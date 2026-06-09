@@ -3833,7 +3833,8 @@ function importCSV(event) {
   const reader = new FileReader();
   reader.onload = async (e) => {
     const text = e.target.result;
-    const lines = text.split(/?
+    const lines = text.split(/
+?
 /).filter(l => l.trim());
     // Skip first line if it's "Tableau 1"
     const startIdx = lines[0].includes('Tableau') ? 2 : 1;
