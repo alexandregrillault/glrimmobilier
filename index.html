@@ -3299,8 +3299,10 @@ function renderVendeurs() {
     return `<div class="vendeur-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between">
         <div class="vendeur-avatar" style="background:${color}20;color:${color}">${initials(v.prenom,v.nom)}</div>
-        <button class="btn btn-ghost btn-sm" onclick="openEditVendeur('${v.id}')" style="margin-right:4px">✏️</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteVendeur('${v.id}')">✕</button>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-ghost btn-sm" onclick="openEditVendeur('${v.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteVendeur('${v.id}')">✕</button>
+        </div>
       </div>
       <div class="vendeur-name">${v.prenom} ${v.nom}</div>
       <div class="vendeur-role">${v.role}</div>
