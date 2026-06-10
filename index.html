@@ -2831,18 +2831,32 @@ function saveVendeur() {
   const nom = document.getElementById('vd-nom').value.trim();
   if (!prenom || !nom) { toast('⚠ Nom et prénom requis', 'var(--warning)'); return; }
 
-  data.vendeurs.push({
-    id: uid(),
-    prenom,
-    nom,
-    role: document.getElementById('vd-role').value,
-    tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
-    email: document.getElementById('vd-email').value.trim()
-  });
+  if (window._editingVendeurId) {
+    const idx = data.vendeurs.findIndex(v => v.id === window._editingVendeurId);
+    if (idx !== -1) {
+      data.vendeurs[idx] = {
+        ...data.vendeurs[idx],
+        prenom, nom,
+        role: document.getElementById('vd-role').value,
+        tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
+        email: document.getElementById('vd-email').value.trim()
+      };
+    }
+    window._editingVendeurId = null;
+    toast('✓ Vendeur modifié !');
+  } else {
+    data.vendeurs.push({
+      id: uid(), prenom, nom,
+      role: document.getElementById('vd-role').value,
+      tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
+      email: document.getElementById('vd-email').value.trim()
+    });
+    toast('✓ Vendeur ajouté !');
+  }
 
   saveData();
   closeModal('vendeur');
-  toast('✓ Vendeur ajouté !');
+  document.querySelector('#modal-vendeur .modal-title').textContent = '👤 Nouveau membre';
   refresh();
 }
 
@@ -3285,6 +3299,7 @@ function renderVendeurs() {
     return `<div class="vendeur-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between">
         <div class="vendeur-avatar" style="background:${color}20;color:${color}">${initials(v.prenom,v.nom)}</div>
+        <button class="btn btn-ghost btn-sm" onclick="openEditVendeur('${v.id}')" style="margin-right:4px">✏️</button>
         <button class="btn btn-danger btn-sm" onclick="deleteVendeur('${v.id}')">✕</button>
       </div>
       <div class="vendeur-name">${v.prenom} ${v.nom}</div>
@@ -3315,6 +3330,19 @@ function deleteVendeur(id) {
   if (!confirm('Supprimer ce vendeur ? Ses ventes resteront.')) return;
   data.vendeurs = data.vendeurs.filter(v => v.id !== id);
   saveData(); refresh(); toast('Vendeur supprimé', 'var(--danger)');
+}
+
+function openEditVendeur(id) {
+  const v = data.vendeurs.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('vd-prenom').value = v.prenom || '';
+  document.getElementById('vd-nom').value = v.nom || '';
+  document.getElementById('vd-role').value = v.role || 'Commercial indépendant';
+  document.getElementById('vd-taux').value = v.tauxDefaut || '';
+  document.getElementById('vd-email').value = v.email || '';
+  document.querySelector('#modal-vendeur .modal-title').textContent = '✏️ Modifier le vendeur';
+  window._editingVendeurId = id;
+  document.getElementById('modal-vendeur').classList.add('open');
 }
 
 
