@@ -3973,7 +3973,27 @@ async function parseAndImportCSV(text) {
 
   const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
 
+  // Clé d'identification d'un contact : email en priorité, sinon nom + téléphone
+  const contactKey = (c) => {
+    const email = (c.email || '').toLowerCase().trim();
+    if (email) return 'e:' + email;
+    return 'n:' + (c.nom || '').toLowerCase().trim() + '|' + (c.telephone || '').replace(/\s/g, '');
+  };
+
+  // Charger les contacts existants pour détecter les doublons
+  let existingKeys = new Set();
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=nom,email,telephone&limit=10000', {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    if (res.ok) {
+      const existing = await res.json();
+      existingKeys = new Set(existing.map(contactKey));
+    }
+  } catch(e) {}
+
   let imported = 0;
+  let doublons = 0;
   let firstError = null;
   for (let i = startIdx; i < lines.length; i++) {
     const vals = lines[i].split(sep).map(v => v.trim().replace(/^"|"$/g, ''));
@@ -3996,6 +4016,12 @@ async function parseAndImportCSV(text) {
       notes: ''
     };
     if (!contact.email && !contact.nom) continue;
+
+    // Doublon ? (déjà en base, ou déjà vu plus haut dans ce fichier)
+    const key = contactKey(contact);
+    if (existingKeys.has(key)) { doublons++; continue; }
+    existingKeys.add(key);
+
     const result = await saveContact(contact);
     if (result.ok) imported++;
     else if (!firstError) firstError = result.error;
@@ -4004,6 +4030,9 @@ async function parseAndImportCSV(text) {
   if (imported === 0) {
     if (firstError) {
       toast('⚠ Supabase a refusé l\'enregistrement : ' + firstError, 'var(--danger)');
+    } else if (doublons > 0) {
+      closeModal('import-csv');
+      toast('Aucun nouveau contact — ' + doublons + ' doublon(s) déjà dans la base', 'var(--warning)');
     } else {
       toast('⚠ Aucun contact reconnu — vérifiez les en-têtes (Nom, Email...)', 'var(--warning)');
     }
@@ -4012,7 +4041,10 @@ async function parseAndImportCSV(text) {
   closeModal('import-csv');
   const hint = document.getElementById('csv-file-hint');
   if (hint) hint.textContent = '';
-  toast('✓ ' + imported + ' contacts importés !' + (firstError ? ' — certains ont échoué : ' + firstError : ''));
+  let msg = '✓ ' + imported + ' contact(s) importé(s) !';
+  if (doublons > 0) msg += ' — ' + doublons + ' doublon(s) ignoré(s)';
+  if (firstError) msg += ' (certains ont échoué : ' + firstError + ')';
+  toast(msg);
   await loadContacts();
 }
 
