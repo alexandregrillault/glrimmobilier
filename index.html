@@ -2282,19 +2282,19 @@
       (ouvrez le CSV dans un éditeur de texte, Ctrl+A puis Ctrl+C, et collez ici).
     </p>
     <div style="margin-bottom:14px">
-      <label class="btn btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+      <label class="btn btn-ghost" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
         📂 Choisir un fichier
-        <input type="file" id="csv-input" accept=".csv,.txt,text/csv,text/plain" style="display:none" onchange="importCSV(event)">
+        <input type="file" id="csv-input" accept=".csv,.txt,text/csv,text/plain" style="display:none" onchange="csvFileSelected(event)">
       </label>
-      <span id="csv-file-hint" style="font-size:12px;color:var(--muted);margin-left:10px"></span>
+      <span id="csv-file-hint" style="font-size:12px;color:var(--success);margin-left:10px"></span>
     </div>
     <div class="form-group full" style="margin-bottom:0">
       <label>Ou coller le contenu du CSV</label>
       <textarea id="csv-paste" rows="8" placeholder="Nom;Email;Telephone;Lieu;Prix;Surface;...&#10;Jean Dupont;jean@mail.fr;0601020304;Paris;350000;45;..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);font-family:monospace;font-size:12px;outline:none;resize:vertical"></textarea>
     </div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="closeModal('import-csv')">Annuler</button>
-      <button class="btn btn-primary" onclick="importCSVFromPaste()">Importer le texte collé</button>
+      <button class="btn btn-ghost" onclick="cancelImportCSV()">Annuler</button>
+      <button class="btn btn-primary" onclick="validerImportCSV()">✓ Valider l'import</button>
     </div>
   </div>
 </div>
@@ -3923,23 +3923,39 @@ async function deleteContact(id) {
   toast('Contact supprimé', 'var(--danger)');
 }
 
-function importCSV(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+let pendingCSVFile = null;
+
+function csvFileSelected(event) {
+  pendingCSVFile = event.target.files[0] || null;
   const hint = document.getElementById('csv-file-hint');
-  if (hint) hint.textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    await parseAndImportCSV(e.target.result);
-  };
-  reader.onerror = () => toast('⚠ Impossible de lire le fichier', 'var(--warning)');
-  reader.readAsText(file, 'UTF-8');
-  event.target.value = '';
+  if (hint) hint.textContent = pendingCSVFile ? '✓ ' + pendingCSVFile.name + ' — cliquez sur "Valider l\'import"' : '';
 }
 
-async function importCSVFromPaste() {
+function cancelImportCSV() {
+  pendingCSVFile = null;
+  const hint = document.getElementById('csv-file-hint');
+  if (hint) hint.textContent = '';
+  const input = document.getElementById('csv-input');
+  if (input) input.value = '';
+  closeModal('import-csv');
+}
+
+async function validerImportCSV() {
+  // Priorité au fichier sélectionné, sinon au texte collé
+  if (pendingCSVFile) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      await parseAndImportCSV(e.target.result);
+      pendingCSVFile = null;
+      const input = document.getElementById('csv-input');
+      if (input) input.value = '';
+    };
+    reader.onerror = () => toast('⚠ Impossible de lire le fichier', 'var(--warning)');
+    reader.readAsText(pendingCSVFile, 'UTF-8');
+    return;
+  }
   const text = (document.getElementById('csv-paste')?.value || '').trim();
-  if (!text) { toast('⚠ Collez d\'abord le contenu du CSV', 'var(--warning)'); return; }
+  if (!text) { toast('⚠ Choisissez un fichier ou collez le contenu du CSV', 'var(--warning)'); return; }
   await parseAndImportCSV(text);
 }
 
