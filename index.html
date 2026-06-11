@@ -4220,6 +4220,15 @@ function onLieuInput() {
   lieuInputTimer = setTimeout(updateRayonFilter, 450);
 }
 
+let _allCommunes = null; // cache : toutes les communes de France (chargées une fois par session)
+
+async function getAllCommunes() {
+  if (_allCommunes) return _allCommunes;
+  const r = await fetch('https://geo.api.gouv.fr/communes?fields=centre,nom,codesPostaux');
+  _allCommunes = await r.json();
+  return _allCommunes;
+}
+
 async function updateRayonFilter() {
   const lieuVal = (document.getElementById('filter-lieu')?.value || '').trim();
   const rayon = parseInt(document.getElementById('filter-rayon')?.value || '0');
@@ -4231,19 +4240,21 @@ async function updateRayonFilter() {
     return;
   }
 
+  const filteredEl = document.getElementById('contacts-filtered-count');
+  if (filteredEl) filteredEl.textContent = '⏳ recherche des communes à moins de ' + rayon + ' km…';
+
   try {
     // Géocoder la saisie : code postal (5 chiffres) ou nom de ville
     const isCP = /^\d{5}$/.test(lieuVal);
     const q = isCP ? 'codePostal=' + lieuVal : 'nom=' + encodeURIComponent(lieuVal) + '&boost=population';
-    const r = await fetch('https://geo.api.gouv.fr/communes?' + q + '&fields=centre,codeDepartement,nom&limit=1');
+    const r = await fetch('https://geo.api.gouv.fr/communes?' + q + '&fields=centre,nom&limit=1');
     const arr = await r.json();
     if (token !== rayonToken) return;
     if (!arr[0] || !arr[0].centre) { rayonNames = null; rayonCPs = null; renderContacts(); return; }
 
     const base = arr[0].centre.coordinates;
-    // Toutes les communes du département (noms + codes postaux + coordonnées)
-    const r2 = await fetch('https://geo.api.gouv.fr/communes?codeDepartement=' + arr[0].codeDepartement + '&fields=centre,nom,codesPostaux');
-    const communes = await r2.json();
+    // Toutes les communes de France : le rayon traverse les départements sans limite
+    const communes = await getAllCommunes();
     if (token !== rayonToken) return;
 
     const names = new Set(), cps = new Set();
