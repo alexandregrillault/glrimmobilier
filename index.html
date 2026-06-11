@@ -2442,6 +2442,20 @@
       <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Contacts sélectionnés</div>
       <div style="font-size:14px;font-weight:600" id="campagne-nb-contacts">0 contact(s)</div>
     </div>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">📍 Élargir aux communes alentours</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:12.5px">Rayon :</span>
+        <select id="camp-rayon" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 8px;color:var(--text);font-size:12px;cursor:pointer;font-family:var(--font-body)">
+          <option value="10">10 km</option>
+          <option value="20" selected>20 km</option>
+          <option value="30">30 km</option>
+          <option value="50">50 km</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="chercherLeadsProximite()">🔍 Chercher les leads à proximité</button>
+      </div>
+      <div id="camp-proximite-results" style="margin-top:10px"></div>
+    </div>
     <div class="form-grid">
       <div class="form-group full">
         <label>Objet du mail</label>
@@ -4168,7 +4182,129 @@ async function confirmDeleteSelection() {
 function lancerCampagne() {
   const nbEl = document.getElementById('campagne-nb-contacts');
   if (nbEl) nbEl.textContent = selectedContacts.length + ' contact(s)';
+  const resEl = document.getElementById('camp-proximite-results');
+  if (resEl) resEl.innerHTML = '';
   openModal('campagne');
+}
+
+// ============================================================
+//  LEADS À PROXIMITÉ (communes alentours via geo.api.gouv.fr)
+// ============================================================
+function normLieu(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\bsaint\b/g, 'st').replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+async function chercherLeadsProximite() {
+  const resultsEl = document.getElementById('camp-proximite-results');
+  if (!resultsEl) return;
+  const rayon = parseInt(document.getElementById('camp-rayon')?.value || '20');
+  const contacts = window._contacts || [];
+  const selSet = new Set(selectedContacts);
+
+  if (!selSet.size) {
+    resultsEl.innerHTML = '<span style="color:var(--warning);font-size:12px">Sélectionnez d\'abord au moins un contact dans la liste.</span>';
+    return;
+  }
+
+  // Lieux distincts des contacts sélectionnés
+  const lieux = [...new Set(contacts.filter(c => selSet.has(c.id)).map(c => (c.lieu || '').trim()).filter(Boolean))];
+  if (!lieux.length) {
+    resultsEl.innerHTML = '<span style="color:var(--warning);font-size:12px">Les contacts sélectionnés n\'ont pas de lieu renseigné.</span>';
+    return;
+  }
+
+  resultsEl.innerHTML = '<span style="color:var(--muted);font-size:12px">⏳ Recherche des communes dans un rayon de ' + rayon + ' km…</span>';
+
+  try {
+    // 1. Géocoder les lieux de la sélection (max 6 pour limiter les appels)
+    const centres = [];
+    const deps = new Set();
+    for (const lieu of lieux.slice(0, 6)) {
+      try {
+        const r = await fetch('https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(lieu) + '&fields=centre,codeDepartement,nom&boost=population&limit=1');
+        const arr = await r.json();
+        if (arr[0] && arr[0].centre) { centres.push(arr[0]); deps.add(arr[0].codeDepartement); }
+      } catch(e) {}
+    }
+    if (!centres.length) {
+      resultsEl.innerHTML = '<span style="color:var(--warning);font-size:12px">Impossible de localiser les communes de la sélection (' + lieux.slice(0,3).join(', ') + '…).</span>';
+      return;
+    }
+
+    // 2. Récupérer toutes les communes des départements concernés (avec coordonnées)
+    let communes = [];
+    for (const dep of deps) {
+      try {
+        const r = await fetch('https://geo.api.gouv.fr/communes?codeDepartement=' + dep + '&fields=centre,nom');
+        communes = communes.concat(await r.json());
+      } catch(e) {}
+    }
+
+    // 3. Distance haversine (km)
+    const dist = (a, b) => {
+      const R = 6371, toRad = d => d * Math.PI / 180;
+      const dLat = toRad(b[1] - a[1]), dLon = toRad(b[0] - a[0]);
+      const h = Math.sin(dLat/2)**2 + Math.cos(toRad(a[1])) * Math.cos(toRad(b[1])) * Math.sin(dLon/2)**2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+
+    // 4. Communes dans le rayon d'au moins un lieu de la sélection
+    const proches = new Set();
+    communes.forEach(c => {
+      if (!c.centre) return;
+      for (const base of centres) {
+        if (dist(base.centre.coordinates, c.centre.coordinates) <= rayon) { proches.add(normLieu(c.nom)); break; }
+      }
+    });
+
+    // 5. Leads de la base, non sélectionnés, situés dans ces communes
+    const matches = {};
+    contacts.forEach(c => {
+      if (selSet.has(c.id)) return;
+      const n = normLieu(c.lieu);
+      if (n && proches.has(n)) (matches[c.lieu] = matches[c.lieu] || []).push(c.id);
+    });
+
+    const entries = Object.entries(matches).sort((a, b) => b[1].length - a[1].length);
+    if (!entries.length) {
+      resultsEl.innerHTML = '<span style="color:var(--muted);font-size:12px">Aucun autre lead trouvé dans un rayon de ' + rayon + ' km.</span>';
+      return;
+    }
+
+    window._proximiteMatches = matches;
+    const totalLeads = entries.reduce((s, e) => s + e[1].length, 0);
+    resultsEl.innerHTML =
+      '<div style="font-size:12px;color:var(--success);margin-bottom:6px">✓ ' + totalLeads + ' lead(s) trouvé(s) dans ' + entries.length + ' commune(s) :</div>' +
+      '<div style="max-height:160px;overflow-y:auto">' +
+      entries.map(([lieu, ids]) =>
+        '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;cursor:pointer">' +
+        '<input type="checkbox" class="prox-cb" data-lieu="' + lieu.replace(/"/g, '&quot;') + '" checked style="accent-color:var(--accent);cursor:pointer">' +
+        '<span>' + lieu + ' — <strong>' + ids.length + '</strong> lead(s)</span></label>'
+      ).join('') +
+      '</div>' +
+      '<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="ajouterLeadsProximite()">➕ Ajouter à la campagne</button>';
+  } catch(e) {
+    resultsEl.innerHTML = '<span style="color:var(--danger);font-size:12px">⚠ Erreur lors de la recherche : ' + e.message + '</span>';
+  }
+}
+
+function ajouterLeadsProximite() {
+  const matches = window._proximiteMatches || {};
+  let added = 0;
+  document.querySelectorAll('.prox-cb:checked').forEach(cb => {
+    (matches[cb.dataset.lieu] || []).forEach(id => {
+      if (!selectedContacts.includes(id)) { selectedContacts.push(id); added++; }
+      const domCb = document.querySelector('.contact-cb[data-id="' + id + '"]');
+      if (domCb) domCb.checked = true;
+    });
+  });
+  const nbEl = document.getElementById('campagne-nb-contacts');
+  if (nbEl) nbEl.textContent = selectedContacts.length + ' contact(s)';
+  const countEl = document.getElementById('selection-count');
+  if (countEl) countEl.textContent = selectedContacts.length + ' contact(s) sélectionné(s)';
+  const resultsEl = document.getElementById('camp-proximite-results');
+  if (resultsEl) resultsEl.innerHTML = '<span style="color:var(--success);font-size:12px">✓ ' + added + ' lead(s) ajouté(s) à la campagne</span>';
 }
 
 function envoyerCampagne() {
