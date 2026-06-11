@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gérer mes préférences — GLR Immobilier</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --surface2: #1c2128;
+    --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --accent: #4493f8; --success: #3fb950; --danger: #f85149;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 36px 32px; max-width: 440px; width: 100%; text-align: center;
+  }
+  .icon { font-size: 40px; margin-bottom: 14px; }
+  h1 { font-size: 19px; margin-bottom: 10px; }
+  p { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 22px; }
+  input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 9px; padding: 12px 14px; color: var(--text); font-size: 14px;
+    outline: none; margin-bottom: 14px;
+  }
+  input:focus { border-color: var(--accent); }
+  button {
+    width: 100%; background: var(--accent); color: #fff; border: none;
+    border-radius: 9px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button:hover { opacity: .9; }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { font-size: 13.5px; margin-top: 16px; line-height: 1.5; }
+  .msg.ok { color: var(--success); }
+  .msg.err { color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">📭</div>
+  <h1>Vous n'êtes plus en recherche ?</h1>
+  <p>Indiquez l'adresse email sur laquelle vous recevez nos annonces immobilières, et nous ne vous recontacterons plus.</p>
+  <input type="email" id="email" placeholder="votre@email.fr" autocomplete="email">
+  <button id="btn" onclick="confirmer()">Ne plus me recontacter</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
+
+async function confirmer() {
+  const email = (document.getElementById('email').value || '').trim().toLowerCase();
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('btn');
+  msg.className = 'msg';
+  if (!email || !email.includes('@')) {
+    msg.textContent = 'Veuillez saisir une adresse email valide.';
+    msg.className = 'msg err';
+    return;
+  }
+  btn.disabled = true;
+  msg.textContent = 'Un instant…';
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?email=ilike.' + encodeURIComponent(email), {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify({ statut: 'Perdu' })
+    });
+    const rows = res.ok ? await res.json() : [];
+    if (res.ok && rows.length > 0) {
+      msg.textContent = '✓ C\'est noté, vous ne recevrez plus nos annonces. Bonne continuation dans vos projets !';
+      msg.className = 'msg ok';
+      document.getElementById('email').value = '';
+    } else if (res.ok) {
+      msg.textContent = 'Cette adresse ne figure pas dans notre liste. Vérifiez l\'orthographe ou utilisez l\'adresse sur laquelle vous recevez nos emails.';
+      msg.className = 'msg err';
+      btn.disabled = false;
+    } else {
+      msg.textContent = 'Une erreur est survenue, veuillez réessayer.';
+      msg.className = 'msg err';
+      btn.disabled = false;
+    }
+  } catch(e) {
+    msg.textContent = 'Une erreur est survenue, veuillez réessayer.';
+    msg.className = 'msg err';
+    btn.disabled = false;
+  }
+}
+document.getElementById('email').addEventListener('keydown', e => { if (e.key === 'Enter') confirmer(); });
+</script>
+</body>
+</html>
