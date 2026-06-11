@@ -2015,10 +2015,9 @@
           <div class="section-sub" id="contacts-count">0 contact(s)</div>
         </div>
         <div style="display:flex;gap:10px;align-items:center">
-          <label class="btn btn-ghost" style="cursor:pointer">
+          <button class="btn btn-ghost" onclick="openModal('import-csv')">
             📥 Importer CSV
-            <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="importCSV(event)">
-          </label>
+          </button>
           <button class="btn btn-primary" onclick="openModal(&#39;campagne&#39;)">
             📨 Nouvelle campagne
           </button>
@@ -2255,6 +2254,47 @@
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal(&#39;vendeur&#39;)">Annuler</button>
       <button class="btn btn-primary" onclick="saveVendeur()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CONFIRMATION SUPPRESSION VENDEUR -->
+<div class="modal-overlay" id="modal-confirm-vendeur">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">🗑️ Supprimer ce vendeur ?</div>
+    <p style="font-size:13.5px;color:var(--muted);line-height:1.6;margin:4px 0 8px">
+      Vous êtes sur le point de supprimer <strong id="confirm-vendeur-nom" style="color:var(--text)"></strong>.<br>
+      Ses ventes resteront enregistrées, mais cette action est <strong style="color:var(--danger)">irréversible</strong>.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('confirm-vendeur')">Annuler</button>
+      <button class="btn btn-danger" onclick="confirmDeleteVendeur()">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: IMPORT CSV -->
+<div class="modal-overlay" id="modal-import-csv">
+  <div class="modal" style="max-width:540px">
+    <div class="modal-title">📥 Importer des contacts (CSV)</div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;margin:4px 0 14px">
+      Choisissez un fichier CSV, <strong style="color:var(--text)">ou</strong> collez directement son contenu ci-dessous
+      (ouvrez le CSV dans un éditeur de texte, Ctrl+A puis Ctrl+C, et collez ici).
+    </p>
+    <div style="margin-bottom:14px">
+      <label class="btn btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        📂 Choisir un fichier
+        <input type="file" id="csv-input" accept=".csv,.txt,text/csv,text/plain" style="display:none" onchange="importCSV(event)">
+      </label>
+      <span id="csv-file-hint" style="font-size:12px;color:var(--muted);margin-left:10px"></span>
+    </div>
+    <div class="form-group full" style="margin-bottom:0">
+      <label>Ou coller le contenu du CSV</label>
+      <textarea id="csv-paste" rows="8" placeholder="Nom;Email;Telephone;Lieu;Prix;Surface;...&#10;Jean Dupont;jean@mail.fr;0601020304;Paris;350000;45;..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);font-family:monospace;font-size:12px;outline:none;resize:vertical"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('import-csv')">Annuler</button>
+      <button class="btn btn-primary" onclick="importCSVFromPaste()">Importer le texte collé</button>
     </div>
   </div>
 </div>
@@ -3328,9 +3368,21 @@ function renderVendeurs() {
   }).join('');
 }
 
+let pendingDeleteVendeurId = null;
+
 function deleteVendeur(id) {
-  if (!confirm('Supprimer ce vendeur ? Ses ventes resteront.')) return;
-  data.vendeurs = data.vendeurs.filter(v => v.id !== id);
+  pendingDeleteVendeurId = id;
+  const v = data.vendeurs.find(x => x.id === id);
+  const nomEl = document.getElementById('confirm-vendeur-nom');
+  if (nomEl) nomEl.textContent = v ? (v.prenom + ' ' + v.nom) : 'ce vendeur';
+  openModal('confirm-vendeur');
+}
+
+function confirmDeleteVendeur() {
+  if (!pendingDeleteVendeurId) return;
+  data.vendeurs = data.vendeurs.filter(v => v.id !== pendingDeleteVendeurId);
+  pendingDeleteVendeurId = null;
+  closeModal('confirm-vendeur');
   saveData(); refresh(); toast('Vendeur supprimé', 'var(--danger)');
 }
 
@@ -3862,44 +3914,72 @@ async function deleteContact(id) {
 function importCSV(event) {
   const file = event.target.files[0];
   if (!file) return;
+  const hint = document.getElementById('csv-file-hint');
+  if (hint) hint.textContent = file.name;
   const reader = new FileReader();
   reader.onload = async (e) => {
-    const text = e.target.result;
-    const lines = text.split('\n').filter(l => l.trim());
-    // Skip first line if it's "Tableau 1"
-    const startIdx = lines[0].includes('Tableau') ? 2 : 1;
-    const headers = lines[startIdx - 1].split(';').map(h => h.trim());
-
-    let imported = 0;
-    for (let i = startIdx; i < lines.length; i++) {
-      const vals = lines[i].split(';').map(v => v.trim());
-      if (vals.length < 3) continue;
-      const row = {};
-      headers.forEach((h, idx) => row[h] = vals[idx] || '');
-
-      const contact = {
-        nom: row['Nom'] || '',
-        email: row['Email'] || '',
-        telephone: row['Telephone'] || '',
-        lieu: row['Lieu'] || '',
-        budget: row['Prix'] || '',
-        surface: row['Surface'] || '',
-        reference_annonce: row['ReferenceAnnonce'] || '',
-        message: row['Message'] || '',
-        intention: row['Intention'] || '',
-        date_lead: row['Date'] || '',
-        statut: 'Nouveau',
-        notes: ''
-      };
-      if (!contact.email && !contact.nom) continue;
-      await saveContact(contact);
-      imported++;
-    }
-    toast('✓ ' + imported + ' contacts importés !');
-    await loadContacts();
+    await parseAndImportCSV(e.target.result);
   };
+  reader.onerror = () => toast('⚠ Impossible de lire le fichier', 'var(--warning)');
   reader.readAsText(file, 'UTF-8');
   event.target.value = '';
+}
+
+async function importCSVFromPaste() {
+  const text = (document.getElementById('csv-paste')?.value || '').trim();
+  if (!text) { toast('⚠ Collez d\'abord le contenu du CSV', 'var(--warning)'); return; }
+  await parseAndImportCSV(text);
+}
+
+async function parseAndImportCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) { toast('⚠ CSV vide ou sans données', 'var(--warning)'); return; }
+
+  // Skip first line if it's "Tableau 1"
+  const startIdx = lines[0].includes('Tableau') ? 2 : 1;
+
+  // Détection automatique du séparateur (; , ou tabulation)
+  const headerLine = lines[startIdx - 1];
+  const sep = [';', '\t', ','].reduce((best, s) =>
+    headerLine.split(s).length > headerLine.split(best).length ? s : best, ';');
+
+  const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+
+  let imported = 0;
+  for (let i = startIdx; i < lines.length; i++) {
+    const vals = lines[i].split(sep).map(v => v.trim().replace(/^"|"$/g, ''));
+    if (vals.length < 3) continue;
+    const row = {};
+    headers.forEach((h, idx) => row[h] = vals[idx] || '');
+
+    const contact = {
+      nom: row['Nom'] || '',
+      email: row['Email'] || '',
+      telephone: row['Telephone'] || '',
+      lieu: row['Lieu'] || '',
+      budget: row['Prix'] || '',
+      surface: row['Surface'] || '',
+      reference_annonce: row['ReferenceAnnonce'] || '',
+      message: row['Message'] || '',
+      intention: row['Intention'] || '',
+      date_lead: row['Date'] || '',
+      statut: 'Nouveau',
+      notes: ''
+    };
+    if (!contact.email && !contact.nom) continue;
+    await saveContact(contact);
+    imported++;
+  }
+
+  if (imported === 0) {
+    toast('⚠ Aucun contact reconnu — vérifiez les en-têtes (Nom, Email...)', 'var(--warning)');
+    return;
+  }
+  closeModal('import-csv');
+  const hint = document.getElementById('csv-file-hint');
+  if (hint) hint.textContent = '';
+  toast('✓ ' + imported + ' contacts importés !');
+  await loadContacts();
 }
 
 function renderContacts() {
