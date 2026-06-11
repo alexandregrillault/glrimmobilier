@@ -3863,6 +3863,10 @@ async function loadContacts() {
       const contacts = await res.json();
       window._contacts = contacts;
       renderContacts();
+    } else {
+      let msg = 'HTTP ' + res.status;
+      try { const err = await res.json(); msg = err.message || msg; } catch(e) {}
+      toast('⚠ Impossible de charger les contacts : ' + msg, 'var(--danger)');
     }
   } catch(e) {
     console.error('Erreur chargement contacts:', e);
@@ -3871,7 +3875,7 @@ async function loadContacts() {
 
 async function saveContact(contact) {
   try {
-    await fetch(SUPABASE_URL + '/rest/v1/contacts', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts', {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_KEY,
@@ -3881,7 +3885,15 @@ async function saveContact(contact) {
       },
       body: JSON.stringify(contact)
     });
-  } catch(e) {}
+    if (!res.ok) {
+      let msg = 'HTTP ' + res.status;
+      try { const err = await res.json(); msg = err.message || err.hint || msg; } catch(e) {}
+      return { ok: false, error: msg };
+    }
+    return { ok: true };
+  } catch(e) {
+    return { ok: false, error: e.message };
+  }
 }
 
 async function updateContactStatut(id, statut) {
@@ -3946,6 +3958,7 @@ async function parseAndImportCSV(text) {
   const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
 
   let imported = 0;
+  let firstError = null;
   for (let i = startIdx; i < lines.length; i++) {
     const vals = lines[i].split(sep).map(v => v.trim().replace(/^"|"$/g, ''));
     if (vals.length < 3) continue;
@@ -3967,18 +3980,23 @@ async function parseAndImportCSV(text) {
       notes: ''
     };
     if (!contact.email && !contact.nom) continue;
-    await saveContact(contact);
-    imported++;
+    const result = await saveContact(contact);
+    if (result.ok) imported++;
+    else if (!firstError) firstError = result.error;
   }
 
   if (imported === 0) {
-    toast('⚠ Aucun contact reconnu — vérifiez les en-têtes (Nom, Email...)', 'var(--warning)');
+    if (firstError) {
+      toast('⚠ Supabase a refusé l\'enregistrement : ' + firstError, 'var(--danger)');
+    } else {
+      toast('⚠ Aucun contact reconnu — vérifiez les en-têtes (Nom, Email...)', 'var(--warning)');
+    }
     return;
   }
   closeModal('import-csv');
   const hint = document.getElementById('csv-file-hint');
   if (hint) hint.textContent = '';
-  toast('✓ ' + imported + ' contacts importés !');
+  toast('✓ ' + imported + ' contacts importés !' + (firstError ? ' — certains ont échoué : ' + firstError : ''));
   await loadContacts();
 }
 
