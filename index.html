@@ -4282,13 +4282,10 @@ function envoyerCampagne() {
 
   const contacts = (window._contacts||[]).filter(c => selectedContacts.includes(c.id));
   
-  // Pied de mail automatique : lien de désinscription (met le statut à "Perdu" automatiquement)
-  const footer = '\n\n———\nVous n\'êtes plus en recherche de bien immobilier ? Cliquez ici et nous ne vous recontacterons plus :\nhttps://alexandregrillault.github.io/glrimmobilier/stop.html';
-
   // Générer les emails mailto
   const emails = contacts.map(c => c.email).filter(Boolean).join(',');
   const sujet = encodeURIComponent(objet);
-  const corps = encodeURIComponent(message + footer);
+  const corps = encodeURIComponent(message);
   
   // Ouvrir le client mail avec tous les destinataires en BCC
   window.location.href = `mailto:?bcc=${encodeURIComponent(emails)}&subject=${sujet}&body=${corps}`;
