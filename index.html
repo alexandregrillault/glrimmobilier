@@ -2067,6 +2067,7 @@
       <div id="contacts-selection-bar" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px 24px;display:flex;gap:12px;align-items:center;z-index:50;box-shadow:0 8px 32px rgba(0,0,0,.4)">
         <span id="selection-count" style="font-size:13px;color:var(--accent);font-weight:600"></span>
         <button class="btn btn-primary btn-sm" onclick="lancerCampagne()">📨 Lancer une campagne</button>
+        <button class="btn btn-danger btn-sm" onclick="askDeleteSelection()">🗑️ Supprimer</button>
         <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Désélectionner</button>
       </div>
     </div>
@@ -2295,6 +2296,21 @@
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="cancelImportCSV()">Annuler</button>
       <button class="btn btn-primary" onclick="validerImportCSV()">✓ Valider l'import</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CONFIRMATION SUPPRESSION CONTACTS -->
+<div class="modal-overlay" id="modal-confirm-contacts">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">🗑️ Supprimer les contacts sélectionnés ?</div>
+    <p style="font-size:13.5px;color:var(--muted);line-height:1.6;margin:4px 0 8px">
+      Vous êtes sur le point de supprimer <strong id="confirm-contacts-count" style="color:var(--text)"></strong> de votre base.<br>
+      Cette action est <strong style="color:var(--danger)">irréversible</strong>.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('confirm-contacts')">Annuler</button>
+      <button class="btn btn-danger" onclick="confirmDeleteSelection()">Supprimer</button>
     </div>
   </div>
 </div>
@@ -4121,6 +4137,32 @@ function clearSelection() {
   selectedContacts = [];
   const bar = document.getElementById('contacts-selection-bar');
   if (bar) bar.style.display = 'none';
+}
+
+function askDeleteSelection() {
+  if (!selectedContacts.length) return;
+  const countEl = document.getElementById('confirm-contacts-count');
+  if (countEl) countEl.textContent = selectedContacts.length + ' contact(s)';
+  openModal('confirm-contacts');
+}
+
+async function confirmDeleteSelection() {
+  const ids = [...selectedContacts];
+  if (!ids.length) { closeModal('confirm-contacts'); return; }
+  closeModal('confirm-contacts');
+  // Suppression en une seule requête : id=in.(id1,id2,...)
+  const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=in.(' + ids.join(',') + ')', {
+    method: 'DELETE',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+  }).catch(() => null);
+  if (!res || !res.ok) {
+    toast('⚠ Erreur lors de la suppression', 'var(--danger)');
+    return;
+  }
+  window._contacts = (window._contacts||[]).filter(c => !ids.includes(c.id));
+  clearSelection();
+  renderContacts();
+  toast(ids.length + ' contact(s) supprimé(s)', 'var(--danger)');
 }
 
 function lancerCampagne() {
