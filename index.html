@@ -4027,6 +4027,9 @@ async function parseAndImportCSV(text) {
   let imported = 0;
   let doublons = 0;
   let firstError = null;
+
+  // Construire tous les contacts d'abord
+  const toInsert = [];
   for (let i = startIdx; i < lines.length; i++) {
     const vals = lines[i].split(sep).map(v => v.trim().replace(/^"|"$/g, ''));
     if (vals.length < 3) continue;
@@ -4049,14 +4052,38 @@ async function parseAndImportCSV(text) {
     };
     if (!contact.email && !contact.nom) continue;
 
-    // Doublon ? (déjà en base, ou déjà vu plus haut dans ce fichier)
     const key = contactKey(contact);
     if (existingKeys.has(key)) { doublons++; continue; }
     existingKeys.add(key);
+    toInsert.push(contact);
+  }
 
-    const result = await saveContact(contact);
-    if (result.ok) imported++;
-    else if (!firstError) firstError = result.error;
+  // Insérer par lots de 500
+  const BATCH_SIZE = 500;
+  for (let b = 0; b < toInsert.length; b += BATCH_SIZE) {
+    const batch = toInsert.slice(b, b + BATCH_SIZE);
+    try {
+      const res = await fetch(SUPABASE_URL + '/rest/v1/contacts', {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify(batch)
+      });
+      if (res.ok) {
+        imported += batch.length;
+        toast('⏳ ' + imported + '/' + toInsert.length + ' contacts importés...', 'var(--success)');
+      } else {
+        let msg = 'HTTP ' + res.status;
+        try { const err = await res.json(); msg = err.message || err.hint || msg; } catch(e) {}
+        if (!firstError) firstError = msg;
+      }
+    } catch(e) {
+      if (!firstError) firstError = e.message;
+    }
   }
 
   if (imported === 0) {
