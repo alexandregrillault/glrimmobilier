@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Réserver une visio — programme immobilier neuf</title>
+<meta name="description" content="Découvrez le programme et réservez une courte visio personnalisée. Lien Google Meet, rien à installer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cream:#f5f1e8;
+    --cream2:#efe9db;
+    --card:#fffdf8;
+    --green:#16271d;
+    --green2:#22382a;
+    --brass:#a87f3e;
+    --brass-soft:#c39a55;
+    --ink:#23281f;
+    --muted:#6f6a5d;
+    --line:#e3ddcc;
+    --serif:'Cormorant Garamond',Georgia,serif;
+    --sans:'Inter',system-ui,sans-serif;
+    --maxw:1100px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--cream);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  img{max-width:100%;display:block}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:var(--brass)}
+
+  /* TOP BAR */
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(245,241,232,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
+  .brand{font-size:11px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--green)}
+  .brand small{display:block;color:var(--muted);font-weight:500;letter-spacing:.12em;margin-top:2px;font-size:9px}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;border:none;border-radius:999px;padding:11px 22px;background:var(--green);color:var(--cream);text-decoration:none;transition:transform .15s ease,box-shadow .15s ease,background .15s ease}
+  .btn:hover{background:var(--green2);transform:translateY(-1px);box-shadow:0 10px 26px rgba(22,39,29,.20)}
+  .btn:focus-visible{outline:2px solid var(--brass);outline-offset:3px}
+  .btn-sm{padding:9px 18px;font-size:13px}
+  .btn-ghost{background:transparent;color:var(--green);border:1px solid var(--green)}
+  .btn-ghost:hover{background:var(--green);color:var(--cream)}
+
+  /* HERO — split éditorial sur crème */
+  .hero{padding:46px 0 70px}
+  .hero-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
+  .hero h1{font-family:var(--serif);font-weight:500;font-size:clamp(46px,7.4vw,88px);line-height:.98;letter-spacing:-.01em;color:var(--green);margin:14px 0 4px}
+  .hero .loc{font-family:var(--serif);font-style:italic;font-size:clamp(20px,3vw,30px);color:var(--brass)}
+  .hero .pitch{max-width:520px;color:#5b5648;margin:20px 0 26px;font-size:clamp(15px,1.8vw,18px)}
+  .hero-facts{display:flex;flex-wrap:wrap;gap:0;margin-bottom:28px}
+  .hero-facts .f{padding-right:24px;margin-right:24px;border-right:1px solid var(--line)}
+  .hero-facts .f:last-child{border-right:none;margin-right:0}
+  .hero-facts .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .hero-facts .v{font-family:var(--serif);font-size:26px;color:var(--green);margin-top:2px}
+  .hero-cta{display:flex;gap:12px;flex-wrap:wrap}
+  .hero-figure{position:relative;padding:14px}
+  .hero-figure::before{content:"";position:absolute;inset:0;border:1px solid var(--brass-soft);border-radius:20px}
+  #hero-img{height:clamp(300px,48vw,470px);border-radius:14px;background-position:center;background-size:cover;background-color:var(--cream2);box-shadow:0 22px 50px rgba(22,39,29,.16)}
+
+  .reveal{opacity:0;transform:translateY(16px);animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards}
+  .reveal.d1{animation-delay:.05s}.reveal.d2{animation-delay:.12s}.reveal.d3{animation-delay:.19s}.reveal.d4{animation-delay:.26s}
+  @keyframes rise{to{opacity:1;transform:none}}
+
+  /* SECTIONS */
+  section{padding:74px 0}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:34px}
+  .sec-head h2{font-family:var(--serif);font-weight:500;font-size:clamp(30px,5vw,46px);line-height:1.05;color:var(--green)}
+  .sec-head .num{font-size:11px;letter-spacing:.2em;color:var(--brass);padding-top:8px}
+
+  .tarif-intro{color:var(--muted);max-width:620px;margin-bottom:28px}
+  .typos{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+  .typo{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease}
+  .typo:hover{border-color:var(--brass);transform:translateY(-3px);box-shadow:0 12px 30px rgba(22,39,29,.08)}
+  .typo .t{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass)}
+  .typo .s{color:var(--muted);font-size:14px;margin:10px 0 16px}
+  .typo .p{font-family:var(--serif);font-size:34px;line-height:1;color:var(--green)}
+  .typo .p small{font-size:14px;color:var(--muted);font-family:var(--sans)}
+  .disclaimer{color:var(--muted);font-size:12px;margin-top:18px;max-width:680px}
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .chip{border:1px solid var(--brass);color:#8a6a31;border-radius:999px;padding:7px 16px;font-size:13px;font-weight:600}
+
+  .atouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:28px 36px}
+  .atout{border-top:1px solid var(--line);padding-top:18px}
+  .atout h3{font-family:var(--serif);font-weight:600;font-size:23px;color:var(--green);margin-bottom:8px}
+  .atout p{color:var(--muted);font-size:15px}
+
+  .quartier{background:var(--cream2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .quartier .q-body{max-width:720px;font-family:var(--serif);font-size:clamp(20px,3vw,27px);line-height:1.4;color:#3f4a3f}
+
+  /* BOOKING — clair et chaleureux, carte blanche pour le focus du CTA */
+  .booking{background:var(--cream2);color:var(--ink);border-top:1px solid var(--brass-soft)}
+  .booking .sec-head h2{color:var(--green)}
+  .booking .sec-head .num{color:var(--brass)}
+  .book-grid{display:grid;grid-template-columns:.9fr 1.3fr;gap:48px;align-items:start}
+  .book-pitch p{color:#5b5648;margin-bottom:22px;font-size:17px}
+  .book-list{list-style:none;display:grid;gap:14px}
+  .book-list li{display:flex;gap:12px;align-items:flex-start;font-size:15px;color:var(--ink)}
+  .book-list .ic{color:var(--brass);font-weight:700;flex:none;margin-top:1px}
+  .embed-shell{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:520px;box-shadow:0 20px 50px rgba(22,39,29,.12)}
+  .embed-shell iframe{width:100%;height:640px;border:0;display:block}
+  .embed-placeholder{padding:40px 34px;text-align:center;color:#6a6457}
+  .embed-placeholder .big{font-family:var(--serif);font-size:28px;color:var(--green);margin-bottom:8px}
+  .embed-placeholder ol{text-align:left;max-width:430px;margin:22px auto 26px;padding-left:18px;color:#5c574d;font-size:14px;line-height:1.9}
+  .embed-placeholder code{background:#efe9dd;border-radius:5px;padding:1px 6px;font-size:13px}
+
+  footer{background:#e9e2d1;color:var(--ink);padding:54px 0 60px;border-top:1px solid var(--brass-soft)}
+  .foot-grid{display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;align-items:flex-end}
+  .foot-brand{font-family:var(--serif);font-size:30px;color:var(--green)}
+  .foot-brand span{color:var(--brass)}
+  .foot-contact{font-size:14px;color:var(--muted);line-height:1.9}
+  .foot-contact a{color:var(--green);text-decoration:none;border-bottom:1px solid var(--line)}
+  .foot-legal{margin-top:34px;font-size:12px;color:#8a8474;max-width:640px;line-height:1.7}
+
+  @media(max-width:820px){
+    .hero-grid{grid-template-columns:1fr;gap:30px}
+    .hero-figure{order:-1}
+  }
+  @media(max-width:760px){
+    .book-grid{grid-template-columns:1fr;gap:30px}
+    .topbar .btn{display:none}
+    .hero-facts .f{border-right:none;padding-right:0;margin-right:20px}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}.reveal{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand">GLR Immobilier<small id="tb-prog">Programme neuf</small></div>
+    <a href="#booking" class="btn btn-sm">Réserver ma visio</a>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div class="hero-text">
+        <div class="eyebrow reveal" id="h-eyebrow">Vente en avant-première</div>
+        <h1 class="reveal d1" id="h-nom">—</h1>
+        <div class="loc reveal d1" id="h-loc">—</div>
+        <p class="pitch reveal d2" id="h-pitch">—</p>
+        <div class="hero-facts reveal d3" id="h-facts"></div>
+        <div class="hero-cta reveal d4">
+          <a href="#booking" class="btn">Réserver ma visio →</a>
+          <a href="#programme" class="btn btn-ghost">Découvrir le programme</a>
+        </div>
+      </div>
+      <div class="hero-figure reveal d2"><div id="hero-img"></div></div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section id="programme">
+    <div class="wrap">
+      <div class="sec-head"><span class="num">01</span><h2>En bref</h2></div>
+      <p class="tarif-intro" id="s-intro">Les typologies disponibles et leurs prix de lancement.</p>
+      <div class="typos" id="s-typos"></div>
+      <div class="chips" id="s-chips"></div>
+      <p class="disclaimer">Prix et disponibilités indicatifs, susceptibles d'évoluer. Les lots précis et leur prix exact vous sont présentés en visio. Mensualités et dispositifs (PTZ, etc.) selon votre situation et sous conditions.</p>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <div class="sec-head"><span class="num">02</span><h2>Ce qui fait la différence</h2></div>
+      <div class="atouts" id="s-atouts"></div>
+    </div>
+  </section>
+
+  <section class="quartier">
+    <div class="wrap">
+      <div class="sec-head"><span class="num">03</span><h2>L'emplacement</h2></div>
+      <p class="q-body" id="s-quartier">—</p>
+    </div>
+  </section>
+
+  <section class="booking" id="booking">
+    <div class="wrap">
+      <div class="sec-head"><span class="num">04</span><h2>Réservons 15 minutes ensemble</h2></div>
+      <div class="book-grid">
+        <div class="book-pitch">
+          <p>On fait le tour des lots encore disponibles, et je regarde avec vous le plan de financement le plus adapté — sans engagement.</p>
+          <ul class="book-list">
+            <li><span class="ic">✓</span><span><strong>En visio, par lien Google&nbsp;Meet</strong> — rien à télécharger, vous rejoignez depuis votre navigateur.</span></li>
+            <li><span class="ic">✓</span><span><strong>15 minutes</strong>, à l'heure qui vous arrange.</span></li>
+            <li><span class="ic">✓</span><span>Les <strong>lots disponibles</strong> et leurs prix réels, en direct.</span></li>
+            <li><span class="ic">✓</span><span>Votre <strong>éligibilité PTZ</strong> et les options de financement.</span></li>
+          </ul>
+        </div>
+        <div class="embed-shell" id="embed-shell"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div><div class="foot-brand">GLR <span>Immobilier</span></div></div>
+      <div class="foot-contact" id="foot-contact"></div>
+    </div>
+    <p class="foot-legal">
+      Vous recevez ce lien suite à votre intérêt pour un bien immobilier neuf. Pour ne plus être contacté, répondez simplement à notre email.
+      GLR Immobilier — commercialisation de programmes neufs. Document non contractuel : seuls les actes notariés et contrats de réservation font foi.
+    </p>
+  </div>
+</footer>
+
+<script>
+
+/* ============================================================
+   1) TES INFOS — à compléter une fois
+   ============================================================ */
+const AGENT = {
+  societe: "GLR Immobilier",
+  nom:     "Alexandre Grillault",
+  tel:     "",                       // ← ton numéro direct (optionnel)
+  email:   "agl@glrimmobilier.com"
+};
+
+/* Code d'intégration Google Agenda :
+   - Crée ta page de rendez-vous dans Google Agenda (lieu = Google Meet)
+   - Clique « Intégrer » et copie l'URL du src de l'iframe (elle finit par ?gv=true)
+   - Colle-la ci-dessous entre les guillemets. Laisse vide pour voir le mode "à brancher". */
+const BOOKING_EMBED = "";
+/* Lien de partage Google (mode bouton). Dès que tu remplis BOOKING_EMBED ci-dessus,
+   c'est le calendrier intégré (inline) qui prend le dessus automatiquement. */
+const BOOKING_LINK  = "https://calendar.app.google/VFPp8KiMXyifDXPv7";
+
+/* ============================================================
+   2) TES PROGRAMMES — duplique un bloc pour en ajouter un.
+      L'URL ?prog=villa-aurea affiche celui-ci.
+   ============================================================ */
+const PROGRAMMES = {
+  "villa-aurea": {
+    nom:"Villa Auréa",
+    ville:"Élancourt",
+    dept:"Yvelines (78)",
+    eyebrow:"Vente en avant-première",
+    livraison:"1ᵉʳ trim. 2029",
+    prixMin:"234 000 €",
+    pitch:"Des appartements neufs du 2 au 5 pièces — terrasses, balcons et jardins privatifs — au cœur d'un quartier préservé, à quelques minutes des transports et de Versailles.",
+    image:"https://media-js.nexity.fr/MDIA_01_000042550_ae8f3f2c-f4a4-4dd5-93af-e689be50f8182_1920x1080.webp",
+    dispositifs:["PTZ","Jeanbrun","LMNP","LLI"],
+    typologies:[
+      {type:"2 pièces",        surface:"dès 45 m²",  prix:"234 000"},
+      {type:"3 pièces",        surface:"dès 65 m²",  prix:"299 000"},
+      {type:"4 pièces",        surface:"dès 68 m²",  prix:"312 000"},
+      {type:"5 pièces duplex", surface:"dès 100 m²", prix:"421 000"}
+    ],
+    atouts:[
+      {titre:"Espaces extérieurs généreux", texte:"Terrasse, balcon ou jardin privatif pour chaque logement."},
+      {titre:"Tout à proximité",            texte:"Commerces, écoles et transports à quelques minutes à pied."},
+      {titre:"Connecté à Paris",            texte:"10 min en bus jusqu'à la gare (Transilien U & N), proche Versailles et Saint-Quentin."},
+      {titre:"Pensé pour durer",            texte:"Architecture moderne, parkings sécurisés en sous-sol et local vélos."}
+    ],
+    quartier:"Au cœur du quartier de la Sente des Réaux, un cadre préservé près de l'Étang de la Boissière : espaces verts, aménagements paysagers et services à portée de main."
+  }
+  /* ,
+  "autre-programme": { nom:"…", ville:"…", dept:"…", … }
+  */
+};
+
+/* ============================================================
+   3) RENDU — rien à modifier en dessous
+   ============================================================ */
+const SB_URL = "https://hydqfbxdtpmbuooexekp.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g";
+
+// Va chercher le programme dans Supabase (table publique « programmes »).
+// Retourne l'objet normalisé au format attendu, ou null.
+async function fetchProgramme(slug){
+  if(!slug) return null;
+  try{
+    const res = await fetch(SB_URL + '/rest/v1/programmes?slug=eq.' + encodeURIComponent(slug) + '&select=*&limit=1',
+      { headers:{ 'apikey':SB_KEY, 'Authorization':'Bearer ' + SB_KEY } });
+    if(!res.ok) return null;
+    const arr = await res.json();
+    if(!arr || !arr.length) return null;
+    const r = arr[0];
+    return {
+      nom:r.nom, ville:r.ville, dept:r.dept, eyebrow:r.eyebrow, livraison:r.livraison,
+      prixMin:r.prix_min, pitch:r.pitch, image:r.image, quartier:r.quartier,
+      dispositifs:r.dispositifs || [], typologies:r.typologies || [], atouts:r.atouts || []
+    };
+  }catch(e){ return null; }
+}
+
+(async function(){
+  const slug = new URLSearchParams(location.search).get('prog');
+  let p = await fetchProgramme(slug);            // 1) Supabase d'abord
+  if(!p){                                        // 2) repli sur la config locale
+    const keys = Object.keys(PROGRAMMES);
+    p = PROGRAMMES[slug] || PROGRAMMES[keys[0]];
+  }
+  if(!p){ return; }
+
+  const set = (id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
+
+  document.title = `${p.nom} — ${p.ville} · Réserver une visio`;
+  set('tb-prog', `${p.nom} · ${p.ville}`);
+  set('h-eyebrow', p.eyebrow || 'Programme neuf');
+  set('h-nom', p.nom);
+  set('h-loc', `${p.ville} · ${p.dept}`);
+  set('h-pitch', p.pitch);
+  set('s-quartier', p.quartier || '');
+
+  // hero image (fallback discret si l'image promoteur tombe)
+  const hi = document.getElementById('hero-img');
+  if(p.image){
+    const test = new Image();
+    test.onload = ()=>{ hi.style.backgroundImage = `url("${p.image}")`; };
+    test.onerror = ()=>{ hi.style.background = 'radial-gradient(120% 90% at 70% 10%, #2a2f3b 0%, #101219 70%)'; };
+    test.src = p.image;
+  } else {
+    hi.style.background = 'radial-gradient(120% 90% at 70% 10%, #2a2f3b 0%, #101219 70%)';
+  }
+
+  // hero facts
+  const facts = [
+    {k:"À partir de", v:p.prixMin},
+    {k:"Livraison",   v:p.livraison},
+    {k:"Typologies",  v:(p.typologies&&p.typologies.length)? `${p.typologies[0].type.split(' ')[0]} au ${p.typologies[p.typologies.length-1].type.split(' ')[0]} P` : "—"}
+  ];
+  document.getElementById('h-facts').innerHTML = facts.map(f=>
+    `<div class="f"><div class="k">${f.k}</div><div class="v">${f.v}</div></div>`).join('');
+
+  // typologies
+  document.getElementById('s-typos').innerHTML = (p.typologies||[]).map(t=>
+    `<div class="typo"><div class="t">${t.type}</div><div class="s">${t.surface}</div>
+     <div class="p">${t.prix}&nbsp;<small>€</small></div></div>`).join('');
+
+  // dispositifs
+  document.getElementById('s-chips').innerHTML = (p.dispositifs||[]).map(d=>
+    `<span class="chip">${d}</span>`).join('');
+
+  // atouts
+  document.getElementById('s-atouts').innerHTML = (p.atouts||[]).map(a=>
+    `<div class="atout"><h3>${a.titre}</h3><p>${a.texte}</p></div>`).join('');
+
+  // footer contact
+  const fc=[];
+  fc.push(`<strong style="color:var(--text)">${AGENT.nom}</strong>`);
+  fc.push(AGENT.societe);
+  if(AGENT.tel)   fc.push(`<a href="tel:${AGENT.tel.replace(/\s/g,'')}">${AGENT.tel}</a>`);
+  if(AGENT.email) fc.push(`<a href="mailto:${AGENT.email}">${AGENT.email}</a>`);
+  document.getElementById('foot-contact').innerHTML = fc.join('<br>');
+
+  // booking embed OU placeholder "à brancher"
+  const shell = document.getElementById('embed-shell');
+  if(BOOKING_EMBED && BOOKING_EMBED.trim()){
+    shell.innerHTML = `<iframe src="${BOOKING_EMBED}" title="Réserver un créneau" loading="lazy"></iframe>`;
+  } else if(BOOKING_LINK && BOOKING_LINK.trim()){
+    shell.innerHTML = `
+      <div class="embed-placeholder">
+        <div class="big">Choisissez votre créneau</div>
+        <p style="margin:6px 0 24px">Vous choisissez l'heure qui vous arrange, et vous recevez le lien Google&nbsp;Meet par email. Rien à installer.</p>
+        <a class="btn" href="${BOOKING_LINK}" target="_blank" rel="noopener">Choisir mon créneau →</a>
+      </div>`;
+  } else {
+    const mailto = AGENT.email
+      ? `mailto:${AGENT.email}?subject=${encodeURIComponent('Demande de visio — '+p.nom)}&body=${encodeURIComponent('Bonjour, je souhaite réserver une visio pour le programme '+p.nom+' à '+p.ville+'.')}`
+      : '#';
+    shell.innerHTML = `
+      <div class="embed-placeholder">
+        <div class="big">Module de réservation à brancher</div>
+        <p>Ici s'affichera ton calendrier Google avec les créneaux de visio.</p>
+        <ol>
+          <li>Dans Google Agenda → <code>Page de rendez-vous</code> (lieu&nbsp;: <code>Google&nbsp;Meet</code>).</li>
+          <li>Clique <code>Intégrer</code> et copie l'URL du <code>src</code> (elle finit par <code>?gv=true</code>).</li>
+          <li>Colle-la dans <code>BOOKING_EMBED</code> en haut du fichier.</li>
+        </ol>
+        <a class="btn" href="${mailto}">En attendant : demander un créneau par email</a>
+      </div>`;
+  }
+})();
+</script>
+</body>
+</html>
