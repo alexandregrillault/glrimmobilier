@@ -339,9 +339,10 @@ async function fetchProgramme(slug){
     `<div class="f"><div class="k">${f.k}</div><div class="v">${f.v}</div></div>`).join('');
 
   // typologies
-  document.getElementById('s-typos').innerHTML = (p.typologies||[]).map(t=>
-    `<div class="typo"><div class="t">${t.type}</div><div class="s">${t.surface}</div>
-     <div class="p">${t.prix}&nbsp;<small>€</small></div></div>`).join('');
+ document.getElementById('s-typos').innerHTML = (p.typologies||[]).map(t=>
+  `<div class="typo"><div class="t">${t.type}</div><div class="s">${t.surface}</div>
+   <div class="p">${t.prix}&nbsp;<small>€</small></div>
+   <div class="book"><a href="#booking">Réserver une visio →</a></div></div>`).join('');
 
   // dispositifs
   document.getElementById('s-chips').innerHTML = (p.dispositifs||[]).map(d=>
