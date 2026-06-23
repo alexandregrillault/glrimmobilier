@@ -4687,8 +4687,8 @@ async function envoyerCampagne() {
   const emails = contacts.map(c => c.email).filter(Boolean).join(',');
   const sujet = encodeURIComponent(objet);
   const corps = encodeURIComponent(message);
-  window.location.href = `mailto:?bcc=${encodeURIComponent(emails)}&subject=${sujet}&body=${corps}`;
-
+const gmailUrl = `https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1&authuser=agl@glrimmobilier.com&bcc=${encodeURIComponent(emails)}&su=${sujet}&body=${corps}`;
+window.open(gmailUrl, '_blank');
   // TRI AUTOMATIQUE DU FUNNEL : les "Nouveau" passent en "Contacté"
   const aPromouvoir = contacts.filter(c => c.statut === 'Nouveau').map(c => c.id);
   if (aPromouvoir.length) {
