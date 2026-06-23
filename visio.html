@@ -77,7 +77,15 @@
   .typo .t{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass)}
   .typo .s{color:var(--muted);font-size:14px;margin:10px 0 16px}
   .typo .p{font-family:var(--serif);font-size:34px;line-height:1;color:var(--green)}
-  .typo .p small{font-size:14px;color:var(--muted);font-family:var(--sans)}
+  .typo .p small{font-size:14px;color:var(--muted);font-family:var(--sans)}/* CTA "Réserver" qui apparaît au survol de chaque typologie */
+.typo .book a{display:inline-block;font-family:var(--sans);font-size:13px;letter-spacing:.02em;color:#fff;background:var(--green);padding:10px 18px;border-radius:9px;text-decoration:none;transition:background .2s ease}
+.typo .book a:hover{background:var(--brass)}
+.typo .book{margin-top:18px}
+/* Sur écran avec souris : caché par défaut, révélé au survol de la carte */
+@media (hover:hover){
+  .typo .book{max-height:0;opacity:0;overflow:hidden;margin-top:0;transform:translateY(6px);transition:max-height .25s ease,opacity .2s ease,transform .25s ease,margin-top .25s ease}
+  .typo:hover .book{max-height:64px;opacity:1;margin-top:18px;transform:translateY(0)}
+}
   .disclaimer{color:var(--muted);font-size:12px;margin-top:18px;max-width:680px}
   .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
   .chip{border:1px solid var(--brass);color:#8a6a31;border-radius:999px;padding:7px 16px;font-size:13px;font-weight:600}
