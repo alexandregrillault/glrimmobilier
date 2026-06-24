@@ -1228,6 +1228,9 @@
           Nouvelle vente
         </button>
       </div>
+      <div style="margin-bottom:16px">
+        <input id="ventes-search" type="text" placeholder="🔍 Rechercher une vente (client, programme, ville, promoteur…)" oninput="venteSearch=this.value; renderAllVentes();" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:var(--font-body);font-size:14px;outline:none">
+      </div>
       <div class="card">
         <table>
           <thead>
@@ -3466,6 +3469,7 @@ function renderLastVentes() {
   </tr>`).join('');
 }
 
+let venteSearch = '';
 let venteSortCol = 'date';
 let venteSortDir = 'desc';
 
@@ -3486,9 +3490,13 @@ function sortVentes(col) {
 
 function renderAllVentes() {
   const tbody = document.getElementById('all-ventes-tbody');
-  const ventesFiltered = getFilteredVentes();
-  document.getElementById('ventes-count').textContent = ventesFiltered.length + ' vente(s) — ' + (currentPeriod === 'mois' ? currentMois : currentPeriod === 'annee' ? String(currentAnnee) : 'tout');
-  if (ventesFiltered.length === 0) { tbody.innerHTML = '<tr><td colspan="9"><div class="empty"><div class="empty-icon">🏗️</div><p>Aucune vente sur cette période</p></div></td></tr>'; return; }
+  let ventesFiltered = getFilteredVentes();
+  const q = (venteSearch || '').trim().toLowerCase();
+  if (q) ventesFiltered = ventesFiltered.filter(v =>
+    ((v.client||'')+' '+(v.programme||'')+' '+(v.ville||'')+' '+(v.promoteur||'')+' '+(v.lot||'')+' '+(v.coPrenom||'')+' '+(v.coNom||'')+' '+vendeurName(v.vendeurId)).toLowerCase().includes(q)
+  );
+  document.getElementById('ventes-count').textContent = ventesFiltered.length + ' vente(s)' + (q ? ' — recherche « ' + venteSearch.trim() + ' »' : ' — ' + (currentPeriod === 'mois' ? currentMois : currentPeriod === 'annee' ? String(currentAnnee) : 'tout'));
+  if (ventesFiltered.length === 0) { tbody.innerHTML = '<tr><td colspan="9"><div class="empty"><div class="empty-icon">🔍</div><p>' + (q ? 'Aucune vente ne correspond à « ' + venteSearch.trim() + ' »' : 'Aucune vente sur cette période') + '</p></div></td></tr>'; return; }
 
   const sorted = [...ventesFiltered].sort((a, b) => {
     let valA, valB;
