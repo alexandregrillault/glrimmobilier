@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Votre sélection — GLR Immobilier</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+  :root {
+    --gold:#c8a96e; --gold-fonce:#b3945a; --dark:#1a1d23; --muted:#6b7280;
+    --bg:#f7f5f1; --carte:#ffffff; --bordure:#e8e3d9; --encre:#3f4550;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--bg); color:var(--dark); font-family:'Helvetica Neue',Arial,sans-serif; line-height:1.55; }
+  .wrap { max-width:720px; margin:0 auto; padding:28px 18px 110px; }
+
+  header { text-align:center; padding:22px 0 18px; }
+  .marque { font-family:Georgia,'Times New Roman',serif; letter-spacing:5px; font-size:18px; font-weight:700; }
+  .filet { width:54px; height:2px; background:var(--gold); margin:14px auto 0; }
+
+  .intro { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; padding:24px 26px; margin:18px 0 10px; box-shadow:0 2px 12px rgba(26,29,35,.05); }
+  .intro h1 { font-family:Georgia,serif; font-size:22px; margin-bottom:8px; font-weight:600; }
+  .intro p { color:var(--encre); font-size:15px; white-space:pre-line; }
+  .intro .sig { margin-top:14px; color:var(--muted); font-size:13px; font-style:italic; }
+
+  .meta { display:flex; justify-content:center; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:12px; letter-spacing:1px; text-transform:uppercase; margin:14px 0 22px; }
+  .meta span::before { content:""; }
+
+  /* ---- Carte bien ---- */
+  .card { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; overflow:hidden; margin-bottom:28px; box-shadow:0 2px 12px rgba(26,29,35,.05);
+          opacity:0; transform:translateY(18px); transition:opacity .5s ease, transform .5s ease; }
+  .card.vue { opacity:1; transform:none; }
+  @media (prefers-reduced-motion:reduce){ .card { opacity:1; transform:none; transition:none; } }
+
+  .photo { position:relative; height:250px; background:#eceae4; overflow:hidden; user-select:none; }
+  .photo img { width:100%; height:100%; object-fit:cover; display:block; cursor:zoom-in; }
+  .img-vide { position:relative; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#1a1d23,#3a3f4a); height:250px; }
+  .img-vide img { max-width:150px; max-height:120px; object-fit:contain; }
+  .img-vide .txt { color:var(--gold); font-family:Georgia,serif; letter-spacing:6px; font-size:22px; }
+  .num-bien { position:absolute; top:12px; left:12px; background:var(--gold); color:#fff; font-family:Georgia,serif; font-size:12.5px; padding:3px 11px; border-radius:14px; letter-spacing:1px; z-index:3; }
+
+  .body { padding:22px 24px 24px; }
+  .eyebrow { color:var(--gold-fonce); font-size:12px; letter-spacing:1.5px; text-transform:uppercase; font-weight:600; margin-bottom:4px; }
+  h2 { font-family:Georgia,serif; font-size:21px; margin-bottom:4px; font-weight:600; }
+  .prix { font-size:17px; font-weight:700; margin-bottom:10px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .chip { border:1px solid #e0d9c8; background:#faf8f4; border-radius:20px; padding:2px 11px; font-size:12px; color:#4a4f58; }
+  .pitch { font-size:14px; color:var(--encre); margin-bottom:10px; }
+  .atouts { list-style:none; margin:0 0 12px; font-size:13.5px; color:var(--encre); }
+  .atouts li { padding-left:20px; position:relative; margin-bottom:3px; }
+  .atouts li::before { content:"✦"; position:absolute; left:2px; color:var(--gold); font-size:11px; }
+
+  .det { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px 14px; margin:12px 0; padding:13px 15px; background:#faf8f4; border:1px solid #eee8db; border-radius:12px; }
+  .det span { display:block; font-size:10px; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); }
+  .det strong { font-size:13.5px; }
+
+  .docs { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 4px; }
+  .doc { border:1px solid var(--gold); background:#fff; color:var(--dark); border-radius:10px; padding:8px 13px; font-size:13px; font-weight:600; text-decoration:none; transition:all .15s; }
+  .doc:hover { background:var(--gold); color:#fff; }
+
+  .cta-rdv { width:100%; margin-top:14px; border:none; background:var(--gold); color:#fff; border-radius:12px; padding:14px; font-size:15px; font-weight:700; letter-spacing:.3px; cursor:pointer; transition:background .15s; box-shadow:0 3px 10px rgba(200,169,110,.35); }
+  .cta-rdv:hover { background:var(--gold-fonce); }
+
+  .avis { border-top:1px dashed #e0d9c8; margin-top:16px; padding-top:14px; }
+  .avis-titre { font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .avis-btns { display:flex; gap:8px; flex-wrap:wrap; }
+  .ab { border:1px solid #ddd6c8; background:#faf8f4; border-radius:22px; padding:8px 14px; font-size:13.5px; cursor:pointer; transition:all .15s; }
+  .ab:hover { border-color:var(--gold); }
+  .ab.on { background:var(--gold); border-color:var(--gold); color:#fff; font-weight:600; }
+
+  /* ---- Bloc rendez-vous ---- */
+  .rdv { background:var(--dark); border-radius:16px; padding:26px 26px 24px; margin:6px 0 28px; text-align:center; color:#fff; }
+  .rdv h3 { font-family:Georgia,serif; font-size:19px; font-weight:600; margin-bottom:6px; }
+  .rdv p { font-size:13.5px; color:#c8cbd2; margin-bottom:14px; }
+  .rdv-form { display:flex; gap:8px; max-width:440px; margin:0 auto; }
+  .rdv-form input { flex:1; min-width:0; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); border-radius:10px; padding:10px 13px; font-size:13.5px; color:#fff; outline:none; }
+  .rdv-form input::placeholder { color:#9aa0ab; }
+  .rdv-form input:focus { border-color:var(--gold); }
+  .rdv-btn { border:none; background:var(--gold); color:#fff; border-radius:10px; padding:10px 18px; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .rdv-btn:hover { background:var(--gold-fonce); }
+  .rdv-ok { font-size:14px; color:var(--gold); font-weight:600; }
+
+  footer { text-align:center; color:var(--muted); font-size:12.5px; margin-top:8px; }
+  .partage { margin-top:12px; }
+  .partage button { border:1px solid #ddd6c8; background:#fff; border-radius:20px; padding:7px 16px; font-size:12.5px; color:var(--encre); cursor:pointer; }
+  .partage button:hover { border-color:var(--gold); }
+
+  /* ---- Barre de progression sticky ---- */
+  #barre { position:fixed; bottom:0; left:0; right:0; background:rgba(255,255,255,.96); backdrop-filter:blur(8px); border-top:1px solid var(--bordure);
+           padding:10px 16px calc(10px + env(safe-area-inset-bottom)); z-index:40; transform:translateY(110%); transition:transform .3s ease; }
+  #barre.show { transform:none; }
+  .barre-in { max-width:720px; margin:0 auto; display:flex; align-items:center; gap:14px; }
+  .prog { flex:1; min-width:0; }
+  .prog-txt { font-size:12px; color:var(--muted); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .prog-fond { height:5px; background:#ece7dc; border-radius:3px; overflow:hidden; }
+  .prog-rempli { height:100%; width:0; background:var(--gold); border-radius:3px; transition:width .4s ease; }
+  .barre-btn { border:1px solid var(--dark); background:var(--dark); color:#fff; border-radius:10px; padding:9px 15px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .barre-btn.sec { background:#fff; color:var(--dark); }
+
+  /* ---- Comparateur ---- */
+  #comp { position:fixed; inset:0; background:rgba(26,29,35,.6); z-index:60; display:none; align-items:center; justify-content:center; padding:18px; }
+  #comp.show { display:flex; }
+  .comp-boite { background:#fff; border-radius:16px; max-width:860px; width:100%; max-height:88vh; display:flex; flex-direction:column; overflow:hidden; }
+  .comp-tete { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--bordure); }
+  .comp-tete h3 { font-family:Georgia,serif; font-size:17px; font-weight:600; }
+  .comp-x { border:none; background:none; font-size:20px; cursor:pointer; color:var(--muted); padding:4px 8px; }
+  .comp-scroll { overflow:auto; }
+  .comp-scroll table { border-collapse:collapse; width:100%; min-width:520px; }
+  .comp-scroll th, .comp-scroll td { padding:10px 14px; font-size:13px; text-align:left; border-bottom:1px solid #f0ece3; vertical-align:top; }
+  .comp-scroll thead th { font-family:Georgia,serif; font-size:13.5px; background:#faf8f4; position:sticky; top:0; }
+  .comp-scroll td:first-child, .comp-scroll th:first-child { color:var(--muted); font-size:11px; letter-spacing:.6px; text-transform:uppercase; white-space:nowrap; position:sticky; left:0; background:#fff; }
+  .comp-scroll thead th:first-child { background:#faf8f4; }
+
+  /* ---- Lightbox ---- */
+  #lb { position:fixed; inset:0; background:rgba(15,17,21,.94); z-index:70; display:none; align-items:center; justify-content:center; }
+  #lb.show { display:flex; }
+  #lb img { max-width:94vw; max-height:88vh; object-fit:contain; border-radius:6px; }
+  .lb-x { position:absolute; top:16px; right:18px; border:none; background:rgba(255,255,255,.12); color:#fff; font-size:20px; width:40px; height:40px; border-radius:50%; cursor:pointer; }
+  .lb-nav { position:absolute; top:50%; transform:translateY(-50%); border:none; background:rgba(255,255,255,.12); color:#fff; font-size:20px; width:44px; height:44px; border-radius:50%; cursor:pointer; }
+  .lb-nav:hover, .lb-x:hover { background:rgba(255,255,255,.25); }
+  .lb-prec { left:14px; } .lb-suiv { right:14px; }
+  .lb-num { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); color:#c8cbd2; font-size:13px; letter-spacing:1px; }
+
+  #toast { position:fixed; bottom:76px; left:50%; transform:translateX(-50%) translateY(140px); background:var(--dark); color:#fff; border-radius:24px; padding:10px 22px; font-size:13.5px; transition:transform .25s; z-index:80; max-width:88vw; text-align:center; }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+  .etat { text-align:center; color:var(--muted); padding:60px 0; }
+  .etat h2 { font-family:Georgia,serif; color:var(--dark); font-size:20px; margin-bottom:10px; }
+  .etat p { font-size:14px; max-width:420px; margin:0 auto; }
+
+  @media (max-width:520px){
+    .photo, .img-vide { height:210px; }
+    .body { padding:18px; }
+    .intro { padding:20px; }
+    .rdv-form { flex-direction:column; }
+    .barre-btn { padding:9px 12px; font-size:12.5px; }
+  }
+</style></head><body>
+<div class="wrap">
+  <header><div class="marque">GLR IMMOBILIER</div><div class="filet"></div></header>
+  <div id="contenu" class="etat">Chargement de votre sélection…</div>
+</div>
+
+<div id="barre"><div class="barre-in">
+  <div class="prog"><div class="prog-txt" id="prog-txt"></div><div class="prog-fond"><div class="prog-rempli" id="prog-rempli"></div></div></div>
+  <button class="barre-btn sec" id="btn-comp" style="display:none">Comparer</button>
+  <button class="barre-btn" id="btn-rdv">Rendez-vous</button>
+</div></div>
+
+<div id="comp"><div class="comp-boite">
+  <div class="comp-tete"><h3>Comparer les biens</h3><button class="comp-x" id="comp-x">✕</button></div>
+  <div class="comp-scroll" id="comp-corps"></div>
+</div></div>
+
+<div id="lb">
+  <button class="lb-x" id="lb-x">✕</button>
+  <button class="lb-nav lb-prec" id="lb-prec">‹</button>
+  <img id="lb-img" alt="">
+  <button class="lb-nav lb-suiv" id="lb-suiv">›</button>
+  <div class="lb-num" id="lb-num"></div>
+</div>
+
+<div id="toast">✓</div>
+<script>
+(function(){
+  var SUPA = "https://hydqfbxdtpmbuooexekp.supabase.co";
+  var token = new URLSearchParams(location.search).get("t") || "";
+  var FN = SUPA + "/functions/v1/selection/" + encodeURIComponent(token);
+  var cont = document.getElementById("contenu");
+  var etatAvis = {};   // copie locale des avis
+  var biens = [];
+  var rdvContexte = ""; // bien depuis lequel le client a cliqué "Demander un rendez-vous"
+  var lbBien = 0, lbIdx = 0;
+
+  function esc(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function toast(m){
+    var t = document.getElementById("toast");
+    t.textContent = m; t.classList.add("show");
+    clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove("show"); }, 2600);
+  }
+  function envoyer(corps, message){
+    return fetch(FN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(corps) })
+      .then(function(r){ if (!r.ok) throw 0; if (message) toast(message); return true; })
+      .catch(function(){ toast("Envoi impossible — vérifiez votre connexion et réessayez"); return false; });
+  }
+  function photoDe(b){
+    // Une seule photo générale du programme
+    if (b.image) return b.image;
+    if (Array.isArray(b.images) && b.images.length) return b.images[0];
+    return "";
+  }
+  function imagesDe(b){
+    var u = photoDe(b);
+    return u ? [u] : [];
+  }
+  function fmtDate(d){
+    try { return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }); } catch(e){ return ""; }
+  }
+
+  function ecranVide(titre, texte){
+    cont.className = "etat";
+    cont.innerHTML = "<h2>" + esc(titre) + "</h2><p>" + esc(texte) + "</p>";
+  }
+
+  if (!token) { ecranVide("Lien introuvable", "Ce lien de sélection n'existe pas ou a expiré. Rapprochez-vous de votre conseiller GLR Immobilier."); return; }
+
+  // ---------- Données de démonstration (aperçu : ?t=demo) ----------
+  function donneesDemo(){
+    var img1 = "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200&q=70";
+    var img2 = "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1200&q=70";
+    var img3 = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1200&q=70";
+    return {
+      ok: true, expired: false, prenom: "Camille", vendeur: "Alexandre",
+      message: "Suite à notre échange, voici une sélection de biens qui correspondent à vos critères.\nN'hésitez pas à me donner votre avis sur chacun.",
+      biens: [
+        { titre: "Alter Ego — Lot A106", ville: "Asnières-sur-Seine (92600)", prix: "515 000 €", typologies: ["T4"],
+          pitch: "Résidence Alter Ego (Care Promotion), au cœur d'un quartier en pleine renaissance.",
+          surface: "80,19 m²", etage: "1", terrasse: "15,68 m²", parking: "P33", expo: "Sud-Ouest", livraison: "2028 — T4",
+          atouts: ["Grande terrasse exposée Sud-Ouest", "À 8 min à pied du métro", "Prestations haut de gamme"],
+          images: [img1, img2, img3], lien: "#", plan: img2, masse: "" },
+        { titre: "Domaine des Prunais — Lot A2 005", ville: "Villiers-sur-Marne (94350)", prix: "389 000 €", typologies: ["T3"],
+          pitch: "Petite copropriété intimiste entourée de verdure.",
+          surface: "64,5 m²", etage: "RDJ", terrasse: "Jardin 42 m²", expo: "Sud", livraison: "2027 — T2",
+          atouts: ["Jardin privatif de 42 m²", "Calme absolu", "Proche écoles et commerces"],
+          images: [img3, img1], lien: "#" }
+      ],
+      avis: {}, created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 55 * 864e5).toISOString()
+    };
+  }
+
+  // ---------- Rendu ----------
+  function rendre(d){
+    biens = Array.isArray(d.biens) ? d.biens : [];
+    etatAvis = d.avis || {};
+    var prenom = d.prenom || "";
+    var h = "";
+    h += "<div class='intro'><h1>Bonjour" + (prenom ? " " + esc(prenom) : "") + ",</h1>";
+    h += "<p>" + esc(d.message || "Voici une sélection de biens correspondant à vos critères.") + "</p>";
+    if (d.vendeur) h += "<div class='sig'>— " + esc(d.vendeur) + ", votre conseiller GLR Immobilier</div>";
+    h += "</div>";
+    h += "<div class='meta'><span>" + biens.length + " bien" + (biens.length > 1 ? "s" : "") + " sélectionné" + (biens.length > 1 ? "s" : "") + " pour vous</span>";
+    if (d.expires_at) h += "<span>·</span><span>Sélection valable jusqu'au " + esc(fmtDate(d.expires_at)) + "</span>";
+    h += "</div>";
+
+    biens.forEach(function(b, i){
+      var photo = photoDe(b);
+      h += "<div class='card' data-carte='" + i + "'>";
+      if (photo){
+        h += "<div class='photo' data-g='" + i + "'>";
+        h += "<div class='num-bien'>Bien " + (i + 1) + "</div>";
+        h += "<img src='" + esc(photo) + "' alt='" + esc(b.titre || "Bien") + "' loading='lazy'>";
+        h += "</div>";
+      } else {
+        h += "<div class='img-vide'><div class='num-bien'>Bien " + (i + 1) + "</div><img src='logo-glr.png' alt='GLR Immobilier' onerror=\"this.outerHTML='<span class=&quot;txt&quot;>GLR</span>'\"></div>";
+      }
+      h += "<div class='body'>";
+      if (b.ville) h += "<div class='eyebrow'>" + esc(b.ville) + "</div>";
+      h += "<h2>" + esc(b.titre) + "</h2>";
+      if (b.prix) h += "<div class='prix'>" + esc(b.prix) + "</div>";
+      var typos = Array.isArray(b.typologies) ? b.typologies : [];
+      if (typos.length) h += "<div class='chips'>" + typos.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
+      if (b.pitch) h += "<p class='pitch'>" + esc(b.pitch) + "</p>";
+      var det = [];
+      if (b.surface) det.push(["Surface", b.surface]);
+      if (b.etage) det.push(["Étage", b.etage]);
+      if (b.terrasse) det.push(["Terrasse / balcon", b.terrasse]);
+      if (b.parking) det.push(["Parking", b.parking]);
+      if (b.expo) det.push(["Exposition", b.expo]);
+      if (b.livraison) det.push(["Livraison", b.livraison]);
+      if (det.length) h += "<div class='det'>" + det.map(function(x){ return "<div><span>" + esc(x[0]) + "</span><strong>" + esc(x[1]) + "</strong></div>"; }).join("") + "</div>";
+      var atouts = Array.isArray(b.atouts) ? b.atouts.slice(0, 5) : [];
+      if (atouts.length) h += "<ul class='atouts'>" + atouts.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
+      var docs = [];
+      if (b.plan) docs.push(["Plan de l'appartement", b.plan]);
+      if (b.masse) docs.push(["Plan de masse", b.masse]);
+      if (b.lien) docs.push(["Fiche &amp; plans du lot", b.lien]);
+      if (b.pdf) docs.push(["Fiche du lot (PDF)", b.pdf]);
+      if (docs.length) h += "<div class='docs'>" + docs.map(function(x){ return "<a class='doc' href='" + esc(x[1]) + "' target='_blank' rel='noopener'>" + x[0] + "</a>"; }).join("") + "</div>";
+
+      var a = etatAvis[String(i)] || {};
+      h += "<div class='avis' data-i='" + i + "'>";
+      h += "<div class='avis-titre'>Votre avis sur ce bien :</div>";
+      h += "<div class='avis-btns'>";
+      h += "<button class='ab" + (a.choix === "interesse" ? " on" : "") + "' data-c='interesse'>Ça m'intéresse</button>";
+      h += "<button class='ab" + (a.choix === "a_discuter" ? " on" : "") + "' data-c='a_discuter'>À discuter</button>";
+      h += "<button class='ab" + (a.choix === "pas_pour_moi" ? " on" : "") + "' data-c='pas_pour_moi'>Pas pour moi</button>";
+      h += "</div>";
+      h += "<button class='cta-rdv'>Demander un rendez-vous</button>";
+      h += "</div></div></div>";
+    });
+
+    // Bloc rendez-vous
+    var rdv = etatAvis.rdv || {};
+    h += "<div class='rdv' id='bloc-rdv'>";
+    h += "<h3>Envie d'aller plus loin ?</h3>";
+    if (rdv.demande){
+      h += "<p>Votre demande de rendez-vous a bien été transmise" + (d.vendeur ? " à " + esc(d.vendeur) : "") + ".</p><div class='rdv-ok'>✓ " + (d.vendeur ? esc(d.vendeur) : "Votre conseiller") + " revient vers vous très vite</div>";
+    } else {
+      h += "<p>Proposez un créneau, " + (d.vendeur ? esc(d.vendeur) : "votre conseiller") + " vous rappelle pour en parler.</p>";
+      h += "<div id='rdv-contexte' style='font-size:12.5px;color:var(--gold);margin-bottom:10px'></div>";
+      h += "<div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Demander un rendez-vous</button></div>";
+    }
+    h += "</div>";
+
+    h += "<footer>Donnez votre avis sur chaque bien : votre conseiller adaptera la prochaine sélection.";
+    h += "<div class='partage'><button id='btn-partage'>Partager cette sélection</button></div>";
+    h += "<div style='margin-top:14px'>GLR Immobilier</div></footer>";
+
+    cont.className = "";
+    cont.innerHTML = h;
+    brancher(d);
+    majProgression();
+    document.getElementById("barre").classList.add("show");
+    if (biens.length >= 2) document.getElementById("btn-comp").style.display = "";
+
+    // Apparition douce des cartes
+    if ("IntersectionObserver" in window){
+      var obs = new IntersectionObserver(function(entries){
+        entries.forEach(function(e){ if (e.isIntersecting){ e.target.classList.add("vue"); obs.unobserve(e.target); } });
+      }, { threshold: 0.08 });
+      Array.prototype.forEach.call(document.querySelectorAll(".card"), function(c){ obs.observe(c); });
+    } else {
+      Array.prototype.forEach.call(document.querySelectorAll(".card"), function(c){ c.classList.add("vue"); });
+    }
+  }
+
+  // ---------- Interactions ----------
+  function majProgression(){
+    var n = biens.length, fait = 0;
+    for (var i = 0; i < n; i++){ if ((etatAvis[String(i)] || {}).choix) fait++; }
+    var txt = document.getElementById("prog-txt");
+    var barre = document.getElementById("prog-rempli");
+    if (fait >= n && n > 0){
+      txt.textContent = "✓ Merci ! Votre avis est complet — votre conseiller revient vers vous.";
+    } else {
+      txt.textContent = "Votre avis : " + fait + " / " + n + " bien" + (n > 1 ? "s" : "");
+    }
+    barre.style.width = (n ? Math.round(100 * fait / n) : 0) + "%";
+  }
+
+  function ouvrirLb(i, j){
+    lbBien = i; lbIdx = j;
+    majLb();
+    document.getElementById("lb").classList.add("show");
+    document.body.style.overflow = "hidden";
+  }
+  function fermerLb(){
+    document.getElementById("lb").classList.remove("show");
+    document.body.style.overflow = "";
+  }
+  function majLb(){
+    var imgs = imagesDe(biens[lbBien] || {});
+    if (lbIdx < 0) lbIdx = imgs.length - 1;
+    if (lbIdx >= imgs.length) lbIdx = 0;
+    document.getElementById("lb-img").src = imgs[lbIdx] || "";
+    document.getElementById("lb-num").textContent = (imgs.length > 1 ? (lbIdx + 1) + " / " + imgs.length + " — " : "") + (biens[lbBien].titre || "");
+    document.getElementById("lb-prec").style.display = imgs.length > 1 ? "" : "none";
+    document.getElementById("lb-suiv").style.display = imgs.length > 1 ? "" : "none";
+  }
+
+  function ouvrirComp(){
+    var lignes = [
+      ["Prix", function(b){ return b.prix; }],
+      ["Type", function(b){ return (Array.isArray(b.typologies) ? b.typologies.join(", ") : ""); }],
+      ["Ville", function(b){ return b.ville; }],
+      ["Surface", function(b){ return b.surface; }],
+      ["Étage", function(b){ return b.etage; }],
+      ["Terrasse / balcon", function(b){ return b.terrasse; }],
+      ["Parking", function(b){ return b.parking; }],
+      ["Exposition", function(b){ return b.expo; }],
+      ["Livraison", function(b){ return b.livraison; }]
+    ];
+    var labels = { interesse: "Ça m'intéresse", a_discuter: "À discuter", pas_pour_moi: "Pas pour moi" };
+    var h = "<table><thead><tr><th></th>";
+    biens.forEach(function(b, i){ h += "<th>Bien " + (i + 1) + "<div style='font-weight:400;font-size:12px;color:var(--muted)'>" + esc(b.titre || "") + "</div></th>"; });
+    h += "</tr></thead><tbody>";
+    lignes.forEach(function(l){
+      var vals = biens.map(function(b){ return l[1](b) || ""; });
+      if (!vals.some(function(v){ return v; })) return;
+      h += "<tr><td>" + l[0] + "</td>" + vals.map(function(v){ return "<td>" + (v ? esc(v) : "<span style='color:#c9c4b8'>—</span>") + "</td>"; }).join("") + "</tr>";
+    });
+    h += "<tr><td>Votre avis</td>" + biens.map(function(_, i){
+      var c = (etatAvis[String(i)] || {}).choix;
+      return "<td>" + (c ? labels[c] : "<span style='color:#c9c4b8'>—</span>") + "</td>";
+    }).join("") + "</tr>";
+    h += "</tbody></table>";
+    document.getElementById("comp-corps").innerHTML = h;
+    document.getElementById("comp").classList.add("show");
+    document.body.style.overflow = "hidden";
+  }
+  function fermerComp(){
+    document.getElementById("comp").classList.remove("show");
+    document.body.style.overflow = "";
+  }
+
+  function brancher(d){
+    // Photo : clic → plein écran
+    Array.prototype.forEach.call(document.querySelectorAll(".photo"), function(g){
+      var i = parseInt(g.getAttribute("data-g"), 10);
+      var im = g.querySelector("img");
+      if (im) im.addEventListener("click", function(){ ouvrirLb(i, 0); });
+    });
+
+    // Avis
+    Array.prototype.forEach.call(document.querySelectorAll(".avis"), function(bloc){
+      var i = parseInt(bloc.getAttribute("data-i"), 10);
+      Array.prototype.forEach.call(bloc.querySelectorAll(".ab"), function(btn){
+        btn.addEventListener("click", function(){
+          Array.prototype.forEach.call(bloc.querySelectorAll(".ab"), function(b2){ b2.classList.remove("on"); });
+          btn.classList.add("on");
+          etatAvis[String(i)] = etatAvis[String(i)] || {};
+          etatAvis[String(i)].choix = btn.getAttribute("data-c");
+          majProgression();
+          envoyer({ action: "avis", index: i, choix: btn.getAttribute("data-c") }, "✓ Merci, votre avis a bien été transmis");
+        });
+      });
+      bloc.querySelector(".cta-rdv").addEventListener("click", function(){
+        rdvContexte = biens[i] && biens[i].titre ? biens[i].titre : "Bien " + (i + 1);
+        var cible = document.getElementById("bloc-rdv");
+        var note = document.getElementById("rdv-contexte");
+        if (note) note.textContent = "Au sujet de : " + rdvContexte;
+        cible.scrollIntoView({ behavior: "smooth", block: "center" });
+        var inp = document.getElementById("rdv-creneau");
+        if (inp) setTimeout(function(){ inp.focus(); }, 500);
+      });
+    });
+
+    // Rendez-vous
+    var btnRdvEnvoyer = document.getElementById("rdv-envoyer");
+    if (btnRdvEnvoyer) btnRdvEnvoyer.addEventListener("click", function(){
+      var creneau = (document.getElementById("rdv-creneau").value || "").trim();
+      envoyer({ action: "rdv", creneau: creneau, bien: rdvContexte }, "✓ Demande de rendez-vous transmise").then(function(ok){
+        if (!ok) return;
+        etatAvis.rdv = { demande: true, creneau: creneau };
+        var bloc = document.getElementById("bloc-rdv");
+        bloc.innerHTML = "<h3>Envie d'aller plus loin ?</h3><p>Votre demande de rendez-vous a bien été transmise" + (d.vendeur ? " à " + esc(d.vendeur) : "") + ".</p><div class='rdv-ok'>✓ " + (d.vendeur ? esc(d.vendeur) : "Votre conseiller") + " revient vers vous très vite</div>";
+      });
+    });
+    document.getElementById("btn-rdv").addEventListener("click", function(){
+      var bloc = document.getElementById("bloc-rdv");
+      bloc.scrollIntoView({ behavior: "smooth", block: "center" });
+      var inp = document.getElementById("rdv-creneau");
+      if (inp) setTimeout(function(){ inp.focus(); }, 500);
+    });
+
+    // Comparateur
+    document.getElementById("btn-comp").addEventListener("click", ouvrirComp);
+    document.getElementById("comp-x").addEventListener("click", fermerComp);
+    document.getElementById("comp").addEventListener("click", function(e){ if (e.target === this) fermerComp(); });
+
+    // Lightbox
+    document.getElementById("lb-x").addEventListener("click", fermerLb);
+    document.getElementById("lb-prec").addEventListener("click", function(){ lbIdx--; majLb(); });
+    document.getElementById("lb-suiv").addEventListener("click", function(){ lbIdx++; majLb(); });
+    document.getElementById("lb").addEventListener("click", function(e){ if (e.target === this) fermerLb(); });
+    document.addEventListener("keydown", function(e){
+      if (document.getElementById("lb").classList.contains("show")){
+        if (e.key === "Escape") fermerLb();
+        if (e.key === "ArrowLeft"){ lbIdx--; majLb(); }
+        if (e.key === "ArrowRight"){ lbIdx++; majLb(); }
+      } else if (document.getElementById("comp").classList.contains("show") && e.key === "Escape") fermerComp();
+    });
+    (function(){
+      var lb = document.getElementById("lb"), x0 = null;
+      lb.addEventListener("touchstart", function(e){ x0 = e.touches[0].clientX; }, { passive: true });
+      lb.addEventListener("touchend", function(e){
+        if (x0 === null) return;
+        var dx = e.changedTouches[0].clientX - x0;
+        if (Math.abs(dx) > 40){ lbIdx += (dx < 0 ? 1 : -1); majLb(); }
+        x0 = null;
+      }, { passive: true });
+    })();
+
+    // Partage
+    document.getElementById("btn-partage").addEventListener("click", function(){
+      var url = location.href;
+      if (navigator.share){
+        navigator.share({ title: "Ma sélection GLR Immobilier", url: url }).catch(function(){});
+      } else if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(function(){ toast("✓ Lien copié — partagez-le à qui vous voulez"); });
+      } else {
+        toast(url);
+      }
+    });
+  }
+
+  // ---------- Chargement ----------
+  if (token === "demo"){ rendre(donneesDemo()); return; }
+
+  fetch(FN + "?data=1")
+  .then(function(r){
+    if (r.status === 404) throw { code: 404 };
+    if (!r.ok) throw {};
+    return r.json();
+  })
+  .then(function(d){
+    if (!d || !d.ok) throw { code: 404 };
+    if (d.expired){
+      ecranVide("Cette sélection a expiré",
+        "Pour recevoir une sélection à jour des meilleures opportunités du moment, contactez " + (d.vendeur || "votre conseiller") + " — GLR Immobilier. Les prix et disponibilités évoluent vite !");
+      return;
+    }
+    rendre(d);
+  })
+  .catch(function(e){
+    if (e && e.code === 404) ecranVide("Lien introuvable", "Ce lien de sélection n'existe pas ou a expiré. Rapprochez-vous de votre conseiller GLR Immobilier.");
+    else ecranVide("Erreur de chargement", "Impossible de charger votre sélection — vérifiez votre connexion et réessayez.");
+  });
+})();
+</script>
+</body></html>
