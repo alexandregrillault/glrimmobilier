@@ -2333,9 +2333,12 @@ Nous avons le plaisir de vous annoncer le lancement de..."></textarea>
       <div class="form-group"><label>N° TVA intracom.</label><input type="text" id="fac-promo-tva"></div>
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:8px;margin-top:2px"><label style="color:var(--accent);font-weight:700">Prestation</label></div>
       <div class="form-group full"><label>Désignation</label><textarea id="fac-designation" rows="2"></textarea></div>
+      <div class="form-group"><label>Prix du bien (€)</label><input type="number" step="0.01" id="fac-prix" placeholder="ex: 350000" oninput="_facMajTotaux()"></div>
+      <div class="form-group"><label>Honoraires (% du prix)</label><input type="number" step="0.01" id="fac-taux-hono" placeholder="ex: 5" oninput="_facMajTotaux()"></div>
       <div class="form-group"><label>Montant HT (€)</label><input type="number" step="0.01" id="fac-ht" oninput="_facMajTotaux()"></div>
       <div class="form-group"><label>TVA (%)</label><input type="number" step="0.1" id="fac-tva-taux" value="20" oninput="_facMajTotaux()"></div>
     </div>
+    <div id="fac-base-hint" style="font-size:12px;color:var(--muted);margin:6px 4px 0"></div>
     <div style="display:flex;justify-content:flex-end;gap:26px;margin:10px 4px 0;font-size:13px">
       <div>TVA : <strong id="fac-tva-montant">—</strong></div>
       <div>Total TTC : <strong id="fac-ttc" style="color:var(--accent)">—</strong></div>
@@ -10572,6 +10575,21 @@ function _facMajTotaux() {
   const tva = ht * taux / 100;
   const mEl = document.getElementById('fac-tva-montant'); if (mEl) mEl.textContent = fmtEur(tva);
   const tEl = document.getElementById('fac-ttc'); if (tEl) tEl.textContent = fmtEur(ht + tva);
+  const hint = document.getElementById('fac-base-hint');
+  if (hint) {
+    const prix = parseFloat((document.getElementById('fac-prix') || {}).value) || 0;
+    const tx   = parseFloat((document.getElementById('fac-taux-hono') || {}).value) || 0;
+    if (prix > 0 && tx > 0) {
+      const base = prix * tx / 100;
+      const ecart = base - ht;
+      hint.innerHTML = 'Base de calcul : ' + fmtEur(prix) + ' \u00d7 ' + _facPct(tx) + ' = <strong>' + fmtEur(base) + ' HT</strong>'
+        + (Math.abs(ecart) > 1 ? ' \u00b7 <span style="color:var(--warning)">\u00e9cart de ' + fmtEur(ecart) + ' avec le montant factur\u00e9 (d\u00e9duction plateforme ?)</span>' : '');
+    } else hint.innerHTML = '';
+  }
+}
+function _facPct(n) {
+  const v = Number(n) || 0;
+  return (Math.round(v * 100) / 100).toString().replace('.', ',') + ' %';
 }
 function _remplirSelectVentes(selectedId) {
   const sel = document.getElementById('fac-vente'); if (!sel) return;
@@ -10588,6 +10606,8 @@ function onVenteLieeChange() {
   const setV = (i, val) => { const el = document.getElementById(i); if (el) el.value = val; };
   setV('fac-designation', 'Honoraires de commercialisation — ' + (v.programme || '') + (v.lot ? (' (lot ' + v.lot + ')') : '') + (v.ville ? (' — ' + v.ville) : '') + (v.client ? (' — acquéreur : ' + v.client) : ''));
   setV('fac-ht', Number(v.honoraires) || 0);
+  setV('fac-prix', Number(v.prix) || '');
+  setV('fac-taux-hono', Number(v.tauxHonoraires) || '');
   const nomEl = document.getElementById('fac-promo-nom');
   if (nomEl && !nomEl.value) nomEl.value = v.promoteur || '';
   _facMajTotaux();
@@ -10596,6 +10616,8 @@ function _resetFactureModal() {
   const setV = (i, val) => { const el = document.getElementById(i); if (el) el.value = val; };
   ['fac-promo-nom', 'fac-promo-adresse', 'fac-promo-siren', 'fac-promo-tva', 'fac-designation'].forEach(i => setV(i, ''));
   setV('fac-ht', ''); setV('fac-tva-taux', 20);
+  setV('fac-prix', ''); setV('fac-taux-hono', '');
+  const bh = document.getElementById('fac-base-hint'); if (bh) bh.innerHTML = '';
   const m = document.getElementById('fac-tva-montant'); if (m) m.textContent = '—';
   const t = document.getElementById('fac-ttc'); if (t) t.textContent = '—';
 }
@@ -10635,6 +10657,8 @@ function editFacture(fid) {
   setV('fac-promo-tva', p.tva || '');
   setV('fac-designation', rec.designation || '');
   setV('fac-ht', rec.ht || 0);
+  setV('fac-prix', rec.prixBien || '');
+  setV('fac-taux-hono', rec.tauxHono || '');
   setV('fac-tva-taux', rec.taux != null ? rec.taux : 20);
   _facMajTotaux();
   document.querySelector('#modal-facture .modal-title').textContent = '✎ Facture ' + rec.numero;
@@ -10654,11 +10678,13 @@ function saveFacture(withPdf) {
   };
   const designation = (document.getElementById('fac-designation').value || '').trim();
   const ht = parseFloat(document.getElementById('fac-ht').value) || 0;
+  const prixBien = parseFloat(document.getElementById('fac-prix').value) || 0;
+  const tauxHono = parseFloat(document.getElementById('fac-taux-hono').value) || 0;
   const taux = parseFloat(document.getElementById('fac-tva-taux').value) || 0;
   const venteId = document.getElementById('fac-vente').value || null;
   if (!numero || !dateF || !promo.nom) { toast('⚠ Numéro, date et promoteur requis', 'var(--warning)'); return; }
   const tva = ht * taux / 100, ttc = ht + tva;
-  const rec = { id: fid || uid(), numero: numero, date: dateF, echeance: ech, venteId: venteId, promoteur: promo, designation: designation, ht: ht, taux: taux, tva: tva, ttc: ttc, updatedAt: new Date().toISOString() };
+  const rec = { id: fid || uid(), numero: numero, date: dateF, echeance: ech, venteId: venteId, promoteur: promo, designation: designation, prixBien: prixBien, tauxHono: tauxHono, ht: ht, taux: taux, tva: tva, ttc: ttc, updatedAt: new Date().toISOString() };
   if (fid) {
     const idx = st.emises.findIndex(x => x.id === fid);
     if (idx !== -1) rec.createdAt = st.emises[idx].createdAt, st.emises[idx] = rec;
@@ -10687,7 +10713,7 @@ function regenFacturePDF(fid) {
   if (rec) _ouvrirFacturePDF(_recToFacture(rec));
 }
 function _recToFacture(rec) {
-  return { numero: rec.numero, dateF: rec.date, ech: rec.echeance, promo: rec.promoteur || {}, designation: rec.designation, ht: rec.ht, taux: rec.taux, tva: rec.tva, ttc: rec.ttc };
+  return { numero: rec.numero, dateF: rec.date, ech: rec.echeance, promo: rec.promoteur || {}, designation: rec.designation, prixBien: rec.prixBien, tauxHono: rec.tauxHono, ht: rec.ht, taux: rec.taux, tva: rec.tva, ttc: rec.ttc };
 }
 function renderFactures() {
   const st = _facturationState();
@@ -10711,6 +10737,21 @@ function renderFactures() {
     + '<button class="btn btn-danger btn-sm" onclick="deleteFacture(\'' + r.id + '\')">✕</button>'
     + '</div></td></tr>').join('');
 }
+function _ligneBaseFacture(f, eur) {
+  const prix = Number(f.prixBien) || 0;
+  const tx   = Number(f.tauxHono) || 0;
+  if (!prix && !tx) return '';
+  const out = [];
+  if (prix) out.push('Prix de vente du bien : <b>' + eur(prix) + '</b>');
+  if (tx)   out.push('Honoraires : <b>' + _facPct(tx) + '</b>' + (prix ? ' du prix de vente' : ''));
+  let html = '<div class="sub">' + out.join(' &middot; ') + '</div>';
+  if (prix && tx) {
+    const base = prix * tx / 100;
+    const ecart = base - (Number(f.ht) || 0);
+    if (Math.abs(ecart) > 1) html += '<div class="sub">Soit ' + eur(base) + ' HT, dont d\u00e9duction de ' + eur(ecart) + ' (frais de plateforme)</div>';
+  }
+  return html;
+}
 function _ouvrirFacturePDF(f) {
   const E = GLR_EMETTEUR;
   const d = s => s ? new Date(s).toLocaleDateString('fr-FR') : '';
@@ -10730,6 +10771,8 @@ function _ouvrirFacturePDF(f) {
     + 'th{background:#13161e;color:#fff;text-align:left;padding:8px 10px;font-size:11px}'
     + 'td{padding:8px 10px;border-bottom:1px solid #e5e7eb}'
     + '.num{text-align:right}'
+    + '.sub{margin-top:5px;font-size:10.5px;color:#6b7280;line-height:1.6}'
+    + '.sub b{color:#1c2230;font-weight:700}'
     + '.totes{width:280px;margin-left:auto;margin-top:8px}'
     + '.totes div{display:flex;justify-content:space-between;padding:5px 0}'
     + '.totes .grand{border-top:2px solid #0d0f14;margin-top:4px;padding-top:8px;font-size:15px;font-weight:800}'
@@ -10745,7 +10788,7 @@ function _ouvrirFacturePDF(f) {
     + '<div class="parties"><div class="card"><h4>Émetteur</h4><strong>' + esc(E.nom) + '</strong><br>' + esc(E.adresse) + '<br>SIREN ' + esc(E.siren) + '<br>TVA ' + esc(E.tva) + '</div>'
     + '<div class="card"><h4>Facturé à</h4><strong>' + esc(f.promo.nom) + '</strong><br>' + esc(f.promo.adresse) + (f.promo.siren ? ('<br>SIREN ' + esc(f.promo.siren)) : '') + (f.promo.tva ? ('<br>TVA ' + esc(f.promo.tva)) : '') + '</div></div>'
     + '<table><thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">P.U. HT</th><th class="num">Montant HT</th></tr></thead>'
-    + '<tbody><tr><td>' + esc(f.designation) + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
+    + '<tbody><tr><td>' + esc(f.designation) + _ligneBaseFacture(f, eur) + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
     + '<div class="totes"><div><span>Total HT</span><span>' + eur(f.ht) + '</span></div><div><span>TVA (' + f.taux + ' %)</span><span>' + eur(f.tva) + '</span></div><div class="grand"><span>Total TTC</span><span>' + eur(f.ttc) + '</span></div></div>'
     + '<div class="pay"><strong>Modalités de règlement</strong><br>Paiement à ' + E.delaiJours + ' jours — échéance le ' + d(f.ech) + '.<br>Par virement : IBAN ' + esc(E.iban) + ' — BIC ' + esc(E.bic) + '.<br>'
     + '<span class="muted">En cas de retard : pénalités au taux de 3 fois le taux d\'intérêt légal, exigibles sans rappel, et indemnité forfaitaire pour frais de recouvrement de 40 € (art. L441-10 et D441-5 du Code de commerce). Pas d\'escompte pour paiement anticipé.</span></div>'
