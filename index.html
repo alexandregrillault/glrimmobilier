@@ -1530,6 +1530,7 @@
       </div>
 
       <!-- Filtres rapides -->
+      <div id="eq-veille-bandeau" style="margin-bottom:14px"></div>
       <div id="eq-leads-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"></div>
       <div id="eq-leads-legende" style="margin-bottom:14px"></div>
 
@@ -1692,6 +1693,7 @@
           <option value="Contacté">Contacté</option>
           <option value="Chaud">Chaud</option>
           <option value="Client">Client</option>
+          <option value="En veille">En veille</option>
           <option value="Perdu">Perdu</option>
           <option value="Non qualifié">Non qualifié</option>
           <option value="Stop">Ne plus contacter</option>
@@ -1748,6 +1750,7 @@
       <div style="color:var(--muted);font-size:13px;margin-bottom:18px;max-width:680px">
         Chaque programme génère une page de réservation visio. Crée-le ici, puis clique « Copier le lien » pour récupérer l'URL à mettre dans tes mails de campagne.
       </div>
+      <div id="prog-veille-bandeau" style="margin-bottom:16px"></div>
       <div id="programmes-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px"></div>
     </div>
 
@@ -4984,10 +4987,14 @@ function _eqLeadsPopulateSelect() {
 
 // Pipeline simplifié : 4 étapes + case "Sans réponse" à part + 3 statuts finaux
 const STATUTS_PIPELINE = ['Nouveau','Sélections','Retour documentation','Finaliser la vente'];
-const STATUTS_LEAD = ['Nouveau','Sélections','Retour documentation','Finaliser la vente','Sans réponse','Vendu','Perdu','Non qualifié'];
+const STATUTS_LEAD = ['Nouveau','Sélections','Retour documentation','Finaliser la vente','Sans réponse','En veille','Vendu','Perdu','Non qualifié'];
 // Statuts qui ferment le lead : plus de rappel, plus de sélection, sorti des activités
 // « Non qualifié » = hors cible / pas de projet réel / injoignable définitivement — à ne plus travailler
 const STATUTS_FINAUX = ['Vendu','Perdu','Non qualifié'];
+// « En veille » : les critères sont pris, rien ne correspond sur le marché du
+// moment. Le lead ne se ferme pas — il attend un lancement. Pas de date
+// d'activité : c'est le catalogue qui le réveillera, pas un rappel à froid.
+const STATUT_VEILLE = 'En veille';
 // Correspondance anciens statuts → nouveaux (les leads existants restent lisibles sans migration)
 const MAP_ANCIENS_STATUTS = {
   'Contacté': 'Sélections',
@@ -5072,6 +5079,241 @@ function _eqCopyFallback(text, done) {
   ta.remove();
 }
 
+// --- Budget : une seule écriture pour tout le CRM ---------------------------
+// Convention maison : on parle toujours en milliers d'euros. « 300 » et
+// « 300K » valent 300 000 €, mais « 300 000 » reste 300 000 € — jamais 300
+// millions. Exception : un montant écrit avec le symbole € et inférieur à
+// 10 000 est pris au pied de la lettre (« jusqu'à 1 300 € », c'est un loyer).
+// Une saisie approximative garde un ~ devant.
+const BUDGET_MINI = 50000;      // en dessous : probable faute de frappe
+const BUDGET_MAXI = 3000000;    // au dessus  : probable faute de frappe
+const _BUD_NBSP = /[  ]/g;
+const _BUD_APPROX = /~|environ|autour|alentour|à peu près|a peu pres|dans les|aux environs/;
+const _BUD_FOURCHETTE = /(\d[\d\s.,]*(?:\s*(?:k|m|mille|mio|millions?)\b|\s*€)?)\s*(?:-|–|—|\s(?:à|a|et|au)\s)\s*(\d[\d\s.,]*(?:\s*(?:k|m|mille|mio|millions?)\b|\s*€)?)/;
+
+function _budUnNombre(txt, euroExplicite) {
+  let s = String(txt == null ? '' : txt).toLowerCase().replace(_BUD_NBSP, ' ');
+  const euro = !!euroExplicite || /€|eur(os?)?\b/.test(s);
+  s = s.replace(/€|eur(os?)?\b/g, ' ');
+  if (!/\d/.test(s)) return null;
+  const suffixeM = /\d\s*(m|mio|millions?)\b/.test(s);
+  const suffixeK = /\d\s*(k|mille)\b/.test(s);
+  s = s.replace(/\b(m|mio|millions?|k|mille)\b/g, ' ');
+  s = s.replace(/[.,](?=\d{3}(?!\d))/g, '');          // séparateur de milliers
+  while (/\d\s+\d/.test(s)) s = s.replace(/(\d)\s+(\d)/g, '$1$2');
+  s = s.replace(/,/g, '.');
+  const m = s.match(/\d+(?:\.\d+)?/);
+  if (!m) return null;
+  let n = parseFloat(m[0]);
+  if (!isFinite(n) || n <= 0) return null;
+  const decimal = m[0].indexOf('.') !== -1;
+  if (suffixeM) n *= 1e6;
+  else if (suffixeK) n *= 1000;
+  else if (euro && n < 10000) n = n;                  // « 1 300 € » : montant écrit tel quel
+  else if (n < 10) n *= decimal ? 1e6 : 1000;         // « 1,2 » = 1,2 M€
+  else if (n < 10000) n *= 1000;                      // « 300 » = 300 000 €
+  return Math.round(n);
+}
+
+// { min, max, approx, alerte, propre } ou null. « propre » : la saisie ne
+// contenait qu'un budget, on peut la réécrire ; sinon on garde les mots du
+// vendeur (« de 190 000 dispo max 2027 » a du sens, on n'y touche pas).
+function budgetParse(txt) {
+  const brut = String(txt == null ? '' : txt).trim();
+  if (!brut) return null;
+  const bas = brut.toLowerCase().replace(_BUD_NBSP, ' ');
+  const approx = _BUD_APPROX.test(bas);
+  const euro = /€|eur(os?)?\b/.test(bas);
+  const f = bas.match(_BUD_FOURCHETTE);
+  let min = null, max = null;
+  if (f) {
+    min = _budUnNombre(f[1], euro);
+    max = _budUnNombre(f[2], euro);
+    if (min && max && min > max) { const t = min; min = max; max = t; }
+  }
+  if (max == null) { max = _budUnNombre(bas, euro); min = null; }
+  if (max == null) return null;
+  const reste = bas.replace(/[\d\s.,€~<>+-]|–|—/g, ' ')
+    .replace(/\b(k|m|mio|millions?|mille|eur|euros?|max|maximum|mini|minimum|budget|de|du|des|a|à|au|et|entre|environ|autour|alentours?|aux|dans|les|le|la|jusqu|jusqua|peu|près|pres|prix)\b/g, ' ')
+    .replace(/[’']/g, ' ').trim();
+  return { min: (min && min !== max) ? min : null, max: max, approx: approx,
+           alerte: max < BUDGET_MINI || max > BUDGET_MAXI, propre: reste === '' };
+}
+
+function budgetFmt(n) { return Number(n).toLocaleString('fr-FR') + ' €'; }
+function budgetTexte(b) {
+  if (!b) return '';
+  if (b.min) return budgetFmt(b.min) + ' – ' + budgetFmt(b.max);
+  return (b.approx ? '~' : '') + budgetFmt(b.max);
+}
+// Corps de mise à jour prêt pour Supabase
+function budgetCorps(txt, reecrire) {
+  const brut = String(txt == null ? '' : txt).trim();
+  const b = budgetParse(brut);
+  if (!b) return { budget: brut || null, budget_min: null, budget_max: null, budget_approx: false };
+  return { budget: (reecrire && b.propre) ? budgetTexte(b) : brut,
+           budget_min: b.min, budget_max: b.max, budget_approx: b.approx };
+}
+// Ce que le vendeur lit sous le champ pendant qu'il tape
+function budgetApercuHtml(txt) {
+  const b = budgetParse(txt);
+  if (!b) return String(txt || '').trim()
+    ? '<span style="color:var(--warning)">Montant non reconnu</span>' : '';
+  const coul = b.alerte ? 'var(--warning)' : 'var(--muted)';
+  return '<span style="color:' + coul + '">→ ' + budgetTexte(b)
+    + (b.alerte ? ' — à vérifier' : '') + '</span>';
+}
+// Le budget d'un lead, quel que soit l'endroit d'où il vient
+function leadBudgetMax(l) {
+  if (!l) return null;
+  if (l.budget_max != null) return Number(l.budget_max);
+  const b = budgetParse(l.budget);
+  return b ? b.max : null;
+}
+
+// --- Veille : le client dont rien ne correspond aujourd'hui -----------------
+// Le commercial a pris les critères, le marché n'a rien à lui montrer. Plutôt
+// que de le perdre, on le met de côté avec ses critères figés, et c'est le
+// prochain lancement qui vient le rechercher — avec une marge, parce qu'un
+// client à 300 000 € prend un lot à 320 000 € et qu'une ville limitrophe se
+// visite.
+const VEILLE_MARGE_BUDGET = 0.15;   // budget élargi de 15 % au lancement
+const VEILLE_RAYON_KM = 12;         // « ville limitrophe » : centre à centre
+const VEILLE_MOTIFS = ['Budget trop juste', 'Secteur non couvert',
+                       'Livraison trop lointaine', 'Typologie indisponible', 'Autre'];
+
+function estEnVeille(l) { return l && eqLeadStatut(l) === STATUT_VEILLE; }
+
+// Photo des critères au moment de la mise en veille. On la fige : si le
+// vendeur retouche la fiche six mois plus tard, le réveil doit toujours
+// répondre à la demande d'origine.
+function veilleSnapshot(l) {
+  const q = l.qualif || {};
+  return {
+    villes: String(l.lieu || '').split(/\s*,\s*/).filter(Boolean),
+    typologies: String(l.typologie || '').split(/\s*,\s*/).filter(Boolean),
+    budget_max: leadBudgetMax(l),
+    budget_min: l.budget_min != null ? Number(l.budget_min) : null,
+    budget_approx: !!l.budget_approx,
+    livraison_max: q.livraison_max || null,
+    surface_min: q.surface_min || null,
+    parking: q.parking || null, terrasse: q.terrasse || null, balcon: q.balcon || null,
+    expositions: Array.isArray(q.expositions) ? q.expositions : [],
+    tva_reduite: q.tva_reduite || null, ptz: q.ptz || null, etage_rdj: q.etage_rdj || null,
+    fige_le: new Date().toISOString()
+  };
+}
+// Les critères qui font foi pour le réveil : la photo si elle existe, la fiche sinon
+function veilleCriteres(l) {
+  if (l && l.veille_criteres && typeof l.veille_criteres === 'object') return l.veille_criteres;
+  return veilleSnapshot(l || {});
+}
+
+// « 2 pièces », « T2 », « Studio » → T1..T5+
+function veilleTypoCode(t) {
+  const s = String(t == null ? '' : t).toLowerCase();
+  if (/studio/.test(s)) return 'T1';
+  const m = s.match(/t\s*([1-5])/) || s.match(/([1-5])\s*(?:pi|p\b)/);
+  if (!m) return null;
+  return m[1] === '5' ? 'T5+' : 'T' + m[1];
+}
+function veilleAnnee(txt) {
+  const m = String(txt == null ? '' : txt).match(/(20\d{2})/);
+  return m ? parseInt(m[1], 10) : null;
+}
+// Prix d'entrée du programme pour la typologie qui intéresse le client
+function veillePrixEntree(p, typos) {
+  const lignes = Array.isArray(p.typologies) ? p.typologies : [];
+  const prix = [];
+  lignes.forEach(t => {
+    const code = veilleTypoCode(t.type);
+    if (typos && typos.length && code && typos.indexOf(code) === -1) return;
+    const b = budgetParse(t.prix);
+    if (b) prix.push(b.max);
+  });
+  if (prix.length) return Math.min.apply(null, prix);
+  const b = budgetParse(p.prix_min);
+  return b ? b.max : null;
+}
+
+// Zones : les communes à moins de VEILLE_RAYON_KM du programme. On passe par
+// l'API officielle des communes, déjà utilisée par le filtre rayon des contacts.
+const _veilleZones = {};        // slug → Set de noms normalisés (null = non calculée)
+let _veilleZonesEchec = false;  // API injoignable : on retombe sur ville + département
+async function veilleZone(p) {
+  const cle = p.slug || p.nom;
+  if (_veilleZones[cle]) return _veilleZones[cle];
+  if (!p.ville || _veilleZonesEchec) return null;
+  try {
+    const r = await fetch('https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(p.ville)
+      + '&fields=centre,nom&boost=population&limit=1');
+    const arr = await r.json();
+    if (!arr[0] || !arr[0].centre) return null;
+    const base = arr[0].centre.coordinates;
+    const toutes = await getAllCommunes();
+    const set = new Set();
+    toutes.forEach(c => {
+      if (c.centre && haversineKm(base, c.centre.coordinates) <= VEILLE_RAYON_KM) set.add(normLieu(c.nom));
+    });
+    _veilleZones[cle] = set;
+    return set;
+  } catch (e) { _veilleZonesEchec = true; return null; }
+}
+
+// Le cœur : ce client en veille correspond-il à ce programme ?
+// Renvoie null si un critère dur est hors sujet, sinon la liste des marges
+// qu'il a fallu accorder — c'est ce que le vendeur doit lire avant d'appeler.
+function veilleMatch(l, p, zone) {
+  if (!l || !p) return null;
+  const ecartes = Array.isArray(l.veille_ecartes) ? l.veille_ecartes : [];
+  if (ecartes.indexOf(p.slug) !== -1) return null;
+  const c = veilleCriteres(l);
+  const marges = [], exacts = [];
+
+  // 1. Le secteur
+  const villes = (c.villes || []).map(normLieu).filter(Boolean);
+  const villeProg = normLieu(p.ville);
+  if (!villes.length) marges.push('aucune ville renseignée');
+  else if (villeProg) {
+    const i = villes.indexOf(villeProg);
+    if (i !== -1) exacts.push(p.ville);
+    else {
+      // Sans la liste des communes alentours, on ne devine pas la proximité
+      const j = zone ? villes.findIndex(v => zone.has(v)) : -1;
+      if (j === -1) return null;
+      marges.push(p.ville + ' — limitrophe de ' + (c.villes[j] || ''));
+    }
+  }
+
+  // 2. Le budget, élargi de 15 %
+  const typos = (c.typologies || []).map(veilleTypoCode).filter(Boolean);
+  const prix = veillePrixEntree(p, typos);
+  const bmax = c.budget_max != null ? Number(c.budget_max) : null;
+  if (prix != null && bmax) {
+    if (prix <= bmax) exacts.push('budget');
+    else if (prix <= Math.round(bmax * (1 + VEILLE_MARGE_BUDGET)))
+      marges.push('budget +' + Math.round((prix / bmax - 1) * 100) + ' %');
+    else return null;
+  }
+
+  // 3. La typologie
+  const typosProg = (Array.isArray(p.typologies) ? p.typologies : [])
+    .map(t => veilleTypoCode(t.type)).filter(Boolean);
+  if (typos.length && typosProg.length) {
+    const communs = typos.filter(t => typosProg.indexOf(t) !== -1);
+    if (!communs.length) return null;
+    exacts.push(communs.join(' / '));
+  }
+
+  // 4. La livraison
+  const anMax = c.livraison_max && c.livraison_max !== 'peu_importe'
+    ? parseInt(String(c.livraison_max), 10) : null;
+  const anProg = veilleAnnee(p.livraison);
+  if (anMax && anProg && !/\+/.test(String(c.livraison_max)) && anProg > anMax) return null;
+
+  return { marges: marges, exacts: exacts, prix: prix };
+}
+
 // --- Paternité des leads (règle v2) -----------------------------------------
 // 1. Un lead reçu par plusieurs vendeurs avant toute action apparaît chez chacun
 //    (recu_par) : la paternité revient au premier qui fait une action commerciale.
@@ -5087,10 +5329,15 @@ const PATERNITE_JOURS = 14;
 // commerciale, le trigger Supabase fige la paternité (premiere_action_le) : le
 // lead ne doit alors plus apparaître que chez son propriétaire — sinon les
 // rappels et activités de l'un se retrouvent dans les listes de l'autre.
+// Exception : un lead EN VEILLE reçu à nouveau par un autre vendeur doit
+// apparaître chez lui — pas pour le lui prendre, mais pour qu'il sache qu'un
+// premier contact a déjà eu lieu avant de le rappeler à froid.
 function eqLeadVisiblePour(l, prenom) {
   if (!l || !prenom) return false;
   if (l.vendeur === prenom) return true;      // c'est le sien
-  return !l.premiere_action_le;               // compétition encore ouverte
+  if (!l.premiere_action_le) return true;     // compétition encore ouverte
+  return estEnVeille(l) && (Array.isArray(l.recu_par) ? l.recu_par : [])
+    .some(r => r && r.vendeur === prenom);
 }
 
 function paterniteEtat(c) {
@@ -5114,6 +5361,13 @@ function paterniteEtat(c) {
   const lignesHisto = histo.length
     ? '\n' + histo.map(h => '\u2022 ' + (h.vendeur || '?') + ' jusqu\u2019au ' + (h.au ? fmt(h.au) : '?') + (h.motif ? ' (' + h.motif + ')' : '')).join('\n')
     : '';
+  // En veille : le d\u00e9lai de 14 jours ne court pas. Un client peut attendre un
+  // lancement pendant des mois sans que son vendeur ait \u00e0 le rappeler pour la
+  // forme, uniquement pour garder sa paternit\u00e9.
+  if (estEnVeille(c)) return { type:'veille', vendeur, texte:vendeur + ' \u00b7 en veille', couleur:'var(--accent2)',
+    detail:'Paternit\u00e9 ' + vendeur + ' \u2014 gel\u00e9e pendant la veille'
+      + (c.veille_depuis ? ' (depuis le ' + fmt(c.veille_depuis) + ')' : '')
+      + ' : le d\u00e9lai de ' + PATERNITE_JOURS + ' jours ne court pas tant que le client attend un lancement' + lignesHisto, histo };
   if (c.paternite_geree === false) return { type:'historique', vendeur, texte:vendeur + ' \u00b7 historique', couleur:'var(--muted)',
     detail:'Contact antérieur à la règle \u2014 conservé par ' + vendeur + ', jamais transféré automatiquement' + lignesHisto, histo };
   const ts = [c.derniere_action_le, c.vendeur_depuis].filter(Boolean).map(d => new Date(d).getTime()).filter(t => !isNaN(t));
@@ -5222,7 +5476,7 @@ async function renderEquipeLeads() {
     // Un lead en compétition (recu_par) apparaît chez chaque vendeur récepteur,
     // même si la paternité n'est pas (encore) à lui.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,vendeur_historique,paternite_geree,recu_par,premiere_action_le&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -5246,6 +5500,7 @@ async function renderEquipeLeads() {
     await eqRdvCharger();
     renderEqNotifs();
     renderEquipeLeadsTable();
+    renderVeilleBandeau();   // les lancements qui réveillent mes clients en veille
     // Fiche rouverte sur les données fraîches, ou fermée si le lead a quitté la liste
     if (_ficheAvant) {
       if ((_eqLeads || []).some(l => l.id === _ficheAvant)) {
@@ -5288,6 +5543,10 @@ async function _eqLeadPatch(id, body) {
 }
 
 async function eqLeadStatutChange(id, statut) {
+  // Mise en veille : aucune date d'activité n'est demandée. On fige les
+  // critères et on note pourquoi rien ne correspond aujourd'hui — c'est ce
+  // qui dira dans six mois quels programmes il manque au catalogue.
+  if (statut === STATUT_VEILLE) { eqVeilleOuvrir(id); return; }
   // Étapes actives du pipeline → on choisit quand rappeler le client (J+1 / J+2 / J+3 / date)
   if (['Sélections','Retour documentation','Finaliser la vente'].includes(statut)) {
     const dejaVu = _eqLeads.find(x => x.id === id) || {};
@@ -5363,6 +5622,382 @@ function eqRappelAnnule() {
   renderEquipeLeadsTable(); // remet le select du statut à sa valeur actuelle
 }
 
+// ============================================================
+//  MISE EN VEILLE — on fige les critères, on note pourquoi
+// ============================================================
+let _eqVeilleId = null;
+let _eqVeilleMotif = null;
+
+function eqVeilleOuvrir(id) {
+  const l = _eqLeads.find(x => x.id === id);
+  if (!l) return;
+  _eqVeilleId = id;
+  _eqVeilleMotif = l.veille_motif || null;
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const c = veilleSnapshot(l);
+  const nq = eqQualifRemplie(l);
+  const resume = [];
+  if (c.typologies.length) resume.push(c.typologies.join(' / '));
+  if (c.villes.length) resume.push(c.villes.join(', '));
+  if (c.budget_max) resume.push((c.budget_approx ? '~' : '') + budgetFmt(c.budget_max));
+  if (c.livraison_max) resume.push('livraison ≤ ' + c.livraison_max);
+  const manque = [];
+  if (!c.villes.length) manque.push('la ville');
+  if (!c.budget_max) manque.push('le budget');
+  if (!c.typologies.length) manque.push('la typologie');
+
+  const old = document.getElementById('eq-veille-modal'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'eq-veille-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center;padding:16px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:460px;max-width:100%;max-height:88vh;overflow-y:auto">
+    <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Mettre ${esc(nomComplet(l) || 'ce client')} en veille</div>
+    <div style="font-size:12.5px;color:var(--muted);margin:4px 0 16px;line-height:1.5">
+      Aucune date d'activité ne sera demandée : c'est le prochain lancement qui le fera ressortir,
+      avec une marge de ${Math.round(VEILLE_MARGE_BUDGET * 100)} % sur le budget et les villes limitrophes.
+    </div>
+    <div style="background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:11px 13px;margin-bottom:14px">
+      <div style="font-size:10px;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:6px">Critères figés — ${nq.n}/${nq.total}</div>
+      <div style="font-size:13px;font-weight:600">${resume.length ? esc(resume.join(' · ')) : '<span style="color:var(--warning)">Aucun critère renseigné</span>'}</div>
+    </div>
+    ${manque.length ? `<div style="background:var(--warning)18;border:1px solid var(--warning);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:12.5px;line-height:1.5">
+      Il manque ${esc(manque.join(', '))}. Sans ça, aucun lancement ne pourra le réveiller — complète la fiche avant de fermer.
+    </div>` : ''}
+    <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Pourquoi rien ne correspond aujourd'hui ?</div>
+    <div id="eq-veille-motifs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+    <input id="eq-veille-note" value="${esc(l.veille_motif && VEILLE_MOTIFS.indexOf(l.veille_motif) === -1 ? l.veille_motif : '')}" placeholder="Précision (facultatif) — ex : rien en RDJ sous 280 000 €" maxlength="120" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;margin-bottom:18px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="eqVeilleAnnuler()" style="background:none;border:1px solid var(--border);border-radius:10px;padding:9px 15px;color:var(--muted);cursor:pointer;font-size:13px">Annuler</button>
+      <button onclick="eqVeilleValider()" style="background:var(--accent);border:none;border-radius:10px;padding:9px 17px;color:#fff;cursor:pointer;font-size:13px;font-weight:700">Mettre en veille</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) eqVeilleAnnuler(); });
+  document.body.appendChild(div);
+  eqVeilleMotifsRender();
+}
+function eqVeilleMotifsRender() {
+  const z = document.getElementById('eq-veille-motifs');
+  if (!z) return;
+  z.innerHTML = VEILLE_MOTIFS.map(m => {
+    const actif = _eqVeilleMotif === m;
+    return `<button onclick="eqVeilleMotif('${m.replace(/'/g, "\\'")}')" style="border-radius:9px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ${actif?'var(--accent)':'var(--border)'};background:${actif?'var(--accent)':'var(--surface2)'};color:${actif?'#fff':'var(--text)'}">${m}</button>`;
+  }).join('');
+}
+function eqVeilleMotif(m) { _eqVeilleMotif = (_eqVeilleMotif === m ? null : m); eqVeilleMotifsRender(); }
+function eqVeilleAnnuler() {
+  const el = document.getElementById('eq-veille-modal'); if (el) el.remove();
+  _eqVeilleId = null; _eqVeilleMotif = null;
+  renderEquipeLeadsTable();   // remet le select du statut sur sa valeur réelle
+  if (_eqFicheId) _eqFicheRender();
+}
+async function eqVeilleValider() {
+  const id = _eqVeilleId;
+  const l = _eqLeads.find(x => x.id === id);
+  if (!l) { eqVeilleAnnuler(); return; }
+  const note = (document.getElementById('eq-veille-note')?.value || '').trim();
+  const motif = [_eqVeilleMotif, note].filter(Boolean).join(' — ') || null;
+  const el = document.getElementById('eq-veille-modal'); if (el) el.remove();
+  _eqVeilleId = null; _eqVeilleMotif = null;
+  await _eqLeadPatch(id, {
+    statut: STATUT_VEILLE,
+    statut_maj: new Date().toISOString(),
+    rappel_le: null, rappel_titre: null, rappel_heure: null,
+    veille_depuis: new Date().toISOString(),
+    veille_motif: motif,
+    veille_criteres: veilleSnapshot(l)
+  });
+  if (typeof toast === 'function') toast('✓ En veille — il ressortira au prochain lancement', 'var(--success)');
+  renderVeilleBandeau();
+}
+
+// ============================================================
+//  RÉVEIL — un lancement va rechercher les clients en veille
+// ============================================================
+let _veilleLeads = null;       // contacts en veille (portée : mon périmètre)
+let _veilleReveils = null;     // [{ p, items: [{ l, m }] }]
+let _veilleEnCours = false;
+
+async function veilleCharger(force) {
+  if (_veilleLeads && !force) return _veilleLeads;
+  try {
+    const champs = 'id,nom,prenom,nom_famille,email,telephone,lieu,budget,budget_min,budget_max,budget_approx,typologie,statut,vendeur,qualif,recu_le,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert';
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=' + champs
+      + '&statut=eq.' + encodeURIComponent(STATUT_VEILLE) + '&order=veille_depuis.desc.nullslast&limit=500', {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    _veilleLeads = res.ok ? await res.json() : [];
+  } catch (e) { _veilleLeads = []; }
+  // Un commercial ne voit que les siens ; le gérant voit tout le monde
+  if (typeof estGerant === 'function' && !estGerant() && MON_ROLE.prenom)
+    _veilleLeads = _veilleLeads.filter(l => l.vendeur === MON_ROLE.prenom);
+  return _veilleLeads;
+}
+
+// Croise tous les clients en veille avec tous les programmes du catalogue
+async function veilleCalculer(force) {
+  if (_veilleReveils && !force) return _veilleReveils;
+  if (_veilleEnCours) return null;
+  _veilleEnCours = true;
+  try {
+    const leads = await veilleCharger(force);
+    // Personne en veille : on ne va pas télécharger les communes de France
+    if (!leads.length) { _veilleReveils = []; return _veilleReveils; }
+    const progs = await _selChargerProgrammes();
+    const out = [];
+    for (const p of (progs || [])) {
+      const zone = await veilleZone(p);
+      const items = [];
+      leads.forEach(l => { const m = veilleMatch(l, p, zone); if (m) items.push({ l: l, m: m }); });
+      if (items.length) out.push({ p: p, items: items });
+    }
+    out.sort((a, b) => b.items.length - a.items.length);
+    _veilleReveils = out;
+    return out;
+  } finally { _veilleEnCours = false; }
+}
+
+function _veilleEsc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Le prix d'appel du programme, écrit comme partout ailleurs
+function progPrixTexte(p) {
+  const b = budgetParse(p && p.prix_min);
+  return b ? budgetTexte(b) : (p && p.prix_min) || '';
+}
+function _veillePuce(txt, couleur) {
+  return '<span style="display:inline-block;background:var(--surface2);border:1px solid ' + (couleur || 'var(--border)')
+    + ';color:' + (couleur || 'var(--text)') + ';border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;margin:1px 3px 1px 0">' + _veilleEsc(txt) + '</span>';
+}
+
+// Bandeau « Mes leads » : ce qui vient de se libérer pour mes clients en veille
+async function renderVeilleBandeau() {
+  const z = document.getElementById('eq-veille-bandeau');
+  if (!z) return;
+  const enVeille = (_eqLeads || []).filter(estEnVeille);
+  const r = await veilleCalculer(true);
+  if (!r) return;
+  const total = r.reduce((n, x) => n + x.items.length, 0);
+  if (!enVeille.length && !total) { z.innerHTML = ''; return; }
+  if (!total) {
+    z.innerHTML = `<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:11px;padding:11px 14px;font-size:12.5px;color:var(--muted)">
+      ${enVeille.length} client(s) en veille — aucun programme du catalogue ne leur correspond pour l'instant.
+      <button onclick="eqLeadsSetFilter('statut:${STATUT_VEILLE}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12.5px;text-decoration:underline;padding:0 0 0 6px">Les voir</button>
+    </div>`;
+    return;
+  }
+  z.innerHTML = `<div style="background:var(--accent)12;border:1px solid var(--accent);border-radius:11px;padding:13px 15px">
+    <div style="font-family:var(--font-head);font-size:14px;font-weight:800;margin-bottom:3px">Réveil veille — ${total} client(s) à rappeler</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Marge appliquée : budget +${Math.round(VEILLE_MARGE_BUDGET*100)} % et villes limitrophes${_veilleZonesEchec ? ' <span style="color:var(--warning)">(communes alentours indisponibles — correspondance sur la ville exacte seulement)</span>' : ''}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${r.map(x => `<button onclick="veilleModale('${_veilleEsc(x.p.slug)}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left">
+        <strong>${_veilleEsc(x.p.nom)}</strong><br><span style="font-size:11px;color:var(--muted)">${_veilleEsc(x.p.ville || '')} · ${x.items.length} client(s)</span>
+      </button>`).join('')}
+    </div>
+  </div>`;
+}
+
+// Bandeau et compteurs de la page Programmes
+async function renderProgVeilleBandeau() {
+  const z = document.getElementById('prog-veille-bandeau');
+  if (!z) return;
+  const r = await veilleCalculer(true);
+  if (!r) return;
+  const total = r.reduce((n, x) => n + x.items.length, 0);
+  const enVeille = (_veilleLeads || []).length;
+  if (!enVeille) { z.innerHTML = ''; return; }
+  z.innerHTML = `<div style="background:${total ? 'var(--accent)12' : 'var(--surface2)'};border:1px solid ${total ? 'var(--accent)' : 'var(--border)'};border-radius:11px;padding:13px 15px">
+    <div style="font-family:var(--font-head);font-size:14px;font-weight:800">${enVeille} client(s) en veille${total ? ' — ' + total + ' correspondance(s)' : ''}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px">Chaque programme affiche les clients dont il coche les critères, budget élargi de ${Math.round(VEILLE_MARGE_BUDGET*100)} % et villes limitrophes comprises.</div>
+  </div>`;
+  renderProgrammes();
+}
+function veilleNbPour(slug) {
+  if (!_veilleReveils) return null;
+  const x = _veilleReveils.find(y => y.p.slug === slug);
+  return x ? x.items.length : 0;
+}
+
+// La liste des clients réveillés par un programme
+function veilleModale(slug) {
+  const x = (_veilleReveils || []).find(y => y.p.slug === slug);
+  if (!x) { if (typeof toast === 'function') toast('Aucun client en veille pour ce programme', 'var(--muted)'); return; }
+  const p = x.p;
+  const old = document.getElementById('veille-modale'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'veille-modale';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2100;display:flex;align-items:center;justify-content:center;padding:16px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:720px;max-width:100%;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:4px">
+      <div>
+        <div style="font-family:var(--font-head);font-size:17px;font-weight:800">${_veilleEsc(p.nom)}</div>
+        <div style="font-size:12.5px;color:var(--muted)">${_veilleEsc(p.ville || '')} ${_veilleEsc(p.dept || '')}${p.livraison ? ' · livraison ' + _veilleEsc(p.livraison) : ''}${p.prix_min ? ' · dès ' + _veilleEsc(progPrixTexte(p)) : ''}</div>
+      </div>
+      <button onclick="veilleModaleFermer()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin:8px 0 16px">${x.items.length} client(s) en veille correspondent à ce programme.</div>
+    <div id="veille-modale-liste">${x.items.map(it => _veilleLigne(it, p)).join('')}</div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) veilleModaleFermer(); });
+  document.body.appendChild(div);
+}
+function veilleModaleFermer() { const el = document.getElementById('veille-modale'); if (el) el.remove(); }
+
+function _veilleLigne(it, p) {
+  const l = it.l, c = veilleCriteres(l);
+  const nom = (typeof nomComplet === 'function' ? nomComplet(l) : l.nom) || '—';
+  const depuis = l.veille_depuis ? new Date(l.veille_depuis).toLocaleDateString('fr-FR') : '';
+  const puces = it.m.exacts.map(t => _veillePuce(t, 'var(--success)')).join('')
+              + it.m.marges.map(t => _veillePuce(t, 'var(--warning)')).join('')
+              + (it.m.prix ? _veillePuce('lot dès ' + budgetFmt(it.m.prix)) : '');
+  return `<div id="veille-l-${_veilleEsc(l.id)}" style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:9px">
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline">
+      <div style="font-weight:700;font-size:14px">${_veilleEsc(nom)}</div>
+      <div style="font-size:11.5px;color:var(--muted)">${l.vendeur ? _veilleEsc(l.vendeur) + ' · ' : ''}en veille depuis le ${depuis}</div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin:5px 0 7px">
+      ${_veilleEsc([(c.typologies||[]).join(' / '), (c.villes||[]).join(', '), c.budget_max ? (c.budget_approx?'~':'') + budgetFmt(c.budget_max) : ''].filter(Boolean).join(' · '))}
+      ${l.veille_motif ? ' — <em>' + _veilleEsc(l.veille_motif) + '</em>' : ''}
+    </div>
+    <div style="margin-bottom:9px">${puces}</div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      ${l.telephone ? `<a href="tel:${_veilleEsc(l.telephone)}" style="background:var(--accent);border-radius:9px;padding:7px 13px;color:#fff;text-decoration:none;font-size:12px;font-weight:600">${_veilleEsc(l.telephone)}</a>` : ''}
+      <button onclick="veilleCopierMessage('${_veilleEsc(l.id)}','${_veilleEsc(p.slug)}')" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 13px;color:var(--text);font-size:12px;cursor:pointer">Copier le message</button>
+      <button onclick="veilleReprendre('${_veilleEsc(l.id)}','${_veilleEsc(p.slug)}')" style="background:var(--surface);border:1px solid var(--accent);border-radius:9px;padding:7px 13px;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">Sortir de veille</button>
+      <button onclick="veilleEcarter('${_veilleEsc(l.id)}','${_veilleEsc(p.slug)}')" title="Ce programme n'est pas pour lui — on ne le reproposera plus" style="background:none;border:1px solid var(--border);border-radius:9px;padding:7px 13px;color:var(--muted);font-size:12px;cursor:pointer">Pas pour lui</button>
+    </div>
+  </div>`;
+}
+
+function veilleMessage(l, p) {
+  const c = veilleCriteres(l);
+  const pre = (typeof nomPrenomContact === 'function' ? (nomPrenomContact(l).prenom || '') : '');
+  const crit = [(c.typologies || []).join(' ou '), (c.villes || []).join(' / '),
+                c.budget_max ? 'autour de ' + budgetFmt(c.budget_max) : ''].filter(Boolean).join(', ');
+  return 'Bonjour' + (pre ? ' ' + pre : '') + ',\n\n'
+    + 'Nous nous étions parlé' + (l.veille_depuis ? ' le ' + new Date(l.veille_depuis).toLocaleDateString('fr-FR') : '')
+    + ' : vous cherchiez ' + (crit || 'un bien') + ', et je n\'avais rien à vous proposer qui corresponde.\n\n'
+    + 'Un nouveau programme vient de sortir : ' + (p.nom || '') + (p.ville ? ' à ' + p.ville : '')
+    + (p.livraison ? ', livraison ' + p.livraison : '') + (p.prix_min ? ', à partir de ' + progPrixTexte(p) : '') + '.\n\n'
+    + 'Est-ce que je vous prépare une sélection ?';
+}
+function veilleCopierMessage(id, slug) {
+  const l = (_veilleLeads || []).find(x => x.id === id);
+  const p = (_veilleReveils || []).map(y => y.p).find(y => y.slug === slug);
+  if (!l || !p) return;
+  eqCopy(veilleMessage(l, p), 'Message');
+}
+
+async function _veillePatchContact(id, corps) {
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id, {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify(corps)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const l = (_veilleLeads || []).find(x => x.id === id); if (l) Object.assign(l, corps);
+    const e = (_eqLeads || []).find(x => x.id === id); if (e) Object.assign(e, corps);
+    return true;
+  } catch (err) {
+    if (typeof toast === 'function') toast('⚠ Échec de la mise à jour', 'var(--danger)');
+    return false;
+  }
+}
+
+// « Pas pour lui » : on ne repropose plus ce programme à ce client
+async function veilleEcarter(id, slug) {
+  const l = (_veilleLeads || []).find(x => x.id === id);
+  if (!l) return;
+  const ec = Array.isArray(l.veille_ecartes) ? l.veille_ecartes.slice() : [];
+  if (ec.indexOf(slug) === -1) ec.push(slug);
+  if (!await _veillePatchContact(id, { veille_ecartes: ec })) return;
+  _veilleReveils = null;
+  veilleModaleFermer();
+  await renderVeilleBandeau();
+  await renderProgVeilleBandeau();
+  if (typeof toast === 'function') toast('✓ Écarté — ce programme ne lui sera plus proposé', 'var(--muted)');
+}
+
+// Le client repart dans le pipeline : on garde la trace du réveil
+async function veilleReprendre(id, slug) {
+  const l = (_veilleLeads || []).find(x => x.id === id);
+  if (!l) return;
+  const hist = Array.isArray(l.veille_reveils) ? l.veille_reveils.slice() : [];
+  hist.push({ slug: slug, le: new Date().toISOString() });
+  const ok = await _veillePatchContact(id, {
+    statut: 'Sélections', statut_maj: new Date().toISOString(), veille_reveils: hist
+  });
+  if (!ok) return;
+  _veilleLeads = (_veilleLeads || []).filter(x => x.id !== id);
+  _veilleReveils = null;
+  veilleModaleFermer();
+  await renderVeilleBandeau();
+  await renderProgVeilleBandeau();
+  if (typeof renderEquipeLeadsTable === 'function') renderEquipeLeadsTable();
+  if (typeof toast === 'function') toast('✓ Sorti de veille — pense à planifier une activité', 'var(--success)');
+}
+
+// Bandeau de la fiche : l'état de veille, et l'avertissement au vendeur qui
+// reçoit un lead déjà travaillé par un collègue.
+function eqVeilleBandeauFiche(l) {
+  if (!l || !estEnVeille(l)) return '';
+  const e = _veilleEsc;
+  const c = veilleCriteres(l);
+  const depuis = l.veille_depuis ? new Date(l.veille_depuis).toLocaleDateString('fr-FR') : '—';
+  const moi = MON_ROLE && MON_ROLE.prenom;
+  const gerant = typeof estGerant === 'function' && estGerant();
+  const villes = (c.villes || []).join(', ');
+  let html = '';
+
+  // 1. Le vendeur qui reçoit le lead d'un collègue : il doit le savoir avant d'appeler
+  if (l.vendeur && moi && l.vendeur !== moi && !gerant) {
+    html += `<div style="background:var(--warning)18;border:1px solid var(--warning);border-radius:11px;padding:12px 14px;margin:10px 0">
+      <div style="font-weight:800;font-size:13px;margin-bottom:4px">Un premier contact a déjà eu lieu</div>
+      <div style="font-size:12.5px;line-height:1.55">
+        <strong>${e(l.vendeur)}</strong> a pris ses critères et l'a mis en veille le <strong>${e(depuis)}</strong>${villes ? ` sur ${e(villes)}` : ''}.
+        Le lead reste le sien. Si tu veux le travailler, ce doit être sur d'autres villes — indique-les, elles seront visibles par la direction.
+      </div>
+      <button onclick="eqVeilleAvertir('${e(l.id)}')" style="margin-top:9px;background:var(--surface);border:1px solid var(--warning);border-radius:9px;padding:7px 13px;color:var(--text);font-size:12px;font-weight:600;cursor:pointer">Je le travaille sur d'autres villes</button>
+    </div>`;
+  } else {
+    // 2. Son vendeur, ou la direction : l'état de la veille
+    html += `<div style="background:var(--accent2)14;border:1px solid var(--accent2);border-radius:11px;padding:12px 14px;margin:10px 0">
+      <div style="font-weight:800;font-size:13px;margin-bottom:4px">En veille depuis le ${e(depuis)}</div>
+      <div style="font-size:12.5px;line-height:1.55;color:var(--muted)">
+        ${l.veille_motif ? e(l.veille_motif) + '. ' : ''}Aucune activité à programmer : il ressortira au prochain lancement qui coche ses critères,
+        budget élargi de ${Math.round(VEILLE_MARGE_BUDGET*100)} % et villes limitrophes comprises. La paternité est gelée pendant ce temps.
+      </div>
+    </div>`;
+  }
+
+  // 3. La trace des autres commerciaux — direction uniquement
+  const tr = Array.isArray(l.veille_avert) ? l.veille_avert : [];
+  if (gerant && tr.length) {
+    html += `<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:11px;padding:11px 14px;margin:10px 0">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:6px">Visible par la direction seule</div>
+      ${tr.map(a => `<div style="font-size:12.5px;line-height:1.6">
+        <strong>${e(a.vendeur || '?')}</strong> a reçu ce lead le ${e(a.le ? new Date(a.le).toLocaleDateString('fr-FR') : '?')}
+        et le travaille sur <strong>${e(a.villes || '—')}</strong>${a.proprietaire ? ' (suivi par ' + e(a.proprietaire) + ')' : ''}
+      </div>`).join('')}
+    </div>`;
+  }
+  return html;
+}
+
+// Le second commercial déclare les villes sur lesquelles il travaille le lead
+async function eqVeilleAvertir(id) {
+  const l = _eqLeads.find(x => x.id === id);
+  if (!l) return;
+  const dejaVues = (veilleCriteres(l).villes || []).join(', ') || '—';
+  const villes = (window.prompt(
+    'Sur quelles villes comptes-tu le travailler ? (séparées par des virgules)\n\n'
+    + (l.vendeur || 'Un collègue') + ' le suit déjà sur : ' + dejaVues) || '').trim();
+  if (!villes) return;
+  const tr = Array.isArray(l.veille_avert) ? l.veille_avert.slice() : [];
+  tr.push({ vendeur: (MON_ROLE && MON_ROLE.prenom) || '?', le: new Date().toISOString(),
+            villes: villes, proprietaire: l.vendeur || null });
+  await _eqLeadPatch(id, { veille_avert: tr });
+  if (typeof toast === 'function') toast('✓ Noté — à travailler sur ' + villes, 'var(--success)');
+}
+
 function eqLeadsSetFilter(f) { _eqLeadsFilter = f; renderEquipeLeadsTable(); }
 
 // ---- Tri par date de demande d'information (récent → ancien par défaut)
@@ -5423,6 +6058,10 @@ function renderEquipeLeadsTable() {
       <div style="font-family:var(--font-head);font-size:22px;font-weight:800;color:var(--muted)">${_eqLeads.filter(l=>eqLeadStatut(l)==='Sans réponse').length}</div>
       <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Sans réponse</div>
     </div>
+    <div onclick="eqLeadsSetFilter('statut:${STATUT_VEILLE}')" title="Critères pris, rien ne correspond aujourd'hui — ils ressortent au prochain lancement" style="min-width:100px;cursor:pointer;background:var(--surface2);border:1px dashed var(--accent2);border-radius:10px;padding:12px 14px;text-align:center">
+      <div style="font-family:var(--font-head);font-size:22px;font-weight:800;color:var(--accent2)">${_eqLeads.filter(l=>eqLeadStatut(l)===STATUT_VEILLE).length}</div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase">En veille</div>
+    </div>
     <div onclick="eqLeadsSetFilter('statut:Vendu')" style="min-width:90px;cursor:pointer;background:var(--surface2);border:1px dashed var(--success);border-radius:10px;padding:12px 14px;text-align:center">
       <div style="font-family:var(--font-head);font-size:22px;font-weight:800;color:var(--success)">${_eqLeads.filter(l=>eqLeadStatut(l)==='Vendu').length}</div>
       <div style="font-size:10px;color:var(--muted);text-transform:uppercase">Vendu</div>
@@ -5470,7 +6109,8 @@ function renderEquipeLeadsTable() {
       ['alerte', 'À traiter (' + nAlerte + ')'],
       ['rappels', 'Rappels du jour (' + nRappels + ')'],
       ['sansreponse', 'Sans réponse (' + _eqLeads.filter(l=>eqLeadStatut(l)==='Sans réponse').length + ')'],
-      ['nouveaux', 'Nouveaux (' + _eqLeads.filter(l=>eqLeadStatut(l)==='Nouveau').length + ')']
+      ['nouveaux', 'Nouveaux (' + _eqLeads.filter(l=>eqLeadStatut(l)==='Nouveau').length + ')'],
+      ['veille', 'En veille (' + _eqLeads.filter(estEnVeille).length + ')']
     ];
     chipsEl.innerHTML = chips.map(([f,label]) => {
       const active = _eqLeadsFilter === f;
@@ -5488,6 +6128,7 @@ function renderEquipeLeadsTable() {
   else if (_eqLeadsFilter === 'rappels') leads = leads.filter(l => _eqLeadFlags(l).rappelDue);
   else if (_eqLeadsFilter === 'sansreponse') leads = leads.filter(l => eqLeadStatut(l) === 'Sans réponse');
   else if (_eqLeadsFilter === 'nouveaux') leads = leads.filter(l => eqLeadStatut(l) === 'Nouveau');
+  else if (_eqLeadsFilter === 'veille') leads = leads.filter(estEnVeille);
   else if (_eqLeadsFilter.startsWith('statut:')) leads = leads.filter(l => eqLeadStatut(l) === _eqLeadsFilter.slice(7));
   if (q) leads = leads.filter(l => ((l.nom||'')+' '+(l.email||'')+' '+(l.lieu||'')+' '+(l.typologie||'')+' '+(l.source||'')).toLowerCase().includes(q));
   const dDem = (l) => { const d = new Date(l.date_lead || l.recu_le || 0); return isNaN(d) ? 0 : d.getTime(); };
@@ -5510,7 +6151,8 @@ function renderEquipeLeadsTable() {
         const f = _eqLeadFlags(l);
         const badge = f.rappelDue ? '<span title="Rappel dû — activité prévue aujourd\'hui ou dépassée">' + selIc('rappel', 15) + '</span>' : f.alerte48 ? '<span title="Nouveau depuis plus de 48 h — à traiter">' + selIc('alerte', 13) + '</span>' : f.sansReponse ? '<span title="Sans réponse">' + selIc('sansrep', 15) + '</span>' : '';
         const nq = eqQualifRemplie(l);
-        const qualifBadge = `<br><span style="font-size:10px;color:${nq.n===nq.total?'var(--success)':'var(--muted)'}">${nq.n===nq.total?'✓ Fiche complète':'Fiche '+nq.n+'/'+nq.total}</span>`;
+        const qualifBadge = `<br><span style="font-size:10px;color:${nq.n===nq.total?'var(--success)':'var(--muted)'}">${nq.n===nq.total?'✓ Fiche complète':'Fiche '+nq.n+'/'+nq.total}</span>`
+          + (estEnVeille(l) ? `<br><span title="En veille — ressortira au prochain lancement" style="display:inline-block;background:var(--surface2);border:1px solid var(--accent2);color:var(--accent2);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">En veille</span>` : '');
         return `<tr onclick="eqOuvrirFiche('${l.id}')" style="cursor:pointer${f.rappelDue||f.alerte48 ? ';background:var(--accent)08' : ''}">
         <td onclick="event.stopPropagation()"><input type="checkbox" ${_eqSelected.has(l.id)?'checked':''} onchange="eqToggleSelect('${l.id}', this.checked)" style="cursor:pointer;accent-color:var(--accent)"></td>
         <td style="font-size:15px">${badge}${eqSelIcone(l)}</td>
@@ -5624,7 +6266,7 @@ function eqFicheFermer() {
       const dansQualif = cle.indexOf('q:') === 0;
       const champ = dansQualif ? cle.slice(2) : cle;
       const el = document.getElementById('eq-champ-' + champ);
-      if (el) _eqTexteEnregistre(champ, el.value, dansQualif);
+      if (el) _eqTexteEnregistre(champ, el.value, dansQualif, true);
     });
   }
   // Une modification refusée par le serveur bloque la fermeture : sinon elle
@@ -5915,12 +6557,47 @@ function _eqTexteEtat(champ, texte, couleur){
   const el = document.getElementById('eq-etat-' + champ);
   if (el){ el.textContent = texte || ''; el.style.color = couleur || 'var(--muted)'; }
 }
+// Aperçu du budget pendant la frappe : ce que le CRM a compris
+function eqBudgetApercu(v){
+  const el = document.getElementById('eq-apercu-budget');
+  if (el) el.innerHTML = budgetApercuHtml(v);
+}
 // Enregistre SANS re-rendre la fiche : un re-rendu effacerait la saisie en cours.
-async function _eqTexteEnregistre(champ, valeur, dansQualif){
+async function _eqTexteEnregistre(champ, valeur, dansQualif, final){
   const l = _eqLeads.find(x => x.id === _eqFicheId);
   if (!l) return;
   const v = (valeur || '').trim() || null;
   const actuel = dansQualif ? ((l.qualif || {})[champ] || null) : (l[champ] || null);
+  // Le budget porte trois colonnes de plus (min / max / approximatif) : elles
+  // peuvent avoir besoin d'être recalculées même si le texte n'a pas bougé.
+  if (champ === 'budget' && !dansQualif) {
+    const corpsB = budgetCorps(v, !!final);
+    if (actuel === corpsB.budget && l.budget_max == corpsB.budget_max
+        && l.budget_min == corpsB.budget_min && !!l.budget_approx === corpsB.budget_approx) {
+      _eqTexteEtat('budget', ''); return;
+    }
+    _eqTexteEtat('budget', 'Enregistrement…', 'var(--muted)');
+    try {
+      const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + l.id, {
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpsB)
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      Object.assign(l, corpsB);
+      _eqEchecOublie(l.id);
+      _eqTexteEtat('budget', '✓ Enregistré', 'var(--success)');
+      // À la sortie du champ seulement : on réécrit proprement ce qui a été tapé
+      const champEl = document.getElementById('eq-champ-budget');
+      if (final && champEl && corpsB.budget && champEl.value !== corpsB.budget) champEl.value = corpsB.budget;
+      eqBudgetApercu(corpsB.budget);
+      renderEquipeLeadsTable();
+    } catch(e){
+      _eqTexteEtat('budget', '⚠ Non enregistré', 'var(--danger)');
+      _eqEchecNote(l.id, corpsB, 'budget');
+    }
+    return;
+  }
   if (actuel === v){ _eqTexteEtat(champ, ''); return; }
   const corps = dansQualif
     ? { qualif: Object.assign({}, l.qualif || {}, { [champ]: v }) }
@@ -5951,7 +6628,7 @@ function eqTexteInput(champ, valeur, dansQualif){
 function eqTexteFlush(champ, valeur, dansQualif){   // sortie du champ : on n'attend pas les 700 ms
   const cle = (dansQualif ? 'q:' : '') + champ;
   clearTimeout(_eqTexteTimers[cle]);
-  _eqTexteEnregistre(champ, valeur, dansQualif);
+  _eqTexteEnregistre(champ, valeur, dansQualif, true);
 }
 
 // ---- Échecs d'enregistrement : visibles et rattrapables -------------------
@@ -6066,6 +6743,13 @@ function _eqFicheRender() {
   const champTexte = (champ, valeur, placeholder) =>
     `<input id="eq-champ-${champ}" value="${esc(valeur||'').replace(/"/g,'&quot;')}" placeholder="${placeholder}" oninput="eqTexteInput('${champ}', this.value, false)" onchange="eqTexteFlush('${champ}', this.value, false)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
      <div id="eq-etat-${champ}" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>`;
+  // Le budget se relit en direct : le vendeur voit ce que le CRM a compris
+  // avant de valider. « 300 » devient 300 000 €, « autour de 300 » garde son ~.
+  const champBudget = (valeur) =>
+    `<input id="eq-champ-budget" value="${esc(valeur||'').replace(/"/g,'&quot;')}" placeholder="Ex : 350 ou 350 000 €" oninput="eqBudgetApercu(this.value);eqTexteInput('budget', this.value, false)" onchange="eqTexteFlush('budget', this.value, false)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
+     <div id="eq-apercu-budget" style="font-size:11.5px;margin-top:4px;min-height:15px;font-weight:600">${budgetApercuHtml(valeur)}</div>
+     <div id="eq-etat-budget" style="font-size:11px;color:var(--muted);margin-top:2px;min-height:14px"></div>
+     <div style="font-size:10.5px;color:var(--muted);margin-top:2px">On parle en milliers : « 300 » = 300 000 €.</div>`;
   // Carte d'une question dans la grille horizontale
   const carte = (contenu) => `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px">${contenu}</div>`;
   const titreQ = (t) => `<div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">${t}</div>`;
@@ -6086,6 +6770,7 @@ function _eqFicheRender() {
       </div>
     </div>
     <div id="eq-fiche-echec" style="display:none;margin:10px 0"></div>
+    ${eqVeilleBandeauFiche(l)}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 14px;font-size:13px">
       ${l.telephone ? `<a href="tel:${esc(l.telephone)}" style="background:var(--accent);border-radius:9px;padding:8px 14px;color:#fff;text-decoration:none;font-weight:600">${esc(l.telephone)}</a>` : ''}
       ${l.email ? `<button onclick="eqCopy(this.dataset.v, 'Email')" data-v="${esc(l.email).replace(/"/g,'&quot;')}" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);cursor:pointer;font-size:13px">${esc(l.email)}</button>` : ''}
@@ -6127,7 +6812,7 @@ function _eqFicheRender() {
         </div>
         <input id="eq-ville-input" oninput="eqVilleRechercheInput(this.value)" onkeydown="if(event.key==='Enter'&&this.value.trim())eqVilleAjoute(this.value)" placeholder="Rechercher une ville… (ex : Asnières)" autocomplete="off" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
         <div id="eq-ville-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
-      ${carte(titreQ('Budget') + champTexte('budget', l.budget, 'Ex : 350 000 €') + `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('ptz', [['avec','Avec PTZ'],['sans','Sans PTZ'],['a_verifier','À vérifier']], q.ptz)}</div>` + (l.reference_annonce ? `
+      ${carte(titreQ('Budget') + champBudget(l.budget) + `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('ptz', [['avec','Avec PTZ'],['sans','Sans PTZ'],['a_verifier','À vérifier']], q.ptz)}</div>` + (l.reference_annonce ? `
         <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
           <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Annonce cliquée</div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -7049,7 +7734,7 @@ function _selSalutationApercu() {
 async function _selChargerProgrammes() {
   if (_selProgrammes) return _selProgrammes;
   try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/programmes?select=slug,nom,ville,dept,prix_min,image,pitch,typologies,atouts&order=nom.asc&limit=200', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/programmes?select=slug,nom,ville,dept,livraison,prix_min,image,pitch,typologies,atouts&order=nom.asc&limit=200', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -9089,7 +9774,6 @@ async function saveNewContact() {
     nom_confirme: true,          // c'est un gérant qui saisit : le nom est sûr
     email, telephone: tel,
     lieu: val('cn-lieu') || null,
-    budget: val('cn-budget') || null,
     typologie: val('cn-typologie') || null,
     reference_annonce: val('cn-ref') || null,
     source: val('cn-source') || 'Saisie manuelle',
@@ -9103,6 +9787,8 @@ async function saveNewContact() {
     paternite_geree: true,
     recu_par: vendeur ? [{ vendeur, le: nowIso }] : []
   };
+  // Budget : même écriture que partout ailleurs (300 → 300 000 €)
+  Object.assign(contact, budgetCorps(val('cn-budget'), true));
 
   const r = await saveContact(contact);
   if (btn) { btn.disabled = false; btn.textContent = libelleBtn; }
@@ -9135,10 +9821,11 @@ async function saveEditContact() {
     email: val('ce-email'),
     telephone: val('ce-tel'),
     lieu: val('ce-lieu'),
-    budget: val('ce-budget'),
     reference_annonce: val('ce-ref'),
     source: val('ce-source')
   };
+  // Budget : même écriture que partout ailleurs (300 → 300 000 €)
+  Object.assign(body, budgetCorps(val('ce-budget'), true));
   if (!body.nom && !body.email && !body.telephone) {
     const err = document.getElementById('ce-erreur');
     if (err) { err.textContent = 'Renseignez au moins un prénom, un nom, un email ou un téléphone.'; err.style.display = 'block'; }
@@ -9541,7 +10228,7 @@ function renderContacts() {
     return;
   }
 
-  const statutColors = { 'Nouveau':'var(--accent2)', 'Contacté':'var(--warning)', 'Chaud':'var(--danger)', 'Client':'var(--success)', 'Perdu':'var(--muted)', 'Non qualifié':'#b03a39', 'Stop':'#b03a39' };
+  const statutColors = { 'Nouveau':'var(--accent2)', 'Contacté':'var(--warning)', 'Chaud':'var(--danger)', 'Client':'var(--success)', 'En veille':'var(--accent2)', 'Perdu':'var(--muted)', 'Non qualifié':'#b03a39', 'Stop':'#b03a39' };
 
   tbody.innerHTML = filtered.map(c => `<tr>
     <td><input type="checkbox" class="contact-cb" data-id="${c.id}" ${selectedContacts.includes(c.id)?'checked':''} onchange="updateSelection()" style="cursor:pointer;accent-color:var(--accent)"></td>
@@ -9559,6 +10246,7 @@ function renderContacts() {
         <option value="Contacté" ${c.statut==='Contacté'?'selected':''}>Contacté</option>
         <option value="Chaud" ${c.statut==='Chaud'?'selected':''}>Chaud</option>
         <option value="Client" ${c.statut==='Client'?'selected':''}>Client</option>
+        <option value="En veille" ${c.statut==='En veille'?'selected':''}>En veille</option>
         <option value="Perdu" ${c.statut==='Perdu'?'selected':''}>Perdu</option>
         <option value="Non qualifié" ${c.statut==='Non qualifié'?'selected':''}>Non qualifié</option>
         <option value="Stop" ${c.statut==='Stop'?'selected':''}>Ne plus contacter</option>
@@ -10327,6 +11015,9 @@ async function loadProgrammes() {
     }
   } catch(e) { window._programmes = []; }
   renderProgrammes();
+  _selProgrammes = null;              // le catalogue a pu changer : on recalcule
+  _veilleReveils = null;
+  renderProgVeilleBandeau();          // qui, parmi les clients en veille, attend ça
 }
 
 function renderProgrammes() {
@@ -10344,6 +11035,12 @@ function renderProgrammes() {
     <div style="padding:15px">
       <div style="font-weight:700;font-size:15px">${_esc(p.nom || '—')}</div>
       <div style="color:var(--muted);font-size:12px;margin:3px 0 12px">${_esc(p.ville || '')} ${_esc(p.dept || '')} · dès ${_esc(p.prix_min || '—')}</div>
+      ${(() => {
+        const n = typeof veilleNbPour === 'function' ? veilleNbPour(p.slug) : null;
+        if (n === null) return '';
+        if (!n) return `<div style="font-size:11.5px;color:var(--muted);margin-bottom:9px">Aucun client en veille pour ce programme</div>`;
+        return `<button onclick="veilleModale('${_esc(p.slug)}')" style="width:100%;background:var(--accent)18;border:1px solid var(--accent);border-radius:9px;padding:8px 11px;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;margin-bottom:9px;text-align:left">${n} client(s) en veille correspondent</button>`;
+      })()}
       <div style="display:flex;gap:7px;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" onclick="openProgramme('${_esc(p.slug)}')">✎ Modifier</button>
         <button class="btn btn-ghost btn-sm" onclick="copyVisioLink('${_esc(p.slug)}')">Copier le lien</button>
