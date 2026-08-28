@@ -5187,6 +5187,21 @@ function eqExportCSV() {
 }
 
 // Copie email / téléphone dans le presse-papiers
+// ---- Téléphone : une seule écriture, lisible, dans tout le CRM
+// France → 06 12 34 56 78 (le +33 disparaît, jamais le 0 initial).
+// Étranger → on garde le numéro tel quel, indicatif compris.
+function telFmt(tel) {
+  const brut = String(tel == null ? '' : tel).trim().replace(/\s+/g, ' ');
+  if (!brut) return '';
+  const chiffres = brut.replace(/\D/g, '');
+  let fr = null;
+  if (/^33\d{9}$/.test(chiffres)) fr = '0' + chiffres.slice(2);
+  else if (/^0033\d{9}$/.test(chiffres)) fr = '0' + chiffres.slice(4);
+  else if (/^0\d{9}$/.test(chiffres)) fr = chiffres;
+  if (fr) return fr.replace(/(\d{2})(?=\d)/g, '$1 ');
+  return brut;   // numéro étranger ou incomplet : on n'invente rien
+}
+
 function eqCopy(text, label) {
   const done = () => { if (typeof toast === 'function') toast('✓ ' + label + ' copié : ' + text, 'var(--success)'); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -5981,7 +5996,7 @@ function _veilleLigne(it, p) {
     </div>
     <div style="margin-bottom:9px">${puces}</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap">
-      ${l.telephone ? `<a href="tel:${_veilleEsc(l.telephone)}" style="background:var(--accent);border-radius:9px;padding:7px 13px;color:#fff;text-decoration:none;font-size:12px;font-weight:600">${_veilleEsc(l.telephone)}</a>` : ''}
+      ${l.telephone ? `<span style="background:var(--accent);border-radius:9px;padding:7px 13px;color:#fff;font-size:12px;font-weight:600">${_veilleEsc(telFmt(l.telephone))}</span>` : ''}
       <button onclick="veilleCopierMessage('${_veilleEsc(l.id)}','${_veilleEsc(p.slug)}')" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:7px 13px;color:var(--text);font-size:12px;cursor:pointer">Copier le message</button>
       <button onclick="veilleReprendre('${_veilleEsc(l.id)}','${_veilleEsc(p.slug)}')" style="background:var(--surface);border:1px solid var(--accent);border-radius:9px;padding:7px 13px;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">Sortir de veille</button>
       <button onclick="veilleEcarter('${_veilleEsc(l.id)}','${_veilleEsc(p.slug)}')" title="Ce programme n'est pas pour lui — on ne le reproposera plus" style="background:none;border:1px solid var(--border);border-radius:9px;padding:7px 13px;color:var(--muted);font-size:12px;cursor:pointer">Pas pour lui</button>
@@ -6314,7 +6329,7 @@ function renderEquipeLeadsTable() {
         <td onclick="event.stopPropagation()"><input type="checkbox" ${_eqSelected.has(l.id)?'checked':''} onchange="eqToggleSelect('${l.id}', this.checked)" style="cursor:pointer;accent-color:var(--accent)"></td>
         <td style="font-size:15px">${badgeTr}${badge}${eqSelIcone(l)}</td>
         <td><strong>${esc(nomComplet(l)||'—')}</strong>${nomAConfirmer(l) ? '<span title="Nom repris du mail du portail, à confirmer avec le client" style="color:var(--warning);font-weight:700;margin-left:3px">*</span>' : ''}${qualifBadge}</td>
-        <td style="font-size:12px" onclick="event.stopPropagation()">${l.email?esc(l.email)+' '+copyBtn(l.email,'Email')+'<br>':''}${l.telephone?esc(l.telephone)+' '+copyBtn(l.telephone,'Téléphone'):''}</td>
+        <td style="font-size:12px" onclick="event.stopPropagation()">${l.email?esc(l.email)+' '+copyBtn(l.email,'Email')+'<br>':''}${l.telephone?esc(telFmt(l.telephone))+' '+copyBtn(telFmt(l.telephone),'Téléphone'):''}</td>
         <td>${villesHtml(l.lieu)}</td>
         <td>${typoHtml(l.typologie)}</td>
         <td>${fmtD(l.date_lead || l.recu_le)}</td>
@@ -6961,8 +6976,15 @@ function _eqFicheRender() {
     ${eqTransfertBandeauFiche(l)}
     ${eqVeilleBandeauFiche(l)}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 14px;font-size:13px">
-      ${l.telephone ? `<a href="tel:${esc(l.telephone)}" style="background:var(--accent);border-radius:9px;padding:8px 14px;color:#fff;text-decoration:none;font-weight:600">${esc(l.telephone)}</a>` : ''}
-      ${l.email ? `<button onclick="eqCopy(this.dataset.v, 'Email')" data-v="${esc(l.email).replace(/"/g,'&quot;')}" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);cursor:pointer;font-size:13px">${esc(l.email)}</button>` : ''}
+${(() => {
+        // Téléphone et mail : un clic les copie, c'est tout ce qu'on en fait ici
+        const pastille = (valeur, affiche, label, fond, bordure, couleur) =>
+          `<button onclick="eqCopy(this.dataset.v, '${label}')" data-v="${esc(valeur).replace(/"/g,'&quot;')}" title="Copier ${label.toLowerCase()} : ${esc(affiche)}" style="display:inline-flex;align-items:center;gap:7px;background:${fond};border:1px solid ${bordure};border-radius:9px;padding:8px 14px;color:${couleur};cursor:pointer;font-family:var(--font-body);font-size:13px;font-weight:600">
+            <span>${esc(affiche)}</span><span style="opacity:.75;font-weight:400">⧉</span>
+          </button>`;
+        return (l.telephone ? pastille(telFmt(l.telephone), telFmt(l.telephone), 'Téléphone', 'var(--accent)', 'var(--accent)', '#fff') : '')
+             + (l.email ? pastille(l.email, l.email, 'Email', 'var(--surface2)', 'var(--border)', 'var(--text)') : '');
+      })()}
       <select onchange="eqLeadStatutChange('${l.id}', this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer">
         ${STATUTS_LEAD.map(s => `<option value="${esc(s)}" ${s===cur?'selected':''}>${esc(s)}</option>`).join('')}
       </select>
@@ -7668,8 +7690,7 @@ function renderEqNotifs() {
     } else if (s === 'Nouveau' && !l.activite_masquee_le) {
       const recu = l.recu_le || l.date_lead;
       const recuJour = recu ? String(new Date(recu).toISOString()).slice(0, 10) : jour;
-      const boutonsNew = btnFiche(l.id) +
-        `<button class="btn btn-sm btn-primary" onclick="eqLeadAppele('${l.id}')" style="font-size:11px">Appelé</button>` + btnActions(l.id);
+      const boutonsNew = btnFiche(l.id) + btnActions(l.id);
       if (_eqLeadFlags(l).alerte48) {
         retard.push({ t: recu ? new Date(recu).getTime() : 0, g: 'premier', d: recuJour, html: item('alerte', 'Premier appel — ' + esc(nomComplet(l) || '—'),
           'Lead reçu le ' + fmtJ(recu) + ', toujours sans premier appel (+ de 48 h)', boutonsNew, 'var(--danger)', l.id) });
@@ -10635,7 +10656,7 @@ function renderContacts() {
     <td><input type="checkbox" class="contact-cb" data-id="${c.id}" ${selectedContacts.includes(c.id)?'checked':''} onchange="updateSelection()" style="cursor:pointer;accent-color:var(--accent)"></td>
     <td style="font-weight:600">${_vEsc(c.nom||'—')}</td>
     <td style="color:var(--muted);font-size:12px">${_vEsc(c.email||'—')}</td>
-    <td style="color:var(--muted);font-size:12px">${_vEsc(c.telephone||'—')}</td>
+    <td style="color:var(--muted);font-size:12px">${_vEsc(telFmt(c.telephone) || '—')}</td>
     <td><span style="background:var(--surface2);padding:2px 8px;border-radius:6px;font-size:12px">${_vEsc(c.lieu||'—')}</span></td>
     <td style="color:var(--accent);font-weight:600;font-size:12px">${_vEsc(c.budget||'—')}</td>
     <td style="font-size:12px;color:var(--muted)">${_vEsc(c.reference_annonce||'—')}</td>
