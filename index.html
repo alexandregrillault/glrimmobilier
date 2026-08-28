@@ -8505,6 +8505,8 @@ function selAdresseLot(i) {
       <input id="sel-adr-ville" value="${_vEsc(b.commune || '')}" placeholder="Commune" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px">
     </div>
     <div id="sel-adr-etat" style="font-size:12px;color:var(--muted);margin-bottom:10px">${g.label ? 'Point trouvé : ' + _vEsc(g.label) + (g.precision === 'housenumber' ? ' (numéro exact)' : ' (voie seule)') : 'Pas encore vérifiée'}</div>
+    <div style="font-size:12px;color:var(--muted);margin:2px 0 6px">Ce que le promoteur a imprimé — l'adresse est en général sous le nom du programme :</div>
+    <div id="sel-adr-docs" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:11px;color:var(--muted)">Chargement des documents…</div>
     <div id="sel-adr-liens" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${g.lat ? `<a class="btn btn-sm btn-secondary" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${g.lat},${g.lon}" target="_blank" rel="noopener" style="font-size:11px">Vue de la rue</a><a class="btn btn-sm btn-secondary" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(_selAdresseTexte(b))}" target="_blank" rel="noopener" style="font-size:11px">Maps</a>` : ''}</div>
     <div style="display:flex;justify-content:space-between;gap:10px">
       <button class="btn btn-secondary" onclick="selAdresseVerifier(${i})">Vérifier l'adresse</button>
@@ -8516,7 +8518,27 @@ function selAdresseLot(i) {
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
   document.body.appendChild(div);
+  _selAdresseDocuments(b.lien);
 }
+
+// Documents du promoteur (plaquette, descriptif, plan de masse) : c'est la seule
+// source indépendante de la fiche Otaree pour recouper l'adresse.
+async function _selAdresseDocuments(lien) {
+  const zone = document.getElementById('sel-adr-docs');
+  if (!zone) return;
+  if (!lien) { zone.textContent = 'Lot sans lien Otaree — rien à comparer.'; return; }
+  try {
+    const r = await fetch(SUPABASE_URL + '/functions/v1/otaree-documents?lien=' + encodeURIComponent(lien));
+    const d = await r.json();
+    const docs = ((d && d.documents) || []).filter(x => !/^plan$/i.test(String(x.nom || '')));
+    if (!docs.length) { zone.textContent = 'Aucun document du promoteur sur cette fiche.'; return; }
+    zone.innerHTML = docs.map(x => `<a href="${x.url}" target="_blank" rel="noopener" style="display:block;width:78px;text-align:center;color:var(--muted);text-decoration:none;line-height:1.25">
+      <img src="${x.vignette || x.url}" alt="" loading="lazy" style="width:78px;height:58px;object-fit:cover;border:1px solid var(--border);border-radius:8px;display:block;margin-bottom:3px">${_vEsc(x.nom)}</a>`).join('');
+  } catch (e) {
+    zone.textContent = 'Documents indisponibles pour le moment.';
+  }
+}
+
 async function selAdresseVerifier(i) {
   const b = _selCtx.libres[i];
   if (!b) return;
@@ -8530,7 +8552,7 @@ async function selAdresseVerifier(i) {
   b.adresseOk = _selAdresseFiable(b);
   if (etat) etat.innerHTML = g
     ? 'Point trouvé : ' + _vEsc(g.label) + (g.precision === 'housenumber' ? ' <span style="color:var(--success)">(numéro exact)</span>' : ' <span style="color:var(--warning)">(voie seule — vérifie sur la vue de la rue)</span>')
-    : '<span style="color:var(--danger)">Adresse introuvable — corrige la voie ou la commune</span>';
+    : '<span style="color:var(--warning)">Introuvable dans la Base Adresse Nationale — voie peut-être trop récente : vérifie sur les documents du promoteur, puis valide si elle est bonne</span>';
   const liens = document.getElementById('sel-adr-liens');
   if (liens) liens.innerHTML = g
     ? `<a class="btn btn-sm btn-secondary" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${g.lat},${g.lon}" target="_blank" rel="noopener" style="font-size:11px">Vue de la rue</a><a class="btn btn-sm btn-secondary" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(_selAdresseTexte(b))}" target="_blank" rel="noopener" style="font-size:11px">Maps</a>`
