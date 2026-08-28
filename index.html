@@ -7195,6 +7195,7 @@ function eqFicheSelectionsHtml(l) {
         ${sec ? `<div style="height:3px;border-radius:2px;background:var(--surface2);margin-top:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div>` : ''}
         ${a.commentaire ? `<div style="font-size:12px;color:var(--muted);font-style:italic;margin-top:3px">« ${_vEsc(a.commentaire)} »</div>` : ''}
         ${a.infos ? `<div style="font-size:11.5px;color:var(--accent);margin-top:3px;font-weight:600">${selIc('infos', 12)} a demandé plus d\'infos</div>` : ''}
+        ${a.adresse_demandee ? `<div style="font-size:11.5px;color:var(--warning);margin-top:3px;font-weight:600">A demandé l\'adresse exacte du programme</div>` : ''}
         ${eqRemisesLigne(s.token, i, b)}
       </div>`;
     }).join('');
@@ -8312,6 +8313,8 @@ async function selExtraireLiens() {
           titre: d.titre || lien, lien,
           ville: d.ville || '', prix: d.prix || '',
           plan: d.plan || '', masse: d.masse || '', image: d.image || '', images: Array.isArray(d.images) ? d.images : [], pdf: '',
+          adresse: d.adresse || '', adresseBrute: d.adresseBrute || '', commune: d.commune || '', codePostal: d.codePostal || '',
+          geo: d.geo || null, adresseOk: _selAdresseFiable(d),
           surface: d.surface || '', surfacePonderee: d.surfacePonderee || '',
           etage: d.etage || '', terrasse: d.terrasse || '', parking: d.parking || '',
           expo: d.expo || '', livraison: d.livraison || '', promoteur: d.promoteur || '',
@@ -8368,6 +8371,23 @@ async function _selEnvoyerDoc(f, i) {
   } catch(e) { return null; }
 }
 
+// Adresse du programme : Otaree se trompe parfois de voie. On ne la montre au
+// client que si la Base Adresse Nationale confirme un numéro exact dans la même
+// commune ; sinon le conseiller vérifie à la main (bouton Adresse sur le lot).
+function _selSansAccent(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+function _selAdresseFiable(d) {
+  const g = d && d.geo;
+  if (!g || !g.lat || !g.lon || !d.adresse) return false;
+  if (g.precision !== 'housenumber') return false;
+  const commune = _selSansAccent(d.commune);
+  return !!commune && _selSansAccent(g.label).indexOf(commune) !== -1;
+}
+function _selAdresseTexte(b) {
+  return [b && b.adresse, [b && b.codePostal, b && b.commune].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+}
+
 // Remises et avantages négociés : ils ne figurent pas sur la fiche Otaree,
 // le conseiller les saisit à la main et ils s'affichent sur la sélection du client.
 function _selMontantRemise(v) {
@@ -8420,6 +8440,8 @@ async function selAjouterLibre() {
     prixOptions: Array.isArray(_base.prixOptions) ? _base.prixOptions : [],
     surfacePonderee: _base.surfacePonderee || '',
     plan: val('plan'), masse: val('masse'), pdf: pdfUrl, docs: docs,
+    adresse: _base.adresse || '', adresseBrute: _base.adresseBrute || '', commune: _base.commune || '',
+    codePostal: _base.codePostal || '', geo: _base.geo || null, adresseOk: !!_base.adresseOk,
     remises: ((val('remise') || _selMontantRemise(val('remiseMontant')))
       ? [{ libelle: val('remise') || 'Remise', montant: _selMontantRemise(val('remiseMontant')) }]
       : []).concat(Array.isArray(_selCtx.remisesExistantes) ? _selCtx.remisesExistantes : []),
@@ -8443,12 +8465,91 @@ function selAjouterLibreRefresh() {
       return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)">
       <span><strong>${_vEsc(b.titre)}</strong>${b.ville ? ' — ' + _vEsc(b.ville) : ''}${b.prix ? ' · ' + _vEsc(b.prix) : ''}${b.typologies && b.typologies.length ? ' · ' + _vEsc(b.typologies[0]) : ''}${b.surface ? ' · ' + _vEsc(b.surface) : ''}${b.prixOptions && b.prixOptions.length > 1 ? ' · <span style="color:var(--success)">' + b.prixOptions.length + ' régimes de TVA</span>' : ''}${eqRemisesListe(b).length ? ' · <span style="color:var(--accent)">' + eqRemisesListe(b).map(_selRemiseTexte).join(' · ') + '</span>' : ''} <span style="font-size:11px;opacity:.8">${badges}</span></span>
       <span style="white-space:nowrap">
+        <button onclick="selAdresseLot(${i})" title="Adresse du programme" style="background:none;border:1px dashed ${b.adresseOk ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.adresseOk ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.adresseOk ? 'Adresse ✓' : 'Adresse ?'}</button>
         <button onclick="selRemiseLot(${i})" title="Remise ou avantage négocié" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:1px 9px;color:var(--muted);font-size:11px;cursor:pointer;margin-right:4px">Remise</button>
         <button onclick="selEditerLot(${i})" title="Modifier / compléter ce lot" style="background:none;border:none;cursor:pointer;font-size:13px">✎</button>
         <button onclick="_selCtx.libres.splice(${i},1);selAjouterLibreRefresh()" title="Retirer" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button>
       </span>
     </div>`; }).join('');
 }
+// Vérification de l'adresse d'un lot : Otaree donne parfois la mauvaise voie,
+// alors on recoupe avec la Base Adresse Nationale et le conseiller confirme.
+// Tant que ce n'est pas confirmé, le client ne voit ni adresse ni carte.
+async function _selGeocoder(adresse, cp, commune) {
+  const q = [adresse, cp, commune].filter(Boolean).join(' ').trim();
+  if (!q) return null;
+  try {
+    const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=1&q=' + encodeURIComponent(q));
+    if (!r.ok) return null;
+    const d = await r.json();
+    const f = (d.features || [])[0];
+    if (!f || !f.geometry) return null;
+    return { lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], precision: f.properties.type || '', label: f.properties.label || '', score: f.properties.score };
+  } catch (e) { return null; }
+}
+function selAdresseLot(i) {
+  const b = _selCtx.libres[i];
+  if (!b) return;
+  document.getElementById('sel-adresse-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'sel-adresse-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px';
+  const g = b.geo || {};
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:470px;max-width:95vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Adresse de ${_vEsc(b.titre || 'ce lot')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Otaree se trompe parfois de voie : vérifie sur la vue de la rue avant de valider. Sans validation, le client ne voit ni adresse ni carte — il peut seulement la demander.</div>
+    ${b.adresseBrute && b.adresseBrute !== b.adresse ? `<div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">Fiche Otaree : ${_vEsc(b.adresseBrute)}</div>` : ''}
+    <input id="sel-adr-rue" value="${_vEsc(b.adresse || '')}" placeholder="Numéro et voie" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:8px">
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input id="sel-adr-cp" value="${_vEsc(b.codePostal || '')}" placeholder="Code postal" style="width:120px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px">
+      <input id="sel-adr-ville" value="${_vEsc(b.commune || '')}" placeholder="Commune" style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px">
+    </div>
+    <div id="sel-adr-etat" style="font-size:12px;color:var(--muted);margin-bottom:10px">${g.label ? 'Point trouvé : ' + _vEsc(g.label) + (g.precision === 'housenumber' ? ' (numéro exact)' : ' (voie seule)') : 'Pas encore vérifiée'}</div>
+    <div id="sel-adr-liens" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${g.lat ? `<a class="btn btn-sm btn-secondary" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${g.lat},${g.lon}" target="_blank" rel="noopener" style="font-size:11px">Vue de la rue</a><a class="btn btn-sm btn-secondary" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(_selAdresseTexte(b))}" target="_blank" rel="noopener" style="font-size:11px">Maps</a>` : ''}</div>
+    <div style="display:flex;justify-content:space-between;gap:10px">
+      <button class="btn btn-secondary" onclick="selAdresseVerifier(${i})">Vérifier l'adresse</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="document.getElementById('sel-adresse-modal').remove()">Fermer</button>
+        <button class="btn" onclick="selAdresseValider(${i})">Valider</button>
+      </div>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+}
+async function selAdresseVerifier(i) {
+  const b = _selCtx.libres[i];
+  if (!b) return;
+  const etat = document.getElementById('sel-adr-etat');
+  const rue = document.getElementById('sel-adr-rue').value.trim();
+  const cp = document.getElementById('sel-adr-cp').value.trim();
+  const ville = document.getElementById('sel-adr-ville').value.trim();
+  if (etat) etat.textContent = 'Recherche…';
+  const g = await _selGeocoder(rue, cp, ville);
+  b.adresse = rue; b.codePostal = cp; b.commune = ville; b.geo = g;
+  b.adresseOk = _selAdresseFiable(b);
+  if (etat) etat.innerHTML = g
+    ? 'Point trouvé : ' + _vEsc(g.label) + (g.precision === 'housenumber' ? ' <span style="color:var(--success)">(numéro exact)</span>' : ' <span style="color:var(--warning)">(voie seule — vérifie sur la vue de la rue)</span>')
+    : '<span style="color:var(--danger)">Adresse introuvable — corrige la voie ou la commune</span>';
+  const liens = document.getElementById('sel-adr-liens');
+  if (liens) liens.innerHTML = g
+    ? `<a class="btn btn-sm btn-secondary" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${g.lat},${g.lon}" target="_blank" rel="noopener" style="font-size:11px">Vue de la rue</a><a class="btn btn-sm btn-secondary" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(_selAdresseTexte(b))}" target="_blank" rel="noopener" style="font-size:11px">Maps</a>`
+    : '';
+  selAjouterLibreRefresh();
+}
+function selAdresseValider(i) {
+  const b = _selCtx.libres[i];
+  if (!b) return;
+  b.adresse = document.getElementById('sel-adr-rue').value.trim();
+  b.codePostal = document.getElementById('sel-adr-cp').value.trim();
+  b.commune = document.getElementById('sel-adr-ville').value.trim();
+  if (!b.adresse || !b.geo) { if (typeof toast === 'function') toast('⚠ Vérifie d\'abord l\'adresse : sans point sur la carte, le client ne verra rien', 'var(--warning)'); return; }
+  b.adresseOk = true;   // le conseiller a confirmé, même si la BAN n'a trouvé que la voie
+  document.getElementById('sel-adresse-modal')?.remove();
+  selAjouterLibreRefresh();
+  if (typeof toast === 'function') toast('✓ Adresse validée — elle s\'affichera avec la carte chez le client', 'var(--success)');
+}
+
 // Remises d'un lot en cours de composition : même fenêtre pour un lot Otaree
 // et un lot saisi à la main, sans repasser par le formulaire.
 function selRemiseLot(i) {

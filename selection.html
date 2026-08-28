@@ -62,6 +62,30 @@
   .prix-bloc.avantage .regime { color:var(--gold); font-weight:700; }
   .prix-bloc .montant { font-family:Georgia,serif; font-size:20px; font-weight:700; color:var(--encre); }
   .prix-bloc .detail { font-size:11.5px; color:var(--muted); margin-top:3px; }
+  /* Ville : intertitre quand la sélection couvre plusieurs communes */
+  .ville-titre { display:flex; align-items:baseline; gap:10px; margin:26px 0 12px; }
+  .ville-titre span { font-family:Georgia,serif; font-size:17px; font-weight:600; color:var(--dark); }
+  .ville-titre small { font-size:12px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; }
+  .ville-titre:after { content:""; flex:1; height:1px; background:var(--bordure); }
+  .ville-titre:first-of-type { margin-top:2px; }
+
+  /* Adresse du lot + carte */
+  .adresse { display:flex; align-items:flex-start; gap:7px; font-size:13.5px; color:var(--encre); margin:12px 0 8px; }
+  .adresse svg { flex:none; margin-top:1px; }
+  .carte { position:relative; height:150px; border-radius:12px; overflow:hidden; border:1px solid var(--bordure); background:#eceae4; cursor:pointer; }
+  .carte-tuiles { position:absolute; inset:0; }
+  .carte-tuiles img { position:absolute; border:0; }
+  .carte .pin { position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-30px 0 0 -11px; opacity:0; }
+  .carte.vue .pin { animation:tombe .55s cubic-bezier(.3,1.4,.5,1) .15s forwards; }
+  @keyframes tombe { 0% { opacity:0; transform:translateY(-26px) scale(.85); } 60% { opacity:1; transform:translateY(2px) scale(1); } 100% { opacity:1; transform:translateY(0) scale(1); } }
+  .carte-credits { position:absolute; right:0; bottom:0; background:rgba(255,255,255,.82); color:#5a606b; font-size:9.5px; padding:1px 5px; border-radius:5px 0 0 0; }
+  .adr-btns { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 2px; }
+  .adr-btn { border:1px solid var(--bordure); background:#fff; color:var(--encre); border-radius:10px; padding:7px 13px; font-size:12.5px; font-weight:600; text-decoration:none; transition:all .15s; }
+  .adr-btn:hover { border-color:var(--gold); color:var(--gold-fonce); }
+  .adr-demande { border:1px dashed var(--gold); background:#fffdf8; color:var(--gold-fonce); border-radius:10px; padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer; margin:10px 0 2px; }
+  .adr-demande:hover { background:var(--gold); color:#fff; border-style:solid; }
+  .adr-demande[disabled] { opacity:.75; cursor:default; border-style:solid; }
+
   .remises { display:flex; gap:6px; flex-wrap:wrap; margin:-2px 0 12px; }
   .remise { background:var(--gold); color:#fff; border-radius:20px; padding:5px 13px; font-size:12.5px; font-weight:700; }
   .remise .detail { font-weight:600; opacity:.92; }
@@ -443,6 +467,78 @@
     }).join("") + "</div>";
   }
 
+  // Adresse du programme : affichée seulement si elle a été confirmée
+  // (fiche Otaree recoupée avec la Base Adresse Nationale, puis validée par le
+  // conseiller). Sinon le client peut la demander en un clic.
+  function adresseSure(b){
+    var g = b && b.geo;
+    return !!(b && b.adresseOk && b.adresse && g && g.lat && g.lon);
+  }
+  function adresseTexte(b){
+    return [b.adresse, [b.codePostal, b.commune].filter(Boolean).join(" ")].filter(Boolean).join(", ") || b.ville || "";
+  }
+  var PIN = "<svg class='pin-svg' width='22' height='22' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='%23c8a96e' stroke='%23fff' stroke-width='1.6'/><circle cx='12' cy='10' r='2.6' fill='%23fff'/></svg>";
+  function htmlAdresse(b, i, a){
+    if (adresseSure(b)){
+      var g = b.geo, txt = adresseTexte(b);
+      var q = encodeURIComponent(txt);
+      var h2 = "<div class='adresse'><svg width='15' height='15' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='#c8a96e'/><circle cx='12' cy='10' r='2.4' fill='#fff'/></svg><span>" + esc(txt) + "</span></div>";
+      h2 += "<div class='carte' data-lat='" + g.lat + "' data-lon='" + g.lon + "' data-q='" + esc(q) + "'>";
+      h2 += "<div class='carte-tuiles'></div><div class='pin'>" + PIN.replace(/%23/g, "#") + "</div>";
+      h2 += "<div class='carte-credits'>&copy; OpenStreetMap</div></div>";
+      h2 += "<div class='adr-btns'>";
+      h2 += "<a class='adr-btn' href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Ouvrir dans Maps</a>";
+      h2 += "<a class='adr-btn' href='https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + g.lat + "," + g.lon + "' target='_blank' rel='noopener'>Vue de la rue</a>";
+      h2 += "</div>";
+      return h2;
+    }
+    var demandee = a && a.adresse_demandee;
+    return "<button class='adr-demande' data-adr='" + i + "'" + (demandee ? " disabled" : "") + ">"
+      + (demandee ? "\u2713 Adresse demandée — votre conseiller revient vers vous" : "Demander l'adresse exacte") + "</button>";
+  }
+
+  // Fond de carte : tuiles OpenStreetMap positionnées pour que le lot tombe
+  // pile au centre, sans bibliothèque ni clé d'API.
+  function poserCartes(){
+    Array.prototype.forEach.call(document.querySelectorAll(".carte"), function(el){
+      var lat = parseFloat(el.getAttribute("data-lat")), lon = parseFloat(el.getAttribute("data-lon"));
+      if (!isFinite(lat) || !isFinite(lon)) return;
+      var w = el.clientWidth, hh = el.clientHeight;
+      if (!w || !hh) return;
+      if (el.getAttribute("data-l") === String(w)) return;   // déjà posée à cette largeur
+      var z = 16, n = Math.pow(2, z), tuile = 256;
+      var xw = (lon + 180) / 360 * n * tuile;
+      var r = lat * Math.PI / 180;
+      var yw = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n * tuile;
+      var gauche = xw - w / 2, haut = yw - hh / 2;
+      var html = "";
+      for (var ty = Math.floor(haut / tuile); ty <= Math.floor((haut + hh) / tuile); ty++){
+        if (ty < 0 || ty >= n) continue;
+        for (var tx = Math.floor(gauche / tuile); tx <= Math.floor((gauche + w) / tuile); tx++){
+          var mx = ((tx % n) + n) % n;
+          html += "<img src='https://tile.openstreetmap.org/" + z + "/" + mx + "/" + ty + ".png' alt='' loading='lazy' width='256' height='256' style='left:" + Math.round(tx * tuile - gauche) + "px;top:" + Math.round(ty * tuile - haut) + "px'>";
+        }
+      }
+      el.querySelector(".carte-tuiles").innerHTML = html;
+      el.setAttribute("data-l", String(w));
+      el.classList.add("vue");
+    });
+  }
+
+  // Sélection sur plusieurs communes : un lot garde son numéro d'origine,
+  // seuls l'ordre et les intertitres changent.
+  function grouperParVille(liste){
+    var groupes = [];
+    liste.forEach(function(b, i){
+      var v = String((b && b.ville) || "").trim() || "Autres biens";
+      var g = null;
+      for (var k = 0; k < groupes.length; k++) if (groupes[k].ville === v) { g = groupes[k]; break; }
+      if (!g) { g = { ville: v, items: [] }; groupes.push(g); }
+      g.items.push({ b: b, i: i });
+    });
+    return groupes;
+  }
+
   // Surface, étage, exposition, livraison, annexes
   function htmlFaits(b){
     var faits = [];
@@ -531,7 +627,11 @@
     if (d.expires_at) h += "<span>·</span><span>Sélection valable jusqu'au " + esc(fmtDate(d.expires_at)) + "</span>";
     h += "</div>";
 
-    biens.forEach(function(b, i){
+    var groupes = grouperParVille(biens);
+    groupes.forEach(function(gr){
+    if (groupes.length > 1) h += "<div class='ville-titre'><span>" + esc(gr.ville) + "</span><small>" + gr.items.length + " bien" + (gr.items.length > 1 ? "s" : "") + "</small></div>";
+    gr.items.forEach(function(o){
+      var b = o.b, i = o.i;
       var photo = photoDe(b);
       h += "<div class='card' data-carte='" + i + "'>";
       if (photo){
@@ -552,6 +652,7 @@
       h += htmlPrix(b);
       h += htmlRemises(b);
       h += htmlFaits(b);
+      h += htmlAdresse(b, i, etatAvis[String(i)] || {});
       if (b.pitch) h += "<p class='pitch'>" + esc(b.pitch) + "</p>";
       var atouts = Array.isArray(b.atouts) ? b.atouts.slice(0, 5) : [];
       if (atouts.length) h += "<ul class='atouts'>" + atouts.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
@@ -582,6 +683,7 @@
       h += "</div>";
       h += "<button class='cta-rdv'>Demander un rendez-vous</button>";
       h += "</div></div></div>";
+    });
     });
 
     // Invitation à comparer les lots, juste avant la carte rendez-vous
@@ -651,10 +753,17 @@
     document.getElementById("lb-suiv").style.display = imgs.length > 1 ? "" : "none";
   }
 
+  var _majCartes = null;
+  window.addEventListener("resize", function(){
+    clearTimeout(_majCartes);
+    _majCartes = setTimeout(poserCartes, 250);
+  });
+
   function ouvrirComp(){
     var lignes = [
       ["Prix", function(b){ return b.prix; }],
       ["Remise", function(b){ return remisesDe(b).map(texteRemise).join(" · "); }],
+      ["Adresse", function(b){ return adresseSure(b) ? adresseTexte(b) : ""; }],
       ["Type", function(b){ return (Array.isArray(b.typologies) ? b.typologies.join(", ") : ""); }],
       ["Ville", function(b){ return b.ville; }],
       ["Surface", function(b){ return b.surface; }],
@@ -822,6 +931,26 @@
       var inp = document.getElementById("rdv-creneau");
       if (inp) setTimeout(function(){ inp.focus(); }, 500);
     });
+
+    // Adresse : ouverture de Maps au clic sur la carte, demande d'adresse sinon
+    Array.prototype.forEach.call(document.querySelectorAll(".carte"), function(el){
+      el.addEventListener("click", function(){
+        window.open("https://www.google.com/maps/search/?api=1&query=" + el.getAttribute("data-q"), "_blank", "noopener");
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".adr-demande"), function(btn){
+      btn.addEventListener("click", function(){
+        var i = parseInt(btn.getAttribute("data-adr"), 10);
+        envoyer({ action: "adresse", index: i }, "\u2713 Demande transmise — votre conseiller vous donne l'adresse très vite").then(function(ok){
+          if (!ok) return;
+          etatAvis[String(i)] = etatAvis[String(i)] || {};
+          etatAvis[String(i)].adresse_demandee = true;
+          btn.disabled = true;
+          btn.textContent = "\u2713 Adresse demandée — votre conseiller revient vers vous";
+        });
+      });
+    });
+    poserCartes();
 
     // Comparateur
     var compInvite = document.getElementById("comp-ouvrir");
