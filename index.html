@@ -5082,6 +5082,7 @@ async function _eqSelBulk(corpsFn, verbe){
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       Object.assign(l, corps);
+      if (typeof _toucheAuRappel === 'function' && _toucheAuRappel(corps)) await eqCreneauRappelSync(l);
     } catch(e){ rates++; }
   }
   const faits = leads.length - rates;
@@ -5597,7 +5598,7 @@ async function renderEquipeLeads() {
     // Un lead en compétition (recu_par) apparaît chez chaque vendeur récepteur,
     // même si la paternité n'est pas (encore) à lui.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -5647,6 +5648,7 @@ async function _eqLeadPatch(id, body) {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     if (l) Object.assign(l, body);
+    if (l && typeof _toucheAuRappel === 'function' && _toucheAuRappel(body)) eqCreneauRappelSync(l);
     if (typeof _eqEchecOublie === 'function') _eqEchecOublie(id);
     if (typeof toast === 'function') {
       if (body.rappel_le) toast('✓ Mis à jour — rappel le ' + new Date(body.rappel_le).toLocaleDateString('fr-FR'), 'var(--success)');
@@ -6058,6 +6060,20 @@ async function veilleReprendre(id, slug) {
 
 // Bandeau de la fiche : l'état de veille, et l'avertissement au vendeur qui
 // reçoit un lead déjà travaillé par un collègue.
+// Bandeau de la fiche : « ce client vient de t'être transféré »
+function eqTransfertBandeauFiche(l) {
+  const t = transfertRecent(l);
+  if (!t) return '';
+  const e = _vEsc;
+  return `<div style="background:var(--accent2)14;border:1px solid var(--accent2);border-radius:11px;padding:12px 14px;margin:10px 0">
+    <div style="font-weight:800;font-size:13px;margin-bottom:4px">${selIc('transfert', 14)} Client transféré${t.de ? ' par ' + e(t.de) : ''}</div>
+    <div style="font-size:12.5px;line-height:1.55;color:var(--muted)">
+      Il t'appartient depuis le <strong>${e(new Date(t.le).toLocaleDateString('fr-FR'))}</strong>.
+      Relis ses notes et son historique avant d'appeler — un premier contact a déjà pu avoir lieu.
+    </div>
+  </div>`;
+}
+
 function eqVeilleBandeauFiche(l) {
   if (!l || !estEnVeille(l)) return '';
   const e = _veilleEsc;
@@ -6142,6 +6158,19 @@ function eqLeadsEditObjectifs() {
   v.objectifs = { traites, rdv, resa };
   saveData();
   renderEquipeLeadsTable();
+}
+
+// ---- Transfert de client : le commercial qui reçoit doit le voir tout de suite
+// Le repère vit 3 jours après le transfert, puis s'efface tout seul.
+const TRANSFERT_JOURS = 3;
+function transfertRecent(l) {
+  if (!l || !l.vendeur || !l.vendeur_depuis) return null;
+  const hist = Array.isArray(l.vendeur_historique) ? l.vendeur_historique : [];
+  if (!hist.length) return null;                       // jamais transféré : attribution d'origine
+  const t = new Date(l.vendeur_depuis).getTime();
+  if (isNaN(t) || Date.now() - t > TRANSFERT_JOURS * 86400000) return null;
+  const dernier = hist[hist.length - 1] || {};
+  return { de: dernier.vendeur || null, le: l.vendeur_depuis };
 }
 
 function renderEquipeLeadsTable() {
@@ -6254,7 +6283,9 @@ function renderEquipeLeadsTable() {
   else if (_eqLeadsFilter.startsWith('statut:')) leads = leads.filter(l => eqLeadStatut(l) === _eqLeadsFilter.slice(7));
   if (q) leads = leads.filter(l => ((l.nom||'')+' '+(l.email||'')+' '+(l.lieu||'')+' '+(l.typologie||'')+' '+(l.source||'')).toLowerCase().includes(q));
   const dDem = (l) => { const d = new Date(l.date_lead || l.recu_le || 0); return isNaN(d) ? 0 : d.getTime(); };
-  leads = [...leads].sort((a,b) => _eqTriDate === 'desc' ? dDem(b) - dDem(a) : dDem(a) - dDem(b));
+  const nouveauChezMoi = (l) => transfertRecent(l) ? 1 : 0;
+  leads = [...leads].sort((a,b) => (nouveauChezMoi(b) - nouveauChezMoi(a))
+    || (_eqTriDate === 'desc' ? dDem(b) - dDem(a) : dDem(a) - dDem(b)));
   const fleche = document.getElementById('eq-tri-date-fleche');
   if (fleche) fleche.textContent = _eqTriDate === 'desc' ? '↓' : '↑';
   countEl.textContent = leads.length + ' lead(s)' + (q || _eqLeadsFilter !== 'tous' ? ' (filtré)' : '');
@@ -6271,13 +6302,17 @@ function renderEquipeLeadsTable() {
     ? '<tr><td colspan="8"><div class="empty"><div class="empty-icon">—</div><p>Aucun lead ici</p></div></td></tr>'
     : leads.map(l => {
         const f = _eqLeadFlags(l);
+        const tr = transfertRecent(l);
+        const badgeTr = tr
+          ? `<span title="Client transféré${tr.de ? ' par ' + esc(tr.de) : ''} le ${esc(new Date(tr.le).toLocaleDateString('fr-FR'))} — il est à toi depuis">${selIc('transfert', 15)}</span>`
+          : '';
         const badge = f.rappelDue ? '<span title="Rappel dû — activité prévue aujourd\'hui ou dépassée">' + selIc('rappel', 15) + '</span>' : f.alerte48 ? '<span title="Nouveau depuis plus de 48 h — à traiter">' + selIc('alerte', 13) + '</span>' : f.sansReponse ? '<span title="Sans réponse">' + selIc('sansrep', 15) + '</span>' : '';
         const nq = eqQualifRemplie(l);
         const qualifBadge = `<br><span style="font-size:10px;color:${nq.n===nq.total?'var(--success)':'var(--muted)'}">${nq.n===nq.total?'✓ Fiche complète':'Fiche '+nq.n+'/'+nq.total}</span>`
           + (estEnVeille(l) ? `<br><span title="En veille — ressortira au prochain lancement" style="display:inline-block;background:var(--surface2);border:1px solid var(--accent2);color:var(--accent2);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">En veille</span>` : '');
-        return `<tr onclick="eqOuvrirFiche('${l.id}')" style="cursor:pointer${f.rappelDue||f.alerte48 ? ';background:var(--accent)08' : ''}">
+        return `<tr onclick="eqOuvrirFiche('${l.id}')" style="cursor:pointer${tr ? ';background:var(--accent2)12' : f.rappelDue||f.alerte48 ? ';background:var(--accent)08' : ''}">
         <td onclick="event.stopPropagation()"><input type="checkbox" ${_eqSelected.has(l.id)?'checked':''} onchange="eqToggleSelect('${l.id}', this.checked)" style="cursor:pointer;accent-color:var(--accent)"></td>
-        <td style="font-size:15px">${badge}${eqSelIcone(l)}</td>
+        <td style="font-size:15px">${badgeTr}${badge}${eqSelIcone(l)}</td>
         <td><strong>${esc(nomComplet(l)||'—')}</strong>${nomAConfirmer(l) ? '<span title="Nom repris du mail du portail, à confirmer avec le client" style="color:var(--warning);font-weight:700;margin-left:3px">*</span>' : ''}${qualifBadge}</td>
         <td style="font-size:12px" onclick="event.stopPropagation()">${l.email?esc(l.email)+' '+copyBtn(l.email,'Email')+'<br>':''}${l.telephone?esc(l.telephone)+' '+copyBtn(l.telephone,'Téléphone'):''}</td>
         <td>${villesHtml(l.lieu)}</td>
@@ -6415,8 +6450,24 @@ async function _eqChargerAnnonces() {
   } catch(e) { _eqAnnonces = {}; }
   return _eqAnnonces;
 }
+// Une « référence » SeLoger n'est pas toujours celle d'un bien : les mails
+// portent souvent le libellé de la boîte du vendeur (« Théo », « Anaïs ») ou le
+// nom d'un programme entier. Y attacher UN prix le collait à tous les leads de
+// ce vendeur — c'est le bug du même prix partout. Sur ces références on
+// n'affiche plus que le prix lu dans le mail du client lui-même.
+function _eqSansAccent(x) {
+  return String(x == null ? '' : x).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+}
+function _eqRefGenerique(ref) {
+  const r = _eqSansAccent(ref);
+  if (!r) return true;
+  if (/^programme\b/.test(r)) return true;
+  const prenoms = ((typeof data !== 'undefined' && data && data.vendeurs) || []).map(v => _eqSansAccent(v.prenom)).filter(Boolean);
+  return prenoms.includes(r) || ['theo', 'alex', 'anais', 'louis', 'nour', 'lgl'].includes(r);
+}
+
 function eqAnnoncePrix(ref) {
-  if (!ref || !_eqAnnonces) return null;
+  if (!ref || !_eqAnnonces || _eqRefGenerique(ref)) return null;
   const a = _eqAnnonces[String(ref).toLowerCase()];
   return a && a.prix ? a.prix : null;
 }
@@ -6425,37 +6476,48 @@ function eqAnnoncePrix(ref) {
 // (le prix figure dans le corps de l'email "acquéreur intéressé" ; on l'enregistre
 //  une fois pour toutes dans la table annonces, pour tous les vendeurs)
 const _eqAnnoncesTentees = new Set();
+// Dans le mail SeLoger, le prix du bien est la ligne juste au-dessus de la
+// ville : « 285 000 € / AUBERVILLIERS , 93300 ». On s'accroche à ce couple
+// prix + ville plutôt qu'au premier montant venu — les mentions légales et le
+// message du client contiennent eux aussi des montants.
 function _eqPrixDepuisMessage(message) {
   if (!message) return null;
-  const corps = String(message).split('Cet email vous est adressé')[0];
-  const m = corps.match(/(\d{1,3}(?:[^\d€]?\d{3})+)[^\d€]{0,2}€/);
-  if (!m) return null;
-  const prix = m[1].replace(/[^\d]+/g, ' ').trim();
-  if (prix === '642 609 233') return null; // capital social SeLoger (pied de page)
-  return prix + ' €';
+  const corps = String(message).split('Cet email vous est adressé')[0]
+    .replace(/[    ⁠]/g, ' ')
+    .replace(/\s+/g, ' ');
+  const propre = (brut) => {
+    const n = parseInt(String(brut).replace(/\D/g, ''), 10);
+    if (!n || n < 20000 || n > 5000000) return null;   // écarte les mentions légales
+    return n.toLocaleString('fr-FR') + ' €';
+  };
+  // 1. Prix suivi de « VILLE , 12345 » — la structure de l'encart du bien
+  const ancre = corps.match(/(\d{1,3}(?:[ .,]\d{3}){1,2})\s*€\s*[A-ZÀ-Ý][A-ZÀ-Ýa-zà-ÿ'’\- ]{2,40}\s*,\s*\d{5}/);
+  if (ancre) { const p = propre(ancre[1]); if (p) return p; }
+  // 2. Repli : premier montant plausible du mail
+  const large = corps.match(/(\d{1,3}(?:[ .,]\d{3}){1,2})\s*€/);
+  return large ? propre(large[1]) : null;
 }
+// Le prix est lu dans le mail DE CE CLIENT et rangé sur SA fiche (prix_annonce),
+// jamais partagé avec les autres leads de la même référence.
 async function _eqAnnonceAutoPrix(l) {
-  if (!l || !l.reference_annonce || !_eqAnnonces) return;
-  const cle = l.reference_annonce.toLowerCase();
-  if (eqAnnoncePrix(l.reference_annonce) || _eqAnnoncesTentees.has(cle)) return;
-  _eqAnnoncesTentees.add(cle);
+  if (!l || l.prix_annonce || _eqAnnoncesTentees.has(l.id)) return;
+  _eqAnnoncesTentees.add(l.id);
   try {
-    // On lit les emails des derniers leads ayant cliqué sur cette annonce
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=message&reference_annonce=eq.' + encodeURIComponent(l.reference_annonce) + '&order=created_at.desc&limit=5', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=message&id=eq.' + l.id, {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
     if (!res.ok) return;
     const rows = await res.json();
-    let prix = null;
-    for (const r of rows) { prix = _eqPrixDepuisMessage(r.message); if (prix) break; }
-    if (!prix) return;
-    await fetch(SUPABASE_URL + '/rest/v1/annonces', {
-      method: 'POST',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
-      body: JSON.stringify({ reference: l.reference_annonce, prix, updated_at: new Date().toISOString() })
+    const prix = _eqPrixDepuisMessage(rows && rows[0] && rows[0].message);
+    const n = prix ? parseInt(String(prix).replace(/\D/g, ''), 10) : 0;
+    if (!n || n < 50000 || n > 5000000) return;
+    await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + l.id, {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prix_annonce: n })
     });
-    _eqAnnonces[cle] = { reference: l.reference_annonce, prix };
+    l.prix_annonce = n;
     if (_eqFicheId === l.id) _eqFicheRender();
   } catch(e) { /* silencieux : le bouton ✎ Prix reste disponible */ }
 }
@@ -6463,6 +6525,10 @@ async function _eqAnnonceAutoPrix(l) {
 // tous les leads ayant cliqué sur cette annonce l'afficheront
 async function eqAnnoncePrixEdit(ref) {
   if (!ref) return;
+  if (_eqRefGenerique(ref)) {
+    if (typeof toast === 'function') toast('⚠ « ' + ref +' » n\'est pas la référence d\'un bien mais celle d\'une boîte ou d\'un programme — un prix unique s\'afficherait chez tous les clients concernés', 'var(--warning)');
+    return;
+  }
   const actuel = eqAnnoncePrix(ref) || '';
   const prix = prompt('Prix de l\'annonce « ' + ref + ' » :', actuel);
   if (prix === null) return;
@@ -6892,6 +6958,7 @@ function _eqFicheRender() {
       </div>
     </div>
     <div id="eq-fiche-echec" style="display:none;margin:10px 0"></div>
+    ${eqTransfertBandeauFiche(l)}
     ${eqVeilleBandeauFiche(l)}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 14px;font-size:13px">
       ${l.telephone ? `<a href="tel:${esc(l.telephone)}" style="background:var(--accent);border-radius:9px;padding:8px 14px;color:#fff;text-decoration:none;font-weight:600">${esc(l.telephone)}</a>` : ''}
@@ -6934,15 +7001,17 @@ function _eqFicheRender() {
         </div>
         <input id="eq-ville-input" oninput="eqVilleRechercheInput(this.value)" onkeydown="if(event.key==='Enter'&&this.value.trim())eqVilleAjoute(this.value)" placeholder="Rechercher une ville… (ex : Asnières)" autocomplete="off" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
         <div id="eq-ville-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
-      ${carte(titreQ('Budget') + champBudget(l.budget) + `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('ptz', [['avec','Avec PTZ'],['sans','Sans PTZ'],['a_verifier','À vérifier']], q.ptz)}</div>` + (l.reference_annonce ? `
+      ${carte(titreQ('Budget') + champBudget(l.budget) + `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('ptz', [['avec','Avec PTZ'],['sans','Sans PTZ'],['a_verifier','À vérifier']], q.ptz)}</div>` + (l.reference_annonce || l.prix_annonce ? `
         <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
-          <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Annonce cliquée</div>
+          <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Annonce cliquée <span style="text-transform:none;letter-spacing:0">— prix du bien, pas le budget du client</span></div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-size:13px;font-weight:600">${esc(l.reference_annonce)}</span>
-            ${eqAnnoncePrix(l.reference_annonce)
-              ? `<span style="background:var(--accent);color:#fff;border-radius:8px;padding:3px 10px;font-size:13px;font-weight:700">${esc(eqAnnoncePrix(l.reference_annonce))}</span>`
-              : `<span style="font-size:12px;color:var(--muted)">${_eqAnnonces ? 'prix non renseigné' : ''}</span>`}
-            <button onclick="eqAnnoncePrixEdit(this.dataset.r)" data-r="${esc(l.reference_annonce).replace(/"/g,'&quot;')}" title="Renseigner ou corriger le prix (partagé pour tous les leads de cette annonce)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 9px;color:var(--text);font-size:11px;cursor:pointer">✎ Prix</button>
+            <span style="font-size:13px;font-weight:600">${esc(l.reference_annonce || '—')}</span>
+            ${l.prix_annonce
+              ? `<span title="Prix lu dans le mail reçu pour CE client — à ne pas confondre avec son budget" style="background:var(--accent);color:#fff;border-radius:8px;padding:3px 10px;font-size:13px;font-weight:700">${esc(budgetFmt(l.prix_annonce))}</span>`
+              : eqAnnoncePrix(l.reference_annonce)
+                ? `<span title="Prix saisi pour cette référence" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:3px 10px;font-size:13px;font-weight:700">${esc(eqAnnoncePrix(l.reference_annonce))}</span>`
+                : `<span style="font-size:12px;color:var(--muted)">${_eqAnnonces ? 'prix non renseigné' : ''}</span>`}
+            ${l.reference_annonce && !_eqRefGenerique(l.reference_annonce) ? `<button onclick="eqAnnoncePrixEdit(this.dataset.r)" data-r="${esc(l.reference_annonce).replace(/"/g,'&quot;')}" title="Renseigner ou corriger le prix (partagé pour tous les leads de cette annonce)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 9px;color:var(--text);font-size:11px;cursor:pointer">✎ Prix</button>` : ''}
           </div>
         </div>` : ''))}
       ${carte(titreQ('Surface minimum (m²)') + inputQ('surface_min', q.surface_min, 'Ex : 60'))}
@@ -7072,7 +7141,7 @@ async function eqRdvCharger() {
     const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&or=' + filtreRdv + '&order=debut.asc&limit=200', {
       cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
-    if (r.ok) _eqRdv = await r.json();
+    if (r.ok) _eqRdv = (await r.json()).filter(c => c.origine !== 'rappel');  // les blocs de rappel ont déjà leur ligne d'activité
   } catch (e) { _eqRdv = []; }
   _eqRdvDemandes = (_eqSelectionsAll || []).filter(x => {
     const r = x.avis && x.avis.rdv;
@@ -7229,6 +7298,7 @@ function _eqLegendeHtml() {
       ligne('alerte', 'À traiter — nouveau lead sans premier appel depuis plus de 48 h'),
       ligne('rappel', 'Rappel dû — activité prévue aujourd\'hui ou dépassée'),
       ligne('prevu', 'Activité programmée à une date à venir'),
+      ligne('transfert', 'Client transféré — reçu d\'un collègue depuis moins de 3 jours'),
       ligne('sansrep', 'Sans réponse — client injoignable pour le moment')
     ])}
     ${groupe('Sélection envoyée', [
@@ -7422,6 +7492,7 @@ async function _eqActAppliquer(action, leads, corpsFn, silencieux){
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       Object.assign(l, corps);
+      if (_toucheAuRappel(corps)) await eqCreneauRappelSync(l);
       _eqActSel.delete(l.id);
     } catch(e){ rates++; }
   }
@@ -7434,6 +7505,64 @@ async function _eqActAppliquer(action, leads, corpsFn, silencieux){
   if (typeof renderEquipeLeadsTable === 'function') renderEquipeLeadsTable();
   if (typeof eqMajVue === 'function') eqMajVue(true);
   return { rates: rates, total: leads.length };
+}
+
+// ============================================================
+//  UNE ACTIVITÉ À HEURE FIXE OCCUPE LE PLANNING
+//  Dès qu'un rappel porte une heure, on pose un bloc dans le planning du
+//  vendeur (origine = 'rappel') : il apparaît à son heure et le créneau
+//  cesse d'être proposable à un client. Sans heure, rien n'est posé.
+//  Le bloc suit toujours l'activité : déplacée, elle le déplace ; supprimée,
+//  il disparaît.
+// ============================================================
+const RAPPEL_DUREE_MIN = 30;
+
+async function eqCreneauRappelSync(l) {
+  if (!l || !l.id) return;
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  try {
+    // 1. On retire le bloc précédent — l'heure a pu changer, ou disparaître
+    await fetch(SUPABASE_URL + '/rest/v1/creneaux?origine=eq.rappel&contact_id=eq.' + l.id, {
+      method: 'DELETE', headers: entetes
+    });
+    if (!l.rappel_le || !l.rappel_heure) { await _eqPlanRecharger(); return; }
+
+    const heure = String(l.rappel_heure).slice(0, 5);
+    const debut = new Date(l.rappel_le + 'T' + heure + ':00');
+    if (isNaN(debut)) return;
+    const fin = new Date(debut.getTime() + RAPPEL_DUREE_MIN * 60000);
+    const vendeur = l.vendeur || (MON_ROLE && MON_ROLE.prenom);
+    if (!vendeur) return;
+
+    await fetch(SUPABASE_URL + '/rest/v1/creneaux', {
+      method: 'POST', headers: entetes,
+      body: JSON.stringify({
+        vendeur: vendeur,
+        debut: debut.toISOString(),
+        fin: fin.toISOString(),
+        mode: 'telephone',
+        statut: 'confirme',
+        contact_id: l.id,
+        client_nom: (typeof nomComplet === 'function' ? nomComplet(l) : null) || l.nom || 'Client',
+        client_message: l.rappel_titre || null,
+        origine: 'rappel'
+      })
+    });
+    await _eqPlanRecharger();
+  } catch (e) { /* le planning n'est pas bloquant : l'activité reste dans la page Activité */ }
+}
+
+// Rafraîchit le planning s'il est chargé, pour que le bloc apparaisse tout de suite
+async function _eqPlanRecharger() {
+  try {
+    const page = document.getElementById('eq-plan-liste');
+    if (page && page.offsetParent !== null && typeof renderEquipePlanning === 'function') await renderEquipePlanning();
+  } catch (e) {}
+}
+
+// Est-ce que ce corps de mise à jour touche à l'activité programmée ?
+function _toucheAuRappel(corps) {
+  return !!corps && ('rappel_le' in corps || 'rappel_heure' in corps || 'rappel_titre' in corps);
 }
 
 // Menu « Actions ▾ » d'une seule ligne d'activité
@@ -7499,12 +7628,12 @@ function renderEqNotifs() {
       'var(--warning)');
     // t = -1 : les rendez-vous à confirmer passent devant tout le reste de la journée
     const enRetardRdv = new Date(c.debut) < now;
-    (enRetardRdv ? retard : aujourdhui).push({ t: -1, d: enRetardRdv ? String(c.debut).slice(0, 10) : jour, html });
+    (enRetardRdv ? retard : aujourdhui).push({ t: -1, g: 'valider', d: enRetardRdv ? String(c.debut).slice(0, 10) : jour, html });
   });
 
   // 2. Demandes de RDV sans créneau : à traiter aujourd'hui
   _eqRdvDemandes.forEach(d => {
-    aujourdhui.push({ t: 0, d: jour, html: item('rdv',
+    aujourdhui.push({ t: 0, g: 'demande', d: jour, html: item('rdv',
       'Proposer des créneaux à ' + esc(d.client_nom || 'un client'),
       'Souhaite un rendez-vous' + (d.avis.rdv.creneau ? ' — « ' + esc(d.avis.rdv.creneau) + ' »' : '') + (d.avis.rdv.mode ? ' · ' + esc(CRENEAU_MODES[d.avis.rdv.mode] || d.avis.rdv.mode) : ''),
       btnFiche(d.contact_id) + `<button class="btn btn-sm btn-primary" onclick="eqProposerOuvrir(null,'${d.token}')" style="font-size:11px">Proposer 3 créneaux</button>`,
@@ -7528,13 +7657,13 @@ function renderEqNotifs() {
       const avantH = hAct ? '<strong>' + esc(hAct.replace(':', 'h')) + '</strong> · ' : '';
       const avantCli = l.rappel_titre ? nomCli + ' · ' : '';
       if (l.rappel_le < jour) {
-        retard.push({ t: tAct, d: l.rappel_le, html: item('rappel', titreAct,
+        retard.push({ t: tAct, g: 'rappel', d: l.rappel_le, html: item('rappel', titreAct,
           avantH + avantCli + 'prévu le ' + fmtJ(l.rappel_le) + ' (il y a ' + joursRetard(l.rappel_le) + ' j) · étape : ' + esc(s), boutons, 'var(--danger)', l.id) });
       } else if (l.rappel_le === jour) {
-        aujourdhui.push({ t: tAct, d: jour, html: item('rappel', titreAct,
+        aujourdhui.push({ t: tAct, g: 'rappel', d: jour, html: item('rappel', titreAct,
           avantH + avantCli + 'aujourd\'hui · étape : ' + esc(s), boutons, 'var(--accent)', l.id) });
       } else {
-        avenir.push({ t: tAct, d: l.rappel_le, html: item('prevu', titreAct,
+        avenir.push({ t: tAct, g: 'rappel', d: l.rappel_le, html: item('prevu', titreAct,
           avantH + avantCli + fmtJ(l.rappel_le) + ' · étape : ' + esc(s), boutons, null, l.id) });
       }
     } else if (s === 'Nouveau' && !l.activite_masquee_le) {
@@ -7543,10 +7672,10 @@ function renderEqNotifs() {
       const boutonsNew = btnTel(l.telephone) + btnFiche(l.id) +
         `<button class="btn btn-sm btn-primary" onclick="eqLeadAppele('${l.id}')" style="font-size:11px">Appelé</button>` + btnActions(l.id);
       if (_eqLeadFlags(l).alerte48) {
-        retard.push({ t: recu ? new Date(recu).getTime() : 0, d: recuJour, html: item('alerte', 'Premier appel — ' + esc(nomComplet(l) || '—'),
+        retard.push({ t: recu ? new Date(recu).getTime() : 0, g: 'premier', d: recuJour, html: item('alerte', 'Premier appel — ' + esc(nomComplet(l) || '—'),
           'Lead reçu le ' + fmtJ(recu) + ', toujours sans premier appel (+ de 48 h)', boutonsNew, 'var(--danger)', l.id) });
       } else {
-        aujourdhui.push({ t: recu ? new Date(recu).getTime() : 0, d: jour, html: item('rappel', 'Premier appel — ' + esc(nomComplet(l) || '—'),
+        aujourdhui.push({ t: recu ? new Date(recu).getTime() : 0, g: 'premier', d: jour, html: item('rappel', 'Premier appel — ' + esc(nomComplet(l) || '—'),
           'Nouveau lead reçu le ' + fmtJ(recu) + ' — à appeler dans les 48 h', boutonsNew, 'var(--accent)', l.id) });
       }
     }
@@ -7559,7 +7688,7 @@ function renderEqNotifs() {
     const detail = (jourRdv === jour ? '<strong>' + esc(hh) + '</strong> · ' : esc(_rdvQuand(c)) + ' · ')
       + esc(CRENEAU_MODES[c.mode] || c.mode) + (c.lieu ? ' — ' + esc(c.lieu) : '');
     const cible = (jourRdv === jour ? aujourdhui : avenir);
-    cible.push({ t: new Date(c.debut).getTime(), d: jourRdv,
+    cible.push({ t: new Date(c.debut).getTime(), g: 'confirme', d: jourRdv,
       html: item('rdv', (c.mode === 'visio' ? 'Visio avec ' : 'RDV avec ') + esc(c.client_nom || 'Client'), detail, btnFiche(c.contact_id), 'var(--success)') });
   });
 
@@ -7583,6 +7712,24 @@ function renderEqNotifs() {
     if (isNaN(n)) return '';
     return n < 0 ? 'il y a ' + Math.abs(n) + ' j' : (n === 1 ? 'demain' : 'dans ' + n + ' j');
   };
+
+  // ---- Chaque journée se lit par famille d'activité plutôt qu'en liste continue
+  const ACT_FAMILLES = [
+    ['valider',  'Rendez-vous à valider'],
+    ['demande',  'Demandes de rendez-vous'],
+    ['premier',  'Premiers appels'],
+    ['rappel',   'Rappels et relances'],
+    ['confirme', 'Rendez-vous confirmés']
+  ];
+  const parFamille = (liste) => ACT_FAMILLES.map(([cle, titre]) => {
+    const lot = liste.filter(x => (x.g || 'rappel') === cle);
+    if (!lot.length) return '';
+    return `<div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
+        <span style="font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)">${titre}</span>
+        <span style="font-size:10.5px;font-weight:700;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:0 7px">${lot.length}</span>
+        <span style="flex:1;height:1px;background:var(--border)"></span>
+      </div>` + lot.map(x => x.html).join('');
+  }).join('');
 
   // ---- Navigation jour par jour : ← hier · Aujourd'hui · demain →
   const tous = [...retard, ...aujourdhui, ...avenir];
@@ -7647,7 +7794,7 @@ function renderEqNotifs() {
           <span style="font-size:11.5px;color:var(--muted)">${ecartRelatif(k)}</span>
           <span style="font-size:11px;color:var(--muted);margin-left:auto">${groupes[k].length} activité${groupes[k].length > 1 ? 's' : ''}</span>
         </div>
-        ${groupes[k].map(x => x.html).join('')}
+        ${parFamille(groupes[k])}
       </div>`).join('');
     }
   }
@@ -7656,9 +7803,9 @@ function renderEqNotifs() {
   if (!duJour.length) {
     html += `<div style="font-size:12.5px;color:var(--muted);padding:10px 4px;text-align:center">${estAujourdhui ? 'Rien à faire aujourd\'hui — tout est à jour' : 'Aucune activité ce jour-là'}</div>`;
   } else if (!_eqActVoirRetard || !estAujourdhui) {
-    html += duJour.map(x => x.html).join('');
+    html += parFamille(duJour);
   } else {
-    html += `<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:${couleur};margin:4px 0 6px">Aujourd'hui</div>` + duJour.map(x => x.html).join('');
+    html += `<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:${couleur};margin:4px 0 6px">Aujourd'hui</div>` + parFamille(duJour);
   }
 
   // Balle dans le camp du client (créneaux proposés, en attente de réponse)
@@ -7812,6 +7959,7 @@ const SEL_ICONES = {
   alerte:      ['\u25CF', 'var(--danger)'],
   rappel:      ['\u25F7', 'var(--accent)'],
   prevu:       ['\u25AB', 'var(--muted)'],
+  transfert:   ['\u21C4', 'var(--accent2)'],
   sansrep:     ['\u25CC', 'var(--muted)'],
   expire:      ['\u2298', 'var(--danger)'],
   temps:       ['\u25F7', 'var(--muted)']
@@ -8980,13 +9128,16 @@ function renderEquipePlanningListe() {
   const aVenir = _planCreneaux.filter(c => new Date(c.fin).getTime() > maintenant);
   const maj = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   maj('eq-plan-kpi-attente', aVenir.filter(c => c.statut === 'reserve').length);
-  maj('eq-plan-kpi-confirmes', aVenir.filter(c => c.statut === 'confirme').length);
+  maj('eq-plan-kpi-confirmes', aVenir.filter(c => c.statut === 'confirme' && c.origine !== 'rappel').length);
   maj('eq-plan-kpi-libres', aVenir.filter(c => c.statut === 'libre').length);
   const proposes = aVenir.filter(c => c.statut === 'propose').length;
   const sousTitre = document.getElementById('eq-plan-sub');
+  const nRappels = aVenir.filter(c => c.origine === 'rappel').length;
   if (sousTitre) sousTitre.textContent = proposes
     ? proposes + ' créneau(x) proposé(s) à des clients, en attente de leur réponse'
-    : 'Uniquement les rendez-vous — les activités programmées sont dans « Mes activités »';
+    : nRappels
+      ? nRappels + ' activité(s) à heure fixe occupent ton planning — elles se pilotent depuis « Mes activités »'
+      : 'Rendez-vous et activités à heure fixe — le reste est dans « Mes activités »';
 
   // Demandes en texte libre : pas de créneau, donc hors grille
   const zone = document.getElementById('eq-plan-libres-demandes');
@@ -9055,6 +9206,13 @@ function renderEquipePlanningListe() {
           return `<div title="Créneau proposé à ${_vEsc(c.client_nom || 'un client')} — en attente de sa réponse" style="border:1px dashed var(--accent);border-radius:7px;padding:4px 6px;margin-bottom:4px;font-size:11.5px;color:var(--muted)">
             <div style="font-weight:700">${hh(c.debut)}</div>
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">proposé à ${_vEsc(String(c.client_nom || 'client').split(' ')[0])}</div>
+          </div>`;
+        }
+        if (c.origine === 'rappel') {
+          return `<div title="Activité programmée à ${_vEsc(hh(c.debut))} — ${_vEsc(c.client_message || 'rappel')} · ce créneau ne peut pas être réservé par un client. Se modifie depuis « Mes activités »." style="border:1px solid var(--accent2);border-left:3px solid var(--accent2);border-radius:7px;padding:5px 6px;margin-bottom:4px;font-size:11.5px;background:var(--surface)">
+            <div style="font-weight:700">${hh(c.debut)}</div>
+            <div onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" style="color:var(--text);cursor:${c.contact_id ? 'pointer' : 'default'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_vEsc(c.client_nom || 'Client')}</div>
+            <div style="font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:.3px;margin-top:4px">activité</div>
           </div>`;
         }
         const enAttente = c.statut === 'reserve';
