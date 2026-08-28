@@ -76,6 +76,12 @@
   .doc { display:block; width:100%; box-sizing:border-box; border:none; background:var(--gold); color:#fff; border-radius:12px; padding:14px; font-size:15px; font-weight:700; letter-spacing:.3px; text-align:center; text-decoration:none; transition:background .15s; box-shadow:0 3px 10px rgba(200,169,110,.35); }
   .doc:hover { background:var(--gold-fonce); color:#fff; }
 
+  .comp-invite { background:#fff; border:1px solid var(--gold); border-radius:16px; padding:22px 24px; margin:2px 0 22px; text-align:center; box-shadow:0 2px 10px rgba(200,169,110,.15); }
+  .comp-invite h3 { font-family:Georgia,serif; font-size:18px; font-weight:600; margin-bottom:6px; }
+  .comp-invite p { font-size:13.5px; color:var(--muted); margin-bottom:14px; }
+  .comp-invite button { border:none; background:var(--gold); color:#fff; border-radius:12px; padding:13px 26px; font-size:14.5px; font-weight:700; cursor:pointer; transition:background .15s; }
+  .comp-invite button:hover { background:var(--gold-fonce); }
+
   .cta-rdv { width:100%; margin-top:14px; border:none; background:var(--gold); color:#fff; border-radius:12px; padding:14px; font-size:15px; font-weight:700; letter-spacing:.3px; cursor:pointer; transition:background .15s; box-shadow:0 3px 10px rgba(200,169,110,.35); }
   .cta-rdv:hover { background:var(--gold-fonce); }
 
@@ -553,6 +559,13 @@
       h += "</div></div></div>";
     });
 
+    // Invitation à comparer les lots, juste avant la carte rendez-vous
+    if (biens.length >= 2){
+      h += "<div class='comp-invite'><h3>Hésitation entre plusieurs lots ?</h3>";
+      h += "<p>Mettez-les côte à côte : prix, surface, étage, exposition et livraison dans un seul tableau.</p>";
+      h += "<button id='comp-ouvrir'>Comparer les " + biens.length + " biens</button></div>";
+    }
+
     // Bloc rendez-vous (créneaux proposés, sinon demande libre)
     h += "<div class='rdv' id='bloc-rdv'>" + htmlRdv(d) + "</div>";
 
@@ -785,6 +798,8 @@
     });
 
     // Comparateur
+    var compInvite = document.getElementById("comp-ouvrir");
+    if (compInvite) compInvite.addEventListener("click", ouvrirComp);
     document.getElementById("btn-comp").addEventListener("click", ouvrirComp);
     document.getElementById("comp-x").addEventListener("click", fermerComp);
     document.getElementById("comp").addEventListener("click", function(e){ if (e.target === this) fermerComp(); });
