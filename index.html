@@ -1533,6 +1533,7 @@
       <div id="eq-veille-bandeau" style="margin-bottom:14px"></div>
       <div id="eq-leads-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"></div>
       <div id="eq-leads-legende" style="margin-bottom:14px"></div>
+      <div id="eq-leads-actions" style="margin-bottom:14px"></div>
 
       <div class="card">
         <table>
@@ -5015,6 +5016,7 @@ let _eqLeadsVisible = [];      // leads affichés (après recherche + filtre)
 function eqToggleSelect(id, checked) {
   if (checked) _eqSelected.add(id); else _eqSelected.delete(id);
   _eqUpdateExportBtn();
+  _eqSelBarreMaj();
 }
 function eqToggleSelectAll(cb) {
   if (cb.checked) _eqLeadsVisible.forEach(l => _eqSelected.add(l.id));
@@ -5024,6 +5026,125 @@ function eqToggleSelectAll(cb) {
 function _eqUpdateExportBtn() {
   const btn = document.getElementById('eq-leads-export');
   if (btn) btn.textContent = _eqSelected.size ? `⬇ Exporter (${_eqSelected.size})` : '⬇ Exporter';
+}
+
+// ============================================================
+//  BARRE D'ACTIONS GROUPÉES DU TABLEAU « MES LEADS »
+//  Elle n'apparaît que quand au moins un client est coché.
+// ============================================================
+// Statuts proposés en groupé. « En veille » en est exclu : il demande les
+// critères du client un par un, ça n'a pas de sens en masse.
+const EQ_SEL_STATUTS = ['Sélections','Retour documentation','Finaliser la vente','Sans réponse','Vendu','Perdu','Non qualifié'];
+
+function _eqSelBarreMaj(){
+  const el = document.getElementById('eq-leads-actions');
+  if (!el) return;
+  const n = _eqSelected.size;
+  if (!n) { el.innerHTML = ''; return; }
+  const e = _vEsc;
+  const gerant = typeof estGerant !== 'function' || estGerant();
+  const prenoms = ((typeof data !== 'undefined' && data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean);
+  const selVendeur = gerant && prenoms.length
+    ? `<select onchange="eqSelVendeur(this)" title="Transférer la paternité des leads cochés" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-family:var(--font-body);font-size:12px;cursor:pointer">
+        <option value="">Réattribuer à…</option>
+        ${prenoms.map(x => `<option value="${e(x)}">${e(x)}</option>`).join('')}
+        <option value="__aucun">— Aucun (libre) —</option>
+      </select>`
+    : '';
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--surface2);border:1.5px solid var(--accent);border-radius:10px;padding:9px 13px">
+    <span style="font-size:12.5px;font-weight:700;flex:1;min-width:150px">${n} client${n > 1 ? 's' : ''} sélectionné${n > 1 ? 's' : ''}</span>
+    <button onclick="eqSelTousDeselectionner()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Tout désélectionner</button>
+    <select onchange="eqSelStatut(this)" title="Appliquer le même statut aux clients cochés" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-family:var(--font-body);font-size:12px;cursor:pointer">
+      <option value="">Changer le statut…</option>
+      ${EQ_SEL_STATUTS.map(x => `<option value="${e(x)}">${e(x)}</option>`).join('')}
+    </select>
+    <button onclick="eqSelRappel()" class="btn btn-sm btn-secondary" style="font-size:11.5px">Programmer un rappel</button>
+    ${selVendeur}
+    <button onclick="eqExportCSV()" class="btn btn-sm btn-secondary" style="font-size:11.5px">Exporter la sélection</button>
+  </div>`;
+}
+
+function eqSelTousDeselectionner(){ _eqSelected.clear(); renderEquipeLeadsTable(); }
+
+// Applique le même corps de mise à jour à tous les leads cochés, en série.
+async function _eqSelBulk(corpsFn, verbe){
+  const leads = [..._eqSelected].map(id => (_eqLeads || []).find(l => l.id === id)).filter(Boolean);
+  if (!leads.length) return;
+  let rates = 0;
+  for (const l of leads){
+    const corps = corpsFn(l);
+    if (!corps) continue;
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + l.id, {
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+        body: JSON.stringify(corps)
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      Object.assign(l, corps);
+    } catch(e){ rates++; }
+  }
+  const faits = leads.length - rates;
+  if (faits && typeof toast === 'function') toast('✓ ' + faits + ' client' + (faits > 1 ? 's ' : ' ') + verbe, 'var(--success)');
+  if (rates && typeof toast === 'function') toast('⚠ ' + rates + ' client' + (rates > 1 ? 's n\'ont' : ' n\'a') + ' pas pu être mis à jour', 'var(--danger)');
+  if (!rates) _eqSelected.clear();
+  renderEquipeLeadsTable();
+  if (typeof renderEqNotifs === 'function') renderEqNotifs();
+  if (typeof eqMajVue === 'function') eqMajVue(true);
+}
+
+function eqSelStatut(sel){
+  const statut = sel && sel.value;
+  if (sel) sel.value = '';
+  if (!statut || !_eqSelected.size) return;
+  const n = _eqSelected.size;
+  const besoinRappel = ['Sélections','Retour documentation','Finaliser la vente'].includes(statut);
+  if (!confirm('Passer ' + n + ' client' + (n > 1 ? 's' : '') + ' en « ' + statut + ' » ?')) return;
+  const nowIso = new Date().toISOString();
+  if (besoinRappel){
+    // Une étape active du pipeline ne reste jamais sans relance : on demande
+    // une date une seule fois, elle vaut pour tous les leads cochés.
+    eqRappelPicker(statut + ' — ' + n + ' client' + (n > 1 ? 's' : ''), (date, t, h) => {
+      _eqSelBulk(() => Object.assign({ statut: statut, statut_maj: nowIso }, _eqActivitePatch(date, t, h)), 'passés en ' + statut);
+    }, false, {});
+    return;
+  }
+  _eqSelBulk(() => ({ statut: statut, statut_maj: nowIso, rappel_le: null, rappel_titre: null, rappel_heure: null }), 'passés en ' + statut);
+}
+
+function eqSelRappel(){
+  if (!_eqSelected.size) return;
+  const n = _eqSelected.size;
+  eqRappelPicker(n + ' client' + (n > 1 ? 's' : '') + ' sélectionné' + (n > 1 ? 's' : ''), (date, t, h) => {
+    if (!date) return;
+    _eqSelBulk(() => _eqActivitePatch(date, t, h), 'à rappeler le ' + new Date(date + 'T12:00:00').toLocaleDateString('fr-FR'));
+  }, false, {});
+}
+
+// Réattribution de la paternité — gérants uniquement (Alex et Théophile)
+function eqSelVendeur(sel){
+  const choix = sel && sel.value;
+  if (sel) sel.value = '';
+  if (!choix || !_eqSelected.size) return;
+  if (typeof estGerant === 'function' && !estGerant()){
+    if (typeof toast === 'function') toast('⚠ La réattribution est réservée aux gérants', 'var(--warning)');
+    return;
+  }
+  const nouveau = choix === '__aucun' ? null : choix;
+  const n = _eqSelected.size;
+  if (!confirm('Transférer ' + n + ' client' + (n > 1 ? 's' : '') + (nouveau ? ' à ' + nouveau : ' vers « aucun vendeur »') + ' ?\n\nLa paternité change et le transfert est tracé dans l\'historique de chaque fiche.')) return;
+  const nowIso = new Date().toISOString();
+  _eqSelBulk((l) => {
+    const ancien = l.vendeur || null;
+    if (ancien === nouveau) return null;
+    const corps = { vendeur: nouveau, vendeur_depuis: nouveau ? nowIso : null };
+    if (ancien){
+      const hist = Array.isArray(l.vendeur_historique) ? l.vendeur_historique.slice() : [];
+      hist.push({ vendeur: ancien, du: l.vendeur_depuis || null, au: nowIso, motif: 'réattribution groupée' });
+      corps.vendeur_historique = hist;
+    }
+    return corps;
+  }, nouveau ? 'transférés à ' + nouveau : 'remis en libre');
 }
 
 // Export CSV : les leads cochés, sinon la liste affichée (recherche + filtre en cours)
@@ -5476,7 +5597,7 @@ async function renderEquipeLeads() {
     // Un lead en compétition (recu_par) apparaît chez chaque vendeur récepteur,
     // même si la paternité n'est pas (encore) à lui.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -6120,6 +6241,7 @@ function renderEquipeLeadsTable() {
   }
   const legEl = document.getElementById('eq-leads-legende');
   if (legEl) legEl.innerHTML = _eqLegendeOuverte ? _eqLegendeHtml() : '';
+  if (typeof _eqSelBarreMaj === 'function') _eqSelBarreMaj();
 
   // ---- Filtrage + tri (alertes en premier)
   let leads = _eqLeads;
@@ -7147,12 +7269,21 @@ function eqActCocher(id, coche){
 }
 function eqActToutDeselectionner(){ _eqActSel.clear(); renderEqNotifs(); }
 
-// Les activités en retard supprimables : celles qui portent une date dépassée.
-// Un rendez-vous à valider ou un lead à appeler n'en font pas partie.
+// Tous les leads qui produisent une ligne d'activité cochable : un rappel
+// programmé, ou un premier appel jamais fait et non retiré de la liste.
+function _eqActLeadsActifs(){
+  return (_eqLeads || []).filter(l => {
+    if (STATUTS_FINAUX.includes(eqLeadStatut(l))) return false;
+    if (l.rappel_le) return true;
+    return eqLeadStatut(l) === 'Nouveau' && !l.activite_masquee_le;
+  });
+}
+// Les activités en retard : rappel à une date dépassée, ou premier appel qui
+// traîne depuis plus de 48 h. Un rendez-vous à valider n'en fait pas partie.
 function _eqActRetardIds(){
   const jour = new Date().toISOString().slice(0, 10);
-  return (_eqLeads || [])
-    .filter(l => l.rappel_le && l.rappel_le < jour && !STATUTS_FINAUX.includes(eqLeadStatut(l)))
+  return _eqActLeadsActifs()
+    .filter(l => l.rappel_le ? l.rappel_le < jour : (typeof _eqLeadFlags === 'function' && _eqLeadFlags(l).alerte48))
     .map(l => l.id);
 }
 // Coche ou décoche d'un coup tout ce qui est en retard, sans toucher aux
@@ -7165,27 +7296,74 @@ function eqActRetardToutCocher(){
   renderEqNotifs();
 }
 
-function eqActSupprimer(idUnique){
-  const ids = idUnique ? [idUnique] : [..._eqActSel];
-  if (!ids.length) return;
-  const lignes = ids.map(id => {
-    const l = _eqLeads.find(x => x.id === id);
-    if (!l) return null;
-    const h = l.rappel_heure ? String(l.rappel_heure).slice(0, 5).replace(':', 'h') + ' · ' : '';
-    const quoi = l.rappel_titre || ('Rappeler ' + (nomComplet(l) || '—'));
-    const quand = l.rappel_le ? new Date(l.rappel_le + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
-    return { id, texte: quoi, detail: h + quand + (l.rappel_titre ? ' · ' + (nomComplet(l) || '') : '') };
-  }).filter(Boolean);
-  if (!lignes.length) return;
+// Les quatre actions possibles sur une activité : reporter, sortir le lead du
+// pipeline (sans réponse / non qualifié), ou simplement retirer la ligne.
+const EQ_ACT_ACTIONS = {
+  reporter:    { titre: 'Reporter', verbe: 'reportée' },
+  sansreponse: { titre: 'Passer en « Sans réponse »', verbe: 'passée en Sans réponse',
+                 texte: 'Le client reste dans ton fichier mais sort des activités : plus de rappel programmé, statut « Sans réponse ». Tu pourras le reprendre quand tu veux depuis Mes leads.' },
+  nonqualifie: { titre: 'Passer en « Non qualifié »', verbe: 'passée en Non qualifié',
+                 texte: 'Hors cible ou sans projet réel : le lead est fermé et ne réapparaîtra plus dans les activités. Sa fiche et son historique ne bougent pas.' },
+  retirer:     { titre: 'Retirer de la liste', verbe: 'retirée',
+                 texte: 'La ligne disparaît de tes activités sans toucher au statut du client. Sa fiche et tout l\'historique restent intacts.' }
+};
 
+// Corps de mise à jour envoyé à Supabase pour un lead donné, selon l'action.
+function _eqActCorps(action, l){
+  const nowIso = new Date().toISOString();
+  if (action === 'sansreponse') return { statut: 'Sans réponse', statut_maj: nowIso, rappel_le: null, rappel_titre: null, rappel_heure: null };
+  if (action === 'nonqualifie') return { statut: 'Non qualifié', statut_maj: nowIso, rappel_le: null, rappel_titre: null, rappel_heure: null };
+  // « Retirer » : un rappel s'efface, un premier appel jamais fait se masque
+  if (action === 'retirer') return l.rappel_le
+    ? { rappel_le: null, rappel_titre: null, rappel_heure: null }
+    : { activite_masquee_le: nowIso };
+  return null;
+}
+
+// Une ligne lisible dans la fenêtre de confirmation
+function _eqActLigne(l){
+  const h = l.rappel_heure ? String(l.rappel_heure).slice(0, 5).replace(':', 'h') + ' · ' : '';
+  const nom = (typeof nomComplet === 'function' && nomComplet(l)) || '—';
+  const quoi = l.rappel_le ? (l.rappel_titre || ('Rappeler ' + nom)) : ('Premier appel — ' + nom);
+  const quand = l.rappel_le
+    ? new Date(l.rappel_le + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+    : 'lead jamais appelé';
+  return { id: l.id, texte: quoi, detail: h + quand + (l.rappel_titre ? ' · ' + nom : '') };
+}
+
+// Point d'entrée unique : action groupée (sans id) ou sur une seule ligne (avec id)
+function eqActAction(action, idUnique){
+  const ids = idUnique ? [idUnique] : [..._eqActSel];
+  const leads = ids.map(id => (_eqLeads || []).find(x => x.id === id)).filter(Boolean);
+  if (!leads.length) return;
+
+  if (action === 'reporter'){
+    const un = leads.length === 1 ? leads[0] : null;
+    eqRappelPicker(leads.length > 1 ? leads.length + ' activités sélectionnées' : 'Reporter cette activité',
+      (date, t, h) => {
+        if (!date) return;
+        _eqActAppliquer('reporter', leads, () => _eqActivitePatch(date, t, h));
+      }, false, un ? { titre: un.rappel_titre, heure: un.rappel_heure } : {});
+    return;
+  }
+  if (!EQ_ACT_ACTIONS[action]) return;
+  _eqActConfirmer(action, leads);
+}
+// Ancien nom, conservé pour les appels existants
+function eqActSupprimer(idUnique){ eqActAction('retirer', idUnique); }
+
+function _eqActConfirmer(action, leads){
+  const cfg = EQ_ACT_ACTIONS[action];
+  const lignes = leads.map(_eqActLigne);
+  const n = lignes.length;
   const old = document.getElementById('eq-act-suppr'); if (old) old.remove();
   const div = document.createElement('div');
   div.id = 'eq-act-suppr';
   div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2100;display:flex;align-items:center;justify-content:center;padding:20px';
   div.addEventListener('click', function(e){ if (e.target === div) eqActSupprAnnuler(); });
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:460px;max-width:95vw;max-height:85vh;overflow-y:auto">
-    <div style="font-family:var(--font-head);font-size:16px;font-weight:800;margin-bottom:3px">Supprimer ${lignes.length > 1 ? 'ces ' + lignes.length + ' activités' : 'cette activité'} ?</div>
-    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${lignes.length > 1 ? 'Elles disparaîtront' : 'Elle disparaîtra'} de tes activités et du suivi. ${lignes.length > 1 ? 'Les fiches clients' : 'La fiche client'} et tout l'historique ne bougent pas.</div>
+    <div style="font-family:var(--font-head);font-size:16px;font-weight:800;margin-bottom:3px">${cfg.titre} — ${n > 1 ? n + ' activités' : '1 activité'} ?</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${cfg.texte}</div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:16px;max-height:230px;overflow-y:auto">
       ${lignes.map(x => `<div style="padding:5px 0;border-bottom:1px solid var(--border)">
         <div style="font-size:13px;font-weight:700">${_vEsc(x.texte)}</div>
@@ -7195,10 +7373,11 @@ function eqActSupprimer(idUnique){
     <div id="eq-act-suppr-etat" style="font-size:12px;min-height:15px;margin-bottom:10px"></div>
     <div style="display:flex;justify-content:flex-end;gap:10px">
       <button onclick="eqActSupprAnnuler()" class="btn btn-secondary">Annuler</button>
-      <button id="eq-act-suppr-ok" onclick="eqActSupprConfirmer()" class="btn" style="background:var(--danger);color:#fff;border:none">Supprimer</button>
+      <button id="eq-act-suppr-ok" onclick="eqActSupprConfirmer()" class="btn" style="background:var(--danger);color:#fff;border:none">${action === 'retirer' ? 'Retirer' : 'Confirmer'}</button>
     </div>
   </div>`;
   document.body.appendChild(div);
+  div.dataset.action = action;
   div.dataset.ids = JSON.stringify(lignes.map(x => x.id));
 }
 
@@ -7209,41 +7388,78 @@ async function eqActSupprConfirmer(){
   if (!d) return;
   let ids = [];
   try { ids = JSON.parse(d.dataset.ids || '[]'); } catch(e){ ids = []; }
+  const action = d.dataset.action || 'retirer';
+  const leads = ids.map(id => (_eqLeads || []).find(x => x.id === id)).filter(Boolean);
   const btn = document.getElementById('eq-act-suppr-ok');
   const etat = document.getElementById('eq-act-suppr-etat');
   const dire = function(t, c){ if (etat){ etat.textContent = t; etat.style.color = c; } };
-  if (btn){ btn.disabled = true; btn.textContent = 'Suppression…'; }
-  let rates = 0;
-  for (const id of ids){
-    try {
-      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id, {
-        method: 'PATCH',
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rappel_le: null, rappel_titre: null, rappel_heure: null })
-      });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const l = _eqLeads.find(x => x.id === id);
-      if (l) { l.rappel_le = null; l.rappel_titre = null; l.rappel_heure = null; }
-      _eqActSel.delete(id);
-    } catch(e){ rates++; }
-  }
-  if (rates){
-    // On ne referme pas : les activités non supprimées restent visibles à l'écran
+  if (btn){ btn.disabled = true; btn.textContent = 'En cours…'; }
+  const r = await _eqActAppliquer(action, leads, (l) => _eqActCorps(action, l), true);
+  if (r.rates){
     if (btn){ btn.disabled = false; btn.textContent = 'Réessayer'; }
-    dire(rates === ids.length
-      ? (ids.length > 1 ? '⚠ Aucune n\'a pu être supprimée — vérifie ta connexion.' : '⚠ La suppression a échoué — vérifie ta connexion.')
-      : '⚠ ' + rates + ' activité' + (rates > 1 ? 's' : '') + ' sur ' + ids.length + ' n\'a pas pu être supprimée — les autres l\'ont bien été.',
+    dire(r.rates === r.total
+      ? (r.total > 1 ? '⚠ Aucune n\'a pu être traitée — vérifie ta connexion.' : '⚠ L\'opération a échoué — vérifie ta connexion.')
+      : '⚠ ' + r.rates + ' activité' + (r.rates > 1 ? 's' : '') + ' sur ' + r.total + ' n\'a pas pu être traitée — les autres l\'ont bien été.',
       'var(--danger)');
-    renderEqNotifs();
-    if (typeof renderEquipeLeadsTable === 'function') renderEquipeLeadsTable();
     return;
   }
   eqActSupprAnnuler();
-  if (typeof toast === 'function') toast('✓ ' + ids.length + ' activité' + (ids.length > 1 ? 's supprimées' : ' supprimée'), 'var(--success)');
+}
+
+// Applique une même modification à une liste de leads, en série, et rafraîchit
+// toutes les vues. corpsFn reçoit le lead et renvoie le corps du PATCH.
+async function _eqActAppliquer(action, leads, corpsFn, silencieux){
+  const cfg = EQ_ACT_ACTIONS[action] || { verbe: 'mise à jour' };
+  let rates = 0;
+  for (const l of leads){
+    const corps = corpsFn(l);
+    if (!corps) continue;
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + l.id, {
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+        body: JSON.stringify(corps)
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      Object.assign(l, corps);
+      _eqActSel.delete(l.id);
+    } catch(e){ rates++; }
+  }
+  const faites = leads.length - rates;
+  if (faites && typeof toast === 'function')
+    toast('✓ ' + faites + ' activité' + (faites > 1 ? 's ' : ' ') + cfg.verbe + (faites > 1 ? 's' : ''), 'var(--success)');
+  if (rates && !silencieux && typeof toast === 'function')
+    toast('⚠ ' + rates + ' activité' + (rates > 1 ? 's' : '') + ' n\'a pas pu être traitée', 'var(--danger)');
   renderEqNotifs();
   if (typeof renderEquipeLeadsTable === 'function') renderEquipeLeadsTable();
   if (typeof eqMajVue === 'function') eqMajVue(true);
+  return { rates: rates, total: leads.length };
 }
+
+// Menu « Actions ▾ » d'une seule ligne d'activité
+function eqActMenu(id, ev){
+  if (ev) ev.stopPropagation();
+  const old = document.getElementById('eq-act-menu'); if (old) old.remove();
+  const l = (_eqLeads || []).find(x => x.id === id);
+  if (!l) return;
+  const div = document.createElement('div');
+  div.id = 'eq-act-menu';
+  div.style.cssText = 'position:fixed;inset:0;z-index:2150';
+  const ligne = (action, label, couleur) =>
+    `<button onclick="eqActMenuFermer();eqActAction('${action}','${id}')" style="display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:10px 14px;font-family:var(--font-body);font-size:13px;color:${couleur || 'var(--text)'};cursor:pointer">${label}</button>`;
+  const r = ev && ev.currentTarget && ev.currentTarget.getBoundingClientRect ? ev.currentTarget.getBoundingClientRect() : null;
+  const top = r ? Math.min(r.bottom + 6, window.innerHeight - 190) : 80;
+  const left = r ? Math.min(r.left, window.innerWidth - 230) : 40;
+  div.innerHTML = `<div style="position:absolute;top:${top}px;left:${Math.max(8, left)}px;width:220px;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden">
+    ${ligne('reporter', 'Reporter à une date…')}
+    ${ligne('sansreponse', 'Passer en Sans réponse')}
+    ${ligne('nonqualifie', 'Passer en Non qualifié')}
+    ${ligne('retirer', 'Retirer de la liste', 'var(--danger)')}
+  </div>`;
+  div.addEventListener('click', function(e){ if (e.target === div) eqActMenuFermer(); });
+  document.body.appendChild(div);
+}
+function eqActMenuFermer(){ const d = document.getElementById('eq-act-menu'); if (d) d.remove(); }
 
 function renderEqNotifs() {
   const liste = document.getElementById('eq-notif-liste');
@@ -7270,6 +7486,7 @@ function renderEqNotifs() {
     </div>`;
   const btnFiche = (id) => id ? `<button class="btn btn-sm btn-secondary" onclick="eqOuvrirFiche('${id}')" style="font-size:11px">Fiche</button>` : '';
   const btnTel = (tel) => tel ? `<a href="tel:${esc(tel)}" onclick="event.stopPropagation()" class="btn btn-sm btn-secondary" style="font-size:11px;text-decoration:none">Appeler</a>` : '';
+  const btnActions = (id) => `<button class="btn btn-sm btn-secondary" onclick="eqActMenu('${id}', event)" style="font-size:11px" title="Reporter, changer le statut ou retirer cette activité">Actions ▾</button>`;
 
   // 1. RDV choisis par un client : à valider (en retard si la date est déjà passée)
   _eqRdv.filter(c => c.statut === 'reserve').forEach(c => {
@@ -7300,7 +7517,7 @@ function renderEqNotifs() {
     if (STATUTS_FINAUX.includes(s)) return;
     const boutons = btnTel(l.telephone) + btnFiche(l.id) +
       `<button class="btn btn-sm btn-secondary" onclick="eqActReporter('${l.id}')" style="font-size:11px" title="Changer l'intitulé, le jour ou l'heure">Modifier</button>` +
-      `<button class="btn btn-sm btn-secondary" onclick="eqActSupprimer('${l.id}')" style="font-size:11px;color:var(--danger)" title="Supprimer cette activité">Supprimer</button>`;
+      btnActions(l.id);
     if (l.rappel_le) {
       // Intitulé libre s'il y en a un, sinon « Rappeler <client> ». L'heure, quand
       // elle est renseignée, sert aussi à ranger l'activité dans la journée.
@@ -7320,17 +7537,17 @@ function renderEqNotifs() {
         avenir.push({ t: tAct, d: l.rappel_le, html: item('prevu', titreAct,
           avantH + avantCli + fmtJ(l.rappel_le) + ' · étape : ' + esc(s), boutons, null, l.id) });
       }
-    } else if (s === 'Nouveau') {
+    } else if (s === 'Nouveau' && !l.activite_masquee_le) {
       const recu = l.recu_le || l.date_lead;
       const recuJour = recu ? String(new Date(recu).toISOString()).slice(0, 10) : jour;
       const boutonsNew = btnTel(l.telephone) + btnFiche(l.id) +
-        `<button class="btn btn-sm btn-primary" onclick="eqLeadAppele('${l.id}')" style="font-size:11px">Appelé</button>`;
+        `<button class="btn btn-sm btn-primary" onclick="eqLeadAppele('${l.id}')" style="font-size:11px">Appelé</button>` + btnActions(l.id);
       if (_eqLeadFlags(l).alerte48) {
         retard.push({ t: recu ? new Date(recu).getTime() : 0, d: recuJour, html: item('alerte', 'Premier appel — ' + esc(nomComplet(l) || '—'),
-          'Lead reçu le ' + fmtJ(recu) + ', toujours sans premier appel (+ de 48 h)', boutonsNew, 'var(--danger)') });
+          'Lead reçu le ' + fmtJ(recu) + ', toujours sans premier appel (+ de 48 h)', boutonsNew, 'var(--danger)', l.id) });
       } else {
         aujourdhui.push({ t: recu ? new Date(recu).getTime() : 0, d: jour, html: item('rappel', 'Premier appel — ' + esc(nomComplet(l) || '—'),
-          'Nouveau lead reçu le ' + fmtJ(recu) + ' — à appeler dans les 48 h', boutonsNew, 'var(--accent)') });
+          'Nouveau lead reçu le ' + fmtJ(recu) + ' — à appeler dans les 48 h', boutonsNew, 'var(--accent)', l.id) });
       }
     }
   });
@@ -7378,13 +7595,17 @@ function renderEqNotifs() {
     `<button onclick="eqActNav(${delta})" title="${titreNav}" style="flex-shrink:0;width:44px;height:44px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:18px;cursor:pointer;transition:all .15s">${fleche}</button>`;
 
   // Barre d'actions groupées, visible dès qu'une activité est cochée
-  const idsVisibles = new Set(_eqLeads.filter(l => l.rappel_le).map(l => l.id));
+  const idsVisibles = new Set(_eqActLeadsActifs().map(l => l.id));
   [..._eqActSel].forEach(id => { if (!idsVisibles.has(id)) _eqActSel.delete(id); });
+  const bAct = (action, label, couleur) => `<button onclick="eqActAction('${action}')" class="btn btn-sm" style="font-size:11.5px;${couleur ? 'background:' + couleur + ';color:#fff;border:none' : ''}">${label}</button>`;
   const barreSel = _eqActSel.size
-    ? `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface2);border:1.5px solid var(--accent);border-radius:10px;padding:9px 13px;margin-bottom:12px">
+    ? `<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--surface2);border:1.5px solid var(--accent);border-radius:10px;padding:9px 13px;margin-bottom:12px">
         <span style="font-size:12.5px;font-weight:700;flex:1;min-width:150px">${_eqActSel.size} activité${_eqActSel.size > 1 ? 's' : ''} sélectionnée${_eqActSel.size > 1 ? 's' : ''}</span>
         <button onclick="eqActToutDeselectionner()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Tout désélectionner</button>
-        <button onclick="eqActSupprimer()" class="btn btn-sm" style="font-size:11.5px;background:var(--danger);color:#fff;border:none">Supprimer la sélection</button>
+        ${bAct('reporter', 'Reporter à une date')}
+        ${bAct('sansreponse', 'Sans réponse')}
+        ${bAct('nonqualifie', 'Non qualifié')}
+        ${bAct('retirer', 'Retirer de la liste', 'var(--danger)')}
       </div>`
     : '';
 
@@ -7413,7 +7634,7 @@ function renderEqNotifs() {
     const tousCoches = idsRetard.length > 0 && idsRetard.every(id => _eqActSel.has(id));
     html += `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--danger)10;border:1px solid var(--danger);border-radius:10px;padding:8px 13px;margin-bottom:10px;user-select:none">
       <span onclick="eqActRetardToggle()" style="font-size:12.5px;font-weight:700;color:var(--danger);flex:1;min-width:140px;cursor:pointer">${retard.length} activité${retard.length > 1 ? 's' : ''} en retard</span>
-      ${idsRetard.length ? `<button onclick="eqActRetardToutCocher()" title="${tousCoches ? 'Décocher' : 'Cocher'} les ${idsRetard.length} activité(s) en retard, pour les supprimer d'un coup" style="background:var(--surface);border:1px solid var(--danger);border-radius:8px;padding:4px 11px;color:var(--danger);font-family:var(--font-body);font-size:11.5px;font-weight:700;cursor:pointer">${tousCoches ? 'Tout décocher' : 'Tout sélectionner (' + idsRetard.length + ')'}</button>` : ''}
+      ${idsRetard.length ? `<button onclick="eqActRetardToutCocher()" title="${tousCoches ? 'Décocher' : 'Cocher'} les ${idsRetard.length} activité(s) en retard, pour les traiter d'un coup" style="background:var(--surface);border:1px solid var(--danger);border-radius:8px;padding:4px 11px;color:var(--danger);font-family:var(--font-body);font-size:11.5px;font-weight:700;cursor:pointer">${tousCoches ? 'Tout décocher' : 'Tout sélectionner (' + idsRetard.length + ')'}</button>` : ''}
       <span onclick="eqActRetardToggle()" style="font-size:11px;color:var(--danger);cursor:pointer">${_eqActVoirRetard ? 'masquer ▾' : 'voir la liste ▸'}</span>
     </div>`;
     if (_eqActVoirRetard) {
