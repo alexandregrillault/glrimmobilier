@@ -63,11 +63,19 @@
   .prix-bloc .montant { font-family:Georgia,serif; font-size:20px; font-weight:700; color:var(--encre); }
   .prix-bloc .detail { font-size:11.5px; color:var(--muted); margin-top:3px; }
   /* Ville : intertitre quand la sélection couvre plusieurs communes */
-  .ville-titre { display:flex; align-items:baseline; gap:10px; margin:26px 0 12px; }
-  .ville-titre span { font-family:Georgia,serif; font-size:17px; font-weight:600; color:var(--dark); }
-  .ville-titre small { font-size:12px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; }
-  .ville-titre:after { content:""; flex:1; height:1px; background:var(--bordure); }
-  .ville-titre:first-of-type { margin-top:2px; }
+  .ville-titre { display:flex; align-items:center; gap:12px; margin:38px 0 16px; padding-bottom:9px; border-bottom:2px solid var(--gold); scroll-margin-top:14px; }
+  .ville-titre .ville-nom { font-family:Georgia,'Times New Roman',serif; font-size:23px; font-weight:700; color:var(--dark); letter-spacing:.2px; }
+  .ville-titre .ville-cp { font-family:'Helvetica Neue',Arial,sans-serif; font-size:13px; font-weight:400; color:var(--muted); margin-left:7px; letter-spacing:.5px; }
+  .ville-titre .ville-nb { margin-left:auto; background:var(--gold); color:#fff; border-radius:20px; padding:4px 13px; font-size:11.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; white-space:nowrap; }
+  .ville-titre:first-of-type { margin-top:6px; }
+
+  /* Villes en tête de sélection : un raccourci vers chaque commune */
+  .villes-tete { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 4px; }
+  .ville-chip { display:flex; align-items:baseline; gap:7px; background:#fff; border:1px solid var(--gold); border-radius:22px; padding:7px 15px; text-decoration:none; transition:all .15s; }
+  .ville-chip b { font-family:Georgia,serif; font-size:14px; font-weight:600; color:var(--dark); }
+  .ville-chip span { font-size:12px; color:var(--gold-fonce); font-weight:600; }
+  .ville-chip:hover { background:var(--gold); box-shadow:0 2px 8px rgba(200,169,110,.3); }
+  .ville-chip:hover b, .ville-chip:hover span { color:#fff; }
 
   /* Adresse du lot + carte */
   .adresse { display:flex; align-items:flex-start; gap:7px; font-size:13.5px; color:var(--encre); margin:12px 0 8px; }
@@ -86,9 +94,12 @@
   .adr-demande:hover { background:var(--gold); color:#fff; border-style:solid; }
   .adr-demande[disabled] { opacity:.75; cursor:default; border-style:solid; }
 
-  .remises { display:flex; gap:6px; flex-wrap:wrap; margin:-2px 0 12px; }
-  .remise { background:var(--gold); color:#fff; border-radius:20px; padding:5px 13px; font-size:12.5px; font-weight:700; }
-  .remise .detail { font-weight:600; opacity:.92; }
+  /* Offres commerciales négociées par le conseiller */
+  .remises { display:flex; flex-direction:column; gap:7px; margin:2px 0 14px; }
+  .remise { display:flex; align-items:center; gap:11px; background:linear-gradient(180deg,#fdfaf3,#fbf6ea); border:1px solid var(--gold); border-left:4px solid var(--gold); border-radius:12px; padding:10px 14px; box-shadow:0 2px 8px rgba(200,169,110,.16); }
+  .remise .offre-tag { font-size:9.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--gold); border-radius:4px; padding:3px 7px; white-space:nowrap; }
+  .remise .offre-txt { font-size:13.5px; font-weight:600; color:var(--dark); }
+  .remise .offre-montant { margin-left:auto; font-family:Georgia,serif; font-size:17px; font-weight:700; color:var(--gold-fonce); white-space:nowrap; }
 
   .prix-eco { display:inline-block; margin-top:6px; background:var(--gold); color:#fff; border-radius:20px; padding:2px 10px; font-size:11.5px; font-weight:700; }
   .prix-lois { font-size:11.5px; color:var(--muted); margin-top:2px; }
@@ -463,7 +474,11 @@
     var rs = remisesDe(b);
     if (!rs.length) return "";
     return "<div class='remises'>" + rs.map(function(r){
-      return "<span class='remise'>" + esc(texteRemise(r)) + "</span>";
+      var m = Number(r.montant);
+      var libelle = String(r.libelle || "Remise").trim() || "Remise";
+      var montant = isFinite(m) && m > 0 ? "\u2212 " + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €" : "";
+      return "<div class='remise'><span class='offre-tag'>Offre</span><span class='offre-txt'>" + esc(libelle) + "</span>"
+        + (montant ? "<span class='offre-montant'>" + esc(montant) + "</span>" : "") + "</div>";
     }).join("") + "</div>";
   }
 
@@ -527,6 +542,12 @@
 
   // Sélection sur plusieurs communes : un lot garde son numéro d'origine,
   // seuls l'ordre et les intertitres changent.
+  // « Cachan 94230 » → { nom: "Cachan", cp: "94230" }
+  function villeEnDeux(v){
+    var t = String(v || "").trim();
+    var m = t.match(/^(.*?)[\s,]*(\d{5})\s*$/);
+    return m ? { nom: m[1].trim() || t, cp: m[2] } : { nom: t, cp: "" };
+  }
   function grouperParVille(liste){
     var groupes = [];
     liste.forEach(function(b, i){
@@ -619,6 +640,7 @@
     // « Monsieur Dupont » si le conseiller a renseigné civilité + nom, sinon le prénom
     var destinataire = (d.salutation || "").trim() || prenom;
     var h = "";
+    var groupes = grouperParVille(biens);
     h += "<div class='intro'><h1>Bonjour" + (destinataire ? " " + esc(destinataire) : "") + ",</h1>";
     h += "<p>" + esc(d.message || "Voici une sélection de biens correspondant à vos critères.") + "</p>";
     if (d.vendeur) h += "<div class='sig'>— " + esc(d.vendeur) + ", votre conseiller GLR Immobilier</div>";
@@ -627,9 +649,21 @@
     if (d.expires_at) h += "<span>·</span><span>Sélection valable jusqu'au " + esc(fmtDate(d.expires_at)) + "</span>";
     h += "</div>";
 
-    var groupes = grouperParVille(biens);
-    groupes.forEach(function(gr){
-    if (groupes.length > 1) h += "<div class='ville-titre'><span>" + esc(gr.ville) + "</span><small>" + gr.items.length + " bien" + (gr.items.length > 1 ? "s" : "") + "</small></div>";
+    // Plusieurs communes : raccourcis vers chaque ville, dès l'en-tête
+    if (groupes.length > 1){
+      h += "<div class='villes-tete'>" + groupes.map(function(gr, k){
+        var v = villeEnDeux(gr.ville);
+        return "<a class='ville-chip' href='#ville-" + k + "'><b>" + esc(v.nom) + "</b><span>" + gr.items.length + " bien" + (gr.items.length > 1 ? "s" : "") + "</span></a>";
+      }).join("") + "</div>";
+    }
+
+    groupes.forEach(function(gr, k){
+    if (groupes.length > 1){
+      var vv = villeEnDeux(gr.ville);
+      h += "<div class='ville-titre' id='ville-" + k + "'><div class='ville-nom'>" + esc(vv.nom)
+        + (vv.cp ? "<span class='ville-cp'>" + esc(vv.cp) + "</span>" : "")
+        + "</div><div class='ville-nb'>" + gr.items.length + " bien" + (gr.items.length > 1 ? "s" : "") + "</div></div>";
+    }
     gr.items.forEach(function(o){
       var b = o.b, i = o.i;
       var photo = photoDe(b);
