@@ -7068,6 +7068,88 @@ ${(() => {
   _eqEchecBanniere();
 }
 
+// Remises d'un lot dans la fiche client : elles s'affichent aussitôt sur la page
+// du client, sans renvoyer de lien — utile quand la remise est négociée après coup.
+function eqRemisesListe(b) {
+  return (Array.isArray(b && b.remises) ? b.remises : [])
+    .filter(r => r && (String(r.libelle || '').trim() || Number(r.montant) > 0));
+}
+function eqRemisesLigne(token, i, b) {
+  const rs = eqRemisesListe(b);
+  const pastilles = rs.map((r, j) => `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:20px;padding:2px 6px 2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}
+    <button onclick="eqRemiseSupprimer('${token}',${i},${j})" title="Retirer cette remise" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 3px;opacity:.85">✕</button></span>`).join(' ');
+  return `<div style="margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${pastilles}
+    <button onclick="eqRemiseOuvrir('${token}',${i})" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:2px 11px;color:var(--muted);font-size:11.5px;cursor:pointer">+ Remise</button>
+  </div>`;
+}
+
+// Écrit la liste des lots modifiée sur la sélection déjà envoyée
+async function _eqRemisesEnregistrer(token, biens) {
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/selections?token=eq.' + encodeURIComponent(token), {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ biens })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const s = (_eqSelectionsAll || []).find(x => x.token === token);
+    if (s) s.biens = biens;
+    if (typeof _eqFicheRender === 'function' && _eqFicheId) _eqFicheRender();
+    if (typeof toast === 'function') toast('✓ Remise mise à jour — visible tout de suite par le client', 'var(--success)');
+    return true;
+  } catch (e) {
+    if (typeof toast === 'function') toast('⚠ Échec de l\'enregistrement de la remise', 'var(--danger)');
+    return false;
+  }
+}
+
+function eqRemiseSupprimer(token, i, j) {
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  if (!s || !Array.isArray(s.biens) || !s.biens[i]) return;
+  const biens = JSON.parse(JSON.stringify(s.biens));
+  const rs = eqRemisesListe(biens[i]);
+  rs.splice(j, 1);
+  biens[i].remises = rs;
+  _eqRemisesEnregistrer(token, biens);
+}
+
+function eqRemiseOuvrir(token, i) {
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  if (!s || !Array.isArray(s.biens) || !s.biens[i]) return;
+  const b = s.biens[i];
+  document.getElementById('eq-remise-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'eq-remise-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1600;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:430px;max-width:95vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Remise sur ${_vEsc(b.titre || 'ce lot')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Elle apparaîtra en pastille dorée sous le prix, sur la page du client.</div>
+    <input id="eq-remise-lib" placeholder="Libellé (ex: Remise promoteur, Frais de notaire offerts)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:8px">
+    <input id="eq-remise-montant" placeholder="Montant en € (optionnel)" inputmode="numeric" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:16px">
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-secondary" onclick="document.getElementById('eq-remise-modal').remove()">Annuler</button>
+      <button class="btn" onclick="eqRemiseValider('${token}',${i})">Ajouter</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  document.getElementById('eq-remise-lib').focus();
+}
+
+async function eqRemiseValider(token, i) {
+  const libelle = (document.getElementById('eq-remise-lib')?.value || '').trim();
+  const montant = _selMontantRemise(document.getElementById('eq-remise-montant')?.value || '');
+  if (!libelle && !montant) { if (typeof toast === 'function') toast('⚠ Renseigne au moins un libellé ou un montant', 'var(--warning)'); return; }
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  if (!s || !Array.isArray(s.biens) || !s.biens[i]) return;
+  const biens = JSON.parse(JSON.stringify(s.biens));
+  const rs = eqRemisesListe(biens[i]);
+  rs.push({ libelle: libelle || 'Remise', montant: montant });
+  biens[i].remises = rs;
+  document.getElementById('eq-remise-modal')?.remove();
+  await _eqRemisesEnregistrer(token, biens);
+}
+
 // Bloc "Sélections envoyées" de la fiche client : lien reçu, aperçu sans fausser le suivi, détail des avis
 function eqFicheSelectionsHtml(l) {
   const sels = (_eqSelectionsAll || []).filter(s => s.contact_id === l.id);
@@ -7113,6 +7195,7 @@ function eqFicheSelectionsHtml(l) {
         ${sec ? `<div style="height:3px;border-radius:2px;background:var(--surface2);margin-top:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div>` : ''}
         ${a.commentaire ? `<div style="font-size:12px;color:var(--muted);font-style:italic;margin-top:3px">« ${_vEsc(a.commentaire)} »</div>` : ''}
         ${a.infos ? `<div style="font-size:11.5px;color:var(--accent);margin-top:3px;font-weight:600">${selIc('infos', 12)} a demandé plus d\'infos</div>` : ''}
+        ${eqRemisesLigne(s.token, i, b)}
       </div>`;
     }).join('');
 
@@ -8034,7 +8117,9 @@ const SEL_CHAMPS_LIBRE = [
   ['parking', 'Parking (ex: P33)'],
   ['livraison', 'Livraison (ex: 2028-T4)'],
   ['plan', 'Lien plan seul (optionnel)'],
-  ['masse', 'Lien plan de masse seul (optionnel)']
+  ['masse', 'Lien plan de masse seul (optionnel)'],
+  ['remise', 'Remise / avantage négocié (ex: Remise promoteur)'],
+  ['remiseMontant', 'Montant de la remise en € (optionnel)']
 ];
 
 // Clé de programme à partir d'un titre de lot ("Le domaine des Prunais - Lot n°B1 403" → "domaineprunais")
@@ -8283,6 +8368,18 @@ async function _selEnvoyerDoc(f, i) {
   } catch(e) { return null; }
 }
 
+// Remises et avantages négociés : ils ne figurent pas sur la fiche Otaree,
+// le conseiller les saisit à la main et ils s'affichent sur la sélection du client.
+function _selMontantRemise(v) {
+  const n = parseFloat(String(v || '').replace(/[^0-9,.]/g, '').replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+function _selRemiseTexte(r) {
+  const t = String((r && r.libelle) || 'Remise').trim() || 'Remise';
+  const m = Number(r && r.montant);
+  return t + (Number.isFinite(m) && m > 0 ? ' − ' + new Intl.NumberFormat('fr-FR').format(m) + ' €' : '');
+}
+
 async function selAjouterLibre() {
   const val = (id) => { const el = document.getElementById('sel-l-' + id); return el ? el.value.trim() : ''; };
   const titre = val('titre');
@@ -8317,9 +8414,12 @@ async function selAjouterLibre() {
     parking: val('parking'), livraison: val('livraison'),
     expo: '', promoteur: '', nature: '', annexes: [], prixOptions: [],
     plan: val('plan'), masse: val('masse'), pdf: pdfUrl, docs: docs,
+    remises: ((val('remise') || _selMontantRemise(val('remiseMontant')))
+      ? [{ libelle: val('remise') || 'Remise', montant: _selMontantRemise(val('remiseMontant')) }]
+      : []).concat(Array.isArray(_selCtx.remisesExistantes) ? _selCtx.remisesExistantes : []),
     image: val('image') || _selCtx.imageExistante || '', images: _selCtx.imagesExistantes || [], pitch: '', typologies: type ? [type] : [], atouts: []
   });
-  _selCtx.pdfExistant = ''; _selCtx.imageExistante = ''; _selCtx.imagesExistantes = []; _selCtx.docsExistants = [];
+  _selCtx.pdfExistant = ''; _selCtx.imageExistante = ''; _selCtx.imagesExistantes = []; _selCtx.docsExistants = []; _selCtx.remisesExistantes = [];
   SEL_CHAMPS_LIBRE.forEach(c => { const el = document.getElementById('sel-l-' + c[0]); if (el) el.value = ''; });
   if (fi) fi.value = '';
   selDocsApercu();
@@ -8333,7 +8433,7 @@ function selAjouterLibreRefresh() {
     : _selCtx.libres.map((b,i) => {
       const badges = [b.lien ? '' : null, b.pdf ? '' : null, b.plan ? '' : null, b.masse ? '' : null].filter(Boolean).join(' ');
       return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)">
-      <span><strong>${_vEsc(b.titre)}</strong>${b.ville ? ' — ' + _vEsc(b.ville) : ''}${b.prix ? ' · ' + _vEsc(b.prix) : ''}${b.typologies && b.typologies.length ? ' · ' + _vEsc(b.typologies[0]) : ''}${b.surface ? ' · ' + _vEsc(b.surface) : ''}${b.prixOptions && b.prixOptions.length > 1 ? ' · <span style="color:var(--success)">' + b.prixOptions.length + ' régimes de TVA</span>' : ''} <span style="font-size:11px;opacity:.8">${badges}</span></span>
+      <span><strong>${_vEsc(b.titre)}</strong>${b.ville ? ' — ' + _vEsc(b.ville) : ''}${b.prix ? ' · ' + _vEsc(b.prix) : ''}${b.typologies && b.typologies.length ? ' · ' + _vEsc(b.typologies[0]) : ''}${b.surface ? ' · ' + _vEsc(b.surface) : ''}${b.prixOptions && b.prixOptions.length > 1 ? ' · <span style="color:var(--success)">' + b.prixOptions.length + ' régimes de TVA</span>' : ''}${eqRemisesListe(b).length ? ' · <span style="color:var(--accent)">' + eqRemisesListe(b).map(_selRemiseTexte).join(' · ') + '</span>' : ''} <span style="font-size:11px;opacity:.8">${badges}</span></span>
       <span style="white-space:nowrap">
         <button onclick="selEditerLot(${i})" title="Modifier / compléter ce lot" style="background:none;border:none;cursor:pointer;font-size:13px">✎</button>
         <button onclick="_selCtx.libres.splice(${i},1);selAjouterLibreRefresh()" title="Retirer" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button>
@@ -8349,6 +8449,10 @@ function selEditerLot(i) {
   setV('type', b.typologies && b.typologies[0]); setV('surface', b.surface); setV('etage', b.etage);
   setV('terrasse', b.terrasse); setV('parking', b.parking); setV('livraison', b.livraison);
   setV('plan', b.plan); setV('masse', b.masse);
+  const r0 = (Array.isArray(b.remises) && b.remises[0]) ? b.remises[0] : null;
+  setV('remise', r0 ? r0.libelle : '');
+  setV('remiseMontant', r0 && r0.montant ? String(r0.montant) : '');
+  _selCtx.remisesExistantes = Array.isArray(b.remises) ? b.remises.slice(1) : [];
   _selCtx.pdfExistant = b.pdf || '';
   _selCtx.imageExistante = b.image || '';
   _selCtx.imagesExistantes = Array.isArray(b.images) ? b.images : [];

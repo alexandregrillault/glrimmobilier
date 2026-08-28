@@ -62,6 +62,10 @@
   .prix-bloc.avantage .regime { color:var(--gold); font-weight:700; }
   .prix-bloc .montant { font-family:Georgia,serif; font-size:20px; font-weight:700; color:var(--encre); }
   .prix-bloc .detail { font-size:11.5px; color:var(--muted); margin-top:3px; }
+  .remises { display:flex; gap:6px; flex-wrap:wrap; margin:-2px 0 12px; }
+  .remise { background:var(--gold); color:#fff; border-radius:20px; padding:5px 13px; font-size:12.5px; font-weight:700; }
+  .remise .detail { font-weight:600; opacity:.92; }
+
   .prix-eco { display:inline-block; margin-top:6px; background:var(--gold); color:#fff; border-radius:20px; padding:2px 10px; font-size:11.5px; font-weight:700; }
   .prix-lois { font-size:11.5px; color:var(--muted); margin-top:2px; }
 
@@ -419,6 +423,26 @@
     }).join("") + "</div>";
   }
 
+  // Remises et avantages négociés, saisis à la main par le conseiller
+  // (ils ne figurent pas toujours sur la fiche Otaree du lot)
+  function remisesDe(b){
+    return (Array.isArray(b.remises) ? b.remises : []).filter(function(r){
+      return r && (String(r.libelle || "").trim() || Number(r.montant) > 0);
+    });
+  }
+  function texteRemise(r){
+    var m = Number(r.montant);
+    var t = String(r.libelle || "Remise").trim() || "Remise";
+    return t + (isFinite(m) && m > 0 ? " \u2212 " + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €" : "");
+  }
+  function htmlRemises(b){
+    var rs = remisesDe(b);
+    if (!rs.length) return "";
+    return "<div class='remises'>" + rs.map(function(r){
+      return "<span class='remise'>" + esc(texteRemise(r)) + "</span>";
+    }).join("") + "</div>";
+  }
+
   // Surface, étage, exposition, livraison, annexes
   function htmlFaits(b){
     var faits = [];
@@ -526,6 +550,7 @@
       if (b.nature && puces.indexOf(b.nature) === -1) puces.unshift(b.nature);
       if (puces.length) h += "<div class='chips'>" + puces.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
       h += htmlPrix(b);
+      h += htmlRemises(b);
       h += htmlFaits(b);
       if (b.pitch) h += "<p class='pitch'>" + esc(b.pitch) + "</p>";
       var atouts = Array.isArray(b.atouts) ? b.atouts.slice(0, 5) : [];
@@ -629,6 +654,7 @@
   function ouvrirComp(){
     var lignes = [
       ["Prix", function(b){ return b.prix; }],
+      ["Remise", function(b){ return remisesDe(b).map(texteRemise).join(" · "); }],
       ["Type", function(b){ return (Array.isArray(b.typologies) ? b.typologies.join(", ") : ""); }],
       ["Ville", function(b){ return b.ville; }],
       ["Surface", function(b){ return b.surface; }],
