@@ -7614,7 +7614,6 @@ function renderEqNotifs() {
       ${boutons}
     </div>`;
   const btnFiche = (id) => id ? `<button class="btn btn-sm btn-secondary" onclick="eqOuvrirFiche('${id}')" style="font-size:11px">Fiche</button>` : '';
-  const btnTel = (tel) => tel ? `<a href="tel:${esc(tel)}" onclick="event.stopPropagation()" class="btn btn-sm btn-secondary" style="font-size:11px;text-decoration:none">Appeler</a>` : '';
   const btnActions = (id) => `<button class="btn btn-sm btn-secondary" onclick="eqActMenu('${id}', event)" style="font-size:11px" title="Reporter, changer le statut ou retirer cette activité">Actions ▾</button>`;
 
   // 1. RDV choisis par un client : à valider (en retard si la date est déjà passée)
@@ -7644,7 +7643,7 @@ function renderEqNotifs() {
   _eqLeads.forEach(l => {
     const s = eqLeadStatut(l);
     if (STATUTS_FINAUX.includes(s)) return;
-    const boutons = btnTel(l.telephone) + btnFiche(l.id) +
+    const boutons = btnFiche(l.id) +
       `<button class="btn btn-sm btn-secondary" onclick="eqActReporter('${l.id}')" style="font-size:11px" title="Changer l'intitulé, le jour ou l'heure">Modifier</button>` +
       btnActions(l.id);
     if (l.rappel_le) {
@@ -7657,19 +7656,19 @@ function renderEqNotifs() {
       const avantH = hAct ? '<strong>' + esc(hAct.replace(':', 'h')) + '</strong> · ' : '';
       const avantCli = l.rappel_titre ? nomCli + ' · ' : '';
       if (l.rappel_le < jour) {
-        retard.push({ t: tAct, g: 'rappel', d: l.rappel_le, html: item('rappel', titreAct,
+        retard.push({ t: tAct, g: 'rappel', e: s, d: l.rappel_le, html: item('rappel', titreAct,
           avantH + avantCli + 'prévu le ' + fmtJ(l.rappel_le) + ' (il y a ' + joursRetard(l.rappel_le) + ' j) · étape : ' + esc(s), boutons, 'var(--danger)', l.id) });
       } else if (l.rappel_le === jour) {
-        aujourdhui.push({ t: tAct, g: 'rappel', d: jour, html: item('rappel', titreAct,
+        aujourdhui.push({ t: tAct, g: 'rappel', e: s, d: jour, html: item('rappel', titreAct,
           avantH + avantCli + 'aujourd\'hui · étape : ' + esc(s), boutons, 'var(--accent)', l.id) });
       } else {
-        avenir.push({ t: tAct, g: 'rappel', d: l.rappel_le, html: item('prevu', titreAct,
+        avenir.push({ t: tAct, g: 'rappel', e: s, d: l.rappel_le, html: item('prevu', titreAct,
           avantH + avantCli + fmtJ(l.rappel_le) + ' · étape : ' + esc(s), boutons, null, l.id) });
       }
     } else if (s === 'Nouveau' && !l.activite_masquee_le) {
       const recu = l.recu_le || l.date_lead;
       const recuJour = recu ? String(new Date(recu).toISOString()).slice(0, 10) : jour;
-      const boutonsNew = btnTel(l.telephone) + btnFiche(l.id) +
+      const boutonsNew = btnFiche(l.id) +
         `<button class="btn btn-sm btn-primary" onclick="eqLeadAppele('${l.id}')" style="font-size:11px">Appelé</button>` + btnActions(l.id);
       if (_eqLeadFlags(l).alerte48) {
         retard.push({ t: recu ? new Date(recu).getTime() : 0, g: 'premier', d: recuJour, html: item('alerte', 'Premier appel — ' + esc(nomComplet(l) || '—'),
@@ -7721,14 +7720,35 @@ function renderEqNotifs() {
     ['rappel',   'Rappels et relances'],
     ['confirme', 'Rendez-vous confirmés']
   ];
+  // Les rappels se relisent étape par étape : l'ordre du pipeline d'abord,
+  // les étapes qui ne sont pas des étapes de vente ensuite.
+  const ACT_ETAPES = STATUTS_PIPELINE.concat(['Sans réponse', STATUT_VEILLE]);
+  const titreFamille = (titre, n) => `<div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
+      <span style="font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)">${titre}</span>
+      <span style="font-size:10.5px;font-weight:700;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:0 7px">${n}</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+    </div>`;
+  const titreEtape = (etape, n) => `<div style="display:flex;align-items:center;gap:7px;margin:9px 0 5px 2px">
+      <span style="width:3px;height:11px;border-radius:2px;background:var(--accent)"></span>
+      <span style="font-size:11px;font-weight:700;color:var(--text)">${_vEsc(etape)}</span>
+      <span style="font-size:10.5px;color:var(--muted)">${n}</span>
+    </div>`;
+  const parEtape = (lot) => {
+    const vues = new Set();
+    const ordre = ACT_ETAPES.filter(e => lot.some(x => x.e === e))
+      .concat([...new Set(lot.map(x => x.e))].filter(e => e && !ACT_ETAPES.includes(e)));
+    return ordre.map(e => {
+      if (vues.has(e)) return '';
+      vues.add(e);
+      const sous = lot.filter(x => x.e === e);
+      return titreEtape(e, sous.length) + sous.map(x => x.html).join('');
+    }).join('') + lot.filter(x => !x.e).map(x => x.html).join('');
+  };
   const parFamille = (liste) => ACT_FAMILLES.map(([cle, titre]) => {
     const lot = liste.filter(x => (x.g || 'rappel') === cle);
     if (!lot.length) return '';
-    return `<div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
-        <span style="font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)">${titre}</span>
-        <span style="font-size:10.5px;font-weight:700;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:0 7px">${lot.length}</span>
-        <span style="flex:1;height:1px;background:var(--border)"></span>
-      </div>` + lot.map(x => x.html).join('');
+    const corps = cle === 'rappel' ? parEtape(lot) : lot.map(x => x.html).join('');
+    return titreFamille(titre, lot.length) + corps;
   }).join('');
 
   // ---- Navigation jour par jour : ← hier · Aujourd'hui · demain →
