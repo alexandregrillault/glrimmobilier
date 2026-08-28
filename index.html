@@ -5624,7 +5624,7 @@ async function renderEquipeLeads() {
     _eqSelected.clear();
     // Sélections envoyées par ce vendeur (suivi ouverture + avis)
     try {
-      const rs = await fetch(SUPABASE_URL + '/rest/v1/selections?select=token,contact_id,client_nom,created_at,opened_at,expires_at,avis,biens,temps,visites,dernier_vu&vendeur=eq.' + encodeURIComponent(v.prenom) + '&order=created_at.desc&limit=1000', {
+      const rs = await fetch(SUPABASE_URL + '/rest/v1/selections?select=token,contact_id,client_nom,created_at,opened_at,expires_at,avis,biens,temps,visites,dernier_vu,maj_at&vendeur=eq.' + encodeURIComponent(v.prenom) + '&order=created_at.desc&limit=1000', {
         cache: 'no-store',
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
       });
@@ -7206,9 +7206,10 @@ function eqFicheSelectionsHtml(l) {
         <span style="font-size:12px;color:${couleur};flex:1">${_vEsc(etat)}</span>
         <a href="${lienApercu}" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px">Aperçu</a>
         <button onclick="eqCopy(this.dataset.v,'Lien client')" data-v="${lienClient}" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">Lien client</button>
+        <button onclick="eqModifierSelection('${s.token}')" title="Retirer ou ajouter des lots, sans changer le lien" style="background:none;border:1px solid var(--border);border-radius:20px;padding:1px 10px;color:var(--text);font-size:11px;cursor:pointer">Modifier</button>
       </div>
       <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px">
-        ${biens.length} lot(s) · ${s.opened_at ? 'ouverte le ' + fmtD(s.opened_at) : 'jamais ouverte'}${total ? ' · ' + fmtDuree(total) + ' de lecture' + (Number(s.visites) > 1 ? ' sur ' + s.visites + ' visites' : '') : ''}
+        ${biens.length} lot(s) · ${s.opened_at ? 'ouverte le ' + fmtD(s.opened_at) : 'jamais ouverte'}${s.maj_at ? ' · <span style="color:var(--accent)">modifiée le ' + fmtD(s.maj_at) + '</span>' : ''}${total ? ' · ' + fmtDuree(total) + ' de lecture' + (Number(s.visites) > 1 ? ' sur ' + s.visites + ' visites' : '') : ''}
       </div>
       ${lots}
     </div>`;
@@ -8244,17 +8245,32 @@ async function _selChargerProgrammes() {
 function _selFermer() { const m = document.getElementById('eq-sel-modal'); if (m) m.remove(); _selCtx = null; }
 
 // ---- Ouverture du modal de création
-async function eqOuvrirSelection(contactId) {
+// Modifier une sélection déjà envoyée : mêmes écrans, même lien client.
+// Les lots ajoutés sont datés (pastille « Nouveau » chez le client), les avis
+// suivent leur lot, et ceux des lots retirés disparaissent après confirmation.
+function eqModifierSelection(token) {
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  if (!s) return;
+  eqOuvrirSelection(s.contact_id, token);
+}
+
+async function eqOuvrirSelection(contactId, tokenEdition) {
   const l = _eqLeads.find(x => x.id === contactId);
   if (!l) return;
-  _selCtx = { lead: l, libres: [] };
+  const selEdit = tokenEdition ? (_eqSelectionsAll || []).find(x => x.token === tokenEdition) : null;
+  _selCtx = { lead: l, libres: selEdit ? JSON.parse(JSON.stringify(selEdit.biens || [])) : [] };
+  if (selEdit) _selCtx.edition = {
+    token: tokenEdition,
+    biensAvant: JSON.parse(JSON.stringify(selEdit.biens || [])),
+    avisAvant: JSON.parse(JSON.stringify(selEdit.avis || {}))
+  };
   const old = document.getElementById('eq-sel-modal'); if (old) old.remove();
   const div = document.createElement('div');
   div.id = 'eq-sel-modal';
   div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1500;display:flex;align-items:center;justify-content:center;padding:20px';
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto" id="eq-sel-corps">
-    <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:2px">Sélection pour ${_vEsc(nomComplet(l)||'ce client')}</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Le client recevra une page personnalisée avec les biens et pourra donner son avis sur chacun.</div>
+    <div id="sel-titre" style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:2px">Sélection pour ${_vEsc(nomComplet(l)||'ce client')}</div>
+    <div id="sel-sous-titre" style="font-size:12px;color:var(--muted);margin-bottom:14px">Le client recevra une page personnalisée avec les biens et pourra donner son avis sur chacun.</div>
     ${eqCriteresChips(l)}
     <label style="font-size:12px;color:var(--muted)">Comment s'adresser au client sur la page</label>
     <div style="display:flex;gap:8px;margin:4px 0 4px;flex-wrap:wrap">
@@ -8285,12 +8301,115 @@ async function eqOuvrirSelection(contactId) {
     <button onclick="selAjouterLibre()" style="background:var(--surface2);border:1px dashed var(--border);border-radius:9px;padding:7px 14px;color:var(--text);font-size:12px;cursor:pointer;margin-bottom:18px">+ Ajouter ce lot</button>
     <div style="display:flex;justify-content:flex-end;gap:10px">
       <button onclick="_selFermer()" class="btn btn-secondary">Annuler</button>
-      <button onclick="selCreer()" class="btn">Créer la sélection</button>
+      <button id="sel-btn-valider" onclick="selCreer()" class="btn">Créer la sélection</button>
     </div>
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) _selFermer(); });
   document.body.appendChild(div);
   _selSalutationApercu();
+  if (_selCtx.edition) {
+    const t = document.getElementById('sel-titre');
+    const st = document.getElementById('sel-sous-titre');
+    const b = document.getElementById('sel-btn-valider');
+    if (t) t.textContent = 'Modifier la sélection de ' + (nomComplet(l) || 'ce client');
+    if (st) st.textContent = 'Même lien qu\'à l\'envoi : retire ou ajoute des lots, le client verra la mise à jour en rouvrant sa page.';
+    if (b) { b.textContent = 'Enregistrer les modifications'; b.setAttribute('onclick', 'selEnregistrerModifs()'); }
+    selAjouterLibreRefresh();
+  }
+}
+
+// Clé d'identité d'un lot : son lien Otaree, à défaut son titre
+function _selCleLot(b) {
+  return String((b && (b.lien || b.titre)) || '').trim().toLowerCase();
+}
+
+async function selEnregistrerModifs() {
+  const ed = _selCtx && _selCtx.edition;
+  if (!ed) return;
+  const biens = _selCtx.libres.slice();
+  if (!biens.length) { if (typeof toast === 'function') toast('⚠ Une sélection doit garder au moins un bien', 'var(--warning)'); return; }
+
+  const avant = Array.isArray(ed.biensAvant) ? ed.biensAvant : [];
+  const clesAvant = avant.map(_selCleLot);
+  const maintenant = new Date().toISOString();
+  let ajoutes = 0;
+  biens.forEach(b => {
+    if (clesAvant.indexOf(_selCleLot(b)) === -1) { if (!b.ajoute_le) b.ajoute_le = maintenant; ajoutes++; }
+  });
+
+  // Les avis suivent leur lot, même si l'ordre change
+  const avisAvant = (ed.avisAvant && typeof ed.avisAvant === 'object') ? ed.avisAvant : {};
+  const avis = {};
+  if (avisAvant.rdv) avis.rdv = avisAvant.rdv;
+  const perdus = [];
+  avant.forEach((b, i) => {
+    const a = avisAvant[String(i)];
+    if (!a) return;
+    const j = biens.findIndex(x => _selCleLot(x) === _selCleLot(b));
+    if (j >= 0) avis[String(j)] = a;
+    else if (a.choix || a.commentaire || a.infos) perdus.push(b.titre || ('Lot ' + (i + 1)));
+  });
+
+  const btn = document.getElementById('sel-btn-valider');
+  if (perdus.length && !_selCtx.confirmePerte) {
+    _selCtx.confirmePerte = true;
+    if (btn) btn.textContent = 'Confirmer — l\'avis du client sur ' + perdus.join(', ') + ' sera perdu';
+    return;
+  }
+
+  const retires = avant.length + ajoutes - biens.length;
+  if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/selections?token=eq.' + encodeURIComponent(ed.token), {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ biens, avis, maj_at: maintenant })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Enregistrer les modifications'; }
+    if (typeof toast === 'function') toast('⚠ Échec de l\'enregistrement', 'var(--danger)');
+    return;
+  }
+
+  const s = (_eqSelectionsAll || []).find(x => x.token === ed.token);
+  if (s) { s.biens = biens; s.avis = avis; s.maj_at = maintenant; }
+  if (typeof toast === 'function') toast('✓ Sélection mise à jour — même lien pour le client', 'var(--success)');
+  await _selEcranMiseAJour(ed.token, biens, ajoutes, retires);
+  eqMajVue(true);
+}
+
+// Après une modification : le lien ne change pas, on propose un mail court
+async function _selEcranMiseAJour(token, biens, ajoutes, retires) {
+  const l = _selCtx.lead || {};
+  const corpsEl = document.getElementById('eq-sel-corps');
+  if (!corpsEl) return;
+  const lien = SEL_FN_URL + token;
+  const dest = (_selNomPropre(nomPrenomContact(l).prenom) || 'à vous');
+  const quoi = [ajoutes ? ajoutes + ' bien' + (ajoutes > 1 ? 's' : '') + ' ajouté' + (ajoutes > 1 ? 's' : '') : '',
+                retires > 0 ? retires + ' retiré' + (retires > 1 ? 's' : '') : ''].filter(Boolean).join(' et ');
+  const sujet = 'Votre sélection GLR Immobilier vient d\'être mise à jour';
+  const mail = 'Bonjour ' + dest + ',\n\nJe viens de mettre à jour votre sélection'
+    + (quoi ? ' (' + quoi + ')' : '') + ' : elle compte maintenant ' + biens.length + ' bien' + (biens.length > 1 ? 's' : '')
+    + '.\n\nLe lien reste le même :\n' + lien
+    + '\n\nLes nouveaux biens sont signalés directement sur la page.\n\nBien à vous,\n'
+    + (_selCtx.lead && _selCtx.lead.vendeur ? _selCtx.lead.vendeur : '') + '\nGLR Immobilier';
+  corpsEl.innerHTML = `
+    <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:2px">✓ Sélection mise à jour</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${biens.length} bien(s)${quoi ? ' — ' + _vEsc(quoi) : ''}. Le lien du client n'a pas changé : il n'a rien à faire, la page se met à jour toute seule.</div>
+    <label style="font-size:12px;color:var(--muted)">Lien de la sélection (inchangé)</label>
+    <div style="display:flex;gap:8px;margin:4px 0 14px">
+      <input id="sel-lien" value="${_vEsc(lien)}" readonly style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px">
+      <button onclick="eqCopy(document.getElementById('sel-lien').value,'Lien')" class="btn btn-secondary" style="font-size:12px">Copier</button>
+    </div>
+    <label style="font-size:12px;color:var(--muted)">Mail de mise à jour — à envoyer seulement si tu le souhaites</label>
+    <input id="sel-sujet" value="${_vEsc(sujet)}" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;margin:4px 0 8px">
+    <textarea id="sel-mail" rows="9" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;margin:0 0 14px;resize:vertical">${_vEsc(mail)}</textarea>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="eqCopy(document.getElementById('sel-mail').value,'Mail')" class="btn btn-secondary">Copier le mail</button>
+      <button onclick="selOuvrirGmail('${_vEsc(l.email||'')}')" class="btn btn-secondary">Ouvrir dans Gmail</button>
+      <button onclick="_selFermer()" class="btn">Terminé</button>
+    </div>`;
 }
 
 // Extraction automatique depuis des liens Otaree (via l'edge function, qui interroge l'API publique Otaree)

@@ -69,6 +69,12 @@
   .ville-titre .ville-nb { margin-left:auto; background:var(--gold); color:#fff; border-radius:20px; padding:4px 13px; font-size:11.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; white-space:nowrap; }
   .ville-titre:first-of-type { margin-top:6px; }
 
+  /* Sélection enrichie depuis la dernière visite du client */
+  .maj-bandeau { display:flex; align-items:center; gap:11px; background:linear-gradient(180deg,#fdfaf3,#fbf6ea); border:1px solid var(--gold); border-left:4px solid var(--gold); border-radius:12px; padding:12px 15px; margin:16px 0 4px; box-shadow:0 2px 8px rgba(200,169,110,.16); }
+  .maj-bandeau b { font-family:Georgia,serif; font-size:14.5px; color:var(--dark); }
+  .maj-bandeau span { font-size:13px; color:var(--muted); }
+  .card .num-neuf { position:absolute; top:12px; right:12px; background:#fff; color:var(--gold-fonce); border:1px solid var(--gold); font-size:11px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; padding:3px 11px; border-radius:14px; z-index:3; box-shadow:0 2px 8px rgba(26,29,35,.12); }
+
   /* Villes en tête de sélection : un raccourci vers chaque commune */
   .villes-tete { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 4px; }
   .ville-chip { display:flex; align-items:baseline; gap:7px; background:#fff; border:1px solid var(--gold); border-radius:22px; padding:7px 15px; text-decoration:none; transition:all .15s; }
@@ -649,6 +655,14 @@
     if (d.expires_at) h += "<span>·</span><span>Sélection valable jusqu'au " + esc(fmtDate(d.expires_at)) + "</span>";
     h += "</div>";
 
+    // Lots ajoutés depuis la dernière visite : on le dit franchement, sans alerte
+    var nbNeufs = biens.filter(function(b){ return b && b.nouveau; }).length;
+    if (nbNeufs){
+      h += "<div class='maj-bandeau'><b>" + nbNeufs + " nouveau" + (nbNeufs > 1 ? "x" : "") + " bien"
+        + (nbNeufs > 1 ? "s" : "") + "</b><span>ajouté" + (nbNeufs > 1 ? "s" : "")
+        + " à votre sélection depuis votre dernière visite</span></div>";
+    }
+
     // Plusieurs communes : raccourcis vers chaque ville, dès l'en-tête
     if (groupes.length > 1){
       h += "<div class='villes-tete'>" + groupes.map(function(gr, k){
@@ -668,13 +682,14 @@
       var b = o.b, i = o.i;
       var photo = photoDe(b);
       h += "<div class='card' data-carte='" + i + "'>";
+      var neuf = b && b.nouveau ? "<div class='num-neuf'>Nouveau</div>" : "";
       if (photo){
         h += "<div class='photo' data-g='" + i + "'>";
-        h += "<div class='num-bien'>Bien " + (i + 1) + "</div>";
+        h += "<div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf;
         h += "<img src='" + esc(photo) + "' alt='" + esc(b.titre || "Bien") + "' loading='lazy'>";
         h += "</div>";
       } else {
-        h += "<div class='img-vide'><div class='num-bien'>Bien " + (i + 1) + "</div><img src='logo-glr.png' alt='GLR Immobilier' onerror=\"this.outerHTML='<span class=&quot;txt&quot;>GLR</span>'\"></div>";
+        h += "<div class='img-vide'><div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf + "<img src='logo-glr.png' alt='GLR Immobilier' onerror=\"this.outerHTML='<span class=&quot;txt&quot;>GLR</span>'\"></div>";
       }
       h += "<div class='body'>";
       if (b.ville) h += "<div class='eyebrow'>" + esc(b.ville) + "</div>";
