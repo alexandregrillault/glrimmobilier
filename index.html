@@ -11930,4 +11930,93 @@ document.addEventListener('click', function(e){
 window.addEventListener('resize', function(){ if (window.innerWidth > 900) closeSidebar(); });
 </script>
 
+
+<script>
+/* ==================== DÉTECTION DE NOUVELLE VERSION ====================
+   Sonde l'empreinte (ETag) du fichier servi par GitHub Pages toutes les
+   60 s. Dès qu'un nouveau index.html est en ligne, un bandeau discret
+   propose de recharger. Aucun rechargement forcé : la saisie en cours
+   n'est jamais perdue.
+   ====================================================================== */
+(function () {
+  'use strict';
+
+  var INTERVALLE      = 60000;  // sondage normal
+  var INTERVALLE_CONF = 8000;   // 2e lecture de confirmation après un changement
+  var URL_APP = location.pathname;
+
+  var reference = null;   // empreinte de la version actuellement chargée
+  var candidat  = null;   // empreinte vue une seule fois (pas encore confirmée)
+  var affiche   = false;
+  var timer     = null;
+
+  function empreinte(r) {
+    return r.headers.get('ETag') || r.headers.get('Last-Modified') || null;
+  }
+
+  function programmer(delai) {
+    clearTimeout(timer);
+    timer = setTimeout(verifier, delai);
+  }
+
+  function verifier() {
+    if (affiche) return;
+    if (navigator.onLine === false || document.hidden) { programmer(INTERVALLE); return; }
+    fetch(URL_APP + '?_maj=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) { programmer(INTERVALLE); return; }
+        var e = empreinte(r);
+        if (!e) { console.log('[MAJ] en-tete ETag indisponible - surveillance inactive'); return; }
+        if (reference === null) { reference = e; console.log('[MAJ] surveillance active'); programmer(INTERVALLE); return; }
+        if (e === reference)    { candidat = null; programmer(INTERVALLE); return; }
+        if (e === candidat)     { montrerBandeau(); return; }  // changement confirmé
+        candidat = e; programmer(INTERVALLE_CONF);             // 1re détection : on revérifie vite
+      })
+      .catch(function () { programmer(INTERVALLE); });
+  }
+
+  function montrerBandeau() {
+    if (affiche) return;
+    affiche = true;
+    var b = document.createElement('div');
+    b.id = 'maj-bandeau';
+    b.innerHTML =
+      '<span class="maj-txt"><b>Nouvelle version disponible</b><span class="maj-sec"> — rechargez pour en profiter.</span></span>' +
+      '<button type="button" class="maj-ok">Recharger</button>' +
+      '<button type="button" class="maj-non">Plus tard</button>';
+    document.body.appendChild(b);
+    b.querySelector('.maj-ok').onclick  = function () { location.reload(); };
+    b.querySelector('.maj-non').onclick = function () { b.remove(); };
+    requestAnimationFrame(function () { b.classList.add('on'); });
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && !affiche) programmer(1000);
+  });
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#maj-bandeau{position:fixed;top:14px;left:50%;transform:translate(-50%,-24px);opacity:0;' +
+    'display:flex;align-items:center;gap:12px;z-index:95;background:var(--surface2);' +
+    'border:1px solid var(--accent);border-radius:12px;padding:11px 14px;color:var(--text);' +
+    'font-family:var(--font-body);font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.22);' +
+    'transition:opacity .25s ease,transform .25s ease}' +
+    '#maj-bandeau.on{opacity:1;transform:translate(-50%,0)}' +
+    '#maj-bandeau .maj-txt{white-space:nowrap}' +
+    '#maj-bandeau button{border:none;border-radius:8px;padding:7px 14px;font-size:13px;' +
+    'font-weight:600;cursor:pointer;font-family:inherit}' +
+    '#maj-bandeau .maj-ok{background:var(--accent);color:#0d0f14}' +
+    'body.light #maj-bandeau .maj-ok{color:#fff}' +
+    '#maj-bandeau .maj-non{background:transparent;color:var(--muted);padding:7px 6px;font-weight:500}' +
+    '@media(max-width:900px){#maj-bandeau{left:10px;right:10px;transform:translateY(-24px);' +
+    'flex-wrap:wrap;justify-content:flex-end}' +
+    '#maj-bandeau.on{transform:translateY(0)}' +
+    '#maj-bandeau .maj-txt{flex:1 1 100%;white-space:normal}' +
+    '#maj-bandeau .maj-sec{display:none}}';
+  document.head.appendChild(css);
+
+  programmer(3000);  // on laisse l'app démarrer avant la 1re lecture
+})();
+</script>
+
 </body></html>
