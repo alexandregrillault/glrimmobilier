@@ -872,4 +872,81 @@
   });
 })();
 </script>
+
+<script>
+/* ============ MISE À JOUR SILENCIEUSE DE LA PAGE SÉLECTION ============
+   Surveille l'empreinte (ETag) du fichier servi par GitHub Pages. Quand
+   une nouvelle version est en ligne, la page ne se recharge QUE lorsque
+   le client a quitté l'onglet — jamais pendant qu'il lit. La position de
+   lecture est restaurée à son retour. Aucun message technique affiché.
+   ===================================================================== */
+(function () {
+  'use strict';
+
+  var INTERVALLE      = 90000;
+  var INTERVALLE_CONF = 8000;
+  var CLE_SCROLL = 'glr-sel-scroll';
+  var URL_PAGE = location.pathname;
+
+  /* --- 1. Restauration de la position après un rechargement silencieux --- */
+  try {
+    var brut = sessionStorage.getItem(CLE_SCROLL);
+    if (brut) {
+      sessionStorage.removeItem(CLE_SCROLL);
+      var sauve = JSON.parse(brut);
+      if (sauve && sauve.y > 0 && Date.now() - sauve.t < 7200000) {
+        if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+        var essais = 0;
+        var rendu = setInterval(function () {
+          if (++essais > 40) { clearInterval(rendu); return; }  // 8 s max
+          var hauteur = document.documentElement.scrollHeight;
+          if (hauteur >= sauve.y + window.innerHeight * 0.5) {
+            window.scrollTo(0, sauve.y);
+            if (Math.abs(window.pageYOffset - sauve.y) < 4) clearInterval(rendu);
+          }
+        }, 200);
+      }
+    }
+  } catch (e) {}
+
+  /* --- 2. Surveillance de la version en ligne --- */
+  var reference = null, candidat = null, prete = false, timer = null;
+
+  function empreinte(r) {
+    return r.headers.get('ETag') || r.headers.get('Last-Modified') || null;
+  }
+
+  function programmer(delai) { clearTimeout(timer); timer = setTimeout(verifier, delai); }
+
+  function verifier() {
+    if (prete) return;
+    if (navigator.onLine === false) { programmer(INTERVALLE); return; }
+    fetch(URL_PAGE + '?_maj=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) { programmer(INTERVALLE); return; }
+        var e = empreinte(r);
+        if (!e) { console.log('[MAJ] en-tete ETag indisponible - surveillance inactive'); return; }
+        if (reference === null) { reference = e; console.log('[MAJ] surveillance active'); programmer(INTERVALLE); return; }
+        if (e === reference)    { candidat = null; programmer(INTERVALLE); return; }
+        if (e === candidat)     { prete = true; if (document.hidden) recharger(); return; }
+        candidat = e; programmer(INTERVALLE_CONF);
+      })
+      .catch(function () { programmer(INTERVALLE); });
+  }
+
+  function recharger() {
+    try {
+      sessionStorage.setItem(CLE_SCROLL, JSON.stringify({ y: window.pageYOffset || 0, t: Date.now() }));
+    } catch (e) {}
+    location.reload();
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && prete) recharger();
+  });
+
+  programmer(5000);
+})();
+</script>
+
 </body></html>
