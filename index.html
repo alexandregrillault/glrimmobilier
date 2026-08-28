@@ -7106,6 +7106,7 @@ function _eqLegendeHtml() {
     ${groupe('Suivi du lead', [
       ligne('alerte', 'À traiter — nouveau lead sans premier appel depuis plus de 48 h'),
       ligne('rappel', 'Rappel dû — activité prévue aujourd\'hui ou dépassée'),
+      ligne('prevu', 'Activité programmée à une date à venir'),
       ligne('sansrep', 'Sans réponse — client injoignable pour le moment')
     ])}
     ${groupe('Sélection envoyée', [
@@ -7310,13 +7311,13 @@ function renderEqNotifs() {
       const avantH = hAct ? '<strong>' + esc(hAct.replace(':', 'h')) + '</strong> · ' : '';
       const avantCli = l.rappel_titre ? nomCli + ' · ' : '';
       if (l.rappel_le < jour) {
-        retard.push({ t: tAct, d: l.rappel_le, html: item('rdv', titreAct,
+        retard.push({ t: tAct, d: l.rappel_le, html: item('rappel', titreAct,
           avantH + avantCli + 'prévu le ' + fmtJ(l.rappel_le) + ' (il y a ' + joursRetard(l.rappel_le) + ' j) · étape : ' + esc(s), boutons, 'var(--danger)', l.id) });
       } else if (l.rappel_le === jour) {
-        aujourdhui.push({ t: tAct, d: jour, html: item('rdv', titreAct,
+        aujourdhui.push({ t: tAct, d: jour, html: item('rappel', titreAct,
           avantH + avantCli + 'aujourd\'hui · étape : ' + esc(s), boutons, 'var(--accent)', l.id) });
       } else {
-        avenir.push({ t: tAct, d: l.rappel_le, html: item('envoi', titreAct,
+        avenir.push({ t: tAct, d: l.rappel_le, html: item('prevu', titreAct,
           avantH + avantCli + fmtJ(l.rappel_le) + ' · étape : ' + esc(s), boutons, null, l.id) });
       }
     } else if (s === 'Nouveau') {
@@ -7325,10 +7326,10 @@ function renderEqNotifs() {
       const boutonsNew = btnTel(l.telephone) + btnFiche(l.id) +
         `<button class="btn btn-sm btn-primary" onclick="eqLeadAppele('${l.id}')" style="font-size:11px">Appelé</button>`;
       if (_eqLeadFlags(l).alerte48) {
-        retard.push({ t: recu ? new Date(recu).getTime() : 0, d: recuJour, html: item('expire', 'Premier appel — ' + esc(nomComplet(l) || '—'),
+        retard.push({ t: recu ? new Date(recu).getTime() : 0, d: recuJour, html: item('alerte', 'Premier appel — ' + esc(nomComplet(l) || '—'),
           'Lead reçu le ' + fmtJ(recu) + ', toujours sans premier appel (+ de 48 h)', boutonsNew, 'var(--danger)') });
       } else {
-        aujourdhui.push({ t: recu ? new Date(recu).getTime() : 0, d: jour, html: item('interesse', 'Premier appel — ' + esc(nomComplet(l) || '—'),
+        aujourdhui.push({ t: recu ? new Date(recu).getTime() : 0, d: jour, html: item('rappel', 'Premier appel — ' + esc(nomComplet(l) || '—'),
           'Nouveau lead reçu le ' + fmtJ(recu) + ' — à appeler dans les 48 h', boutonsNew, 'var(--accent)') });
       }
     }
@@ -7589,6 +7590,7 @@ const SEL_ICONES = {
   envoi:       ['\u25CB', 'var(--muted)'],
   alerte:      ['\u25CF', 'var(--danger)'],
   rappel:      ['\u25F7', 'var(--accent)'],
+  prevu:       ['\u25AB', 'var(--muted)'],
   sansrep:     ['\u25CC', 'var(--muted)'],
   expire:      ['\u2298', 'var(--danger)'],
   temps:       ['\u25F7', 'var(--muted)']
