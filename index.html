@@ -987,7 +987,7 @@
       <!-- PANNEAU : TOUTES LES VENTES -->
       <div id="ventes-panel-toutes" style="display:block">
       <div style="margin-bottom:16px">
-        <input id="ventes-search" type="text" placeholder="Rechercher une vente (client, programme, ville, promoteur…)" oninput="venteSearch=this.value; renderAllVentes();" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:var(--font-body);font-size:14px;outline:none">
+        <input id="ventes-search" type="text" placeholder="Rechercher une vente (client, téléphone, programme, ville, promoteur…)" oninput="venteSearch=this.value; renderAllVentes();" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);font-family:var(--font-body);font-size:14px;outline:none">
       </div>
       <div class="card">
         <table>
@@ -1489,7 +1489,7 @@
           <div class="section-sub" id="eq-leads-count">—</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <input id="eq-leads-search" oninput="renderEquipeLeadsTable()" placeholder="Rechercher nom, ville…" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;width:210px">
+          <input id="eq-leads-search" oninput="renderEquipeLeadsTable()" placeholder="Rechercher nom, ville, téléphone…" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;width:210px">
           <select id="eq-leads-vendeur" onchange="renderEquipeLeads()" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;color:var(--text);font-family:var(--font-body);font-size:13px"><option value="">— Choisir un vendeur —</option></select>
           <button class="btn btn-primary" onclick="openNewContact('leads')" title="Ajouter à la main un lead récupéré par téléphone, en salon ou par recommandation">+ Nouveau lead</button>
           <button class="btn btn-secondary" onclick="eqCreneauxOuvrir()" title="Proposer des créneaux de rendez-vous à mes clients">Mes créneaux</button>
@@ -1672,7 +1672,7 @@
 
       <!-- Filtres -->
       <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-        <input type="text" id="filter-nom" placeholder="Nom ou email..." oninput="renderContacts()" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;min-width:200px">
+        <input type="text" id="filter-nom" placeholder="Nom, email ou téléphone..." oninput="renderContacts()" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;min-width:200px">
         <input type="text" id="filter-lieu" placeholder="Code postal ou ville..." oninput="onLieuInput()" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:170px">
         <select id="filter-rayon" onchange="updateRayonFilter()" title="Inclure les communes alentours" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;cursor:pointer">
           <option value="0">+ 0 km</option>
@@ -2362,6 +2362,33 @@ Nous avons le plaisir de vous annoncer le lancement de..."></textarea>
 // ============================================================
 //  DATA — Supabase
 // ============================================================
+// ============================================================
+//  RECHERCHE PAR TÉLÉPHONE — tolérante au format de saisie
+//  « 06 12 34 56 78 », « 0612345678 », « +33 6 12 34 56 78 »,
+//  « 06.12.34.56.78 » ou « 6 12 34 56 78 » retrouvent la même fiche.
+// ============================================================
+function telChiffres(raw) {
+  let d = String(raw == null ? '' : raw).replace(/\D/g, '');
+  if (d.startsWith('0033')) d = d.slice(4);          // 0033 6 12…
+  else if (d.startsWith('33') && d.length > 9) d = d.slice(2); // +33 6 12…
+  if (d.startsWith('0')) d = d.slice(1);             // 06 12… -> 612…
+  return d;
+}
+// Renvoie les chiffres cherchés si la requête ressemble à un numéro
+// (au moins 4 chiffres saisis), sinon '' — une recherche par nom n'est
+// jamais confondue avec une recherche par téléphone.
+function telRequete(q) {
+  const brut = String(q == null ? '' : q).replace(/\D/g, '');
+  if (brut.length < 4) return '';
+  return telChiffres(q);
+}
+// Le champ contient-il le numéro cherché ? (accepte plusieurs numéros dans le champ)
+function telContient(champ, qDigits) {
+  if (!qDigits) return false;
+  const t = telChiffres(champ);
+  return !!t && t.indexOf(qDigits) !== -1;
+}
+
 const SUPABASE_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
 
@@ -3589,7 +3616,8 @@ function renderAllVentes() {
   let ventesFiltered = getFilteredVentes();
   const q = (venteSearch || '').trim().toLowerCase();
   if (q) ventesFiltered = ventesFiltered.filter(v =>
-    ((v.client||'')+' '+(v.programme||'')+' '+(v.ville||'')+' '+(v.promoteur||'')+' '+(v.lot||'')+' '+(v.coPrenom||'')+' '+(v.coNom||'')+' '+vendeurName(v.vendeurId)).toLowerCase().includes(q)
+    (((v.client||'')+' '+(v.programme||'')+' '+(v.ville||'')+' '+(v.promoteur||'')+' '+(v.lot||'')+' '+(v.coPrenom||'')+' '+(v.coNom||'')+' '+vendeurName(v.vendeurId)).toLowerCase().includes(q)
+     || telContient(v.clientTelephone, telRequete(q)))
   );
   document.getElementById('ventes-count').textContent = ventesFiltered.length + ' vente(s)' + (q ? ' — recherche « ' + venteSearch.trim() + ' »' : ' — ' + (currentPeriod === 'mois' ? currentMois : currentPeriod === 'annee' ? String(currentAnnee) : 'tout'));
   if (ventesFiltered.length === 0) { tbody.innerHTML = '<tr><td colspan="10"><div class="empty"><div class="empty-icon">—</div><p>' + (q ? 'Aucune vente ne correspond à « ' + venteSearch.trim() + ' »' : 'Aucune vente sur cette période') + '</p></div></td></tr>'; return; }
@@ -6296,7 +6324,7 @@ function renderEquipeLeadsTable() {
   else if (_eqLeadsFilter === 'nouveaux') leads = leads.filter(l => eqLeadStatut(l) === 'Nouveau');
   else if (_eqLeadsFilter === 'veille') leads = leads.filter(estEnVeille);
   else if (_eqLeadsFilter.startsWith('statut:')) leads = leads.filter(l => eqLeadStatut(l) === _eqLeadsFilter.slice(7));
-  if (q) leads = leads.filter(l => ((l.nom||'')+' '+(l.email||'')+' '+(l.lieu||'')+' '+(l.typologie||'')+' '+(l.source||'')).toLowerCase().includes(q));
+  if (q) { const qTel = telRequete(q); leads = leads.filter(l => ((l.nom||'')+' '+(l.email||'')+' '+(l.lieu||'')+' '+(l.typologie||'')+' '+(l.source||'')).toLowerCase().includes(q) || telContient(l.telephone, qTel)); }
   const dDem = (l) => { const d = new Date(l.date_lead || l.recu_le || 0); return isNaN(d) ? 0 : d.getTime(); };
   const nouveauChezMoi = (l) => transfertRecent(l) ? 1 : 0;
   leads = [...leads].sort((a,b) => (nouveauChezMoi(b) - nouveauChezMoi(a))
@@ -10875,12 +10903,13 @@ function exportContacts() {
   } else {
     // Sinon : export de la vue filtrée (filtres nom / zone+rayon / budget / statut)
     const filterNom = (document.getElementById('filter-nom')?.value || '').toLowerCase();
+    const filterNomTel = telRequete(filterNom);
     const filterLieu = (document.getElementById('filter-lieu')?.value || '').toLowerCase();
     const filterBudget = (document.getElementById('filter-budget')?.value || '').toLowerCase();
     const filterStatut = document.getElementById('filter-statut')?.value || '';
 
     rows = contacts.filter(c => {
-      const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom);
+      const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel);
       let matchLieu = !filterLieu || (c.lieu||'').toLowerCase().includes(filterLieu);
       if (!matchLieu && typeof rayonNames !== 'undefined' && rayonNames) {
         const cp = extractCP(c.lieu);
@@ -11020,12 +11049,13 @@ async function processStopList(text) {
 function renderContacts() {
   const contacts = window._contacts || [];
   const filterNom = (document.getElementById('filter-nom')?.value || '').toLowerCase();
+  const filterNomTel = telRequete(filterNom);
   const filterLieu = (document.getElementById('filter-lieu')?.value || '').toLowerCase();
   const filterBudget = (document.getElementById('filter-budget')?.value || '').toLowerCase();
   const filterStatut = document.getElementById('filter-statut')?.value || '';
 
   const filtered = contacts.filter(c => {
-    const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom);
+    const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel);
     let matchLieu = !filterLieu || (c.lieu||'').toLowerCase().includes(filterLieu);
     // Élargissement aux communes alentours si un rayon est actif
     if (!matchLieu && rayonNames) {
