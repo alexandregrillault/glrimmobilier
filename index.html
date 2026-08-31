@@ -896,6 +896,17 @@
           <div id="docs-divers" style="padding:12px"><div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">Aucun document</div></div>
         </div>
       </div>
+
+      <div class="card" style="margin-top:20px">
+        <div class="card-header"><div class="card-title">Plans des sélections</div></div>
+        <div style="padding:16px 20px;font-size:13px;color:var(--muted)">
+          Prépare la vignette du plan pour les sélections déjà envoyées : le plan remplace la photo du programme sur la carte du bien, et les anciens liens en profitent sans qu'on renvoie quoi que ce soit au client.
+          <div style="display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap">
+            <button id="plans-rattrapage-btn" class="btn btn-secondary" onclick="planRattrapage()">Préparer les plans manquants</button>
+            <span id="plans-rattrapage-etat" style="font-size:12.5px"></span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="page" id="page-dashboard">
@@ -8468,6 +8479,9 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
     if (st) st.textContent = 'Même lien qu\'à l\'envoi : retire ou ajoute des lots, le client verra la mise à jour en rouvrant sa page.';
     if (b) { b.textContent = 'Enregistrer les modifications'; b.setAttribute('onclick', 'selEnregistrerModifs()'); }
     selAjouterLibreRefresh();
+    // Sélection d'avant la vignette de plan : on la prépare en tâche de fond,
+    // le conseiller n'attend pas et les badges se mettent à jour tout seuls.
+    planPreparerLots(_selCtx.libres).then(r => { if (r.faits) selAjouterLibreRefresh(); });
   }
 }
 
@@ -8565,6 +8579,332 @@ async function _selEcranMiseAJour(token, biens, ajoutes, retires) {
     </div>`;
 }
 
+/* ===== Vignettes de plans (août 2026) =========================================
+   Otaree livre le plan du lot en JPEG : une planche A3 avec, sur un côté, le
+   cartouche du promoteur (logo, tableau des surfaces, légende). Affichée telle
+   quelle sur la carte du bien, le client voit surtout le cartouche et un plan
+   minuscule. On recadre donc la planche sur le dessin, on la réencode en WebP
+   (80 à 120 Ko au lieu de 400 à 600), et on la range une seule fois par
+   document dans le bucket `plans`, nommée d'après l'empreinte du fichier
+   Otaree : le même plan servi à dix clients n'est stocké qu'une fois.
+   Effet de bord voulu : la feuille sélection ne dépend plus des adresses
+   signées d'Otaree, qui peuvent expirer et emporter toutes les images d'un coup.
+   ============================================================================ */
+
+// Nom de rangement d'un plan : l'empreinte du document chez Otaree, sinon une
+// empreinte de l'adresse (sans sa signature, qui change à chaque extraction).
+function _planCle(url) {
+  const u = String(url || '');
+  if (!u) return '';
+  try {
+    const p = u.split('cloudfront.net/')[1];
+    if (p) {
+      const b64 = p.split('?')[0].replace(/-/g, '+').replace(/_/g, '/');
+      const j = JSON.parse(atob(b64));
+      if (j && j.fileHash) return String(j.fileHash).replace(/[^a-z0-9]/gi, '').slice(0, 40);
+    }
+  } catch (e) { /* adresse d'une autre forme : on passe à l'empreinte */ }
+  const base = u.split('?')[0];
+  let h = 5381;
+  for (let i = 0; i < base.length; i++) h = ((h * 33) ^ base.charCodeAt(i)) >>> 0;
+  return 'u' + h.toString(36) + base.length.toString(36);
+}
+function _planUrlPublique(nom) {
+  return SUPABASE_URL + '/storage/v1/object/public/plans/' + nom + '.webp';
+}
+async function _planDejaLa(nom) {
+  try {
+    const r = await fetch(_planUrlPublique(nom), { method: 'HEAD', cache: 'no-store' });
+    return r.ok;
+  } catch (e) { return false; }
+}
+async function _planEnvoyer(nom, blob) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/storage/v1/object/plans/' + nom + '.webp', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'image/webp', 'x-upsert': 'true' },
+      body: blob
+    });
+    return r.ok;
+  } catch (e) { return false; }
+}
+function _planImage(url) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error('plan illisible'));
+    im.src = url;
+  });
+}
+
+// --- Détection du dessin dans la planche ------------------------------------
+// On travaille sur une réduction à 500 px : une carte de l'encre (tout ce qui
+// n'est pas blanc), le plus long trait vertical continu par colonne, puis on
+// découpe la planche en blocs séparés par un trait de règle ou une gouttière.
+// On ne coupe qu'aux extrémités, et seulement si le bloc du bord est nettement
+// plus dense que le reste : c'est la signature d'un cartouche, jamais celle
+// d'un plan. Dans le doute, on garde la planche entière — un cadrage raté
+// devant le client coûte plus cher qu'un cartouche laissé sur la carte.
+function _planAnalyse(img, AW) {
+  const s = AW / img.naturalWidth, AH = Math.max(1, Math.round(img.naturalHeight * s));
+  const c = document.createElement('canvas'); c.width = AW; c.height = AH;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = '#fff'; x.fillRect(0, 0, AW, AH);
+  x.drawImage(img, 0, 0, AW, AH);
+  const d = x.getImageData(0, 0, AW, AH).data;
+  const col = new Int32Array(AW), row = new Int32Array(AH), ink = new Uint8Array(AW * AH), run = new Int32Array(AW);
+  for (let y = 0; y < AH; y++) for (let xx = 0; xx < AW; xx++) {
+    const i = (y * AW + xx) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b, mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (lum < 242 || (mx - mn) > 26) { ink[y * AW + xx] = 1; col[xx]++; row[y]++; }
+  }
+  for (let x2 = 0; x2 < AW; x2++) {
+    let cur = 0, best = 0;
+    for (let y2 = 0; y2 < AH; y2++) { if (ink[y2 * AW + x2]) { cur++; if (cur > best) best = cur; } else cur = 0; }
+    run[x2] = best;
+  }
+  return { AW, AH, col, row, ink, run };
+}
+function _planBornes(t, seuil) {
+  let a = 0, b = t.length - 1;
+  while (a < t.length && t[a] <= seuil) a++;
+  while (b > a && t[b] <= seuil) b--;
+  return [a, b];
+}
+function _planMesure(A, xa, xb, y0, y1) {
+  const w = xb - xa + 1;
+  let ya = -1, yb = -1, enc = 0;
+  for (let y = y0; y <= y1; y++) {
+    let n = 0;
+    for (let x = xa; x <= xb; x++) if (A.ink[y * A.AW + x]) n++;
+    if (n <= 1 || n > w * 0.92) continue;   // trait de cadre : ne compte pas
+    if (ya < 0) ya = y;
+    yb = y; enc += n;
+  }
+  if (ya < 0) return null;
+  const aire = w * (yb - ya + 1);
+  return { xa, xb, ya, yb, aire, enc, dens: enc / aire };
+}
+function _planCadre(img) {
+  const A = _planAnalyse(img, 500);
+  const bruit = Math.max(1, Math.round(A.AH * 0.004));
+  const bx = _planBornes(A.col, bruit), by = _planBornes(A.row, Math.max(1, Math.round(A.AW * 0.004)));
+  const x0 = bx[0], x1 = bx[1], y0 = by[0], y1 = by[1];
+  if (x1 <= x0 || y1 <= y0) return { x: 0, y: 0, w: 1, h: 1 };
+  const W = x1 - x0 + 1, H = y1 - y0 + 1;
+  const gout = Math.max(3, Math.round(W * 0.012));
+  const bl = [];
+  let deb = -1, blanc = 0;
+  for (let x = x0; x <= x1 + 1; x++) {
+    const t = (x > x1) ? 'f' : (A.col[x] <= bruit ? 'w' : (A.run[x] >= H * 0.62 ? 'r' : 'i'));
+    if (t === 'i') { if (deb < 0) deb = x; blanc = 0; }
+    else if (t === 'w') { if (deb >= 0) { blanc++; if (blanc >= gout) { bl.push([deb, x - blanc]); deb = -1; blanc = 0; } } }
+    else { if (deb >= 0) { bl.push([deb, x - 1 - blanc]); deb = -1; blanc = 0; } }
+  }
+  let bs = [];
+  for (let j = 0; j < bl.length; j++) {
+    const m = _planMesure(A, bl[j][0], bl[j][1], y0, y1);
+    if (m) bs.push(m);
+  }
+  if (!bs.length) return { x: x0 / A.AW, y: y0 / A.AH, w: W / A.AW, h: H / A.AH };
+  const densGroupe = (g) => { let a = 0, e = 0; g.forEach(b => { a += b.aire; e += b.enc; }); return a ? e / a : 0; };
+  for (let tour = 0; tour < 4 && bs.length > 1; tour++) {
+    let coupe = false;
+    for (const cote of [0, 1]) {
+      if (coupe || bs.length < 2) continue;
+      const idx = cote === 0 ? 0 : bs.length - 1;
+      const b = bs[idx];
+      const reste = bs.slice(); reste.splice(idx, 1);
+      const lg = (b.xb - b.xa + 1) / W;
+      if (lg >= 0.04 && lg <= 0.40 && b.dens > densGroupe(reste) * 1.5) { bs = reste; coupe = true; }
+    }
+    if (!coupe) break;
+  }
+  let xa = 1e9, xb = -1, ya = 1e9, yb = -1;
+  bs.forEach(b => { xa = Math.min(xa, b.xa); xb = Math.max(xb, b.xb); ya = Math.min(ya, b.ya); yb = Math.max(yb, b.yb); });
+  const mx = Math.round(A.AW * 0.012), my = Math.round(A.AH * 0.012);
+  const X0 = Math.max(0, xa - mx), X1 = Math.min(A.AW - 1, xb + mx);
+  const Y0 = Math.max(0, ya - my), Y1 = Math.min(A.AH - 1, yb + my);
+  return { x: X0 / A.AW, y: Y0 / A.AH, w: (X1 - X0 + 1) / A.AW, h: (Y1 - Y0 + 1) / A.AH };
+}
+// Vignette WebP, fond blanc, 1200 px sur le grand côté
+async function _planVignette(img, cadreImpose) {
+  const f = cadreImpose || _planCadre(img);
+  const sx = Math.round(f.x * img.naturalWidth), sy = Math.round(f.y * img.naturalHeight);
+  const sw = Math.max(1, Math.round(f.w * img.naturalWidth)), sh = Math.max(1, Math.round(f.h * img.naturalHeight));
+  const k = Math.min(1, 1200 / Math.max(sw, sh));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(sw * k)); c.height = Math.max(1, Math.round(sh * k));
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.imageSmoothingQuality = 'high';
+  x.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  const blob = await new Promise(r => c.toBlob(r, 'image/webp', 0.82));
+  return { blob, cadre: f, w: c.width, h: c.height };
+}
+
+// Prépare la vignette d'un lot. Sans cadre imposé, une vignette déjà en ligne
+// est réutilisée telle quelle : rien n'est régénéré ni renvoyé deux fois.
+async function planPreparerLot(b, cadreImpose) {
+  if (!b || !b.plan) return false;
+  const cle = _planCle(b.plan);
+  if (!cle) return false;
+  try {
+    if (!cadreImpose) {
+      const url = _planUrlPublique(cle);
+      if (b.planImg === url) return true;
+      if (await _planDejaLa(cle)) { b.planImg = url; return true; }
+    }
+    const img = await _planImage(b.plan);
+    const v = await _planVignette(img, cadreImpose);
+    const nom = cadreImpose ? cle + '-' + Date.now().toString(36) : cle;
+    if (!await _planEnvoyer(nom, v.blob)) return false;
+    b.planImg = _planUrlPublique(nom);
+    b.planCadre = { x: +v.cadre.x.toFixed(4), y: +v.cadre.y.toFixed(4), w: +v.cadre.w.toFixed(4), h: +v.cadre.h.toFixed(4) };
+    return true;
+  } catch (e) { return false; }
+}
+// Prépare une liste de lots, un par un pour ne pas saturer la connexion
+async function planPreparerLots(lots, avancement) {
+  let faits = 0, rates = 0, i = 0;
+  for (const b of (lots || [])) {
+    i++;
+    if (!b || !b.plan || b.planImg) continue;
+    if (typeof avancement === 'function') avancement(i, (lots || []).length);
+    if (await planPreparerLot(b)) faits++; else rates++;
+  }
+  return { faits, rates };
+}
+// Recadrage à la main : la détection automatique laisse passer les planches où
+// plusieurs lots partagent la même page, ou celles dont le cartouche n'est
+// séparé par aucun trait. Le conseiller trace alors le cadre lui-même.
+async function selPlanLot(i) {
+  const b = _selCtx.libres[i];
+  if (!b || !b.plan) { if (typeof toast === 'function') toast('⚠ Ce lot n\'a pas de plan', 'var(--warning)'); return; }
+  document.getElementById('sel-plan-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'sel-plan-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:1000px;width:100%;max-height:92vh;overflow:auto">
+    <div style="font-family:var(--font-head);font-size:17px;font-weight:700;margin-bottom:2px">Plan affiché au client</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${_vEsc(b.titre || '')} — trace un cadre à la souris pour choisir ce que le client verra sur la carte du bien. Le document complet reste accessible d'un clic sur la carte.</div>
+    <div id="sel-plan-zone" style="position:relative;display:inline-block;max-width:100%;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:crosshair">
+      <div style="padding:40px;color:#666;font-size:13px">Chargement du plan…</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px">
+      <button id="sel-plan-auto" class="btn btn-secondary">Recadrage automatique</button>
+      <button id="sel-plan-tout" class="btn btn-secondary">Planche entière</button>
+      <button onclick="document.getElementById('sel-plan-modal').remove()" class="btn btn-secondary">Annuler</button>
+      <button id="sel-plan-ok" class="btn btn-primary">Enregistrer</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+  const zone = div.querySelector('#sel-plan-zone');
+  let img;
+  try { img = await _planImage(b.plan); }
+  catch (e) { zone.innerHTML = '<div style="padding:40px;color:var(--danger);font-size:13px">Plan illisible — Otaree n\'a pas renvoyé l\'image.</div>'; return; }
+  zone.innerHTML = '';
+  const vue = document.createElement('img');
+  vue.src = img.src;
+  vue.style.cssText = 'display:block;max-width:100%;max-height:62vh;user-select:none;-webkit-user-drag:none';
+  zone.appendChild(vue);
+  const rect = document.createElement('div');
+  rect.style.cssText = 'position:absolute;border:2px solid #c9a227;background:rgba(201,162,39,.12);pointer-events:none';
+  zone.appendChild(rect);
+  const voile = document.createElement('div');
+  voile.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,.55);pointer-events:none;mix-blend-mode:normal';
+  // le voile n'est là que pour faire ressortir la zone retenue : on le pose sous le cadre
+  zone.insertBefore(voile, rect);
+  let cadre = b.planCadre || _planCadre(img);
+  const poser = () => {
+    rect.style.left = (cadre.x * 100) + '%';
+    rect.style.top = (cadre.y * 100) + '%';
+    rect.style.width = (cadre.w * 100) + '%';
+    rect.style.height = (cadre.h * 100) + '%';
+    voile.style.clipPath = 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 ' + (cadre.y * 100) + '%, '
+      + (cadre.x * 100) + '% ' + (cadre.y * 100) + '%, ' + (cadre.x * 100) + '% ' + ((cadre.y + cadre.h) * 100) + '%, '
+      + ((cadre.x + cadre.w) * 100) + '% ' + ((cadre.y + cadre.h) * 100) + '%, ' + ((cadre.x + cadre.w) * 100) + '% ' + (cadre.y * 100) + '%, '
+      + '0 ' + (cadre.y * 100) + '%)';
+  };
+  poser();
+  let depart = null;
+  const pos = (ev) => {
+    const r = vue.getBoundingClientRect();
+    const p = ev.touches ? ev.touches[0] : ev;
+    return { x: Math.min(1, Math.max(0, (p.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (p.clientY - r.top) / r.height)) };
+  };
+  const bouger = (ev) => {
+    if (!depart) return;
+    const p = pos(ev);
+    cadre = { x: Math.min(depart.x, p.x), y: Math.min(depart.y, p.y), w: Math.abs(p.x - depart.x), h: Math.abs(p.y - depart.y) };
+    poser();
+    ev.preventDefault();
+  };
+  const finir = () => { depart = null; };
+  zone.addEventListener('mousedown', (ev) => { depart = pos(ev); ev.preventDefault(); });
+  zone.addEventListener('touchstart', (ev) => { depart = pos(ev); }, { passive: true });
+  window.addEventListener('mousemove', bouger);
+  window.addEventListener('touchmove', bouger, { passive: false });
+  window.addEventListener('mouseup', finir);
+  window.addEventListener('touchend', finir);
+  div.querySelector('#sel-plan-auto').onclick = () => { cadre = _planCadre(img); poser(); };
+  div.querySelector('#sel-plan-tout').onclick = () => { cadre = { x: 0, y: 0, w: 1, h: 1 }; poser(); };
+  div.querySelector('#sel-plan-ok').onclick = async () => {
+    const btn = div.querySelector('#sel-plan-ok');
+    if (cadre.w < 0.05 || cadre.h < 0.05) { if (typeof toast === 'function') toast('⚠ Cadre trop petit', 'var(--warning)'); return; }
+    btn.disabled = true; btn.textContent = 'Enregistrement…';
+    const ok = await planPreparerLot(b, cadre);
+    window.removeEventListener('mousemove', bouger);
+    window.removeEventListener('touchmove', bouger);
+    window.removeEventListener('mouseup', finir);
+    window.removeEventListener('touchend', finir);
+    div.remove();
+    if (typeof toast === 'function') toast(ok ? '✓ Plan recadré' : '⚠ Le plan n\'a pas pu être enregistré', ok ? 'var(--success)' : 'var(--warning)');
+    selAjouterLibreRefresh();
+  };
+}
+
+// Rattrapage des sélections déjà envoyées : les anciens liens profitent du
+// plan net sans qu'on renvoie quoi que ce soit au client.
+async function planRattrapage() {
+  const zone = document.getElementById('plans-rattrapage-etat');
+  const btn = document.getElementById('plans-rattrapage-btn');
+  const dire = (t) => { if (zone) zone.textContent = t; };
+  if (btn) { btn.disabled = true; btn.textContent = 'En cours…'; }
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/selections?select=token,biens&order=created_at.desc&limit=1000', {
+      cache: 'no-store',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const sels = await r.json();
+    let vues = 0, faites = 0, lots = 0, rates = 0;
+    for (const s of sels) {
+      vues++;
+      const biens = Array.isArray(s.biens) ? s.biens : [];
+      const aFaire = biens.filter(b => b && b.plan && !b.planImg);
+      if (!aFaire.length) continue;
+      dire('Sélection ' + vues + '/' + sels.length + ' — ' + aFaire.length + ' plan(s) à préparer…');
+      const res = await planPreparerLots(biens);
+      lots += res.faits; rates += res.rates;
+      if (!res.faits) continue;
+      const up = await fetch(SUPABASE_URL + '/rest/v1/selections?token=eq.' + encodeURIComponent(s.token), {
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ biens: biens })
+      });
+      if (up.ok) faites++;
+    }
+    dire(faites
+      ? '✓ ' + lots + ' plan(s) préparés sur ' + faites + ' sélection(s)' + (rates ? ' — ' + rates + ' plan(s) illisibles, à recadrer à la main' : '')
+      : '✓ Rien à faire : toutes les sélections ont déjà leur plan');
+  } catch (e) {
+    dire('⚠ Rattrapage interrompu : ' + e.message);
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Préparer les plans manquants'; }
+}
+
 // Extraction automatique depuis des liens Otaree (via l'edge function, qui interroge l'API publique Otaree)
 async function selExtraireLiens() {
   const ta = document.getElementById('sel-otaree-liens');
@@ -8597,6 +8937,10 @@ async function selExtraireLiens() {
         ok++;
       }
     } catch(e) { /* lien suivant */ }
+  }
+  if (ok) {
+    btn.textContent = 'Préparation des plans…';
+    await planPreparerLots(_selCtx.libres, (n, t) => { btn.textContent = 'Plan ' + n + '/' + t + '…'; });
   }
   btn.disabled = false; btn.textContent = 'Analyser les liens';
   if (ok) ta.value = '';
@@ -8721,6 +9065,7 @@ async function selAjouterLibre() {
     pitch: _base.pitch || '', atouts: Array.isArray(_base.atouts) ? _base.atouts : [],
     typologies: type ? [type] : (Array.isArray(_base.typologies) ? _base.typologies : [])
   });
+  await planPreparerLot(_selCtx.libres[_selCtx.libres.length - 1]);
   _selCtx.pdfExistant = ''; _selCtx.imageExistante = ''; _selCtx.imagesExistantes = []; _selCtx.docsExistants = []; _selCtx.remisesExistantes = []; _selCtx.lotOrigine = null;
   SEL_CHAMPS_LIBRE.forEach(c => { const el = document.getElementById('sel-l-' + c[0]); if (el) el.value = ''; });
   if (fi) fi.value = '';
@@ -8739,6 +9084,7 @@ function selAjouterLibreRefresh() {
       <span style="white-space:nowrap">
         <button onclick="selAdresseLot(${i})" title="Adresse du programme" style="background:none;border:1px dashed ${b.adresseOk ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.adresseOk ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.adresseOk ? 'Adresse ✓' : 'Adresse ?'}</button>
         <button onclick="selRemiseLot(${i})" title="Remise ou avantage négocié" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:1px 9px;color:var(--muted);font-size:11px;cursor:pointer;margin-right:4px">Remise</button>
+        ${b.plan ? `<button onclick="selPlanLot(${i})" title="Choisir ce que le client voit du plan" style="background:none;border:1px dashed ${b.planImg ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.planImg ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.planImg ? 'Plan ✓' : 'Plan ?'}</button>` : ''}
         <button onclick="selEditerLot(${i})" title="Modifier / compléter ce lot" style="background:none;border:none;cursor:pointer;font-size:13px">✎</button>
         <button onclick="_selCtx.libres.splice(${i},1);selAjouterLibreRefresh()" title="Retirer" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button>
       </span>
@@ -9460,6 +9806,7 @@ function _eqCreneauxLignes() {
   }
   if (d2 < d1) return { lignes: [], erreur: 'La date de fin doit être après la date de début' };
   const lignes = [];
+  let ecartes = 0;         // créneaux non ouverts car une activité bloquante occupe la plage
   const vus = new Set();   // deux plages qui se chevauchent ne doivent pas doubler un créneau
   const cur = new Date(d1 + 'T00:00');
   const fin = new Date(d2 + 'T00:00');
@@ -9482,6 +9829,7 @@ function _eqCreneauxLignes() {
           const iso = new Date(t).toISOString();
           if (vus.has(iso)) continue;
           vus.add(iso);
+          if (_crenSurActiviteBloquante(t, t + duree * 60000)) { ecartes++; continue; }
           lignes.push({ vendeur: prenom, debut: iso, fin: new Date(t + duree * 60000).toISOString(), mode, lieu: lieu || null, statut: 'libre' });
         }
       }
@@ -9489,19 +9837,30 @@ function _eqCreneauxLignes() {
     cur.setDate(cur.getDate() + 1);
   }
   lignes.sort((x, y) => x.debut < y.debut ? -1 : 1);
-  return { lignes, erreur: null };
+  return { lignes, erreur: null, ecartes };
+}
+
+// Une activité du planning marquée « bloquée » interdit d'ouvrir une
+// disponibilité par-dessus : sans ça, un client pourrait réserver pendant
+// une visite déjà calée.
+function _crenSurActiviteBloquante(deb, fin) {
+  const liste = (typeof _creneaux !== 'undefined' && Array.isArray(_creneaux)) ? _creneaux : [];
+  return liste.some(c => c.origine === 'perso' && c.bloquant !== false
+    && new Date(c.debut).getTime() < fin && new Date(c.fin).getTime() > deb);
 }
 
 // Aperçu en direct : « 24 créneaux sur 6 jours »
 function eqCreneauxApercu() {
   const box = document.getElementById('cren-apercu');
   if (!box) return;
-  const { lignes, erreur } = _eqCreneauxLignes();
+  const { lignes, erreur, ecartes } = _eqCreneauxLignes();
   if (erreur) { box.textContent = '⚠ ' + erreur; return; }
   const nbJours = new Set(lignes.map(l => l.debut.slice(0, 10))).size;
+  const note = ecartes ? ' — ' + ecartes + ' écarté(s) : une activité bloquée occupe déjà la plage' : '';
   box.textContent = lignes.length
-    ? '→ ' + lignes.length + ' créneau(x) seront ouverts sur ' + nbJours + ' jour(s)'
-    : 'Aucun créneau sur cette plage — vérifie les dates, horaires et jours cochés';
+    ? '→ ' + lignes.length + ' créneau(x) seront ouverts sur ' + nbJours + ' jour(s)' + note
+    : (ecartes ? 'Aucun créneau à ouvrir : tes activités bloquées couvrent toute la plage'
+               : 'Aucun créneau sur cette plage — vérifie les dates, horaires et jours cochés');
 }
 
 async function eqCreneauxCharger() {
@@ -9556,9 +9915,12 @@ function eqCreneauxRender() {
 }
 
 async function eqCreneauxGenerer() {
-  const { lignes, erreur } = _eqCreneauxLignes();
+  const { lignes, erreur, ecartes } = _eqCreneauxLignes();
   if (erreur) { toast('⚠ ' + erreur, 'var(--warning)'); return; }
-  if (!lignes.length) { toast('Aucun créneau à ouvrir sur cette plage', 'var(--warning)'); return; }
+  if (!lignes.length) {
+    toast(ecartes ? 'Aucun créneau ouvert : tes activités bloquées couvrent la plage' : 'Aucun créneau à ouvrir sur cette plage', 'var(--warning)');
+    return;
+  }
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux?on_conflict=vendeur,debut', {
       method: 'POST',
@@ -9566,7 +9928,7 @@ async function eqCreneauxGenerer() {
       body: JSON.stringify(lignes)
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    toast('✓ ' + lignes.length + ' créneau(x) ouvert(s)', 'var(--success)');
+    toast('✓ ' + lignes.length + ' créneau(x) ouvert(s)' + (ecartes ? ' — ' + ecartes + ' écarté(s), activité déjà posée' : ''), 'var(--success)');
   } catch (e) {
     toast('⚠ Impossible d\'ouvrir ces créneaux', 'var(--danger)');
   }
@@ -13084,8 +13446,11 @@ function _planEvHtml(c, nLanes) {
   if (c.origine === 'perso') {
     const coul = _planCatCouleur(c.categorie);
     const nom = _vEsc(c.titre || _planCatLabel(c.categorie));
-    return `<div class="plan-ev" onclick="eqPlanBlocOuvrir(null,null,null,'${c.id}')" title="${nom} — ${_planHM(c.debut)}–${_planHM(c.fin)} · ${_vEsc(_planCatLabel(c.categorie))} · créneau bloqué${c.lieu ? ' · ' + _vEsc(c.lieu) : ''}" style="${pos};border:1px solid ${coul};border-left:3px solid ${coul};border-radius:6px;padding:2px 5px;background:var(--surface);cursor:pointer">
-      ${titre2(nom, _vEsc(_planCatLabel(c.categorie)))}</div>`;
+    // Trait plein = plage bloquée, trait pointillé = le client peut réserver dessus
+    const bloque = c.bloquant !== false;
+    const trait = bloque ? 'solid' : 'dashed';
+    return `<div class="plan-ev" onclick="eqPlanBlocOuvrir(null,null,null,'${c.id}')" title="${nom} — ${_planHM(c.debut)}–${_planHM(c.fin)} · ${_vEsc(_planCatLabel(c.categorie))} · ${bloque ? 'créneau bloqué pour les clients' : 'plage ouverte aux clients'}${c.lieu ? ' · ' + _vEsc(c.lieu) : ''}" style="${pos};border:1px ${trait} ${coul};border-left:3px solid ${coul};border-radius:6px;padding:2px 5px;background:var(--surface);cursor:pointer">
+      ${titre2(nom, _vEsc(_planCatLabel(c.categorie)) + (bloque ? '' : ' · ouvert'))}</div>`;
   }
   if (c.origine === 'rappel') {
     return `<div class="plan-ev" onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" title="Activité programmée — ${_vEsc(c.client_message || 'rappel')} · se modifie depuis « Mes activités »" style="${pos};border:1px solid var(--accent2);border-left:3px solid var(--accent2);border-radius:6px;padding:2px 5px;background:var(--surface);cursor:pointer">
@@ -13204,6 +13569,9 @@ async function eqPlanBlocOuvrir(jourIso, h1, h2, id) {
   eqPlanBlocFermer();
   const champ = 'background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px';
   const catCourante = c ? (c.categorie || '') : 'appel';
+  // Une activité déjà posée garde son réglage ; une nouvelle bloque par défaut,
+  // c'est le cas le plus fréquent (on ne veut pas être appelé pendant une visite).
+  const bloqueDefaut = c ? (c.bloquant !== false) : true;
   const perso = _planCatsPerso.slice();
   if (c && c.categorie && !PLAN_CATS.some(x => x.k === c.categorie) && perso.indexOf(c.categorie) === -1) perso.push(c.categorie);
 
@@ -13215,14 +13583,14 @@ async function eqPlanBlocOuvrir(jourIso, h1, h2, id) {
       <div style="font-family:var(--font-head);font-size:16px;font-weight:700">${c ? 'Modifier l’activité' : 'Poser une activité'}</div>
       <button onclick="eqPlanBlocFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Planning de <strong style="color:var(--text)">${_vEsc(prenom)}</strong> — pendant cette plage, aucun client ne pourra réserver.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Planning de <strong style="color:var(--text)">${_vEsc(prenom)}</strong> — à toi de dire si la plage reste ouverte à tes clients.</div>
 
     <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Quand</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
-      <input type="date" id="bloc-date" value="${jourIso}" style="${champ}">
-      <input type="time" id="bloc-h1" value="${h1}" step="900" style="${champ}">
+      <input type="date" id="bloc-date" value="${jourIso}" onchange="eqPlanBlocMajBlocage()" style="${champ}">
+      <input type="time" id="bloc-h1" value="${h1}" step="900" onchange="eqPlanBlocMajBlocage()" style="${champ}">
       <span style="font-size:12px;color:var(--muted)">→</span>
-      <input type="time" id="bloc-h2" value="${h2}" step="900" style="${champ}">
+      <input type="time" id="bloc-h2" value="${h2}" step="900" onchange="eqPlanBlocMajBlocage()" style="${champ}">
     </div>
 
     <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Type d’activité</div>
@@ -13239,10 +13607,14 @@ async function eqPlanBlocOuvrir(jourIso, h1, h2, id) {
     <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Lieu ou lien <span style="text-transform:none;letter-spacing:0">(facultatif)</span></div>
     <input type="text" id="bloc-lieu" value="${c ? _vEsc(c.lieu || '') : ''}" placeholder="Agence, adresse, lien visio…" style="${champ};width:100%;box-sizing:border-box;margin-bottom:12px">
 
-    <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;user-select:none;margin-bottom:16px">
-      <input type="checkbox" id="bloc-libere" checked style="accent-color:var(--accent);cursor:pointer">
-      Retirer les créneaux libres qui tombent sur cette plage
-    </label>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:16px">
+      <label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;cursor:pointer;user-select:none">
+        <input type="checkbox" id="bloc-bloque" ${bloqueDefaut ? 'checked' : ''} onchange="eqPlanBlocMajBlocage()" style="accent-color:var(--accent);cursor:pointer;margin-top:3px">
+        <span><strong>Bloquer ce créneau pour mes clients</strong>
+          <span id="bloc-bloque-txt" style="display:block;font-size:12px;color:var(--muted);margin-top:3px;line-height:1.45"></span>
+        </span>
+      </label>
+    </div>
 
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
       ${c ? `<button class="btn btn-secondary" onclick="eqPlanBlocSupprimer('${c.id}')" style="color:var(--danger);border-color:var(--danger)">Supprimer</button>` : ''}
@@ -13253,6 +13625,42 @@ async function eqPlanBlocOuvrir(jourIso, h1, h2, id) {
   div.addEventListener('click', (e) => { if (e.target === div) eqPlanBlocFermer(); });
   document.body.appendChild(div);
   eqPlanBlocCatChange();
+  eqPlanBlocMajBlocage();
+}
+
+// Plage saisie dans la fenêtre « Poser une activité », ou null si incomplète
+function _eqPlanBlocPlage() {
+  const date = document.getElementById('bloc-date')?.value;
+  const h1 = document.getElementById('bloc-h1')?.value;
+  const h2 = document.getElementById('bloc-h2')?.value;
+  if (!date || !h1 || !h2) return null;
+  const debut = new Date(date + 'T' + h1 + ':00');
+  const fin = new Date(date + 'T' + h2 + ':00');
+  if (isNaN(debut) || isNaN(fin) || fin <= debut) return null;
+  return { debut, fin };
+}
+
+// Créneaux libres du vendeur qui tombent dans une plage donnée
+function _eqPlanLibresDansPlage(debut, fin) {
+  return (_planCreneaux || []).filter(c => c.statut === 'libre'
+    && new Date(c.debut) < fin && new Date(c.fin) > debut);
+}
+
+// Dit noir sur blanc ce que le choix va produire, avant de valider
+function eqPlanBlocMajBlocage() {
+  const zone = document.getElementById('bloc-bloque-txt');
+  const cb = document.getElementById('bloc-bloque');
+  if (!zone || !cb) return;
+  if (!cb.checked) {
+    zone.textContent = 'L’activité reste visible dans ton planning, mais tes clients pourront quand même réserver sur cette plage.';
+    return;
+  }
+  const p = _eqPlanBlocPlage();
+  if (!p) { zone.textContent = 'Aucun client ne pourra réserver sur cette plage.'; return; }
+  const n = _eqPlanLibresDansPlage(p.debut, p.fin).filter(c => c.id !== _planBlocId).length;
+  zone.textContent = 'Aucun client ne pourra réserver sur cette plage'
+    + (n ? ', et ' + n + ' créneau' + (n > 1 ? 'x' : '') + ' libre' + (n > 1 ? 's' : '') + ' déjà ouvert' + (n > 1 ? 's' : '') + ' ' + (n > 1 ? 'seront retirés' : 'sera retiré') + '.'
+        : ' — aucun créneau libre à retirer.');
 }
 
 function eqPlanBlocCatChange() {
@@ -13276,7 +13684,7 @@ async function eqPlanBlocEnregistrer() {
   }
   const titre = (document.getElementById('bloc-titre')?.value || '').trim() || null;
   const lieu = (document.getElementById('bloc-lieu')?.value || '').trim() || null;
-  const libere = !!document.getElementById('bloc-libere')?.checked;
+  const bloque = !!document.getElementById('bloc-bloque')?.checked;
   if (!date || !h1 || !h2) { toast('⚠ Date et horaires requis', 'var(--warning)'); return; }
   const debut = new Date(date + 'T' + h1 + ':00');
   const fin = new Date(date + 'T' + h2 + ':00');
@@ -13290,6 +13698,7 @@ async function eqPlanBlocEnregistrer() {
     mode: 'agence',
     statut: 'confirme',
     origine: 'perso',
+    bloquant: bloque,
     categorie: cat,
     titre: titre,
     lieu: lieu,
@@ -13304,8 +13713,8 @@ async function eqPlanBlocEnregistrer() {
       const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux', { method: 'POST', headers: entetes, body: JSON.stringify(corps) });
       if (!r.ok) throw new Error('HTTP ' + r.status);
     }
-    // Les disponibilités ouvertes sur la même plage n'ont plus lieu d'être
-    if (libere) {
+    // Créneau bloqué : les disponibilités déjà ouvertes sur la plage n'ont plus lieu d'être
+    if (bloque) {
       await fetch(SUPABASE_URL + '/rest/v1/creneaux?vendeur=eq.' + encodeURIComponent(prenom)
         + '&statut=eq.libre&debut=lt.' + encodeURIComponent(fin.toISOString())
         + '&fin=gt.' + encodeURIComponent(debut.toISOString()), { method: 'DELETE', headers: entetes });
@@ -13316,8 +13725,8 @@ async function eqPlanBlocEnregistrer() {
       && new Date(c.debut) < fin && new Date(c.fin) > debut);
     eqPlanBlocFermer();
     _planBlocId = null;
-    if (typeof toast === 'function') toast('✓ Activité posée — créneau bloqué', 'var(--success)');
-    if (conflits.length && typeof toast === 'function')
+    if (typeof toast === 'function') toast(bloque ? '✓ Activité posée — créneau bloqué pour tes clients' : '✓ Activité posée — plage laissée ouverte aux clients', 'var(--success)');
+    if (bloque && conflits.length && typeof toast === 'function')
       toast('⚠ ' + conflits.length + ' rendez-vous client déjà prévu sur cette plage', 'var(--warning)');
     await renderEquipePlanning();
   } catch (e) {
