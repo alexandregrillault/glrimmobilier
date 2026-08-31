@@ -1573,6 +1573,39 @@
       <!-- Répartition -->
       <div id="pool-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px"></div>
 
+      <!-- Zone de recherche : une ville (ou un programme) et son rayon -->
+      <div class="card" style="padding:14px 20px;margin-bottom:14px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1.4;min-width:210px">
+            <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Partir d’un programme</div>
+            <select id="pool-prog" onchange="poolProgChoisi()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px">
+              <option value="">— Aucun —</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:170px">
+            <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Ville ou code postal</div>
+            <input id="pool-ville" onkeydown="if(event.key==='Enter')poolZoneAppliquer()" placeholder="Ex : Champigny-sur-Marne" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px">
+          </div>
+          <div style="min-width:110px">
+            <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Rayon</div>
+            <select id="pool-rayon" onchange="poolZoneAppliquer()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px">
+              <option value="0">La ville seule</option>
+              <option value="5">+ 5 km</option>
+              <option value="10">+ 10 km</option>
+              <option value="12" selected>+ 12 km</option>
+              <option value="15">+ 15 km</option>
+              <option value="20">+ 20 km</option>
+              <option value="25">+ 25 km</option>
+              <option value="30">+ 30 km</option>
+              <option value="40">+ 40 km</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="poolZoneAppliquer()">Filtrer la zone</button>
+          <button class="btn btn-secondary" onclick="poolZoneEffacer()" title="Retirer le filtre géographique">Effacer</button>
+        </div>
+        <div id="pool-zone-info" style="font-size:12px;color:var(--muted);margin-top:10px">Aucune zone : le pool complet est affiché.</div>
+      </div>
+
       <!-- Filtres -->
       <div id="pool-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"></div>
 
@@ -12545,34 +12578,135 @@ async function _poolRpc(nom, corps) {
   return j;
 }
 
-// Un numéro se cherche quel que soit le format tapé : on ne garde que les
-// chiffres significatifs et on les cherche dans telephone_norm.
-function _poolTelFiltre(q) {
-  let d = q.replace(/\D/g, '');
-  if (!d) return null;
-  if (d.slice(0, 4) === '0033') d = d.slice(4);
-  else if (d.slice(0, 2) === '33' && d.length >= 11) d = d.slice(2);
-  if (d[0] === '0') d = d.slice(1);
-  return d.length >= 4 ? d : null;
+// ---- Zone géographique : une ville et son rayon, ou directement un programme
+// On réutilise geo.api.gouv.fr et les helpers du filtre rayon des contacts
+// (getAllCommunes, haversineKm, normLieu) : mêmes communes, mêmes résultats.
+let _poolZone = null;      // { communes:[], cps:[], libelle:'', rayon:0 }
+let _poolProg = null;      // { nom, prix, typos } quand on part d'un programme
+let _poolZoneToken = 0;
+let _poolProgCharges = false;
+
+function _poolParams() {
+  return {
+    p_q: _poolRecherche || null,
+    p_filtre: _poolFiltre,
+    p_communes: _poolZone ? _poolZone.communes : null,
+    p_cps: _poolZone ? _poolZone.cps : null,
+    p_prix: _poolProg ? _poolProg.prix : null,
+    p_marge: 0.15,
+    p_typos: _poolProg ? _poolProg.typos : null,
+    p_tri_desc: _poolTriDesc,
+    p_limite: POOL_PAR_PAGE,
+    p_offset: _poolPage * POOL_PAR_PAGE
+  };
 }
 
-function _poolUrl() {
-  const par = ['select=*', 'limit=' + POOL_PAR_PAGE, 'offset=' + (_poolPage * POOL_PAR_PAGE),
-               'order=cree_le.' + (_poolTriDesc ? 'desc' : 'asc') + '.nullslast'];
-  if (_poolFiltre === 'jamais') par.push('origine=eq.jamais_travaille');
-  else if (_poolFiltre === 'echu') par.push('origine=eq.echu');
-  else if (_poolFiltre === 'veille') par.push('statut=eq.' + encodeURIComponent('En veille'));
-  else if (_poolFiltre === 'sansrep') par.push('statut=eq.' + encodeURIComponent('Sans réponse'));
-  const q = _poolRecherche.trim();
-  if (q) {
-    const m = q.replace(/[(),*]/g, ' ').trim();
-    const ou = ['nom.ilike.*' + m + '*', 'prenom.ilike.*' + m + '*', 'nom_famille.ilike.*' + m + '*',
-                'email.ilike.*' + m + '*', 'lieu.ilike.*' + m + '*'];
-    const tel = _poolTelFiltre(q);
-    if (tel) ou.push('telephone_norm.ilike.*' + tel + '*');
-    par.push('or=' + encodeURIComponent('(' + ou.join(',') + ')'));
+async function poolProgPopuler() {
+  const sel = document.getElementById('pool-prog');
+  if (!sel || _poolProgCharges) return;
+  try {
+    if (!window._programmes) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/programmes?select=*&order=created_at.desc',
+        { cache: 'no-store', headers: _poolEntetes() });
+      window._programmes = r.ok ? await r.json() : [];
+    }
+    sel.innerHTML = '<option value="">— Aucun —</option>'
+      + (window._programmes || []).map(p => `<option value="${_pEsc(p.slug || p.nom)}">${_pEsc(p.nom)}${p.ville ? ' — ' + _pEsc(p.ville) : ''}</option>`).join('');
+    _poolProgCharges = true;
+  } catch (e) { /* le catalogue reste optionnel */ }
+}
+
+function poolProgChoisi() {
+  const sel = document.getElementById('pool-prog');
+  const cle = sel ? sel.value : '';
+  if (!cle) { _poolProg = null; poolZoneInfo(); _poolPage = 0; renderPool(); return; }
+  const p = (window._programmes || []).find(x => (x.slug || x.nom) === cle);
+  if (!p) return;
+  const typos = (Array.isArray(p.typologies) ? p.typologies : [])
+    .map(t => (typeof veilleTypoCode === 'function' ? veilleTypoCode(t.type) : null)).filter(Boolean);
+  _poolProg = {
+    nom: p.nom,
+    prix: (typeof veillePrixEntree === 'function') ? veillePrixEntree(p, null) : null,
+    typos: typos.length ? [...new Set(typos)] : null
+  };
+  const ville = document.getElementById('pool-ville');
+  const rayon = document.getElementById('pool-rayon');
+  if (ville) ville.value = p.ville || '';
+  if (rayon) rayon.value = '12';
+  poolZoneAppliquer();
+}
+
+function poolZoneEffacer() {
+  _poolZone = null; _poolProg = null; _poolZoneToken++;
+  const v = document.getElementById('pool-ville'); if (v) v.value = '';
+  const p = document.getElementById('pool-prog'); if (p) p.value = '';
+  poolZoneInfo();
+  _poolPage = 0;
+  renderPool();
+}
+
+function poolZoneInfo(txt) {
+  const el = document.getElementById('pool-zone-info');
+  if (!el) return;
+  if (txt) { el.innerHTML = txt; return; }
+  const bouts = [];
+  if (_poolZone) bouts.push('<strong style="color:var(--text)">' + _pEsc(_poolZone.libelle) + '</strong>'
+    + (_poolZone.rayon ? ' et ' + (_poolZone.communes.length - 1) + ' commune' + (_poolZone.communes.length > 2 ? 's' : '') + ' à moins de ' + _poolZone.rayon + ' km' : ' seule'));
+  if (_poolProg) {
+    const d = [];
+    if (_poolProg.prix) d.push('budget compatible avec ' + (typeof fmtEur === 'function' ? fmtEur(_poolProg.prix) : _poolProg.prix) + ' (marge +15 %)');
+    if (_poolProg.typos) d.push('typologies ' + _poolProg.typos.join(' / '));
+    bouts.push('programme <strong style="color:var(--text)">' + _pEsc(_poolProg.nom) + '</strong>' + (d.length ? ' — ' + d.join(', ') : ''));
   }
-  return SUPABASE_URL + '/rest/v1/v_pool_leads?' + par.join('&');
+  el.innerHTML = bouts.length
+    ? 'Filtré sur : ' + bouts.join(' · ') + ' <span style="color:var(--muted)">(les leads sans budget renseigné sont conservés)</span>'
+    : 'Aucune zone : le pool complet est affiché.';
+}
+
+async function poolZoneAppliquer() {
+  const villeEl = document.getElementById('pool-ville');
+  const ville = (villeEl?.value || '').trim();
+  const rayon = parseInt(document.getElementById('pool-rayon')?.value || '0', 10) || 0;
+  const token = ++_poolZoneToken;
+
+  if (!ville) { _poolZone = null; poolZoneInfo(); _poolPage = 0; renderPool(); return; }
+
+  poolZoneInfo('Recherche des communes' + (rayon ? ' à moins de ' + rayon + ' km' : '') + '…');
+  try {
+    const estCP = /^\d{5}$/.test(ville);
+    const q = estCP ? 'codePostal=' + ville : 'nom=' + encodeURIComponent(ville) + '&boost=population';
+    const r = await fetch('https://geo.api.gouv.fr/communes?' + q + '&fields=centre,nom,codesPostaux&limit=1');
+    const arr = await r.json();
+    if (token !== _poolZoneToken) return;
+    if (!arr[0] || !arr[0].centre) {
+      _poolZone = null;
+      poolZoneInfo('<span style="color:var(--warning)">Commune introuvable — vérifie l’orthographe ou saisis un code postal.</span>');
+      return;
+    }
+    const base = arr[0].centre.coordinates;
+    const noms = new Set([normLieu(arr[0].nom)]);
+    const cps = new Set(arr[0].codesPostaux || []);
+
+    if (rayon > 0) {
+      const communes = await getAllCommunes();
+      if (token !== _poolZoneToken) return;
+      communes.forEach(c => {
+        if (!c.centre) return;
+        if (haversineKm(base, c.centre.coordinates) <= rayon) {
+          noms.add(normLieu(c.nom));
+          (c.codesPostaux || []).forEach(cp => cps.add(cp));
+        }
+      });
+    }
+    _poolZone = { communes: [...noms], cps: [...cps], libelle: arr[0].nom, rayon: rayon };
+    poolZoneInfo();
+    _poolPage = 0;
+    renderPool();
+  } catch (e) {
+    if (token !== _poolZoneToken) return;
+    _poolZone = null;
+    poolZoneInfo('<span style="color:var(--warning)">Liste des communes indisponible — la recherche texte reste utilisable.</span>');
+  }
 }
 
 function poolChercher() {
@@ -12594,16 +12728,14 @@ async function renderPool() {
   _poolEnCours = true;
   tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><p>Chargement…</p></div></td></tr>';
   try {
+    poolProgPopuler();
     const [res, quota, stats] = await Promise.all([
-      fetch(_poolUrl(), { cache: 'no-store', headers: _poolEntetes({ 'Prefer': 'count=exact' }) }),
+      _poolRpc('pool_recherche', _poolParams()),
       _poolRpc('pool_quota').catch(() => null),
       _poolRpc('pool_stats').catch(() => null)
     ]);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    _poolLignes = await res.json();
-    const cr = res.headers.get('content-range') || '';
-    _poolTotal = parseInt(String(cr).split('/')[1], 10);
-    if (isNaN(_poolTotal)) _poolTotal = _poolLignes.length;
+    _poolLignes = (res && res.lignes) || [];
+    _poolTotal = (res && res.total) || 0;
     if (quota) _poolQuota = quota;
     if (stats) _poolStats = stats;
   } catch (e) {
@@ -12688,11 +12820,15 @@ function poolRenderTable() {
   const tbody = document.getElementById('pool-tbody');
   const sub = document.getElementById('pool-sub');
   if (!tbody) return;
+  const cible = !!(_poolZone || _poolProg || _poolRecherche || _poolFiltre !== 'tous');
   if (sub) sub.textContent = _poolTotal.toLocaleString('fr-FR') + ' lead' + (_poolTotal > 1 ? 's' : '')
-    + ' disponible' + (_poolTotal > 1 ? 's' : '') + ' — 10 par jour et par vendeur';
+    + (cible ? ' correspondent à la recherche' : ' disponible' + (_poolTotal > 1 ? 's' : ''))
+    + (_poolStats && cible ? ' sur ' + Number(_poolStats.total).toLocaleString('fr-FR') + ' dans le pool' : '')
+    + ' — 10 par jour et par vendeur';
   const bloque = (_poolQuota && _poolQuota.restant === 0);
   if (!_poolLignes.length) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><p>Aucun lead ne correspond</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><p>Aucun lead ne correspond'
+      + (cible ? ' — élargis le rayon ou retire un filtre' : '') + '</p></div></td></tr>';
     poolRenderPagination();
     return;
   }
