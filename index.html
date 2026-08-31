@@ -617,6 +617,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg>
         Contacts
       </div>
+      <div class="nav-item" onclick="goTo(&#39;pool&#39;, this); renderPool();">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18"></path><path d="M3 12h18"></path><path d="M3 17h18"></path><circle cx="7" cy="7" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="13" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="9" cy="17" r="1.6" fill="currentColor" stroke="none"></circle></svg>
+        Pool de leads
+      </div>
       <div class="nav-item" onclick="goTo(&#39;programmes&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path><path d="M9 9v.01"></path><path d="M9 12v.01"></path><path d="M9 15v.01"></path></svg>
         Programmes
@@ -656,6 +660,10 @@
       <div class="nav-item" onclick="goTo(&#39;equipe-leads&#39;, this); renderEquipeLeads();">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 6l-10 7L2 6"></path><rect x="2" y="4" width="20" height="16" rx="2"></rect></svg>
         Mes leads
+      </div>
+      <div class="nav-item" onclick="goTo(&#39;pool&#39;, this); renderPool();">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18"></path><path d="M3 12h18"></path><path d="M3 17h18"></path><circle cx="7" cy="7" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="13" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="9" cy="17" r="1.6" fill="currentColor" stroke="none"></circle></svg>
+        Pool de leads
       </div>
       <div class="nav-item" onclick="goTo(&#39;equipe-planning&#39;, this); renderEquipePlanning();">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="16" rx="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line></svg>
@@ -1541,6 +1549,48 @@
           <tbody id="eq-leads-tbody"><tr><td colspan="8"><div class="empty"><p>Sélectionne ton nom</p></div></td></tr></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- PAGE: POOL DE LEADS -->
+    <!-- Tous les contacts sans propriétaire, ou dont la paternité de 14 jours
+         est échue. Chacun vient y piocher, 10 par jour au maximum. -->
+    <div class="page" id="page-pool">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Pool de leads</div>
+          <div class="section-sub" id="pool-sub">Les contacts que personne ne travaille — à se partager</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="pool-search" onkeydown="if(event.key==='Enter')poolChercher()" placeholder="Nom, ville, téléphone, email…" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;width:230px">
+          <button class="btn btn-secondary" onclick="poolChercher()">Rechercher</button>
+          <button class="btn btn-secondary" onclick="renderPool()" title="Rafraîchir">↻</button>
+        </div>
+      </div>
+
+      <!-- Compteur du jour -->
+      <div id="pool-quota" class="card" style="padding:14px 20px;margin-bottom:14px">—</div>
+
+      <!-- Répartition -->
+      <div id="pool-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px"></div>
+
+      <!-- Filtres -->
+      <div id="pool-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"></div>
+
+      <div class="card">
+        <table>
+          <thead><tr>
+            <th>Nom</th>
+            <th>Contact</th>
+            <th>Ville(s)</th>
+            <th>Recherche</th>
+            <th onclick="poolTriToggle()" style="cursor:pointer;user-select:none;white-space:nowrap" title="Trier par date de création du lead">Lead créé le <span id="pool-tri-fleche" style="color:var(--accent)">↓</span></th>
+            <th>Paternité</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="pool-tbody"><tr><td colspan="7"><div class="empty"><p>Chargement…</p></div></td></tr></tbody>
+        </table>
+      </div>
+      <div id="pool-pagination" style="display:flex;gap:10px;align-items:center;justify-content:center;margin-top:14px"></div>
     </div>
 
     <!-- PAGE: EQUIPE VILLES -->
@@ -2927,7 +2977,7 @@ const pages = {
   dashboard: 'Tableau de bord', ventes: 'Ventes', charges: 'Charges', 'treso-prev': 'Trésorerie prévisionnelle', vendeurs: 'Vendeurs',
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
-  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning'
+  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads'
 };
 
 let currentSpace = 'gerant';
@@ -5526,20 +5576,25 @@ function paterniteEtat(c) {
   const lignesHisto = histo.length
     ? '\n' + histo.map(h => '\u2022 ' + (h.vendeur || '?') + ' jusqu\u2019au ' + (h.au ? fmt(h.au) : '?') + (h.motif ? ' (' + h.motif + ')' : '')).join('\n')
     : '';
-  // En veille : le d\u00e9lai de 14 jours ne court pas. Un client peut attendre un
-  // lancement pendant des mois sans que son vendeur ait \u00e0 le rappeler pour la
-  // forme, uniquement pour garder sa paternit\u00e9.
-  if (estEnVeille(c)) return { type:'veille', vendeur, texte:vendeur + ' \u00b7 en veille', couleur:'var(--accent2)',
-    detail:'Paternit\u00e9 ' + vendeur + ' \u2014 gel\u00e9e pendant la veille'
-      + (c.veille_depuis ? ' (depuis le ' + fmt(c.veille_depuis) + ')' : '')
-      + ' : le d\u00e9lai de ' + PATERNITE_JOURS + ' jours ne court pas tant que le client attend un lancement' + lignesHisto, histo };
-  if (c.paternite_geree === false) return { type:'historique', vendeur, texte:vendeur + ' \u00b7 historique', couleur:'var(--muted)',
-    detail:'Contact antérieur à la règle \u2014 conservé par ' + vendeur + ', jamais transféré automatiquement' + lignesHisto, histo };
+  // Depuis la mise en place du pool, l'échéance est portée par paternite_jusqu_au
+  // et la veille ne la gèle plus : un client laissé 14 jours sans rien retourne
+  // dans le pool, même en veille.
+  const echJ = c.paternite_jusqu_au ? new Date(c.paternite_jusqu_au).getTime() : NaN;
   const ts = [c.derniere_action_le, c.vendeur_depuis].filter(Boolean).map(d => new Date(d).getTime()).filter(t => !isNaN(t));
-  if (!ts.length) return { type:'inconnu', vendeur, texte:vendeur, couleur:'var(--muted)',
-    detail:'Paternité ' + vendeur + ' \u2014 aucune date de référence' + lignesHisto, histo };
-  const echeance = Math.max.apply(null, ts) + PATERNITE_JOURS * 86400000;
+  if (isNaN(echJ) && !ts.length) return { type:'inconnu', vendeur, texte:vendeur, couleur:'var(--muted)',
+    detail:'Paternité ' + vendeur + ' — aucune date de référence' + lignesHisto, histo };
+  const echeance = !isNaN(echJ) ? echJ : Math.max.apply(null, ts) + PATERNITE_JOURS * 86400000;
   const restant = Math.ceil((echeance - Date.now()) / 86400000);
+  if (estEnVeille(c)) return { type:'veille', vendeur,
+    texte: vendeur + ' · en veille' + (restant > 0 ? ' J-' + restant : ' · échu'),
+    couleur: restant > 0 ? 'var(--accent2)' : 'var(--danger)',
+    detail:'Paternité ' + vendeur + ' — client en veille'
+      + (c.veille_depuis ? ' depuis le ' + fmt(c.veille_depuis) : '')
+      + ' · ' + (restant > 0 ? 'protégée jusqu’au ' + fmt(echeance)
+                                 : 'échue le ' + fmt(echeance) + ' — le lead est retourné dans le pool')
+      + lignesHisto, histo };
+  if (c.paternite_geree === false && restant > 0) return { type:'historique', vendeur, texte:vendeur + ' · historique', couleur:'var(--muted)',
+    detail:'Contact antérieur à la règle — conservé par ' + vendeur + ' jusqu’au ' + fmt(echeance) + lignesHisto, histo };
   const detail = 'Paternité ' + vendeur
     + (c.vendeur_depuis ? ' \u00b7 depuis le ' + fmt(c.vendeur_depuis) : '')
     + (c.derniere_action_le ? ' \u00b7 dernière action le ' + fmt(c.derniere_action_le) : '')
@@ -5641,7 +5696,7 @@ async function renderEquipeLeads() {
     // Un lead en compétition (recu_par) apparaît chez chaque vendeur récepteur,
     // même si la paternité n'est pas (encore) à lui.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -7826,7 +7881,9 @@ function renderEqNotifs() {
   });
 
   // ---- Assemblage : trois cases cliquables + liste dépliée groupée par date
-  retard.sort((a, b) => a.t - b.t);
+  // Le retard se lit du plus récent au plus ancien : ce qu'on vient de laisser
+  // filer se rattrape encore, le vieux fond de liste passe en dessous.
+  retard.sort((a, b) => b.t - a.t);
   aujourdhui.sort((a, b) => a.t - b.t);
   avenir.sort((a, b) => a.t - b.t);
   const nUrgent = retard.length + aujourdhui.length;
@@ -7941,7 +7998,7 @@ function renderEqNotifs() {
     if (_eqActVoirRetard) {
       const groupes = {}, ordre = [];
       retard.forEach(x => { const k = x.d || jour; if (!groupes[k]) { groupes[k] = []; ordre.push(k); } groupes[k].push(x); });
-      ordre.sort();
+      ordre.sort().reverse();   // la journée la plus récente en premier
       html += ordre.map(k => `<div style="margin-bottom:10px">
         <div style="display:flex;align-items:baseline;gap:8px;padding:5px 2px;border-bottom:2px solid var(--danger);margin-bottom:7px">
           <span style="font-family:var(--font-head);font-size:14px;font-weight:800;color:var(--danger)">${fmtLong(k)}</span>
@@ -12448,6 +12505,246 @@ window.addEventListener('resize', function(){ if (window.innerWidth > 900) close
 
   programmer(3000);  // on laisse l'app démarrer avant la 1re lecture
 })();
+</script>
+
+<script>
+// ============================================================
+//  POOL DE LEADS
+//  Tout ce que personne ne travaille — jamais attribué, ou paternité
+//  de 14 jours échue — atterrit ici. Chacun vient s'y servir, dans la
+//  limite de 10 leads par jour, et repart avec 14 jours de paternité.
+// ============================================================
+const POOL_PAR_PAGE = 25;
+let _poolPage = 0;
+let _poolTotal = 0;
+let _poolLignes = [];
+let _poolFiltre = 'tous';
+let _poolRecherche = '';
+let _poolTriDesc = true;      // les leads les plus récents d'abord
+let _poolQuota = { plafond: 10, pris: 0, restant: 10 };
+let _poolStats = null;
+let _poolEnCours = false;
+
+const _pEsc = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const _pDate = (d) => { if (!d) return '—'; const dt = new Date(d); return isNaN(dt) ? '—' : dt.toLocaleDateString('fr-FR'); };
+
+function _poolEntetes(extra) {
+  return Object.assign({ 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }, extra || {});
+}
+
+async function _poolRpc(nom, corps) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + nom, {
+    method: 'POST', cache: 'no-store',
+    headers: _poolEntetes({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(corps || {})
+  });
+  const txt = await r.text();
+  let j = null; try { j = txt ? JSON.parse(txt) : null; } catch (e) { j = null; }
+  if (!r.ok) throw new Error((j && (j.message || j.hint)) || ('HTTP ' + r.status));
+  return j;
+}
+
+// Un numéro se cherche quel que soit le format tapé : on ne garde que les
+// chiffres significatifs et on les cherche dans telephone_norm.
+function _poolTelFiltre(q) {
+  let d = q.replace(/\D/g, '');
+  if (!d) return null;
+  if (d.slice(0, 4) === '0033') d = d.slice(4);
+  else if (d.slice(0, 2) === '33' && d.length >= 11) d = d.slice(2);
+  if (d[0] === '0') d = d.slice(1);
+  return d.length >= 4 ? d : null;
+}
+
+function _poolUrl() {
+  const par = ['select=*', 'limit=' + POOL_PAR_PAGE, 'offset=' + (_poolPage * POOL_PAR_PAGE),
+               'order=cree_le.' + (_poolTriDesc ? 'desc' : 'asc') + '.nullslast'];
+  if (_poolFiltre === 'jamais') par.push('origine=eq.jamais_travaille');
+  else if (_poolFiltre === 'echu') par.push('origine=eq.echu');
+  else if (_poolFiltre === 'veille') par.push('statut=eq.' + encodeURIComponent('En veille'));
+  else if (_poolFiltre === 'sansrep') par.push('statut=eq.' + encodeURIComponent('Sans réponse'));
+  const q = _poolRecherche.trim();
+  if (q) {
+    const m = q.replace(/[(),*]/g, ' ').trim();
+    const ou = ['nom.ilike.*' + m + '*', 'prenom.ilike.*' + m + '*', 'nom_famille.ilike.*' + m + '*',
+                'email.ilike.*' + m + '*', 'lieu.ilike.*' + m + '*'];
+    const tel = _poolTelFiltre(q);
+    if (tel) ou.push('telephone_norm.ilike.*' + tel + '*');
+    par.push('or=' + encodeURIComponent('(' + ou.join(',') + ')'));
+  }
+  return SUPABASE_URL + '/rest/v1/v_pool_leads?' + par.join('&');
+}
+
+function poolChercher() {
+  _poolRecherche = (document.getElementById('pool-search')?.value || '').trim();
+  _poolPage = 0;
+  renderPool();
+}
+function poolFiltre(f) { _poolFiltre = f; _poolPage = 0; renderPool(); }
+function poolTriToggle() { _poolTriDesc = !_poolTriDesc; _poolPage = 0; renderPool(); }
+function poolNav(d) {
+  const max = Math.max(0, Math.ceil(_poolTotal / POOL_PAR_PAGE) - 1);
+  _poolPage = Math.min(max, Math.max(0, _poolPage + d));
+  renderPool();
+}
+
+async function renderPool() {
+  const tbody = document.getElementById('pool-tbody');
+  if (!tbody || _poolEnCours) return;
+  _poolEnCours = true;
+  tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><p>Chargement…</p></div></td></tr>';
+  try {
+    const [res, quota, stats] = await Promise.all([
+      fetch(_poolUrl(), { cache: 'no-store', headers: _poolEntetes({ 'Prefer': 'count=exact' }) }),
+      _poolRpc('pool_quota').catch(() => null),
+      _poolRpc('pool_stats').catch(() => null)
+    ]);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    _poolLignes = await res.json();
+    const cr = res.headers.get('content-range') || '';
+    _poolTotal = parseInt(String(cr).split('/')[1], 10);
+    if (isNaN(_poolTotal)) _poolTotal = _poolLignes.length;
+    if (quota) _poolQuota = quota;
+    if (stats) _poolStats = stats;
+  } catch (e) {
+    _poolEnCours = false;
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">⚠</div><p>Erreur de chargement — réessayez</p></div></div></td></tr>';
+    return;
+  }
+  _poolEnCours = false;
+  poolRenderQuota();
+  poolRenderKpis();
+  poolRenderChips();
+  poolRenderTable();
+}
+
+function poolRenderQuota() {
+  const el = document.getElementById('pool-quota');
+  if (!el) return;
+  const q = _poolQuota || {};
+  const plafond = q.plafond || 10;
+  const pris = q.pris || 0;
+  const restant = Math.max(0, q.restant == null ? plafond - pris : q.restant);
+  const pct = Math.round(pris / plafond * 100);
+  const coul = restant === 0 ? 'var(--danger)' : restant <= 3 ? 'var(--warning)' : 'var(--success)';
+  el.innerHTML = `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+    <div style="flex:1;min-width:220px">
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Mes prises du jour</div>
+      <div style="font-family:var(--font-head);font-size:24px;font-weight:800;margin-top:2px;color:${coul}">${pris} <span style="font-size:15px;color:var(--muted);font-weight:600">/ ${plafond}</span></div>
+      <div style="height:6px;border-radius:3px;background:var(--border);margin-top:7px;max-width:260px"><div style="height:6px;border-radius:3px;width:${pct}%;background:${coul}"></div></div>
+    </div>
+    <div style="flex:2;min-width:260px;font-size:12.5px;color:var(--muted);line-height:1.55">
+      ${restant === 0
+        ? '<strong style="color:var(--danger)">Plafond atteint.</strong> Le compteur repart à zéro demain matin.'
+        : '<strong style="color:var(--text)">' + restant + ' lead' + (restant > 1 ? 's' : '') + '</strong> encore disponible' + (restant > 1 ? 's' : '') + ' aujourd\'hui.'}
+      Un lead pris est à toi pendant <strong>14 jours</strong> ; le délai repart à chaque action commerciale.
+      Sans rien, il retourne dans le pool et redevient prenable par tout le monde.
+    </div>
+  </div>`;
+}
+
+function poolRenderKpis() {
+  const el = document.getElementById('pool-kpis');
+  if (!el) return;
+  const s = _poolStats;
+  if (!s) { el.innerHTML = ''; return; }
+  const carte = (label, val, coul) => `<div class="card" style="padding:14px 18px">
+    <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">${label}</div>
+    <div style="font-family:var(--font-head);font-size:22px;font-weight:800;margin-top:3px${coul ? ';color:' + coul : ''}">${val}</div>
+  </div>`;
+  el.innerHTML = carte('Dans le pool', s.total)
+    + carte('Jamais travaillés', s.jamais_travaille, 'var(--muted)')
+    + carte('Paternité échue', s.echu, 'var(--warning)')
+    + carte('En veille', s.veille, 'var(--accent2)')
+    + carte('Sans réponse', s.sans_reponse, 'var(--muted)');
+}
+
+function poolRenderChips() {
+  const el = document.getElementById('pool-chips');
+  if (!el) return;
+  const chips = [['tous', 'Tous'], ['jamais', 'Jamais travaillés'], ['echu', 'Paternité échue'],
+                 ['veille', 'En veille'], ['sansrep', 'Sans réponse']];
+  el.innerHTML = chips.map(([k, t]) => {
+    const on = _poolFiltre === k;
+    return `<button onclick="poolFiltre('${k}')" style="background:${on ? 'var(--accent)' : 'var(--surface2)'};border:1px solid ${on ? 'var(--accent)' : 'var(--border)'};color:${on ? '#fff' : 'var(--text)'};border-radius:20px;padding:6px 14px;font-family:var(--font-body);font-size:12px;font-weight:600;cursor:pointer">${t}</button>`;
+  }).join('')
+  + (_poolRecherche ? `<span style="font-size:12px;color:var(--muted)">Recherche : « ${_pEsc(_poolRecherche)} » <button onclick="document.getElementById('pool-search').value='';poolChercher()" style="background:none;border:none;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-size:12px">effacer</button></span>` : '');
+}
+
+// Historique de paternité : qui l'a eu, jusqu'à quand, et pourquoi il est reparti
+function poolHisto(l) {
+  const h = Array.isArray(l.vendeur_historique) ? l.vendeur_historique : [];
+  const lignes = h.map(x => '• ' + (x.vendeur || '?') + ' jusqu’au ' + _pDate(x.au) + (x.motif ? ' (' + x.motif + ')' : ''));
+  if (l.dernier_vendeur) lignes.push('• ' + l.dernier_vendeur + ' — paternité échue le ' + _pDate(l.paternite_jusqu_au));
+  const titre = lignes.length ? lignes.join('\n') : 'Aucun vendeur ne l’a jamais eu';
+  const n = h.length + (l.dernier_vendeur ? 1 : 0);
+  if (!n) return '<span style="font-size:11.5px;color:var(--muted)">jamais attribué</span>';
+  return `<span title="${_pEsc(titre)}" style="display:inline-block;background:var(--surface2);border:1px solid var(--warning);color:var(--warning);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap">`
+    + _pEsc(l.dernier_vendeur || (h[h.length - 1] || {}).vendeur || '?') + ' · échu</span>'
+    + (n > 1 ? `<span title="${_pEsc(titre)}" style="font-size:11px;color:var(--muted);margin-left:5px">↻ ${n}</span>` : '');
+}
+
+function poolRenderTable() {
+  const tbody = document.getElementById('pool-tbody');
+  const sub = document.getElementById('pool-sub');
+  if (!tbody) return;
+  if (sub) sub.textContent = _poolTotal.toLocaleString('fr-FR') + ' lead' + (_poolTotal > 1 ? 's' : '')
+    + ' disponible' + (_poolTotal > 1 ? 's' : '') + ' — 10 par jour et par vendeur';
+  const bloque = (_poolQuota && _poolQuota.restant === 0);
+  if (!_poolLignes.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><p>Aucun lead ne correspond</p></div></td></tr>';
+    poolRenderPagination();
+    return;
+  }
+  tbody.innerHTML = _poolLignes.map(l => {
+    const nom = (typeof nomComplet === 'function' ? nomComplet(l) : (l.nom || '')) || '—';
+    const recherche = [l.typologie, (typeof budgetTexte === 'function'
+      ? budgetTexte({ min: l.budget_min, max: l.budget_max, approx: l.budget_approx }) : (l.budget || ''))]
+      .filter(Boolean).join(' · ');
+    const statut = l.statut && l.statut !== 'Nouveau'
+      ? `<div style="font-size:10.5px;color:var(--muted);margin-top:2px">${_pEsc(l.statut)}</div>` : '';
+    return `<tr>
+      <td><div style="font-weight:600">${_pEsc(nom)}</div>${statut}</td>
+      <td style="font-size:12px;color:var(--muted)">${_pEsc(l.email || '')}${l.email && l.telephone ? '<br>' : ''}${_pEsc(l.telephone || '')}</td>
+      <td style="font-size:12.5px">${_pEsc(l.lieu || '—')}</td>
+      <td style="font-size:12px;color:var(--muted)">${_pEsc(recherche || '—')}</td>
+      <td style="font-size:12.5px;white-space:nowrap">${_pDate(l.cree_le)}</td>
+      <td>${poolHisto(l)}</td>
+      <td style="text-align:right"><button class="btn btn-sm btn-primary" ${bloque ? 'disabled style="opacity:.45;cursor:not-allowed"' : ''} onclick="poolPrendre('${l.id}', this)" title="${bloque ? 'Plafond de 10 leads atteint pour aujourd’hui' : 'Ce lead passe dans « Mes leads » et t’est réservé 14 jours'}">Prendre</button></td>
+    </tr>`;
+  }).join('');
+  poolRenderPagination();
+}
+
+function poolRenderPagination() {
+  const el = document.getElementById('pool-pagination');
+  if (!el) return;
+  const pages = Math.max(1, Math.ceil(_poolTotal / POOL_PAR_PAGE));
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  const btn = (d, txt, actif) => `<button class="btn btn-sm btn-secondary" ${actif ? '' : 'disabled style="opacity:.4;cursor:not-allowed"'} onclick="poolNav(${d})">${txt}</button>`;
+  el.innerHTML = btn(-1, '‹ Précédent', _poolPage > 0)
+    + `<span style="font-size:12.5px;color:var(--muted)">Page ${_poolPage + 1} sur ${pages}</span>`
+    + btn(1, 'Suivant ›', _poolPage < pages - 1);
+}
+
+async function poolPrendre(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await _poolRpc('pool_prendre', { p_contact: id });
+    _poolQuota = { plafond: r.plafond, pris: r.pris, restant: r.restant };
+    _poolLignes = _poolLignes.filter(l => l.id !== id);
+    _poolTotal = Math.max(0, _poolTotal - 1);
+    if (_poolStats) { _poolStats.total = Math.max(0, _poolStats.total - 1); }
+    if (typeof toast === 'function')
+      toast('✓ Lead pris — il est dans « Mes leads » pour 14 jours (' + r.restant + ' restant' + (r.restant > 1 ? 's' : '') + ' aujourd\'hui)', 'var(--success)');
+    poolRenderQuota(); poolRenderKpis(); poolRenderTable();
+    if (!_poolLignes.length) renderPool();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Prendre'; }
+    if (typeof toast === 'function') toast('⚠ ' + (e.message || 'Impossible de prendre ce lead'), 'var(--danger)');
+    renderPool();
+  }
+}
 </script>
 
 </body></html>
