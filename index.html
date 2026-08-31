@@ -11309,6 +11309,19 @@ async function parseAndImportCSV(text) {
 
   const headers = headerLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
 
+  // Date du lead : les exports portails la donnent en jj/mm/aaaa (parfois avec
+  // l'heure). On la range toujours en AAAA-MM-JJ, le seul format que le tri par
+  // date et l'affichage des fiches lisent correctement (nouveau, août 2026).
+  const normDateLead = (v) => {
+    const s = String(v || '').trim();
+    if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+    const d = new Date(s);
+    return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+  };
+
   // Clé d'identification d'un contact : email en priorité, sinon nom + téléphone
   const contactKey = (c) => {
     const email = (c.email || '').toLowerCase().trim();
@@ -11360,7 +11373,7 @@ async function parseAndImportCSV(text) {
       reference_annonce: row['ReferenceAnnonce'] || '',
       message: row['Message'] || '',
       intention: row['Intention'] || '',
-      date_lead: row['Date'] || '',
+      date_lead: normDateLead(row['Date']),
       statut: row['Statut'] || 'Nouveau',
       notes: row['Vendeur'] ? 'Vendeur assigné : ' + row['Vendeur'] : ''
     };
