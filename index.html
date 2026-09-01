@@ -2436,8 +2436,8 @@ Nous avons le plaisir de vous annoncer le lancement de..."></textarea>
       <div class="form-group"><label>N° TVA intracom.</label><input type="text" id="fac-promo-tva"></div>
       <div class="form-group full" style="border-top:1px solid var(--border);padding-top:8px;margin-top:2px"><label style="color:var(--accent);font-weight:700">Prestation</label></div>
       <div class="form-group full"><label>Désignation</label><textarea id="fac-designation" rows="2"></textarea></div>
-      <div class="form-group"><label>Prix du bien (€)</label><input type="number" step="0.01" id="fac-prix" placeholder="ex: 350000" oninput="_facMajTotaux()"></div>
-      <div class="form-group"><label>Honoraires (% du prix)</label><input type="number" step="0.01" id="fac-taux-hono" placeholder="ex: 5" oninput="_facMajTotaux()"></div>
+      <div class="form-group"><label>Prix du bien (€)</label><input type="number" step="0.01" id="fac-prix" placeholder="ex: 350000" oninput="_facCalcHT()"></div>
+      <div class="form-group"><label>Honoraires (% du prix)</label><input type="number" step="0.01" id="fac-taux-hono" placeholder="ex: 5" oninput="_facCalcHT()"></div>
       <div class="form-group"><label>Montant HT (€)</label><input type="number" step="0.01" id="fac-ht" oninput="_facMajTotaux()"></div>
       <div class="form-group"><label>TVA (%)</label><input type="number" step="0.1" id="fac-tva-taux" value="20" oninput="_facMajTotaux()"></div>
     </div>
@@ -12684,17 +12684,18 @@ function _facMajTotaux() {
       const base = r2(prix * tx / 100);
       const ecart = r2(base - ht);
       hint.innerHTML = 'Base de calcul : ' + fmtEur(prix) + ' \u00d7 ' + _facPct(tx) + ' = <strong>' + fmtEur2(base) + ' HT</strong>'
-        + '<button type="button" onclick="_facAppliquerBase()" style="margin-left:8px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;cursor:pointer">Reporter en HT</button>'
-        + (Math.abs(ecart) >= 0.01 ? ' \u00b7 <span style="color:var(--warning)">\u00e9cart de ' + fmtEur2(ecart) + ' avec le montant factur\u00e9 (d\u00e9duction plateforme ?)</span>' : '');
+        + (Math.abs(ecart) >= 0.01
+            ? ' \u00b7 <span style="color:var(--warning)">montant factur\u00e9 saisi \u00e0 ' + fmtEur2(ht) + ' (\u00e9cart de ' + fmtEur2(ecart) + ')</span>'
+            : '');
     } else hint.innerHTML = '';
   }
 }
-function _facAppliquerBase() {
+// Prix ou % modifié : le montant HT est recalculé au centime
+function _facCalcHT() {
   const prix = parseFloat((document.getElementById('fac-prix') || {}).value) || 0;
   const tx   = parseFloat((document.getElementById('fac-taux-hono') || {}).value) || 0;
   const el = document.getElementById('fac-ht');
-  if (!el || !prix || !tx) return;
-  el.value = r2(prix * tx / 100);
+  if (el && prix > 0 && tx > 0) el.value = r2(prix * tx / 100);
   _facMajTotaux();
 }
 function _facPct(n) {
@@ -12855,11 +12856,7 @@ function _ligneBaseFacture(f, eur) {
   if (prix) out.push('Prix de vente du bien : <b>' + eur(prix) + '</b>');
   if (tx)   out.push('Honoraires : <b>' + _facPct(tx) + '</b>' + (prix ? ' du prix de vente' : ''));
   let html = '<div class="sub">' + out.join(' &middot; ') + '</div>';
-  if (prix && tx) {
-    const base = r2(prix * tx / 100);
-    const ecart = r2(base - (Number(f.ht) || 0));
-    if (Math.abs(ecart) >= 0.01) html += '<div class="sub">Soit ' + eur(base) + ' HT, dont d\u00e9duction de ' + eur(ecart) + ' (frais de plateforme)</div>';
-  }
+  if (prix && tx) html += '<div class="sub">' + eur(prix) + ' \u00d7 ' + _facPct(tx) + ' = <b>' + eur(r2(prix * tx / 100)) + ' HT</b></div>';
   return html;
 }
 function _ouvrirFacturePDF(f) {
@@ -12900,8 +12897,7 @@ function _ouvrirFacturePDF(f) {
     + '<table><thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">P.U. HT</th><th class="num">Montant HT</th></tr></thead>'
     + '<tbody><tr><td>' + esc(f.designation) + _ligneBaseFacture(f, eur) + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
     + '<div class="totes"><div><span>Total HT</span><span>' + eur(f.ht) + '</span></div><div><span>TVA (' + f.taux + ' %)</span><span>' + eur(f.tva) + '</span></div><div class="grand"><span>Total TTC</span><span>' + eur(f.ttc) + '</span></div></div>'
-    + '<div class="pay"><strong>Modalités de règlement</strong><br>Paiement à ' + E.delaiJours + ' jours — échéance le ' + d(f.ech) + '.<br>Par virement : IBAN ' + esc(E.iban) + ' — BIC ' + esc(E.bic) + '.<br>'
-    + '<span class="muted">En cas de retard : pénalités au taux de 3 fois le taux d\'intérêt légal, exigibles sans rappel, et indemnité forfaitaire pour frais de recouvrement de 40 € (art. L441-10 et D441-5 du Code de commerce). Pas d\'escompte pour paiement anticipé.</span></div>'
+    + '<div class="pay"><strong>Modalités de règlement</strong><br>Paiement à ' + E.delaiJours + ' jours — échéance le ' + d(f.ech) + '.<br>Par virement : IBAN ' + esc(E.iban) + ' — BIC ' + esc(E.bic) + '.</div>'
     + '<div class="legal">' + esc(E.nom) + ' — ' + esc(E.forme) + ' — Siège : ' + esc(E.adresse) + ' — ' + esc(E.rcs) + ' — SIREN ' + esc(E.siren) + ' — TVA intracommunautaire ' + esc(E.tva) + ' — Carte professionnelle Transactions ' + esc(E.cpi) + '.<br>TVA acquittée d\'après les encaissements. Facture émise conformément aux articles 289 et suivants du CGI.</div>'
     + '</body></html>';
   const w = window.open('', '_blank');
