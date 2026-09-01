@@ -7171,6 +7171,7 @@ ${(() => {
       })()}
       ${cur === 'Nouveau' ? `<button onclick="eqLeadAppele('${l.id}')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Appelé</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqOuvrirSelection('${l.id}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Envoyer une sélection</button>` : ''}
+      ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqRdvLienOuvrir('${l.id}')" title="Envoyer au client un lien vers tes disponibilités : il choisit son créneau" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Lien de rendez-vous</button>` : ''}
     </div>
 
     ${eqCriteresChips(l)}
@@ -7423,12 +7424,217 @@ async function eqRdvCharger() {
     const r = x.avis && x.avis.rdv;
     return r && r.demande && !r.reserve && !r.traite;
   });
+  // Mêmes demandes, mais venues d'un lien de rendez-vous simple (sans sélection) :
+  // on leur donne la forme d'une sélection pour que la page Activité les traite pareil.
+  await rdvLiensCharger(prenom);
+  Object.values(_rdvLiens).forEach(x => {
+    const r = x.rdv || {};
+    if (r.demande && !r.reserve && !r.traite) {
+      _eqRdvDemandes.push({ token: x.token, contact_id: x.contact_id, client_nom: x.client_nom || '', avis: { rdv: r } });
+    }
+  });
 }
 
 function _rdvQuand(c) {
   const d = new Date(c.debut);
   const j = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   return j.charAt(0).toUpperCase() + j.slice(1) + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ============================================================
+//  LIEN DE RENDEZ-VOUS — le client réserve son créneau tout seul
+//  Même moteur que la sélection (table creneaux, créneaux libres du vendeur,
+//  validation dans le planning), mais sans biens : un lien qu'on envoie à un
+//  client pour parler de son projet. Le mail automatique envoyé à l'arrivée
+//  d'une demande portail utilise exactement le même lien.
+// ============================================================
+const RDV_FN_URL = SUPABASE_URL + '/functions/v1/rdv/';
+let _rdvLiens = {};      // contact_id -> lien de rendez-vous
+let _rdvLienCtx = null;  // modale en cours
+
+function _rdvJeton() {
+  const o = new Uint8Array(12);
+  crypto.getRandomValues(o);
+  return Array.from(o).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Liens du vendeur, pour le suivi côté fiche client et page Activité
+async function rdvLiensCharger(prenom) {
+  _rdvLiens = {};
+  if (!prenom) return;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rdv_liens?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&order=created_at.desc&limit=500', {
+      cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (!r.ok) return;
+    (await r.json()).forEach(x => {
+      const nom = (() => { const l = (_eqLeads || []).find(y => y.id === x.contact_id); return l ? (nomComplet(l) || '') : ''; })();
+      if (!_rdvLiens[x.contact_id]) _rdvLiens[x.contact_id] = Object.assign({ client_nom: nom }, x);
+    });
+  } catch (e) { /* le suivi des liens n'empêche jamais le reste de tourner */ }
+}
+
+// Un seul lien par client : on reprend celui qui existe, sinon on le crée
+async function rdvLienRecuperer(contactId, vendeur) {
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rdv_liens?select=*&contact_id=eq.' + contactId + '&order=created_at.desc&limit=1', {
+      cache: 'no-store', headers: entetes
+    });
+    if (r.ok) {
+      const rows = await r.json();
+      if (rows.length) {
+        // Le lien suit le client : s'il a changé de main, il pointe vers l'agenda du nouveau vendeur
+        if (vendeur && rows[0].vendeur !== vendeur) {
+          await fetch(SUPABASE_URL + '/rest/v1/rdv_liens?token=eq.' + encodeURIComponent(rows[0].token), {
+            method: 'PATCH', headers: Object.assign({}, entetes, { 'Prefer': 'return=minimal' }), body: JSON.stringify({ vendeur })
+          });
+          rows[0].vendeur = vendeur;
+        }
+        return rows[0];
+      }
+    }
+    const nouveau = { token: _rdvJeton(), contact_id: contactId, vendeur: vendeur || null, origine: 'vendeur' };
+    const c = await fetch(SUPABASE_URL + '/rest/v1/rdv_liens', {
+      method: 'POST', headers: Object.assign({}, entetes, { 'Prefer': 'return=representation' }), body: JSON.stringify(nouveau)
+    });
+    if (!c.ok) return null;
+    const rows = await c.json();
+    return rows[0] || null;
+  } catch (e) { return null; }
+}
+
+function rdvLienFermer() { const m = document.getElementById('rdv-lien-modal'); if (m) m.remove(); _rdvLienCtx = null; }
+
+async function eqRdvLienOuvrir(contactId) {
+  const l = (_eqLeads || []).find(x => x.id === contactId);
+  if (!l) { toast('Fiche introuvable', 'var(--danger)'); return; }
+  const vendeur = l.vendeur || _creneauVendeur();
+  const nom = nomComplet(l) || 'ce client';
+
+  const old = document.getElementById('rdv-lien-modal'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'rdv-lien-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1600;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:560px;max-width:95vw;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+      <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Lien de rendez-vous — ${_vEsc(nom)}</div>
+      <button onclick="rdvLienFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div id="rdv-lien-corps" style="font-size:13px;color:var(--muted);margin-top:10px">Préparation du lien…</div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) rdvLienFermer(); });
+  document.body.appendChild(div);
+
+  const lien = await rdvLienRecuperer(contactId, vendeur);
+  if (!lien) {
+    const b = document.getElementById('rdv-lien-corps');
+    if (b) b.innerHTML = '<div style="color:var(--danger)">Impossible de créer le lien — réessaie dans un instant.</div>';
+    return;
+  }
+  _rdvLiens[contactId] = Object.assign({ client_nom: nom }, lien);
+  _rdvLienCtx = { contactId, lien, l, vendeur, url: RDV_FN_URL + lien.token };
+
+  // Sans disponibilité ouverte, le client ne peut qu'écrire : autant le dire tout de suite
+  let libres = 0;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=id&vendeur=eq.' + encodeURIComponent(vendeur) + '&statut=eq.libre&debut=gte.' + encodeURIComponent(new Date().toISOString()) + '&limit=1', {
+      cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Prefer': 'count=exact' }
+    });
+    if (r.ok) { const rows = await r.json(); libres = rows.length; }
+  } catch (e) { /* information de confort */ }
+
+  rdvLienRender(libres);
+}
+
+function rdvLienRender(libres) {
+  const box = document.getElementById('rdv-lien-corps');
+  if (!box || !_rdvLienCtx) return;
+  const { l, lien, url } = _rdvLienCtx;
+  const r = (lien.rdv && typeof lien.rdv === 'object') ? lien.rdv : {};
+  const quand = r.debut ? new Date(r.debut).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + new Date(r.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+  const etat = r.reserve && r.debut
+    ? (r.confirme ? '✓ Rendez-vous confirmé : ' : '⏳ Créneau réservé — à valider : ') + quand
+    : r.demande ? '⏳ Le client a envoyé une demande — propose-lui des créneaux'
+    : lien.opened_at ? 'Lien ouvert ' + (lien.visites || 1) + ' fois, aucun créneau choisi pour l\'instant'
+    : 'Lien jamais ouvert';
+
+  box.innerHTML = `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Le client ouvre ce lien, choisit un créneau parmi tes disponibilités, et le rendez-vous arrive dans ta page Activité pour validation.</div>
+    ${libres === 0 ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:12px">Tu n'as aucune disponibilité ouverte : le client ne pourra qu'écrire quand il est libre. <button class="btn btn-sm btn-secondary" onclick="rdvLienFermer(); eqCreneauxOuvrir()" style="font-size:11px;margin-left:6px">Ouvrir des créneaux</button></div>` : ''}
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+      <input id="rdv-lien-url" readonly value="${_vEsc(url)}" onclick="this.select()" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:12.5px">
+      <button class="btn btn-sm btn-secondary" onclick="eqCopy(document.getElementById('rdv-lien-url').value, 'Lien de rendez-vous')" style="font-size:11.5px">Copier</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Message</div>
+    <textarea id="rdv-lien-mail" rows="7" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;color:var(--text);font-family:var(--font-body);font-size:13px;line-height:1.55;box-sizing:border-box">${_vEsc(rdvLienMessage())}</textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--muted)">${_vEsc(etat)}</span>
+      <div style="display:flex;gap:8px">
+        ${l.email ? `<button class="btn btn-primary" onclick="rdvLienGmail()">Ouvrir Gmail</button>` : '<span style="font-size:12px;color:var(--warning)">Pas d\'email sur la fiche — copie le lien pour le SMS</span>'}
+        <button class="btn btn-secondary" onclick="rdvLienFermer()">Fermer</button>
+      </div>
+    </div>`;
+}
+
+function rdvLienMessage() {
+  if (!_rdvLienCtx) return '';
+  const { l, url, vendeur } = _rdvLienCtx;
+  const prenom = (l.prenom || String(l.nom || '').split(' ')[0] || '').trim();
+  return (prenom ? 'Bonjour ' + prenom + ',' : 'Bonjour,') + '\n\n'
+    + 'Comme convenu, voici mon agenda : choisissez le créneau qui vous arrange pour qu\'on échange sur votre projet.\n\n'
+    + url + '\n\n'
+    + 'À très vite,\n' + (vendeur || '');
+}
+
+function rdvLienGmail() {
+  if (!_rdvLienCtx) return;
+  const { l } = _rdvLienCtx;
+  const corps = encodeURIComponent((document.getElementById('rdv-lien-mail') || {}).value || '');
+  const su = encodeURIComponent('Choisissez votre créneau — GLR Immobilier');
+  window.open('https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(l.email || '') + '&su=' + su + '&body=' + corps, '_blank');
+}
+
+// Le client est prévenu par mail de ce que décide le vendeur : rendez-vous
+// confirmé, autres créneaux proposés, créneau libéré. L'envoi part au nom du
+// vendeur (fonction rdv-notif + Brevo) et n'est jamais bloquant : la décision
+// du vendeur est enregistrée d'abord, le mail suit.
+async function rdvNotifierClient(token, type, extra) {
+  if (!token) return null;
+  try {
+    const r = await fetch(SUPABASE_URL + '/functions/v1/rdv-notif', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ token: token, type: type }, extra || {}))
+    });
+    return await r.json().catch(() => null);
+  } catch (e) { return null; }
+}
+
+// Ce qu'on dit au vendeur du sort de ce mail — jamais un envoi silencieux
+function _rdvNotifMot(res) {
+  if (res && res.ok) return ' — client prévenu par mail';
+  const e = res && res.error;
+  if (e === 'sans_email') return ' — pas d\'email sur la fiche, préviens-le toi-même';
+  if (e === 'sans_cle') return ' — mail non envoyé : clé Brevo à renseigner';
+  return ' — mail non envoyé, préviens-le toi-même';
+}
+
+// L'état du rendez-vous se range dans le lien, comme il se range dans la sélection
+async function _planMajRdvLien(token, champs) {
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rdv_liens?select=rdv&token=eq.' + encodeURIComponent(token), { cache: 'no-store', headers: entetes });
+    if (!r.ok) return;
+    const rows = await r.json();
+    if (!rows.length) return;
+    const rdv = Object.assign({}, (rows[0].rdv && typeof rows[0].rdv === 'object') ? rows[0].rdv : {}, champs);
+    await fetch(SUPABASE_URL + '/rest/v1/rdv_liens?token=eq.' + encodeURIComponent(token), {
+      method: 'PATCH',
+      headers: Object.assign({}, entetes, { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ rdv })
+    });
+  } catch (e) { /* la validation du créneau reste faite : on n'annule pas pour autant */ }
 }
 
 // ============================================================
@@ -8127,7 +8333,8 @@ async function eqRdvValider(id) {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     await _planMajSelection(c && c.selection_token, { confirme: true, refuse: false, confirme_le: new Date().toISOString() });
-    toast('✓ Rendez-vous confirmé — il est dans ton planning', 'var(--success)');
+    const notif = await rdvNotifierClient(c && c.selection_token, 'confirme', { debut: c && c.debut, fin: c && c.fin, mode: c && c.mode });
+    toast('✓ Rendez-vous confirmé — il est dans ton planning' + _rdvNotifMot(notif), 'var(--success)');
   } catch (e) { toast('⚠ Validation impossible', 'var(--danger)'); }
   await eqRdvCharger();
   renderEqNotifs();
@@ -8233,7 +8440,9 @@ async function eqProposerEnvoyer() {
     }
     await _planMajSelection(_propCtx.token, { reserve: false, confirme: false, refuse: true, propositions: ids, traite: true });
     await _planCalerRappel(_propCtx.contactId, 1);
-    toast('✓ ' + ids.length + ' créneau(x) proposé(s) — le client choisit depuis sa sélection', 'var(--success)');
+    const proposes = (_propCtx.libres || []).filter(c => ids.indexOf(c.id) >= 0).map(c => ({ debut: c.debut, fin: c.fin }));
+    const notif = await rdvNotifierClient(_propCtx.token, 'propositions', { creneaux: proposes });
+    toast('✓ ' + ids.length + ' créneau(x) proposé(s)' + _rdvNotifMot(notif), 'var(--success)');
   } catch (e) { toast('⚠ Impossible d\'envoyer ces créneaux', 'var(--danger)'); }
   eqProposerFermer();
   await eqRdvCharger();
@@ -10267,6 +10476,8 @@ async function _planMajSelection(token, champs) {
     const r = await fetch(SUPABASE_URL + '/rest/v1/selections?select=avis&token=eq.' + encodeURIComponent(token), { cache: 'no-store', headers: entetes });
     if (!r.ok) return;
     const rows = await r.json();
+    // Le token ne vient pas d'une sélection : c'est un lien de rendez-vous simple
+    if (!rows.length) { await _planMajRdvLien(token, champs); return; }
     const avis = (rows[0] && rows[0].avis && typeof rows[0].avis === 'object') ? rows[0].avis : {};
     avis.rdv = Object.assign({}, avis.rdv || {}, champs);
     await fetch(SUPABASE_URL + '/rest/v1/selections?token=eq.' + encodeURIComponent(token), {
@@ -10287,7 +10498,8 @@ async function eqPlanValider(id) {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     await _planMajSelection(c && c.selection_token, { confirme: true, refuse: false, confirme_le: new Date().toISOString() });
-    toast('✓ Rendez-vous confirmé — le client le voit sur sa sélection', 'var(--success)');
+    const notif = await rdvNotifierClient(c && c.selection_token, 'confirme', { debut: c && c.debut, fin: c && c.fin, mode: c && c.mode });
+    toast('✓ Rendez-vous confirmé' + _rdvNotifMot(notif), 'var(--success)');
   } catch (e) { toast('⚠ Validation impossible', 'var(--danger)'); }
   renderEquipePlanning();
 }
@@ -10303,7 +10515,8 @@ async function eqPlanLiberer(id) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     await _planMajSelection(c && c.selection_token, { reserve: false, confirme: false, refuse: true });
     await _planCalerRappel(c && c.contact_id, 1);
-    toast('Créneau libéré — le client peut en choisir un autre, tu le rappelles demain', 'var(--warning)');
+    const notif = await rdvNotifierClient(c && c.selection_token, 'annule', {});
+    toast('Créneau libéré — le client peut en choisir un autre' + _rdvNotifMot(notif), 'var(--warning)');
   } catch (e) { toast('⚠ Impossible de libérer ce créneau', 'var(--danger)'); }
   renderEquipePlanning();
 }
