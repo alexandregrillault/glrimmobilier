@@ -12690,6 +12690,14 @@ function _facMajTotaux() {
     } else hint.innerHTML = '';
   }
 }
+// Montant HT à retenir : le calcul exact prix × %, sauf si le montant saisi
+// s'en écarte d'au moins 1 € (vraie déduction type Otaree) — dans ce cas on le garde.
+function _facHtRetenu(prix, tx, htSaisi) {
+  const base = r2((Number(prix) || 0) * (Number(tx) || 0) / 100);
+  if (!base) return r2(htSaisi);
+  const h = r2(htSaisi);
+  return (h && Math.abs(base - h) >= 1) ? h : base;
+}
 // Prix ou % modifié : le montant HT est recalculé au centime
 function _facCalcHT() {
   const prix = parseFloat((document.getElementById('fac-prix') || {}).value) || 0;
@@ -12716,9 +12724,9 @@ function onVenteLieeChange() {
   const v = (data.ventes || []).find(x => x.id === id); if (!v) return;
   const setV = (i, val) => { const el = document.getElementById(i); if (el) el.value = val; };
   setV('fac-designation', 'Honoraires de commercialisation — ' + (v.programme || '') + (v.lot ? (' (lot ' + v.lot + ')') : '') + (v.ville ? (' — ' + v.ville) : '') + (v.client ? (' — acquéreur : ' + v.client) : ''));
-  setV('fac-ht', Number(v.honoraires) || 0);
   setV('fac-prix', Number(v.prix) || '');
   setV('fac-taux-hono', Number(v.tauxHonoraires) || '');
+  setV('fac-ht', _facHtRetenu(v.prix, v.tauxHonoraires, Number(v.honoraires) || 0));
   const nomEl = document.getElementById('fac-promo-nom');
   if (nomEl && !nomEl.value) nomEl.value = v.promoteur || '';
   _facMajTotaux();
@@ -12767,9 +12775,9 @@ function editFacture(fid) {
   setV('fac-promo-siren', p.siren || '');
   setV('fac-promo-tva', p.tva || '');
   setV('fac-designation', rec.designation || '');
-  setV('fac-ht', rec.ht || 0);
   setV('fac-prix', rec.prixBien || '');
   setV('fac-taux-hono', rec.tauxHono || '');
+  setV('fac-ht', _facHtRetenu(rec.prixBien, rec.tauxHono, rec.ht || 0));
   setV('fac-tva-taux', rec.taux != null ? rec.taux : 20);
   _facMajTotaux();
   document.querySelector('#modal-facture .modal-title').textContent = '✎ Facture ' + rec.numero;
@@ -12856,7 +12864,11 @@ function _ligneBaseFacture(f, eur) {
   if (prix) out.push('Prix de vente du bien : <b>' + eur(prix) + '</b>');
   if (tx)   out.push('Honoraires : <b>' + _facPct(tx) + '</b>' + (prix ? ' du prix de vente' : ''));
   let html = '<div class="sub">' + out.join(' &middot; ') + '</div>';
-  if (prix && tx) html += '<div class="sub">' + eur(prix) + ' \u00d7 ' + _facPct(tx) + ' = <b>' + eur(r2(prix * tx / 100)) + ' HT</b></div>';
+  if (prix && tx) {
+    const base = r2(prix * tx / 100);
+    if (Math.abs(base - (Number(f.ht) || 0)) < 0.01)
+      html += '<div class="sub">' + eur(prix) + ' \u00d7 ' + _facPct(tx) + ' = <b>' + eur(base) + ' HT</b></div>';
+  }
   return html;
 }
 function _ouvrirFacturePDF(f) {
