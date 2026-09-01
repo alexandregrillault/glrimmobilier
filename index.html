@@ -5770,7 +5770,7 @@ async function renderEquipeLeads() {
     // Un lead en compétition (recu_par) apparaît chez chaque vendeur récepteur,
     // même si la paternité n'est pas (encore) à lui.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -7237,7 +7237,10 @@ ${(() => {
       ${cur === 'Nouveau' ? `<button onclick="eqLeadAppele('${l.id}')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Appelé</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqOuvrirSelection('${l.id}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Envoyer une sélection</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqRdvLienOuvrir('${l.id}')" title="Envoyer au client un lien vers tes disponibilités : il choisit son créneau" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Lien de rendez-vous</button>` : ''}
+      ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqAppelSansReponse('${l.id}')" title="Il n'a pas décroché : on note la tentative, avec la date, et tu choisis quand rappeler" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Pas de réponse</button>` : ''}
     </div>
+
+    ${eqAppelsHtml(l)}
 
     ${eqCriteresChips(l)}
 
@@ -7915,7 +7918,7 @@ function _eqLegendeHtml() {
       ligne('rappel', 'Rappel dû — activité prévue aujourd\'hui ou dépassée'),
       ligne('prevu', 'Activité programmée à une date à venir'),
       ligne('transfert', 'Client transféré — reçu d\'un collègue depuis moins de 3 jours'),
-      ligne('sansrep', 'Sans réponse — client injoignable pour le moment'),
+      ligne('sansrep', 'Tentatives d\'appel sans réponse — le chiffre en donne le nombre, le survol les dates et qui a appelé'),
       ligne('veille', 'En veille — ressortira au lancement d\'un programme')
     ])}
     ${groupe('Sélection envoyée', [
@@ -8625,11 +8628,78 @@ function eqReperesLead(l, taille) {
     if (tr) h += `<span title="Client transféré${tr.de ? ' par ' + _vEsc(tr.de) : ''} le ${_vEsc(new Date(tr.le).toLocaleDateString('fr-FR'))} — il est à toi depuis">${selIc('transfert', t)}</span>`;
     if (typeof estEnVeille === 'function' && estEnVeille(l))
       h += `<span title="En veille — ressortira au lancement d'un programme">${selIc('veille', t)}</span>`;
+    // Nombre de fois où on a essayé de le joindre, tous vendeurs confondus
+    const nbAppels = (typeof eqAppelsListe === 'function') ? eqAppelsListe(l).length : 0;
+    if (nbAppels) h += `<span title="${_vEsc(eqAppelsResume(l))}" style="display:inline-flex;align-items:center;gap:2px">${selIc('sansrep', t)}<span style="font-size:${t - 2}px;font-weight:700;color:var(--muted)">${nbAppels}</span></span>`;
     // eqSelIcone porte déjà son propre libellé au survol et son clic
     const suivi = (typeof eqSelIcone === 'function') ? eqSelIcone(l) : '';
     if (suivi) h += suivi;
   } catch (e) { return ''; }   // un repère manquant ne doit jamais casser la liste
   return h ? `<span style="display:inline-flex;align-items:center;gap:5px;margin-left:7px;vertical-align:middle">${h}</span>` : '';
+}
+
+// ---- Tentatives d'appel -------------------------------------------------
+// Un client qu'on n'arrive pas à joindre se rappelle plusieurs fois, parfois par
+// plusieurs vendeurs. Le statut ne dit que la dernière fois ; ce qui manque, c'est
+// la liste des jours où on a essayé. Chaque « Sans réponse » en laisse la trace.
+function eqAppelsListe(l) {
+  const a = (l && Array.isArray(l.appels)) ? l.appels : [];
+  return a.filter(x => x && x.le).sort((x, y) => new Date(x.le) - new Date(y.le));
+}
+
+function eqAppelsHtml(l) {
+  const a = eqAppelsListe(l);
+  if (!a.length) return '';
+  const jour = (d) => {
+    const t = new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  };
+  const puces = a.map(x => `<span style="display:inline-flex;align-items:baseline;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:12px">
+      <span style="font-weight:600">${_vEsc(jour(x.le))}</span>${x.vendeur ? `<span style="color:var(--muted);font-size:11.5px">${_vEsc(x.vendeur)}</span>` : ''}
+    </span>`).join('');
+  return `<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 13px;margin:0 0 12px">
+    <span style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;white-space:nowrap">${a.length} tentative${a.length > 1 ? 's' : ''} d'appel</span>
+    ${puces}
+  </div>`;
+}
+
+// Résumé au survol, pour les repères des listes
+function eqAppelsResume(l) {
+  const a = eqAppelsListe(l);
+  if (!a.length) return '';
+  return a.length + ' tentative' + (a.length > 1 ? 's' : '') + ' d\'appel sans réponse : '
+    + a.map(x => new Date(x.le).toLocaleDateString('fr-FR') + (x.vendeur ? ' (' + x.vendeur + ')' : '')).join(', ');
+}
+
+// « Il n'a pas décroché » : la tentative est datée côté base, et on enchaîne
+// tout de suite sur la question qui compte — quand le rappelle-t-on ?
+async function eqAppelSansReponse(id) {
+  const l = (_eqLeads || []).find(x => x.id === id);
+  if (!l) return;
+  const n = eqAppelsListe(l).length + 1;
+  eqRappelPicker('Tentative n°' + n + ' sans réponse — quand rappelles-tu ?', async (rappel, t, h) => {
+    await _eqLeadPatch(id, Object.assign(
+      { statut: 'Sans réponse', statut_maj: new Date().toISOString() },
+      _eqActivitePatch(rappel, t, h)
+    ));
+    await eqAppelsRelire(id);
+  }, false, { titre: l.rappel_titre, heure: l.rappel_heure });
+}
+
+// La liste des tentatives est écrite par la base : on la relit après coup
+async function eqAppelsRelire(id) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=appels&id=eq.' + id, {
+      cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (!r.ok) return;
+    const rows = await r.json();
+    const l = (_eqLeads || []).find(x => x.id === id);
+    if (l && rows[0]) l.appels = rows[0].appels || [];
+  } catch (e) { /* le compteur se remettra à jour au prochain chargement */ }
+  renderEquipeLeadsTable();
+  if (typeof renderEqNotifs === 'function') renderEqNotifs();
+  if (typeof _eqFicheId !== 'undefined' && _eqFicheId) _eqFicheRender();
 }
 
 // Durée de lecture en clair : 45 s, 4 min 20, 1 h 05
