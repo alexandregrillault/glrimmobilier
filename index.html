@@ -5603,19 +5603,27 @@ const PATERNITE_JOURS = 14;
 // Exception : un lead EN VEILLE reçu à nouveau par un autre vendeur doit
 // apparaître chez lui — pas pour le lui prendre, mais pour qu'il sache qu'un
 // premier contact a déjà eu lieu avant de le rappeler à froid.
-// Un lead qui a déjà changé de mains (réattribution ou transfert décidé par un
-// gérant) n'est plus en compétition : l'attribution fait foi. Sans ça, il restait
-// affiché chez son ancien vendeur, qui le récupérait à sa première action —
-// et la base, elle, refusait. Même règle côté Supabase (contacts_touch_action).
+// Paternité, règle unique :
+//  * un lead reçu par plusieurs vendeurs va au premier qui fait une action commerciale
+//  * un lead redistribué par un gérant appartient à celui qui le reçoit
+//  * sauf si quelqu'un d'autre le reçoit APRÈS cette redistribution et que le
+//    destinataire n'a toujours rien fait : la compétition se rouvre entre eux.
+// Autrement dit : compétition ouverte s'il existe une réception postérieure à
+// l'attribution en cours et que le propriétaire actuel n'a pas encore agi depuis.
+// Même règle côté Supabase (contacts_touch_action).
 function eqCompetitionOuverte(l) {
-  if (!l || l.premiere_action_le) return false;
-  const hist = Array.isArray(l.vendeur_historique) ? l.vendeur_historique : [];
-  return hist.length === 0;
+  if (!l) return false;
+  const t = (d) => { const x = d ? new Date(d).getTime() : 0; return isNaN(x) ? 0 : x; };
+  const attribue = t(l.vendeur_depuis);
+  const agi = t(l.premiere_action_le);
+  if (agi && agi >= attribue) return false;   // son vendeur l'a déjà travaillé
+  return (Array.isArray(l.recu_par) ? l.recu_par : []).some(r => r && t(r.le) > attribue);
 }
 function eqLeadVisiblePour(l, prenom) {
   if (!l || !prenom) return false;
   if (l.vendeur === prenom) return true;      // c'est le sien
-  if (eqCompetitionOuverte(l)) return true;   // compétition encore ouverte
+  // Compétition ouverte : il s'affiche chez chacun de ceux qui l'ont reçu
+  if (eqCompetitionOuverte(l) && (Array.isArray(l.recu_par) ? l.recu_par : []).some(r => r && r.vendeur === prenom)) return true;
   return estEnVeille(l) && (Array.isArray(l.recu_par) ? l.recu_par : [])
     .some(r => r && r.vendeur === prenom);
 }
