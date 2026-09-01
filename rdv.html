@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Votre rendez-vous — GLR Immobilier</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+  :root {
+    --gold:#c8a96e; --gold-fonce:#b3945a; --dark:#1a1d23; --muted:#6b7280;
+    --bg:#f7f5f1; --carte:#ffffff; --bordure:#e8e3d9; --encre:#3f4550;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  body { background:var(--bg); color:var(--dark); font-family:'Helvetica Neue',Arial,sans-serif; line-height:1.55; }
+  .wrap { max-width:600px; margin:0 auto; padding:28px 18px 60px; }
+
+  header { text-align:center; padding:22px 0 18px; }
+  .marque { font-family:Georgia,'Times New Roman',serif; letter-spacing:5px; font-size:18px; font-weight:700; }
+  .logo { display:block; height:72px; width:auto; max-width:80%; margin:0 auto; }
+  .filet { width:54px; height:2px; background:var(--gold); margin:14px auto 0; }
+
+  .bloc { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; padding:24px 26px; margin:16px 0; box-shadow:0 2px 12px rgba(26,29,35,.05); }
+  .bloc h1 { font-family:Georgia,serif; font-size:22px; font-weight:600; margin-bottom:8px; }
+  .bloc h2 { font-family:Georgia,serif; font-size:19px; font-weight:600; margin-bottom:6px; }
+  .bloc p { color:var(--encre); font-size:15px; }
+  .sig { margin-top:14px; color:var(--muted); font-size:13px; font-style:italic; }
+
+  /* Le bien sur lequel le client a écrit */
+  .bien-tag { display:inline-block; font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--gold); border-radius:5px; padding:3px 9px; margin-bottom:10px; }
+  .bien-titre { font-family:Georgia,serif; font-size:19px; font-weight:600; margin-bottom:2px; }
+  .bien-ville { font-size:14px; color:var(--encre); }
+  .bien-prix { font-family:Georgia,serif; font-size:24px; font-weight:700; color:var(--encre); margin-top:8px; }
+  .bien-meta { font-size:12.5px; color:var(--muted); margin-top:8px; }
+
+  /* Choix du créneau */
+  .rdv { border:1px solid var(--gold); background:linear-gradient(180deg,#fffdf8,#fdfaf3); }
+  .mode-choix { display:flex; gap:8px; margin:14px 0; }
+  .mode-btn { flex:1; border:1px solid var(--bordure); background:#fff; color:var(--encre); border-radius:22px; padding:10px 16px; font-size:13.5px; cursor:pointer; transition:all .15s; font-family:inherit; }
+  .mode-btn:hover { border-color:var(--gold); }
+  .mode-btn.on { background:var(--gold); border-color:var(--gold); color:#fff; font-weight:700; }
+
+  .cren-etape { font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin:16px 0 8px; }
+  .cren-jrow { display:flex; gap:7px; overflow-x:auto; padding-bottom:6px; -webkit-overflow-scrolling:touch; }
+  .cren-jpill { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px; border:1px solid var(--bordure); background:#fff; color:var(--dark); border-radius:12px; padding:8px 14px; cursor:pointer; transition:all .15s; font-family:inherit; }
+  .cren-jpill:hover { border-color:var(--gold); }
+  .cren-jpill-wd { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); }
+  .cren-jpill-dm { font-size:14px; font-weight:700; }
+  .cren-jpill.on { background:var(--gold); border-color:var(--gold); color:#fff; }
+  .cren-jpill.on .cren-jpill-wd { color:rgba(255,255,255,.85); }
+  .cren-liste { display:flex; gap:7px; flex-wrap:wrap; }
+  .cren { border:1px solid var(--bordure); background:#fff; color:var(--dark); border-radius:10px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; font-family:inherit; }
+  .cren:hover { border-color:var(--gold); background:var(--gold); color:#fff; }
+  .cren.off { opacity:.35; cursor:not-allowed; }
+  .cren-autre { margin-top:16px; text-align:center; }
+  .cren-autre button { background:none; border:none; color:var(--muted); font-size:13px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; font-family:inherit; }
+  .cren-autre button:hover { color:var(--gold-fonce); }
+
+  .rdv-form { display:flex; gap:8px; margin-top:12px; }
+  .rdv-form input { flex:1; min-width:0; border:1px solid var(--bordure); background:#fff; border-radius:10px; padding:11px 13px; font-size:14px; color:var(--dark); outline:none; font-family:inherit; }
+  .rdv-form input:focus { border-color:var(--gold); }
+  .rdv-btn { border:none; background:var(--gold); color:#fff; border-radius:10px; padding:11px 18px; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit; }
+  .rdv-btn:hover { background:var(--gold-fonce); }
+
+  .confirme { text-align:center; }
+  .confirme .quand { font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--gold-fonce); margin:10px 0 4px; }
+  .confirme .etat { font-size:13px; color:var(--muted); }
+  .coche { width:46px; height:46px; border-radius:50%; background:var(--gold); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 12px; }
+
+  footer { text-align:center; color:var(--muted); font-size:12.5px; margin-top:22px; }
+  footer a { color:var(--gold-fonce); text-decoration:none; }
+  .etat-vide { text-align:center; color:var(--muted); padding:60px 0; }
+  .etat-vide h2 { font-family:Georgia,serif; color:var(--dark); font-size:20px; margin-bottom:10px; }
+
+  #toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(140px); background:var(--dark); color:#fff; border-radius:24px; padding:10px 22px; font-size:13.5px; transition:transform .25s; z-index:80; max-width:88vw; text-align:center; }
+  #toast.show { transform:translateX(-50%) translateY(0); }
+
+  @media (max-width:520px){
+    .bloc { padding:20px; }
+    .logo { height:58px; }
+    .rdv-form { flex-direction:column; }
+  }
+</style></head><body>
+<div class="wrap">
+  <header><img class="logo" src="logo-glr.png" alt="GLR Immobilier" onerror="this.outerHTML='<div class=&quot;marque&quot;>GLR IMMOBILIER</div>'"><div class="filet"></div></header>
+  <div id="contenu"><div class="etat-vide">Chargement…</div></div>
+  <footer>GLR Immobilier — <a href="https://www.glrimmobilier.com" target="_blank" rel="noopener">glrimmobilier.com</a></footer>
+</div>
+<div id="toast">✓</div>
+<script>
+(function(){
+  var SUPA = "https://hydqfbxdtpmbuooexekp.supabase.co";
+  var params = new URLSearchParams(location.search);
+  var token = params.get("t") || "";
+  var FN = SUPA + "/functions/v1/rdv/" + encodeURIComponent(token);
+  var cont = document.getElementById("contenu");
+  var modeContact = "telephone";   // le mail promet un appel : c'est le choix par défaut
+  var etat = {};                   // état du rendez-vous, copie locale
+  var donnees = null;
+
+  var MODES = { telephone: "Par téléphone", visio: "En visio" };
+
+  function esc(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function toast(m){
+    var t = document.getElementById("toast");
+    t.textContent = m; t.classList.add("show");
+    clearTimeout(t._h); t._h = setTimeout(function(){ t.classList.remove("show"); }, 2600);
+  }
+  function fmtJourLong(d){
+    var s = new Date(d).toLocaleDateString("fr-FR", { weekday:"long", day:"numeric", month:"long" });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function fmtHeure(d){
+    return new Date(d).toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
+  }
+  function fmtPrix(n){
+    var v = Number(n);
+    if (!isFinite(v) || v <= 0) return "";
+    return new Intl.NumberFormat("fr-FR", { maximumFractionDigits:0 }).format(Math.round(v)) + " €";
+  }
+  function envoyer(corps){
+    return fetch(FN, { method:"POST", headers:{ "content-type":"application/json" }, body:JSON.stringify(corps) })
+      .then(function(r){ return r.json().then(function(j){ return { statut:r.status, corps:j }; }); });
+  }
+
+  // ---------- Le bien sur lequel le client a écrit ----------
+  function htmlBien(d){
+    var b = d.bien || {};
+    var titre = b.typologie || "Votre demande";
+    var ville = b.ville || "";
+    var prix = fmtPrix(b.prix);
+    if (!ville && !prix && !b.typologie) return "";
+    var h = "<div class='bloc'>";
+    h += "<div class='bien-tag'>Le bien qui vous intéresse</div>";
+    h += "<div class='bien-titre'>" + esc(titre) + "</div>";
+    if (ville) h += "<div class='bien-ville'>" + esc(ville) + "</div>";
+    if (prix) h += "<div class='bien-prix'>" + esc(prix) + "</div>";
+    var meta = [];
+    if (b.source) meta.push("Demande reçue via " + b.source);
+    if (b.reference) meta.push("Réf. " + b.reference);
+    if (meta.length) h += "<div class='bien-meta'>" + esc(meta.join(" · ")) + "</div>";
+    return h + "</div>";
+  }
+
+  // ---------- Choix du jour puis de l'heure ----------
+  function htmlCreneaux(liste, action){
+    var jours = {}, ordre = [];
+    liste.forEach(function(c){
+      var k = String(c.debut).slice(0, 10);
+      if (!jours[k]){ jours[k] = []; ordre.push(k); }
+      jours[k].push(c);
+    });
+    ordre.sort();
+    ordre = ordre.slice(0, 21);
+    if (!ordre.length) return "";
+    var h = "<div class='cren-pick'>";
+    h += "<div class='cren-etape'>1. Choisissez un jour</div><div class='cren-jrow'>";
+    ordre.forEach(function(k, i){
+      var dt = new Date(jours[k][0].debut);
+      var wd = dt.toLocaleDateString("fr-FR", { weekday:"short" });
+      var dm = dt.toLocaleDateString("fr-FR", { day:"numeric", month:"short" });
+      h += "<button type='button' class='cren-jpill" + (i === 0 ? " on" : "") + "' data-jour='" + esc(k) + "'>"
+         + "<span class='cren-jpill-wd'>" + esc(wd) + "</span><span class='cren-jpill-dm'>" + esc(dm) + "</span></button>";
+    });
+    h += "</div><div class='cren-etape'>2. Choisissez une heure</div>";
+    ordre.forEach(function(k, i){
+      h += "<div class='cren-liste cren-heures' data-jour='" + esc(k) + "'" + (i === 0 ? "" : " style='display:none'") + ">";
+      jours[k].forEach(function(c){
+        h += "<button class='cren' data-id='" + esc(c.id) + "' data-action='" + action + "'>" + esc(fmtHeure(c.debut)) + "</button>";
+      });
+      h += "</div>";
+    });
+    return h + "</div>";
+  }
+
+  function htmlModes(){
+    return "<div class='mode-choix'>"
+      + "<button class='mode-btn" + (modeContact === "telephone" ? " on" : "") + "' data-mode='telephone'>Par téléphone</button>"
+      + "<button class='mode-btn" + (modeContact === "visio" ? " on" : "") + "' data-mode='visio'>En visio</button>"
+      + "</div>";
+  }
+
+  function htmlRdv(d){
+    var qui = d.vendeur ? esc(d.vendeur) : "votre conseiller";
+    var h = "";
+
+    // Rendez-vous déjà posé
+    if (etat.reserve && etat.debut && !etat.refuse){
+      var ok = !!etat.confirme;
+      h += "<div class='bloc rdv confirme'>";
+      h += "<div class='coche'>✓</div>";
+      h += "<h2>" + (ok ? "Votre rendez-vous est confirmé" : "Votre créneau est réservé") + "</h2>";
+      h += "<div class='quand'>" + esc(fmtJourLong(etat.debut)) + " à " + esc(fmtHeure(etat.debut)) + "</div>";
+      h += "<div class='etat'>" + (ok ? "✓ Confirmé · " : "En attente de confirmation · ") + esc(MODES[etat.mode] || "") + "</div>";
+      h += "<p style='margin-top:12px;font-size:14px'>" + (ok ? "À très vite avec " + qui + "." : qui + " vous confirme le rendez-vous très vite.") + "</p>";
+      return h + "</div>";
+    }
+
+    // Le conseiller a proposé d'autres créneaux : le client tranche, c'est confirmé d'office
+    var props = Array.isArray(d.propositions) ? d.propositions : [];
+    if (props.length){
+      h += "<div class='bloc rdv'>";
+      h += "<h2>" + qui + " vous propose ces créneaux</h2>";
+      h += "<p>Le créneau que vous aviez choisi n'était finalement pas disponible. Choisissez celui qui vous arrange : il sera confirmé immédiatement.</p>";
+      h += htmlModes();
+      h += htmlCreneaux(props, "accepter_proposition");
+      return h + "</div>";
+    }
+
+    var cr = Array.isArray(d.creneaux) ? d.creneaux : [];
+    h += "<div class='bloc rdv'>";
+    if (etat.refuse){
+      h += "<h2>Choisissez un autre créneau</h2>";
+      h += "<p>Le créneau retenu n'a finalement pas pu être conservé. " + qui + " reste à votre disposition.</p>";
+    } else {
+      h += "<h2>Choisissez le moment qui vous arrange</h2>";
+      h += "<p>" + qui + " vous rappelle pour parler de ce bien, répondre à vos questions et vous montrer ce qui existe d'équivalent. Sans engagement.</p>";
+    }
+    h += htmlModes();
+
+    if (cr.length){
+      h += htmlCreneaux(cr, "reserver");
+      h += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
+      h += "<div id='rdv-libre' style='display:none'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer ma demande</button></div></div>";
+    } else if (etat.demande){
+      h += "<p style='color:var(--gold-fonce);font-weight:600;margin-top:10px'>✓ Votre demande a bien été transmise — " + qui + " revient vers vous très vite.</p>";
+    } else {
+      h += "<div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Demander à être rappelé</button></div>";
+    }
+    return h + "</div>";
+  }
+
+  function rendu(d){
+    var qui = d.vendeur ? esc(d.vendeur) : "votre conseiller";
+    var h = "<div class='bloc'>";
+    h += "<h1>" + (d.prenom ? "Bonjour " + esc(d.prenom) + "," : "Bonjour,") + "</h1>";
+    h += "<p>Nous avons bien reçu votre demande. " + qui + ", votre conseiller GLR Immobilier, vous rappelle pour en parler — choisissez simplement le créneau qui vous convient.</p>";
+    h += "</div>";
+    h += htmlBien(d);
+    h += "<div id='bloc-rdv'>" + htmlRdv(d) + "</div>";
+    cont.innerHTML = h;
+    brancher(d);
+  }
+
+  function redessiner(d){
+    document.getElementById("bloc-rdv").innerHTML = htmlRdv(d);
+    brancher(d);
+  }
+
+  function brancher(d){
+    Array.prototype.forEach.call(document.querySelectorAll(".mode-btn"), function(btn){
+      btn.addEventListener("click", function(){
+        modeContact = btn.getAttribute("data-mode");
+        Array.prototype.forEach.call(document.querySelectorAll(".mode-btn"), function(b2){ b2.classList.remove("on"); });
+        btn.classList.add("on");
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".cren-jpill"), function(p){
+      p.addEventListener("click", function(){
+        var k = p.getAttribute("data-jour");
+        Array.prototype.forEach.call(document.querySelectorAll(".cren-jpill"), function(x){ x.classList.toggle("on", x === p); });
+        Array.prototype.forEach.call(document.querySelectorAll(".cren-heures"), function(x){ x.style.display = x.getAttribute("data-jour") === k ? "" : "none"; });
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(btn){
+      btn.addEventListener("click", function(){
+        if (btn.classList.contains("off")) return;
+        var action = btn.getAttribute("data-action") || "reserver";
+        Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(b2){ b2.classList.add("off"); });
+        envoyer({ action:action, creneau_id:btn.getAttribute("data-id"), mode:modeContact })
+        .then(function(res){
+          var c = res.corps && res.corps.creneau;
+          if (res.corps && res.corps.ok && c){
+            etat = { demande:true, reserve:true, confirme:action === "accepter_proposition", refuse:false, debut:c.debut, fin:c.fin, mode:c.mode, lieu:c.lieu };
+            d.propositions = [];
+            redessiner(d);
+            window.scrollTo({ top:document.getElementById("bloc-rdv").offsetTop - 20, behavior:"smooth" });
+            toast(action === "accepter_proposition" ? "✓ Rendez-vous confirmé" : "✓ Créneau réservé");
+            return;
+          }
+          if (res.corps && (res.corps.creneaux || res.corps.propositions)){
+            if (res.corps.creneaux) d.creneaux = res.corps.creneaux;
+            if (res.corps.propositions) d.propositions = res.corps.propositions;
+            redessiner(d);
+            toast("Ce créneau vient d'être pris — choisissez-en un autre");
+            return;
+          }
+          Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(b2){ b2.classList.remove("off"); });
+          toast("Réservation impossible — réessayez");
+        })
+        .catch(function(){
+          Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(b2){ b2.classList.remove("off"); });
+          toast("Réservation impossible — vérifiez votre connexion");
+        });
+      });
+    });
+
+    var btnBasculer = document.getElementById("rdv-basculer");
+    if (btnBasculer) btnBasculer.addEventListener("click", function(){
+      var zone = document.getElementById("rdv-libre");
+      if (!zone) return;
+      zone.style.display = "block";
+      btnBasculer.style.display = "none";
+      var inp = document.getElementById("rdv-creneau");
+      if (inp) inp.focus();
+    });
+
+    var btnEnvoyer = document.getElementById("rdv-envoyer");
+    if (btnEnvoyer) btnEnvoyer.addEventListener("click", function(){
+      var creneau = (document.getElementById("rdv-creneau").value || "").trim();
+      envoyer({ action:"rdv", creneau:creneau, mode:modeContact }).then(function(res){
+        if (!(res.corps && res.corps.ok)){ toast("Envoi impossible — réessayez"); return; }
+        etat.demande = true;
+        etat.creneau = creneau;
+        etat.mode = modeContact;
+        d.creneaux = [];
+        redessiner(d);
+        toast("✓ Demande transmise");
+      }).catch(function(){ toast("Envoi impossible — vérifiez votre connexion"); });
+    });
+  }
+
+  function charger(){
+    if (!token){
+      cont.innerHTML = "<div class='etat-vide'><h2>Lien incomplet</h2><p>Ouvrez le lien reçu par mail, il contient votre identifiant.</p></div>";
+      return;
+    }
+    fetch(FN + "?data=1", { cache:"no-store" })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d || !d.ok){
+          cont.innerHTML = "<div class='etat-vide'><h2>Ce lien n'est plus valable</h2><p>Contactez votre conseiller GLR Immobilier, il vous en renverra un.</p></div>";
+          return;
+        }
+        if (d.expired){
+          cont.innerHTML = "<div class='etat-vide'><h2>Ce lien a expiré</h2><p>Contactez votre conseiller GLR Immobilier, il vous en renverra un.</p></div>";
+          return;
+        }
+        donnees = d;
+        etat = (d.rdv && typeof d.rdv === "object") ? d.rdv : {};
+        if (etat.mode && MODES[etat.mode]) modeContact = etat.mode;
+        rendu(d);
+      })
+      .catch(function(){
+        cont.innerHTML = "<div class='etat-vide'><h2>Page indisponible</h2><p>Vérifiez votre connexion et rechargez la page.</p></div>";
+      });
+  }
+
+  charger();
+})();
+</script>
+</body></html>
