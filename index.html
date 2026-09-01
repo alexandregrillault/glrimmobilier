@@ -1990,7 +1990,7 @@
       <div class="form-group">
         <label>Honoraires HT (€) — calculé auto</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="number" id="v-honoraires" placeholder="calculé automatiquement" style="flex:1">
+          <input type="number" id="v-honoraires" step="0.01" placeholder="calculé automatiquement" style="flex:1">
           <button type="button" id="btn-otaree" onclick="toggleOtaree()" style="background: var(--surface2); border-color: var(--border); border-radius: 9px; padding: 8px 12px; color: var(--muted); font-size: 12px; font-family: var(--font-body); cursor: pointer; white-space: nowrap; transition: 0.15s;" title="Frais plateforme Otaree : -629 € HT">Otaree</button>
         </div>
         <div style="font-size: 11px; color: var(--accent); margin-top: 2px;" id="otaree-hint"></div>
@@ -2998,6 +2998,13 @@ const COLORS = ['#c8a96e','#4f7fe8','#3ecf8e','#f5a623','#e8504f','#a78bfa','#38
 function fmtEur(n) {
   return new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', maximumFractionDigits:0 }).format(n || 0);
 }
+// Arrondi monétaire au centime — toute commission / honoraire calculé passe par ici
+function r2(n) { return Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100; }
+// Montant en € avec les centimes uniquement s'il y en a (12 500 € / 12 500,45 €)
+function fmtEur2(n) {
+  const v = r2(n);
+  return new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 }).format(v);
+}
 function initials(prenom, nom) {
   return ((prenom||'')[0]||'') + ((nom||'')[0]||'');
 }
@@ -3149,8 +3156,8 @@ function calcHonoraires() {
   const prix = parseFloat(document.getElementById('v-prix').value) || 0;
   const tauxH = parseFloat(document.getElementById('v-taux-honoraires').value) || 0;
   if (prix > 0 && tauxH > 0) {
-    const base = Math.round(prix * tauxH / 100);
-    document.getElementById('v-honoraires').value = otareeActif ? base - 629 : base;
+    const base = r2(prix * tauxH / 100);
+    document.getElementById('v-honoraires').value = otareeActif ? r2(base - 629) : base;
   }
 }
 
@@ -3603,9 +3610,9 @@ function renderKPIs() {
   const actes = toutes.filter(v => v.statut === 'acte');
   const resaCount = toutes.filter(v => v.statut === 'reservation').length;
   const ca = toutes.reduce((s, v) => s + (v.honoraires || 0), 0);
-  const volume = toutes.reduce((s, v) => s + (v.honoraires||0) * (v.taux/100), 0);
+  const volume = r2(toutes.reduce((s, v) => s + r2((v.honoraires||0) * (v.taux/100)), 0));
   const totalCharges = getFilteredChargesTotal();
-  const commissions = actes.reduce((s,v) => s + (v.honoraires||0) * (v.taux/100), 0);
+  const commissions = r2(actes.reduce((s,v) => s + r2((v.honoraires||0) * (v.taux/100)), 0));
   const net = ca - totalCharges - commissions;
 
   document.getElementById('kpi-ca').textContent = fmtEur(ca);
@@ -3632,8 +3639,8 @@ function renderCommissions() {
   const rows = data.vendeurs.map(v => {
     const ventesV = actes.filter(x => x.vendeurId === v.id);
     const ca = ventesV.reduce((s,x) => s+x.prix, 0);
-    const comm = ventesV.reduce((s,x) => s + (x.honoraires||0)*(x.taux/100), 0);
-    totalComm += comm;
+    const comm = r2(ventesV.reduce((s,x) => s + r2((x.honoraires||0)*(x.taux/100)), 0));
+    totalComm = r2(totalComm + comm);
     if (ventesV.length === 0) return '';
     return `<tr>
       <td><span style="display:inline-flex;align-items:center;gap:8px">
@@ -3643,12 +3650,12 @@ function renderCommissions() {
       <td class="num">${ventesV.length}</td>
       <td>${fmtEur(ca)}</td>
       <td>${ventesV[0].taux} %</td>
-      <td style="color:var(--accent);font-weight:700;font-family:var(--font-head)">${fmtEur(comm)}</td>
+      <td style="color:var(--accent);font-weight:700;font-family:var(--font-head)">${fmtEur2(comm)}</td>
     </tr>`;
   }).filter(Boolean).join('');
 
   tbody.innerHTML = rows || '<tr><td colspan="5"><div class="empty"><p>Aucune vente par acte</p></div></td></tr>';
-  document.getElementById('total-commissions').textContent = fmtEur(totalComm);
+  document.getElementById('total-commissions').textContent = fmtEur2(totalComm);
 }
 
 function statutBadge(s) {
@@ -3729,7 +3736,7 @@ function renderAllVentes() {
     else if (venteSortCol === 'vendeur') { valA = vendeurName(a.vendeurId).toLowerCase(); valB = vendeurName(b.vendeurId).toLowerCase(); }
     else if (venteSortCol === 'prix') { valA = a.prix||0; valB = b.prix||0; }
     else if (venteSortCol === 'statut') { valA = a.statut||''; valB = b.statut||''; }
-    else if (venteSortCol === 'commission') { valA = (a.honoraires||0)*(a.taux/100)||0; valB = (b.honoraires||0)*(b.taux/100)||0; }
+    else if (venteSortCol === 'commission') { valA = r2((a.honoraires||0)*(a.taux/100))||0; valB = r2((b.honoraires||0)*(b.taux/100))||0; }
     else if (venteSortCol === 'actabilite') { valA = a.dateActe||''; valB = b.dateActe||''; }
     else { valA = a.date||''; valB = b.date||''; }
     if (valA < valB) return venteSortDir === 'asc' ? -1 : 1;
@@ -3743,7 +3750,7 @@ function renderAllVentes() {
     <td style="color:var(--muted)">${v.promoteur || '—'}</td>
     <td>${vendeurName(v.vendeurId)}</td>
     <td>${fmtEur(v.prix)}</td>
-    <td style="color:var(--accent)">${v.taux ? fmtEur((v.honoraires||0) * v.taux/100) + ' (' + v.taux + '%)' : '—'}</td>
+    <td style="color:var(--accent)">${v.taux ? fmtEur2((v.honoraires||0) * v.taux/100) + ' (' + v.taux + '%)' : '—'}</td>
     <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
     ${actabiliteCell(v)}
     <td>
@@ -3987,15 +3994,15 @@ function renderCommissionsVendeurs() {
   const vendeurs = (data.vendeurs || []);
   if (!vendeurs.length) { tabsBox.innerHTML = '<div style="color:var(--muted);font-size:13px">Aucun vendeur.</div>'; return; }
   // commission par vendeur (toutes ventes)
-  const commOf = v => (Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100;
+  const commOf = v => r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100);
   const stat = {};
   vendeurs.forEach(vd => stat[vd.id] = { total: 0, encaisse: 0, avenir: 0, n: 0, ventes: [] });
   (data.ventes || []).forEach(v => {
     if (!stat[v.vendeurId]) return;
     const c = commOf(v);
     const s = stat[v.vendeurId];
-    s.total += c; s.n++; s.ventes.push(v);
-    if (v.statut === 'facture-payee') s.encaisse += c; else s.avenir += c;
+    s.total = r2(s.total + c); s.n++; s.ventes.push(v);
+    if (v.statut === 'facture-payee') s.encaisse = r2(s.encaisse + c); else s.avenir = r2(s.avenir + c);
   });
   if (!currentCommVendeur || !stat[currentCommVendeur]) currentCommVendeur = vendeurs[0].id;
   // onglets vendeurs
@@ -4009,8 +4016,8 @@ function renderCommissionsVendeurs() {
   const s = stat[currentCommVendeur];
   document.getElementById('comm-vendeur-title').textContent = ((vd.prenom || '') + ' ' + (vd.nom || '')).trim();
   document.getElementById('comm-vendeur-sub').textContent = s.n + ' vente(s) · commission = honoraires × taux';
-  document.getElementById('comm-vendeur-tot').textContent = fmtEur(s.total);
-  document.getElementById('comm-vendeur-split').textContent = 'encaissé ' + fmtEur(s.encaisse) + ' · à venir ' + fmtEur(s.avenir);
+  document.getElementById('comm-vendeur-tot').textContent = fmtEur2(s.total);
+  document.getElementById('comm-vendeur-split').textContent = 'encaissé ' + fmtEur2(s.encaisse) + ' · à venir ' + fmtEur2(s.avenir);
   const tb = document.getElementById('tbody-comm-vendeur');
   if (!s.ventes.length) { tb.innerHTML = '<tr><td colspan="5"><div class="empty" style="padding:24px"><p style="color:var(--muted);font-size:13px">Aucune vente pour ce vendeur</p></div></td></tr>'; return; }
   const rank = { 'facture-payee': 0, 'facture': 1, 'acte': 2, 'reservation': 3 };
@@ -4018,7 +4025,7 @@ function renderCommissionsVendeurs() {
     <td><strong>${v.programme || '—'}</strong><div style="font-size:11px;color:var(--muted)">${v.clientNom || v.client || ''}</div></td>
     <td style="text-align:right">${fmtEur(Number(v.honoraires) || 0)}</td>
     <td style="text-align:right;color:var(--muted)">${Number(v.taux) || 0}%</td>
-    <td style="text-align:right;font-family:var(--font-head);font-weight:700;color:var(--accent2)">${fmtEur(commOf(v))}</td>
+    <td style="text-align:right;font-family:var(--font-head);font-weight:700;color:var(--accent2)">${fmtEur2(commOf(v))}</td>
     <td style="text-align:right">${statutBadge(v.statut)}</td>
   </tr>`).join('');
 }
@@ -4719,7 +4726,7 @@ function renderTresoPrev() {
     if (enc < startMonth) enc = startMonth; // en retard -> reporté au 1er mois
     if (enc <= endMonth) {
       encByMonth[enc] = (encByMonth[enc] || 0) + htv * 1.2;
-      commByMonth[enc] = (commByMonth[enc] || 0) + htv * (Number(v.taux) || 0) / 100;
+      commByMonth[enc] = r2((commByMonth[enc] || 0) + r2(htv * (Number(v.taux) || 0) / 100));
       (encDetailByMonth[enc] = encDetailByMonth[enc] || []).push({ v, acteMonth, delai, reporte, ht: htv, ttc: htv * 1.2 });
     }
   });
@@ -4896,7 +4903,7 @@ function toggleSalaireCharge() {
 }
 // Commission vendeur d'une vente = honoraires × taux %
 function commissionVente(v) {
-  return (Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100;
+  return r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100);
 }
 function renderRemuneration() {
   const box = document.getElementById('remun-gauges');
@@ -4945,7 +4952,7 @@ function renderVendeurs() {
     const ventes = data.ventes.filter(x => x.vendeurId === v.id); // toujours tout l'historique
     const actes = ventes.filter(x => x.statut === 'acte' || x.statut === 'facture-payee');
     const ca = ventes.reduce((s,x)=>s+(x.honoraires||0),0); // honoraires sur toutes les ventes
-    const comm = ventes.reduce((s,x)=>s+(x.honoraires||0)*(x.taux/100),0);
+    const comm = r2(ventes.reduce((s,x)=>s+r2((x.honoraires||0)*(x.taux/100)),0));
     const color = vendeurColor(v.id);
     return `<div class="vendeur-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between">
@@ -5052,11 +5059,11 @@ function renderEquipeDashboard() {
   const ventes = data.ventes.filter(v => v.vendeurId === selectedVendeurId);
   const actes = ventes.filter(v => v.statut === 'acte');
   const totalHonoraires = ventes.reduce((s,v) => s + (v.honoraires||0), 0);
-  const totalComm = ventes.reduce((s,v) => s + (v.honoraires||0)*(v.taux/100), 0);
+  const totalComm = r2(ventes.reduce((s,v) => s + r2((v.honoraires||0)*(v.taux/100)), 0));
   const resa = ventes.filter(v => v.statut === 'reservation').length;
 
   document.getElementById('eq-honoraires').textContent = fmtEur(totalHonoraires);
-  document.getElementById('eq-commissions').textContent = fmtEur(totalComm);
+  document.getElementById('eq-commissions').textContent = fmtEur2(totalComm);
   document.getElementById('eq-comm-sub').textContent = actes.length + ' acte(s) + ' + resa + ' résa';
   document.getElementById('eq-ventes-count').textContent = ventes.length;
   document.getElementById('eq-ventes-sub').textContent = actes.length + ' acte(s), ' + resa + ' réservation(s)';
@@ -5073,7 +5080,7 @@ function renderEquipeDashboard() {
         <td>${v.client||'—'}</td>
         <td>${fmtEur(v.prix)}</td>
         <td style="color:var(--accent)">${fmtEur(v.honoraires||0)}</td>
-        <td style="color:var(--success);font-weight:600">${fmtEur((v.honoraires||0)*(v.taux/100))}</td>
+        <td style="color:var(--success);font-weight:600">${fmtEur2((v.honoraires||0)*(v.taux/100))}</td>
         <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
         <td>${statutBadge(v.statut)}</td>
       </tr>`).join('');
@@ -5094,7 +5101,7 @@ function renderEquipeVentes() {
         <td style="color:var(--accent);font-weight:600">${v.lot||'—'}</td>
         <td>${fmtEur(v.prix)}</td>
         <td style="color:var(--accent)">${fmtEur(v.honoraires||0)}</td>
-        <td style="color:var(--success);font-weight:600">${fmtEur((v.honoraires||0)*(v.taux/100))}</td>
+        <td style="color:var(--success);font-weight:600">${fmtEur2((v.honoraires||0)*(v.taux/100))}</td>
         <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
         <td>${statutBadge(v.statut)}</td>
       </tr>`).join('');
@@ -10565,11 +10572,11 @@ function calculerComm() {
   const otaree = document.getElementById('calc-otaree').checked;
   const result = document.getElementById('calc-result');
   if (!prix || !tauxH || !tauxC) { result.style.display='none'; return; }
-  let honoraires = Math.round(prix * tauxH / 100);
-  if (otaree) honoraires -= 629;
-  const comm = Math.round(honoraires * tauxC / 100);
-  document.getElementById('calc-honoraires-val').textContent = fmtEur(honoraires);
-  document.getElementById('calc-comm-val').textContent = fmtEur(comm);
+  let honoraires = r2(prix * tauxH / 100);
+  if (otaree) honoraires = r2(honoraires - 629);
+  const comm = r2(honoraires * tauxC / 100);
+  document.getElementById('calc-honoraires-val').textContent = fmtEur2(honoraires);
+  document.getElementById('calc-comm-val').textContent = fmtEur2(comm);
   result.style.display = 'block';
 }
 
@@ -12083,7 +12090,7 @@ function soldeTresoProjeteAu(endMonth) {
     if (enc <= endMonth) {
       const htv = Number(v.honoraires) || 0;
       encByMonth[enc] = (encByMonth[enc] || 0) + htv * 1.2;
-      commByMonth[enc] = (commByMonth[enc] || 0) + htv * (Number(v.taux) || 0) / 100;
+      commByMonth[enc] = r2((commByMonth[enc] || 0) + r2(htv * (Number(v.taux) || 0) / 100));
     }
   });
   const tvaDedMois = (fixe + autres) / 6;
@@ -12112,10 +12119,10 @@ function renderGerantChiffres() {
   const resa = reservations.length;
 
   const ca   = ventes.reduce((s,v) => s+(v.honoraires||0), 0);
-  const comm = ventes.reduce((s,v) => s+(v.honoraires||0)*(v.taux/100), 0);
+  const comm = r2(ventes.reduce((s,v) => s+r2((v.honoraires||0)*(v.taux/100)), 0));
   const caEncaisse   = encaissees.reduce((s,v) => s+(v.honoraires||0), 0);
   const caPrev       = reservations.reduce((s,v) => s+(v.honoraires||0), 0);
-  const commEncaisse = encaissees.reduce((s,v) => s+(v.honoraires||0)*(v.taux/100), 0);
+  const commEncaisse = r2(encaissees.reduce((s,v) => s+r2((v.honoraires||0)*(v.taux/100)), 0));
 
   const chargesVar    = getFilteredCharges().filter(c => c.categorie === 'variable').reduce((s,c) => s+c.montant, 0);
   const chargesUrssaf = getFilteredCharges().filter(c => c.categorie === 'urssaf').reduce((s,c) => s+c.montant, 0);
@@ -12666,20 +12673,29 @@ function _nextFactureNumero() {
 function _facMajTotaux() {
   const ht = parseFloat((document.getElementById('fac-ht') || {}).value) || 0;
   const taux = parseFloat((document.getElementById('fac-tva-taux') || {}).value) || 0;
-  const tva = ht * taux / 100;
-  const mEl = document.getElementById('fac-tva-montant'); if (mEl) mEl.textContent = fmtEur(tva);
-  const tEl = document.getElementById('fac-ttc'); if (tEl) tEl.textContent = fmtEur(ht + tva);
+  const tva = r2(ht * taux / 100);
+  const mEl = document.getElementById('fac-tva-montant'); if (mEl) mEl.textContent = fmtEur2(tva);
+  const tEl = document.getElementById('fac-ttc'); if (tEl) tEl.textContent = fmtEur2(r2(ht + tva));
   const hint = document.getElementById('fac-base-hint');
   if (hint) {
     const prix = parseFloat((document.getElementById('fac-prix') || {}).value) || 0;
     const tx   = parseFloat((document.getElementById('fac-taux-hono') || {}).value) || 0;
     if (prix > 0 && tx > 0) {
-      const base = prix * tx / 100;
-      const ecart = base - ht;
-      hint.innerHTML = 'Base de calcul : ' + fmtEur(prix) + ' \u00d7 ' + _facPct(tx) + ' = <strong>' + fmtEur(base) + ' HT</strong>'
-        + (Math.abs(ecart) > 1 ? ' \u00b7 <span style="color:var(--warning)">\u00e9cart de ' + fmtEur(ecart) + ' avec le montant factur\u00e9 (d\u00e9duction plateforme ?)</span>' : '');
+      const base = r2(prix * tx / 100);
+      const ecart = r2(base - ht);
+      hint.innerHTML = 'Base de calcul : ' + fmtEur(prix) + ' \u00d7 ' + _facPct(tx) + ' = <strong>' + fmtEur2(base) + ' HT</strong>'
+        + '<button type="button" onclick="_facAppliquerBase()" style="margin-left:8px;padding:2px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;cursor:pointer">Reporter en HT</button>'
+        + (Math.abs(ecart) >= 0.01 ? ' \u00b7 <span style="color:var(--warning)">\u00e9cart de ' + fmtEur2(ecart) + ' avec le montant factur\u00e9 (d\u00e9duction plateforme ?)</span>' : '');
     } else hint.innerHTML = '';
   }
+}
+function _facAppliquerBase() {
+  const prix = parseFloat((document.getElementById('fac-prix') || {}).value) || 0;
+  const tx   = parseFloat((document.getElementById('fac-taux-hono') || {}).value) || 0;
+  const el = document.getElementById('fac-ht');
+  if (!el || !prix || !tx) return;
+  el.value = r2(prix * tx / 100);
+  _facMajTotaux();
 }
 function _facPct(n) {
   const v = Number(n) || 0;
@@ -12771,13 +12787,13 @@ function saveFacture(withPdf) {
     tva: (document.getElementById('fac-promo-tva').value || '').trim()
   };
   const designation = (document.getElementById('fac-designation').value || '').trim();
-  const ht = parseFloat(document.getElementById('fac-ht').value) || 0;
+  const ht = r2(parseFloat(document.getElementById('fac-ht').value) || 0);
   const prixBien = parseFloat(document.getElementById('fac-prix').value) || 0;
   const tauxHono = parseFloat(document.getElementById('fac-taux-hono').value) || 0;
   const taux = parseFloat(document.getElementById('fac-tva-taux').value) || 0;
   const venteId = document.getElementById('fac-vente').value || null;
   if (!numero || !dateF || !promo.nom) { toast('⚠ Numéro, date et promoteur requis', 'var(--warning)'); return; }
-  const tva = ht * taux / 100, ttc = ht + tva;
+  const tva = r2(ht * taux / 100), ttc = r2(ht + tva);
   const rec = { id: fid || uid(), numero: numero, date: dateF, echeance: ech, venteId: venteId, promoteur: promo, designation: designation, prixBien: prixBien, tauxHono: tauxHono, ht: ht, taux: taux, tva: tva, ttc: ttc, updatedAt: new Date().toISOString() };
   if (fid) {
     const idx = st.emises.findIndex(x => x.id === fid);
@@ -12840,9 +12856,9 @@ function _ligneBaseFacture(f, eur) {
   if (tx)   out.push('Honoraires : <b>' + _facPct(tx) + '</b>' + (prix ? ' du prix de vente' : ''));
   let html = '<div class="sub">' + out.join(' &middot; ') + '</div>';
   if (prix && tx) {
-    const base = prix * tx / 100;
-    const ecart = base - (Number(f.ht) || 0);
-    if (Math.abs(ecart) > 1) html += '<div class="sub">Soit ' + eur(base) + ' HT, dont d\u00e9duction de ' + eur(ecart) + ' (frais de plateforme)</div>';
+    const base = r2(prix * tx / 100);
+    const ecart = r2(base - (Number(f.ht) || 0));
+    if (Math.abs(ecart) >= 0.01) html += '<div class="sub">Soit ' + eur(base) + ' HT, dont d\u00e9duction de ' + eur(ecart) + ' (frais de plateforme)</div>';
   }
   return html;
 }
