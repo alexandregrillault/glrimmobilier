@@ -5603,10 +5603,19 @@ const PATERNITE_JOURS = 14;
 // Exception : un lead EN VEILLE reçu à nouveau par un autre vendeur doit
 // apparaître chez lui — pas pour le lui prendre, mais pour qu'il sache qu'un
 // premier contact a déjà eu lieu avant de le rappeler à froid.
+// Un lead qui a déjà changé de mains (réattribution ou transfert décidé par un
+// gérant) n'est plus en compétition : l'attribution fait foi. Sans ça, il restait
+// affiché chez son ancien vendeur, qui le récupérait à sa première action —
+// et la base, elle, refusait. Même règle côté Supabase (contacts_touch_action).
+function eqCompetitionOuverte(l) {
+  if (!l || l.premiere_action_le) return false;
+  const hist = Array.isArray(l.vendeur_historique) ? l.vendeur_historique : [];
+  return hist.length === 0;
+}
 function eqLeadVisiblePour(l, prenom) {
   if (!l || !prenom) return false;
   if (l.vendeur === prenom) return true;      // c'est le sien
-  if (!l.premiere_action_le) return true;     // compétition encore ouverte
+  if (eqCompetitionOuverte(l)) return true;   // compétition encore ouverte
   return estEnVeille(l) && (Array.isArray(l.recu_par) ? l.recu_par : [])
     .some(r => r && r.vendeur === prenom);
 }
@@ -5618,7 +5627,7 @@ function paterniteEtat(c) {
   // Compétition : lead reçu par plusieurs vendeurs avant toute action commerciale.
   // La paternité revient au premier qui agit (Nouveau → Sans réponse ne compte pas).
   const recus = Array.isArray(c.recu_par) ? c.recu_par : [];
-  if (!c.premiere_action_le && recus.length >= 2 && c.paternite_geree !== false) {
+  if (eqCompetitionOuverte(c) && recus.length >= 2 && c.paternite_geree !== false) {
     const noms = recus.map(r => r && r.vendeur).filter(Boolean);
     return { type:'competition', vendeur, texte:'' + noms.join(' / '), couleur:'var(--warning)',
       detail:'En compétition : lead reçu par ' + noms.join(' et ') +
@@ -5800,7 +5809,7 @@ async function _eqLeadPatch(id, body) {
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) throw await _eqErreurPatch(res);
     if (l) Object.assign(l, body);
     if (l && typeof _toucheAuRappel === 'function' && _toucheAuRappel(body)) eqCreneauRappelSync(l);
     if (typeof _eqEchecOublie === 'function') _eqEchecOublie(id);
@@ -5811,8 +5820,8 @@ async function _eqLeadPatch(id, body) {
   } catch(e) {
     // Modification refusée : on la garde en mémoire et on l'affiche en rouge
     // dans la fiche jusqu'à ce qu'elle passe (bouton Réessayer).
-    if (typeof _eqEchecNote === 'function') _eqEchecNote(id, body, Object.keys(body)[0]);
-    if (typeof toast === 'function') toast('⚠ Échec de la mise à jour — voir le bandeau rouge', 'var(--danger)');
+    if (typeof _eqEchecNote === 'function') _eqEchecNote(id, body, Object.keys(body)[0], e);
+    if (typeof toast === 'function') toast('⚠ ' + (e && e.motif ? e.motif : 'Échec de la mise à jour — voir le bandeau rouge'), 'var(--danger)');
   }
   renderEquipeLeadsTable();
   if (typeof renderEqNotifs === 'function') renderEqNotifs(); // le panneau « Mes activités » suit les changements
@@ -6218,12 +6227,35 @@ async function veilleReprendre(id, slug) {
 function eqTransfertBandeauFiche(l) {
   const t = transfertRecent(l);
   if (!t) return '';
+  // « Il t'appartient » ne se dit qu'à son propriétaire : ce bandeau s'affichait
+  // à tout le monde, y compris au vendeur qui venait de s'en dessaisir.
+  const _moi = (typeof MON_ROLE !== 'undefined' && MON_ROLE) ? MON_ROLE.prenom : null;
+  if (!_moi || l.vendeur !== _moi) return '';
   const e = _vEsc;
   return `<div style="background:var(--accent2)14;border:1px solid var(--accent2);border-radius:11px;padding:12px 14px;margin:10px 0">
     <div style="font-weight:800;font-size:13px;margin-bottom:4px">${selIc('transfert', 14)} Client transféré${t.de ? ' par ' + e(t.de) : ''}</div>
     <div style="font-size:12.5px;line-height:1.55;color:var(--muted)">
       Il t'appartient depuis le <strong>${e(new Date(t.le).toLocaleDateString('fr-FR'))}</strong>.
       Relis ses notes et son historique avant d'appeler — un premier contact a déjà pu avoir lieu.
+    </div>
+  </div>`;
+}
+
+// Fiche d'un collègue : rien n'est bloqué — un vendeur qui a le client au
+// téléphone doit pouvoir saisir. On dit seulement à qui appartient la fiche,
+// et que la réattribution passe par un gérant.
+function eqSuiviParBandeauFiche(l) {
+  const moi = (typeof MON_ROLE !== 'undefined' && MON_ROLE) ? MON_ROLE.prenom : null;
+  if (!l || !l.vendeur || !moi || l.vendeur === moi) return '';
+  if (typeof estGerant === 'function' && estGerant()) return '';
+  const e = _vEsc;
+  const compet = typeof eqCompetitionOuverte === 'function' && eqCompetitionOuverte(l);
+  return `<div style="background:var(--warning)14;border:1px solid var(--warning);border-radius:11px;padding:12px 14px;margin:10px 0">
+    <div style="font-weight:800;font-size:13px;margin-bottom:4px">Client suivi par ${e(l.vendeur)}</div>
+    <div style="font-size:12.5px;line-height:1.55;color:var(--muted)">
+      ${compet
+        ? 'Lead reçu par plusieurs vendeurs : la paternité revient au premier qui fait une action commerciale — si tu le travailles, il devient le tien.'
+        : 'Tu peux saisir ce que tu apprends (statut, notes, critères) : tout est enregistré et tracé. La fiche reste la sienne — seul un gérant peut la réattribuer.'}
     </div>
   </div>`;
 }
@@ -6948,7 +6980,7 @@ async function _eqTexteEnregistre(champ, valeur, dansQualif, final){
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
         body: JSON.stringify(corpsB)
       });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (!res.ok) throw await _eqErreurPatch(res);
       Object.assign(l, corpsB);
       _eqEchecOublie(l.id);
       _eqTexteEtat('budget', '✓ Enregistré', 'var(--success)');
@@ -6959,7 +6991,7 @@ async function _eqTexteEnregistre(champ, valeur, dansQualif, final){
       renderEquipeLeadsTable();
     } catch(e){
       _eqTexteEtat('budget', '⚠ Non enregistré', 'var(--danger)');
-      _eqEchecNote(l.id, corpsB, 'budget');
+      _eqEchecNote(l.id, corpsB, 'budget', e);
     }
     return;
   }
@@ -6974,14 +7006,14 @@ async function _eqTexteEnregistre(champ, valeur, dansQualif, final){
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
       body: JSON.stringify(corps)
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) throw await _eqErreurPatch(res);
     Object.assign(l, corps);
     _eqEchecOublie(l.id);
     _eqTexteEtat(champ, '✓ Enregistré', 'var(--success)');
     renderEquipeLeadsTable();
   } catch(e){
     _eqTexteEtat(champ, '⚠ Non enregistré', 'var(--danger)');
-    _eqEchecNote(l.id, corps, champ);
+    _eqEchecNote(l.id, corps, champ, e);
   }
 }
 function eqTexteInput(champ, valeur, dansQualif){
@@ -6997,12 +7029,28 @@ function eqTexteFlush(champ, valeur, dansQualif){   // sortie du champ : on n'at
 }
 
 // ---- Échecs d'enregistrement : visibles et rattrapables -------------------
+// PostgREST met le motif du refus dans le corps de la réponse ({message}) :
+// répondre « vérifie ta connexion » quand c'est la base qui a dit non envoie le
+// vendeur chercher une panne qui n'existe pas.
+async function _eqErreurPatch(res){
+  let m = '';
+  try { const j = await res.clone().json(); m = j.message || j.error_description || j.details || j.error || ''; } catch(e){}
+  const err = new Error(m || ('Enregistrement refusé (erreur ' + res.status + ')'));
+  err.motif = m;
+  // Un refus de droits ne passera pas davantage au deuxième essai.
+  err.definitif = res.status === 401 || res.status === 403
+    || /gérant|gerant|autoris|permission|policy|row-level|droit/i.test(m);
+  return err;
+}
+
 // Un toast rouge de 3 secondes ne suffit pas : on garde un bandeau dans la
 // fiche tant que la modification n'est pas passée, avec un bouton Réessayer.
 let _eqEchecs = {};   // id du lead → { corps, champs }
-function _eqEchecNote(id, corps, champ){
+function _eqEchecNote(id, corps, champ, err){
   const e = _eqEchecs[id] || { corps: {}, champs: [] };
   Object.assign(e.corps, corps);
+  e.motif = (err && err.motif) || (err && err.message) || '';
+  e.definitif = !!(err && err.definitif);
   const libelle = { budget: 'budget', surface_min: 'surface', lieu: 'ville', statut: 'statut', notes: 'notes', rappel_le: 'rappel', qualif: 'critères' }[champ || Object.keys(corps)[0]] || (champ || '');
   if (libelle && e.champs.indexOf(libelle) === -1) e.champs.push(libelle);
   _eqEchecs[id] = e;
@@ -7015,10 +7063,14 @@ function _eqEchecBanniere(){
   const e = _eqEchecs[_eqFicheId];
   if (!e){ zone.style.display = 'none'; zone.innerHTML = ''; return; }
   zone.style.display = 'block';
+  const _esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const texte = e.definitif
+    ? _esc(e.motif) + ' Un nouvel essai n\'y changera rien : demande à un gérant.'
+    : (e.motif ? _esc(e.motif) + ' ' : '') + 'Cette saisie n\'est pas encore dans la base. Ne fermez pas la fiche avant qu\'elle soit passée.';
   zone.innerHTML = '<div style="background:var(--surface2);border:1.5px solid var(--danger);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
     + '<span style="color:var(--danger);font-weight:800;font-size:13px">⚠ Non enregistré' + (e.champs.length ? ' — ' + e.champs.join(', ') : '') + '</span>'
-    + '<span style="font-size:12.5px;color:var(--text);flex:1;min-width:180px">Cette saisie n\'est pas encore dans la base. Ne fermez pas la fiche avant qu\'elle soit passée.</span>'
-    + '<button onclick="eqEchecReessayer()" style="background:var(--danger);border:none;border-radius:8px;padding:7px 15px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Réessayer</button></div>';
+    + '<span style="font-size:12.5px;color:var(--text);flex:1;min-width:180px">' + texte + '</span>'
+    + (e.definitif ? '' : '<button onclick="eqEchecReessayer()" style="background:var(--danger);border:none;border-radius:8px;padding:7px 15px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Réessayer</button>') + '</div>';
 }
 async function eqEchecReessayer(){
   const id = _eqFicheId, e = _eqEchecs[id];
@@ -7029,7 +7081,7 @@ async function eqEchecReessayer(){
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
       body: JSON.stringify(e.corps)
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) throw await _eqErreurPatch(res);
     const l = _eqLeads.find(x => x.id === id);
     if (l) Object.assign(l, e.corps);
     _eqEchecOublie(id);
@@ -7037,7 +7089,10 @@ async function eqEchecReessayer(){
     renderEquipeLeadsTable();
     _eqFicheRender();
   } catch(err){
-    if (typeof toast === 'function') toast('⚠ Toujours pas enregistré — vérifie ta connexion', 'var(--danger)');
+    e.motif = (err && err.motif) || e.motif || '';
+    e.definitif = !!(err && err.definitif);
+    _eqEchecBanniere();
+    if (typeof toast === 'function') toast('⚠ ' + (err && err.motif ? err.motif : 'Toujours pas enregistré — vérifie ta connexion'), 'var(--danger)');
   }
 }
 
@@ -7136,6 +7191,7 @@ function _eqFicheRender() {
     </div>
     <div id="eq-fiche-echec" style="display:none;margin:10px 0"></div>
     ${eqTransfertBandeauFiche(l)}
+    ${eqSuiviParBandeauFiche(l)}
     ${eqVeilleBandeauFiche(l)}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 14px;font-size:13px">
 ${(() => {
