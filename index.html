@@ -1672,6 +1672,7 @@
           <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="eq-plan-libres" checked onchange="renderEquipePlanningListe()" style="accent-color:var(--accent);cursor:pointer">Voir les créneaux libres</label>
           <button class="btn btn-primary" onclick="eqPlanBlocOuvrir()" title="Poser une activité dans mon planning — le créneau devient indisponible pour les clients">+ Bloquer du temps</button>
           <button class="btn btn-secondary" onclick="eqCreneauxOuvrir('eq-plan-vendeur')">Ouvrir des créneaux</button>
+          <button class="btn btn-secondary" onclick="rdvLienPublicOuvrir()" title="Un lien fixe à partager à qui tu veux : il voit tes disponibilités et réserve son créneau">Mon lien public</button>
           <button class="btn btn-secondary" onclick="renderEquipePlanning()" title="Rafraîchir">↻</button>
         </div>
       </div>
@@ -7683,6 +7684,75 @@ function _rdvNotifMot(res) {
   if (e === 'sans_cle') return ' — mail non envoyé : clé Brevo à renseigner';
   return ' — mail non envoyé, préviens-le toi-même';
 }
+
+// ---- Lien public du commercial ------------------------------------------
+// Un lien fixe, le même toute l'année, à mettre en signature de mail, à envoyer
+// par SMS ou à donner de vive voix. Celui qui l'ouvre voit les disponibilités du
+// commercial, choisit son créneau et se présente : sa fiche est créée à ce
+// moment-là dans le CRM, avec la paternité pour celui qui a donné le lien.
+async function rdvLienPublicRecuperer(vendeur) {
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  const chercher = async () => {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rdv_liens?select=*&origine=eq.public&vendeur=eq.' + encodeURIComponent(vendeur) + '&limit=1', {
+      cache: 'no-store', headers: entetes
+    });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return rows[0] || null;
+  };
+  try {
+    const dejaLa = await chercher();
+    if (dejaLa) return dejaLa;
+    const c = await fetch(SUPABASE_URL + '/rest/v1/rdv_liens', {
+      method: 'POST', headers: Object.assign({}, entetes, { 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ token: _rdvJeton(), contact_id: null, vendeur: vendeur, origine: 'public' })
+    });
+    if (c.ok) { const rows = await c.json(); if (rows[0]) return rows[0]; }
+    return await chercher();   // créé entre-temps depuis un autre écran
+  } catch (e) { return null; }
+}
+
+async function rdvLienPublicOuvrir() {
+  const prenom = _creneauVendeur();
+  if (!prenom) { toast('Sélectionne d\'abord ton nom', 'var(--warning)'); return; }
+
+  const old = document.getElementById('rdv-public-modal'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'rdv-public-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1600;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:560px;max-width:95vw;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+      <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Mon lien de rendez-vous</div>
+      <button onclick="rdvLienPublicFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div id="rdv-public-corps" style="font-size:13px;color:var(--muted);margin-top:10px">Préparation du lien…</div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) rdvLienPublicFermer(); });
+  document.body.appendChild(div);
+
+  const lien = await rdvLienPublicRecuperer(prenom);
+  const box = document.getElementById('rdv-public-corps');
+  if (!box) return;
+  if (!lien) { box.innerHTML = '<div style="color:var(--danger)">Impossible de préparer le lien — réessaie dans un instant.</div>'; return; }
+
+  const url = RDV_FN_URL + lien.token;
+  const libres = (_planCreneaux || []).filter(c => c.statut === 'libre' && new Date(c.debut) > new Date()).length;
+  box.innerHTML = `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Le même lien toute l'année : signature de mail, SMS, message LinkedIn, carte de visite. Celui qui l'ouvre voit tes disponibilités, choisit son créneau et se présente — sa fiche est créée dans ton portefeuille, et le rendez-vous arrive dans ta page Activité à valider.</div>
+    ${libres === 0 ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:12px">Tu n'as aucune disponibilité ouverte : la page proposera seulement de te laisser ses coordonnées. <button class="btn btn-sm btn-secondary" onclick="rdvLienPublicFermer(); eqCreneauxOuvrir('eq-plan-vendeur')" style="font-size:11px;margin-left:6px">Ouvrir des créneaux</button></div>` : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${libres} créneau${libres > 1 ? 'x' : ''} libre${libres > 1 ? 's' : ''} à venir — c'est ce qu'il verra.</div>`}
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <input id="rdv-public-url" readonly value="${_vEsc(url)}" onclick="this.select()" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:12.5px">
+      <button class="btn btn-sm btn-primary" onclick="eqCopy(document.getElementById('rdv-public-url').value, 'Lien de rendez-vous')" style="font-size:11.5px">Copier</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">À coller en signature</div>
+    <textarea id="rdv-public-sign" rows="3" onclick="this.select()" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;color:var(--text);font-family:var(--font-body);font-size:13px;line-height:1.55;box-sizing:border-box">${_vEsc('Prendre rendez-vous avec moi : ' + url)}</textarea>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--muted)">${lien.visites ? 'Ouvert ' + lien.visites + ' fois' : 'Jamais ouvert pour l\'instant'}</span>
+      <button class="btn btn-secondary" onclick="rdvLienPublicFermer()">Fermer</button>
+    </div>`;
+}
+
+function rdvLienPublicFermer() { const m = document.getElementById('rdv-public-modal'); if (m) m.remove(); }
 
 // L'état du rendez-vous se range dans le lien, comme il se range dans la sélection
 async function _planMajRdvLien(token, champs) {
