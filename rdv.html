@@ -49,6 +49,7 @@
   .cren { border:1px solid var(--bordure); background:#fff; color:var(--dark); border-radius:10px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; font-family:inherit; }
   .cren:hover { border-color:var(--gold); background:var(--gold); color:#fff; }
   .cren.off { opacity:.35; cursor:not-allowed; }
+  .cren.choisi { background:var(--gold); border-color:var(--gold); color:#fff; }
   .cren-autre { margin-top:16px; text-align:center; }
   .cren-autre button { background:none; border:none; color:var(--muted); font-size:13px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; font-family:inherit; }
   .cren-autre button:hover { color:var(--gold-fonce); }
@@ -58,6 +59,24 @@
   .rdv-form input:focus { border-color:var(--gold); }
   .rdv-btn { border:none; background:var(--gold); color:#fff; border-radius:10px; padding:11px 18px; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit; }
   .rdv-btn:hover { background:var(--gold-fonce); }
+
+  /* Le visiteur du lien public se présente au moment de confirmer */
+  .form-quand { background:#fff; border:1px solid var(--gold); border-radius:11px; padding:11px 14px; font-size:14px; color:var(--encre); margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .form-quand b { color:var(--dark); }
+  .form-quand button { margin-left:auto; background:none; border:none; color:var(--gold-fonce); font-size:13px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; font-family:inherit; }
+  .champs { display:flex; flex-direction:column; gap:11px; }
+  .champ label { display:block; font-size:11px; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+  .champ input, .champ textarea { width:100%; border:1px solid var(--bordure); background:#fff; border-radius:10px; padding:11px 13px; font-size:14.5px; color:var(--dark); outline:none; font-family:inherit; }
+  .champ textarea { resize:vertical; min-height:66px; }
+  .champ input:focus, .champ textarea:focus { border-color:var(--gold); }
+  .champ .err { font-size:12.5px; color:#b23c3c; margin-top:4px; display:none; }
+  .champ.faux input, .champ.faux textarea { border-color:#b23c3c; }
+  .champ.faux .err { display:block; }
+  .piege { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
+  .btn-large { width:100%; border:none; background:var(--gold); color:#fff; border-radius:12px; padding:14px; font-size:15.5px; font-weight:700; cursor:pointer; font-family:inherit; margin-top:16px; }
+  .btn-large:hover { background:var(--gold-fonce); }
+  .btn-large[disabled] { opacity:.6; cursor:default; }
+  .mention { font-size:12px; color:var(--muted); margin-top:10px; text-align:center; }
 
   .confirme { text-align:center; }
   .confirme .quand { font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--gold-fonce); margin:10px 0 4px; }
@@ -88,12 +107,14 @@
 (function(){
   var SUPA = "https://hydqfbxdtpmbuooexekp.supabase.co";
   var params = new URLSearchParams(location.search);
-  var token = params.get("t") || "";
+  var token = params.get("t") || "";       // remplacé par le lien personnel après une réservation publique
   var FN = SUPA + "/functions/v1/rdv/" + encodeURIComponent(token);
   var cont = document.getElementById("contenu");
   var modeContact = "telephone";   // le mail promet un appel : c'est le choix par défaut
   var etat = {};                   // état du rendez-vous, copie locale
   var donnees = null;
+  var estPublic = false;           // lien fixe d'un commercial, visiteur inconnu
+  var choisiPublic = null;         // créneau retenu, en attente de la présentation
 
   var MODES = { telephone: "Par téléphone", visio: "En visio" };
 
@@ -183,6 +204,7 @@
 
   function htmlRdv(d){
     var qui = d.vendeur ? esc(d.vendeur) : "votre conseiller";
+    if (estPublic) return htmlRdvPublic(d, qui);
     var h = "";
 
     // Rendez-vous déjà posé
@@ -231,13 +253,70 @@
     return h + "</div>";
   }
 
+  // Lien public : personne ne sait encore qui vient. Il choisit son créneau,
+  // puis se présente — c'est à ce moment que sa fiche est créée dans le CRM.
+  function htmlRdvPublic(d, qui){
+    if (etat.reserve && etat.debut){
+      return "<div class='bloc rdv confirme'><div class='coche'>✓</div>"
+        + "<h2>Votre créneau est réservé</h2>"
+        + "<div class='quand'>" + esc(fmtJourLong(etat.debut)) + " à " + esc(fmtHeure(etat.debut)) + "</div>"
+        + "<div class='etat'>En attente de confirmation · " + esc(MODES[etat.mode] || "") + "</div>"
+        + "<p style='margin-top:12px;font-size:14px'>" + qui + " vous confirme le rendez-vous très vite, par mail.</p></div>";
+    }
+    if (etat.demande){
+      return "<div class='bloc rdv confirme'><div class='coche'>✓</div>"
+        + "<h2>Votre demande est transmise</h2>"
+        + "<p style='margin-top:8px;font-size:14px'>" + qui + " vous rappelle très vite pour convenir d'un moment.</p></div>";
+    }
+
+    var cr = Array.isArray(d.creneaux) ? d.creneaux : [];
+    var h = "<div class='bloc rdv'>";
+    if (cr.length){
+      h += "<h2>Choisissez votre créneau</h2>";
+      h += htmlModes();
+      h += htmlCreneaux(cr, "public");
+      h += "<div id='zone-form'>" + (choisiPublic ? htmlFormulaire(choisiPublic) : "") + "</div>";
+    } else {
+      h += "<h2>Laissez-moi vos coordonnées</h2>";
+      h += "<p>Aucun créneau n'est ouvert en ce moment. Dites-moi quand vous êtes disponible, " + qui + " vous rappelle.</p>";
+      h += htmlModes();
+      h += htmlFormulaire(null);
+    }
+    return h + "</div>";
+  }
+
+  function htmlFormulaire(c){
+    var h = "<div class='form-rdv' style='margin-top:16px'>";
+    if (c){
+      h += "<div class='form-quand'>Vous avez choisi <b>" + esc(fmtJourLong(c.debut)) + " à " + esc(fmtHeure(c.debut)) + "</b>"
+         + "<button type='button' id='rdv-changer'>changer</button></div>";
+    }
+    h += "<div class='champs'>";
+    h += "<div class='champ' id='ch-nom'><label for='f-nom'>Votre nom</label><input id='f-nom' type='text' maxlength='80' autocomplete='name' placeholder='Prénom et nom'><div class='err'>Merci d'indiquer votre nom.</div></div>";
+    h += "<div class='champ' id='ch-tel'><label for='f-tel'>Téléphone</label><input id='f-tel' type='tel' maxlength='40' autocomplete='tel' placeholder='06 12 34 56 78'><div class='err'>Numéro incomplet.</div></div>";
+    h += "<div class='champ' id='ch-mail'><label for='f-mail'>Email</label><input id='f-mail' type='email' maxlength='160' autocomplete='email' placeholder='vous@exemple.fr'><div class='err'>Adresse email invalide.</div></div>";
+    h += "<div class='champ'><label for='f-projet'>Votre projet" + (c ? " (facultatif)" : "") + "</label><textarea id='f-projet' maxlength='500' placeholder=\"Ce que vous cherchez, où, pour quand… quelques mots suffisent\"></textarea></div>";
+    if (!c) h += "<div class='champ'><label for='f-dispo'>Vos disponibilités</label><input id='f-dispo' type='text' maxlength='300' placeholder='Ex : en semaine après 18h, ou samedi matin'></div>";
+    h += "<div class='piege'><label>Société<input id='f-societe' type='text' tabindex='-1' autocomplete='off'></label></div>";
+    h += "</div>";
+    h += "<button class='btn-large' id='rdv-valider'>" + (c ? "Confirmer le rendez-vous" : "Demander à être rappelé") + "</button>";
+    h += "<div class='mention'>Vos coordonnées servent uniquement à vous rappeler.</div>";
+    return h + "</div>";
+  }
+
   function rendu(d){
     var qui = d.vendeur ? esc(d.vendeur) : "votre conseiller";
     var h = "<div class='bloc'>";
-    h += "<h1>" + (d.prenom ? "Bonjour " + esc(d.prenom) + "," : "Bonjour,") + "</h1>";
-    h += "<p>Nous avons bien reçu votre demande. " + qui + ", votre conseiller GLR Immobilier, vous rappelle pour en parler — choisissez simplement le créneau qui vous convient.</p>";
-    h += "</div>";
-    h += htmlBien(d);
+    if (estPublic){
+      h += "<h1>Prenons rendez-vous</h1>";
+      h += "<p>Vingt minutes avec " + qui + ", conseiller chez GLR Immobilier : ce que vous cherchez, ce qui existe aujourd'hui près de chez vous, et à quel prix. Par téléphone ou en visio, sans engagement.</p>";
+      h += "</div>";
+    } else {
+      h += "<h1>" + (d.prenom ? "Bonjour " + esc(d.prenom) + "," : "Bonjour,") + "</h1>";
+      h += "<p>Nous avons bien reçu votre demande. " + qui + ", votre conseiller GLR Immobilier, vous rappelle pour en parler — choisissez simplement le créneau qui vous convient.</p>";
+      h += "</div>";
+      h += htmlBien(d);
+    }
     h += "<div id='bloc-rdv'>" + htmlRdv(d) + "</div>";
     cont.innerHTML = h;
     brancher(d);
@@ -269,6 +348,20 @@
       btn.addEventListener("click", function(){
         if (btn.classList.contains("off")) return;
         var action = btn.getAttribute("data-action") || "reserver";
+        // Lien public : on ne réserve rien tant qu'on ne sait pas qui vient
+        if (action === "public"){
+          choisiPublic = (d.creneaux || []).filter(function(c){ return c.id === btn.getAttribute("data-id"); })[0];
+          var zone = document.getElementById("zone-form");
+          if (zone){
+            zone.innerHTML = htmlFormulaire(choisiPublic);
+            brancherFormulaire(d);
+            var champ = document.getElementById("f-nom");
+            if (champ) { zone.scrollIntoView({ behavior:"smooth", block:"center" }); setTimeout(function(){ champ.focus(); }, 350); }
+          }
+          Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(b2){ b2.classList.remove("choisi"); });
+          btn.classList.add("choisi");
+          return;
+        }
         Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(b2){ b2.classList.add("off"); });
         envoyer({ action:action, creneau_id:btn.getAttribute("data-id"), mode:modeContact })
         .then(function(res){
@@ -308,6 +401,8 @@
       if (inp) inp.focus();
     });
 
+    brancherFormulaire(d);
+
     var btnEnvoyer = document.getElementById("rdv-envoyer");
     if (btnEnvoyer) btnEnvoyer.addEventListener("click", function(){
       var creneau = (document.getElementById("rdv-creneau").value || "").trim();
@@ -320,6 +415,84 @@
         redessiner(d);
         toast("✓ Demande transmise");
       }).catch(function(){ toast("Envoi impossible — vérifiez votre connexion"); });
+    });
+  }
+
+  // Présentation du visiteur : validation à l'écran, puis création de sa fiche
+  function brancherFormulaire(d){
+    var changer = document.getElementById("rdv-changer");
+    if (changer) changer.addEventListener("click", function(){
+      choisiPublic = null;
+      var zone = document.getElementById("zone-form");
+      if (zone) zone.innerHTML = "";
+      Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(b){ b.classList.remove("choisi"); });
+    });
+
+    var valider = document.getElementById("rdv-valider");
+    if (!valider) return;
+    valider.addEventListener("click", function(){
+      var val = function(id){ var e = document.getElementById(id); return e ? (e.value || "").trim() : ""; };
+      var faux = function(id, mauvais){ var e = document.getElementById(id); if (e) e.classList.toggle("faux", !!mauvais); return !mauvais; };
+
+      var nom = val("f-nom"), tel = val("f-tel"), mail = val("f-mail");
+      var okNom  = faux("ch-nom",  nom.length < 2);
+      var okTel  = faux("ch-tel",  tel.replace(/\D/g, "").length < 9);
+      var okMail = faux("ch-mail", !/^[^@\s]{1,64}@[^@\s.]+(\.[^@\s.]+)+$/.test(mail));
+      if (!okNom || !okTel || !okMail){
+        toast("Il manque une information");
+        var premier = document.querySelector(".champ.faux input");
+        if (premier) premier.focus();
+        return;
+      }
+
+      valider.disabled = true;
+      valider.textContent = "Envoi…";
+      envoyer({
+        action: "reserver_public",
+        creneau_id: choisiPublic ? choisiPublic.id : "",
+        mode: modeContact,
+        nom: nom, telephone: tel, email: mail,
+        projet: val("f-projet"),
+        creneau: val("f-dispo"),
+        societe: val("f-societe")
+      }).then(function(res){
+        var corps = res.corps || {};
+        if (corps.ok){
+          // Chacun repart avec son propre lien : un rechargement montre SON rendez-vous
+          if (corps.token && corps.token !== token){
+            token = corps.token;
+            FN = SUPA + "/functions/v1/rdv/" + encodeURIComponent(token);
+            try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token)); } catch (e) {}
+          }
+          if (corps.creneau){
+            etat = { demande:true, reserve:true, confirme:false, refuse:false, debut:corps.creneau.debut, fin:corps.creneau.fin, mode:corps.creneau.mode };
+          } else {
+            etat = { demande:true, mode:modeContact };
+          }
+          choisiPublic = null;
+          redessiner(d);
+          window.scrollTo({ top:0, behavior:"smooth" });
+          toast(corps.creneau ? "✓ Créneau réservé" : "✓ Demande transmise");
+          return;
+        }
+        valider.disabled = false;
+        valider.textContent = choisiPublic ? "Confirmer le rendez-vous" : "Demander à être rappelé";
+        if (corps.error === "creneau_indisponible"){
+          if (corps.creneaux) d.creneaux = corps.creneaux;
+          choisiPublic = null;
+          redessiner(d);
+          toast("Ce créneau vient d'être pris — choisissez-en un autre");
+          return;
+        }
+        if (corps.error === "email_invalide"){ toast("Adresse email invalide"); return; }
+        if (corps.error === "telephone_invalide"){ toast("Numéro de téléphone incomplet"); return; }
+        if (corps.error === "trop_de_demandes"){ toast("Trop d'envois — réessayez dans quelques minutes"); return; }
+        toast("Envoi impossible — réessayez");
+      }).catch(function(){
+        valider.disabled = false;
+        valider.textContent = choisiPublic ? "Confirmer le rendez-vous" : "Demander à être rappelé";
+        toast("Envoi impossible — vérifiez votre connexion");
+      });
     });
   }
 
@@ -340,6 +513,7 @@
           return;
         }
         donnees = d;
+        estPublic = !!d.public;
         etat = (d.rdv && typeof d.rdv === "object") ? d.rdv : {};
         if (etat.mode && MODES[etat.mode]) modeContact = etat.mode;
         rendu(d);
