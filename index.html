@@ -389,7 +389,7 @@
   /* ---- TOAST ---- */
   #toast {
     position: fixed;
-    bottom: 28px;
+    bottom: 74px;          /* au-dessus du bouton Déconnexion, fixé en bas à droite */
     right: 28px;
     background: var(--success);
     color: #0d0f14;
@@ -397,7 +397,7 @@
     border-radius: 10px;
     font-weight: 500;
     font-size: 13.5px;
-    z-index: 200;
+    z-index: 9999;         /* devant le bouton Déconnexion (9998) */
     transform: translateY(80px);
     opacity: 0;
     transition: all .3s ease;
@@ -489,7 +489,7 @@
     .form-grid { grid-template-columns: 1fr; }
 
     /* ---- Toast & bouton déconnexion ---- */
-    #toast { left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); text-align: center; }
+    #toast { left: 12px; right: 12px; bottom: calc(58px + env(safe-area-inset-bottom)); text-align: center; }
     #logout-btn { bottom: calc(10px + env(safe-area-inset-bottom)) !important; right: 10px !important; padding: 6px 9px !important; font-size: 11px !important; opacity: .85; }
   }
 
