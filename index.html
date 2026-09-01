@@ -6467,7 +6467,7 @@ function renderEquipeLeadsTable() {
         return `<tr onclick="eqOuvrirFiche('${l.id}')" style="cursor:pointer${tr ? ';background:var(--accent2)12' : f.rappelDue||f.alerte48 ? ';background:var(--accent)08' : ''}">
         <td onclick="event.stopPropagation()"><input type="checkbox" ${_eqSelected.has(l.id)?'checked':''} onchange="eqToggleSelect('${l.id}', this.checked)" style="cursor:pointer;accent-color:var(--accent)"></td>
         <td style="font-size:15px">${badgeTr}${badge}${eqSelIcone(l)}</td>
-        <td><strong>${esc(nomComplet(l)||'—')}</strong>${nomAConfirmer(l) ? '<span title="Nom repris du mail du portail, à confirmer avec le client" style="color:var(--warning);font-weight:700;margin-left:3px">*</span>' : ''}${qualifBadge}</td>
+        <td><strong>${esc(nomComplet(l)||'—')}</strong>${qualifBadge}</td>
         <td style="font-size:12px" onclick="event.stopPropagation()">${l.email?esc(l.email)+' '+copyBtn(l.email,'Email')+'<br>':''}${l.telephone?esc(telFmt(l.telephone))+' '+copyBtn(telFmt(l.telephone),'Téléphone'):''}</td>
         <td>${villesHtml(l.lieu)}</td>
         <td>${typoHtml(l.typologie)}</td>
@@ -8270,7 +8270,7 @@ function selIc(cle, taille) {
   return '<span style="color:' + x[1] + ';font-size:' + (taille || 13) + 'px;line-height:1">' + x[0] + '</span>';
 }
 
-// Repères d'un client : transfert reçu, nom à confirmer, mise en veille, suivi de
+// Repères d'un client : transfert reçu, mise en veille, suivi de
 // sa sélection. Les mêmes symboles que dans le tableau des leads, pour qu'on
 // n'ait pas à ouvrir la fiche avant d'appeler depuis la page Activité.
 function eqReperesLead(l, taille) {
@@ -8280,8 +8280,6 @@ function eqReperesLead(l, taille) {
   try {
     const tr = (typeof transfertRecent === 'function') ? transfertRecent(l) : null;
     if (tr) h += `<span title="Client transféré${tr.de ? ' par ' + _vEsc(tr.de) : ''} le ${_vEsc(new Date(tr.le).toLocaleDateString('fr-FR'))} — il est à toi depuis">${selIc('transfert', t)}</span>`;
-    if (typeof nomAConfirmer === 'function' && nomAConfirmer(l))
-      h += `<span title="Nom repris du mail du portail, à confirmer avec le client" style="color:var(--warning);font-weight:700;font-size:${t}px">*</span>`;
     if (typeof estEnVeille === 'function' && estEnVeille(l))
       h += `<span title="En veille — ressortira au lancement d'un programme">${selIc('veille', t)}</span>`;
     // eqSelIcone porte déjà son propre libellé au survol et son clic
@@ -11090,13 +11088,23 @@ function closeNewContact() {
 
 // Doublon éventuel : on interroge la base plutôt que la liste en mémoire,
 // qui n'est pas forcément chargée au moment de la saisie.
+// Même normalisation que la colonne telephone_norm de Supabase : « 07 80 71 78 78 »,
+// « +33780717878 » et « 0033 7 80 71 78 78 » désignent la même fiche.
+function telNormBase(raw) {
+  let d = String(raw == null ? '' : raw).replace(/\D/g, '');
+  if (d.startsWith('0033')) d = '0' + d.slice(4);
+  else if (d.startsWith('33') && d.length > 9) d = '0' + d.slice(2);
+  else if (d.length === 9 && !d.startsWith('0')) d = '0' + d;
+  return d.length >= 9 ? d : '';
+}
 async function _chercherDoublonContact(email, tel) {
   const conds = [];
   if (email) conds.push('email.ilike.' + encodeURIComponent(email));
-  if (tel)   conds.push('telephone.eq.' + encodeURIComponent(tel));
+  const tn = telNormBase(tel);
+  if (tn) conds.push('telephone_norm.eq.' + encodeURIComponent(tn));
   if (!conds.length) return null;
   try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,email,telephone,vendeur,statut&or=(' + conds.join(',') + ')&limit=1', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,email,telephone,vendeur,statut,date_lead,source&or=(' + conds.join(',') + ')&order=created_at.asc&limit=1', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -11113,6 +11121,84 @@ function _ficheAtteignable(id, estLead) {
     ? (typeof _eqLeads !== 'undefined' ? _eqLeads : [])
     : (window._contacts || []);
   return (src || []).some(c => c && c.id === id);
+}
+
+// Fiche déjà en base : la nouvelle demande vient s'y ranger (note datée +
+// champs encore vides complétés). Ni le statut ni la paternité ne bougent —
+// c'est le trigger d'action commerciale qui les gère.
+let _doublonTrouve = null;
+async function fusionnerDemandeDansFiche(id) {
+  const val = (i) => { const el = document.getElementById(i); return el ? (el.value || '').trim() : ''; };
+  const err = document.getElementById('cn-erreur');
+  const btn = document.getElementById('cn-merge-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Ajout\u2026'; }
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  const champs = 'id,nom,email,telephone,lieu,budget,typologie,reference_annonce,notes,vendeur,recu_par';
+  let c = null;
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=' + champs + '&id=eq.' + id, { cache:'no-store', headers: entetes });
+    if (res.ok) { const rows = await res.json(); c = rows && rows[0]; }
+  } catch (e) {}
+  if (!c) {
+    if (err) { err.innerHTML = 'Impossible de relire la fiche, r\u00e9essaie dans un instant.'; err.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Ajouter cette demande \u00e0 sa fiche'; }
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  const jour = nowIso.slice(0, 10);
+  const estLead = _newContactContexte === 'leads';
+  const vendeur = val('cn-vendeur') || null;
+  const lieu = val('cn-lieu') || null;
+  const typologie = val('cn-typologie') || null;
+  const source = val('cn-source') || null;
+  const notesSaisies = val('cn-notes') || null;
+
+  const upd = { recu_le: nowIso };
+  if (!c.email && val('cn-email')) upd.email = val('cn-email');
+  if (!c.telephone && val('cn-tel')) upd.telephone = val('cn-tel');
+  if (!c.typologie && typologie) upd.typologie = typologie;
+  if (!c.reference_annonce && val('cn-ref')) upd.reference_annonce = val('cn-ref');
+  if (!c.budget && val('cn-budget')) Object.assign(upd, budgetCorps(val('cn-budget'), true));
+  if (lieu) {
+    const dejaLa = (c.lieu || '').split(/\s*,\s*/).some(v => v.trim().toLowerCase().replace(/\s+/g,'') === lieu.toLowerCase().replace(/\s+/g,''));
+    if (!dejaLa) upd.lieu = c.lieu ? (c.lieu + ', ' + lieu) : lieu;
+  }
+  // Le vendeur qui saisit est tracé dans recu_par, sans toucher à la paternité
+  if (vendeur) {
+    const liste = Array.isArray(c.recu_par) ? c.recu_par.slice() : [];
+    const i = liste.findIndex(e => e && e.vendeur === vendeur);
+    if (i >= 0) liste[i] = Object.assign({}, liste[i], { le: nowIso }); else liste.push({ vendeur: vendeur, le: nowIso });
+    upd.recu_par = liste;
+    if (!c.vendeur) { upd.vendeur = vendeur; upd.vendeur_depuis = nowIso; upd.paternite_geree = true; }
+  }
+  const note = '[' + jour + '] Nouvelle demande saisie \u00e0 la main'
+    + (source ? ' (' + source + ')' : '')
+    + (vendeur ? ' par ' + vendeur : '')
+    + (typologie ? ' \u2014 ' + typologie : '')
+    + (lieu ? ' \u00e0 ' + lieu : '')
+    + (notesSaisies ? ' \u2014 ' + notesSaisies : '');
+  upd.notes = c.notes ? (c.notes + '\n' + note) : note;
+
+  let ok = false;
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id, {
+      method: 'PATCH',
+      headers: Object.assign({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }, entetes),
+      body: JSON.stringify(upd)
+    });
+    ok = res.ok;
+  } catch (e) {}
+  if (!ok) {
+    if (err) { err.innerHTML = 'Supabase a refus\u00e9 la mise \u00e0 jour de la fiche.'; err.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Ajouter cette demande \u00e0 sa fiche'; }
+    return;
+  }
+  closeNewContact();
+  toast('\u2713 Demande ajout\u00e9e \u00e0 la fiche de ' + (c.nom || 'ce contact'), 'var(--success)');
+  if (estLead) { if (typeof renderEquipeLeads === 'function') await renderEquipeLeads(); }
+  else { await loadContacts(); }
+  if (_ficheAtteignable(id, estLead)) { if (estLead) eqOuvrirFiche(id); else openEditContact(id); }
 }
 
 async function saveNewContact() {
@@ -11142,14 +11228,19 @@ async function saveNewContact() {
 
   const doublon = await _chercherDoublonContact(email, tel);
   if (doublon) {
+    _doublonTrouve = doublon;
     const nomD = (typeof nomComplet === 'function' ? nomComplet(doublon) : doublon.nom) || 'ce contact';
     const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     montrerErreur('Déjà en base : <strong>' + esc(nomD) + '</strong>'
+      + (doublon.date_lead ? ' — premier contact le ' + esc(doublon.date_lead) : '')
+      + (doublon.source ? ' via ' + esc(doublon.source) : '')
       + (doublon.vendeur ? ' — suivi par ' + esc(doublon.vendeur) : '')
       + (doublon.statut ? ' · ' + esc(doublon.statut) : '')
       + (_ficheAtteignable(doublon.id, estLead)
           ? ' <button onclick="closeNewContact();' + (estLead ? 'eqOuvrirFiche' : 'openEditContact') + '(\'' + doublon.id + '\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:3px 9px;color:var(--text);font-size:12px;cursor:pointer;margin-left:6px">Ouvrir la fiche</button>'
-          : ' <span style="opacity:.75">\u2014 sa fiche est chez ' + esc(doublon.vendeur || 'un autre vendeur') + '</span>'));
+          : ' <span style="opacity:.75">\u2014 sa fiche est chez ' + esc(doublon.vendeur || 'un autre vendeur') + '</span>')
+      + '<div style="margin-top:9px;color:var(--muted);font-size:12px">Pas de seconde fiche : la demande se range dans celle-ci, avec l\'historique des \u00e9changes.</div>'
+      + '<div style="margin-top:9px"><button id="cn-merge-btn" onclick="fusionnerDemandeDansFiche(\'' + doublon.id + '\')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 15px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer">Ajouter cette demande \u00e0 sa fiche</button></div>');
     if (btn) { btn.disabled = false; btn.textContent = libelleBtn; }
     return;
   }
