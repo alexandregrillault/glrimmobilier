@@ -398,6 +398,7 @@
     font-weight: 500;
     font-size: 13.5px;
     z-index: 9999;         /* devant le bouton Déconnexion (9998) */
+    pointer-events: none;  /* au repos le toast est invisible mais reste au-dessus du bouton Déconnexion : sans ça il avale les clics */
     transform: translateY(80px);
     opacity: 0;
     transition: all .3s ease;
