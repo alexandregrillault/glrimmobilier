@@ -2309,6 +2309,15 @@
         <label>Email</label>
         <input type="email" id="vd-email" placeholder="jean@exemple.fr">
       </div>
+      <div class="form-group">
+        <label>Messagerie utilisée</label>
+        <select id="vd-messagerie" title="Sert au bouton « Ouvrir dans … » quand un vendeur préfère finir un mail dans sa boîte">
+          <option value="gmail">Gmail</option>
+          <option value="outlook">Outlook (web)</option>
+          <option value="ionos">IONOS Webmail</option>
+          <option value="mailto">Application mail de l'ordinateur (Mail, Outlook installé…)</option>
+        </select>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal(&#39;vendeur&#39;)">Annuler</button>
@@ -3464,7 +3473,8 @@ function saveVendeur() {
         prenom, nom,
         role: document.getElementById('vd-role').value,
         tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
-        email: document.getElementById('vd-email').value.trim()
+        email: document.getElementById('vd-email').value.trim(),
+        messagerie: document.getElementById('vd-messagerie').value
       };
     }
     window._editingVendeurId = null;
@@ -3474,7 +3484,8 @@ function saveVendeur() {
       id: uid(), prenom, nom,
       role: document.getElementById('vd-role').value,
       tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
-      email: document.getElementById('vd-email').value.trim()
+      email: document.getElementById('vd-email').value.trim(),
+      messagerie: document.getElementById('vd-messagerie').value
     });
     toast('✓ Vendeur ajouté !');
   }
@@ -5131,6 +5142,7 @@ function openEditVendeur(id) {
   document.getElementById('vd-role').value = v.role || 'Commercial indépendant';
   document.getElementById('vd-taux').value = v.tauxDefaut || '';
   document.getElementById('vd-email').value = v.email || '';
+  document.getElementById('vd-messagerie').value = v.messagerie || 'gmail';
   document.querySelector('#modal-vendeur .modal-title').textContent = '✎ Modifier le vendeur';
   window._editingVendeurId = id;
   document.getElementById('modal-vendeur').classList.add('open');
@@ -7773,7 +7785,7 @@ function rdvLienRender(libres) {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--muted)">${_vEsc(etat)}</span>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary" onclick="rdvLienGmail()" title="Si tu préfères finir dans ta boîte mail">Ouvrir dans Gmail</button>
+        <button class="btn btn-secondary" onclick="rdvLienGmail()" title="Si tu préfères finir dans ta boîte mail — la messagerie se règle dans ta fiche vendeur">Ouvrir dans ${_vEsc(_messagerieDuVendeur(vendeur).nom)}</button>
         ${l.email ? `<button class="btn btn-primary" id="rdv-lien-envoyer" onclick="rdvLienEnvoyer()">Envoyer</button>` : ''}
       </div>
     </div>`;
@@ -7830,11 +7842,26 @@ function _rdvLienTexteComplet() {
   return corps + '\n\n' + (vendeur || '') + '\nGLR Immobilier';
 }
 
+// Chaque vendeur a sa messagerie (fiche vendeur, champ « Messagerie utilisée ») :
+// Gmail, Outlook web, le webmail IONOS, ou l'application mail de l'ordinateur.
+const MESSAGERIES = {
+  gmail:   { nom: 'Gmail',          ouvrir: (a, su, corps) => 'https://mail.google.com/mail/?view=cm&fs=1&to=' + a + '&su=' + su + '&body=' + corps },
+  outlook: { nom: 'Outlook',        ouvrir: (a, su, corps) => 'https://outlook.office.com/mail/deeplink/compose?to=' + a + '&subject=' + su + '&body=' + corps },
+  ionos:   { nom: 'IONOS Webmail',  ouvrir: (a, su, corps) => 'https://mail.ionos.fr/appsuite/#!!&app=io.ox/mail/compose:compose&to=' + a + '&subject=' + su + '&body=' + corps },
+  mailto:  { nom: 'mon application mail', ouvrir: (a, su, corps) => 'mailto:' + a + '?subject=' + su + '&body=' + corps }
+};
+function _messagerieDuVendeur(prenom) {
+  const v = (data.vendeurs || []).find(x => x.prenom === prenom);
+  return MESSAGERIES[(v && v.messagerie) || 'gmail'] || MESSAGERIES.gmail;
+}
+
 function rdvLienGmail() {
   if (!_rdvLienCtx) return;
-  const { l } = _rdvLienCtx;
+  const { l, vendeur } = _rdvLienCtx;
   const su = encodeURIComponent((document.getElementById('rdv-lien-objet') || {}).value || rdvLienObjet());
-  window.open('https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(l.email || '') + '&su=' + su + '&body=' + encodeURIComponent(_rdvLienTexteComplet()), '_blank');
+  const m = _messagerieDuVendeur(vendeur);
+  const url = m.ouvrir(encodeURIComponent(l.email || ''), su, encodeURIComponent(_rdvLienTexteComplet()));
+  if (url.indexOf('mailto:') === 0) window.location.href = url; else window.open(url, '_blank');
 }
 
 async function rdvLienEnvoyer() {
