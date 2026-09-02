@@ -32,7 +32,7 @@
 
   /* Choix du créneau */
   .rdv { border:1px solid var(--gold); background:linear-gradient(180deg,#fffdf8,#fdfaf3); }
-  /* Deux formats : la visio complète de 45 min, ou l'appel de 15 min */
+  /* Deux formats : la visio de 30 min, ou l'appel de 10 min */
   .fmt-choix { display:flex; gap:10px; margin:14px 0 4px; }
   .fmt { flex:1; text-align:left; border:1px solid var(--bordure); background:#fff; color:var(--encre); border-radius:14px; padding:13px 14px; cursor:pointer; transition:all .15s; font-family:inherit; position:relative; }
   .fmt:hover { border-color:var(--gold); }
@@ -141,13 +141,29 @@
   var token = params.get("t") || "";       // remplacé par le lien personnel après une réservation publique
   var FN = SUPA + "/functions/v1/rdv/" + encodeURIComponent(token);
   var cont = document.getElementById("contenu");
-  // Deux formats (choix d'Alex, septembre 2026) : la visio complète de 45 min
-  // où l'on prend le temps de tout montrer, ou l'appel de 15 min pour une
-  // première esquisse. Le mail présélectionne (?f=visio|appel), la page laisse changer.
+  // Deux formats (choix d'Alex, septembre 2026) : la visio de 30 min où l'on
+  // prend le temps de montrer, ou l'appel de 10 min pour une première esquisse.
+  // Des durées courtes, volontairement : un gros créneau fait peur au client.
+  // Le mail présélectionne (?f=visio|appel), la page laisse changer.
   var FORMATS = {
-    visio: { duree:45, mode:"visio",     titre:"Visio complète",  sous:"On prend le temps de tout vous montrer : le bien, le programme, comment se passe un achat dans le neuf, votre financement, et d'autres lots qui pourraient vous plaire.", modeLbl:"En visio, 45 minutes" },
-    appel: { duree:15, mode:"telephone", titre:"Premier échange", sous:"Vous avez moins de temps ? Un appel de 15 minutes suffit pour une première esquisse : ce bien, votre projet, et les pistes à creuser.", modeLbl:"Par téléphone, 15 minutes" }
+    visio: { duree:30, mode:"visio",     titre:"Visio",           sous:"On prend le temps de vous montrer : le bien, le programme, comment se passe un achat dans le neuf, votre financement, et d'autres lots qui pourraient vous plaire.", modeLbl:"En visio, 30 minutes" },
+    appel: { duree:10, mode:"telephone", titre:"Premier échange", sous:"Vous avez moins de temps ? Dix minutes par téléphone suffisent pour une première esquisse : ce bien, votre projet, et les pistes à creuser.", modeLbl:"Par téléphone, 10 minutes" }
   };
+  // Les disponibilités du conseiller sont découpées en créneaux de 10 min ; pour
+  // ne pas noyer le client sous les horaires, on ne lui montre que les heures
+  // rondes (toutes les 30 min) — plus le premier horaire libre après un
+  // rendez-vous déjà pris (9h10, par exemple), pour ne pas laisser de temps mort.
+  var GRILLE_MIN = 30;
+  function horairesMontres(liste){
+    var finsLibres = {};
+    (liste || []).forEach(function(c){ finsLibres[new Date(c.fin).getTime()] = true; });
+    return (liste || []).filter(function(c){
+      var d = new Date(c.debut);
+      var rond = (d.getMinutes() % GRILLE_MIN) === 0;
+      var debutDePlage = !finsLibres[d.getTime()];
+      return rond || debutDePlage;
+    });
+  }
   var formatChoisi = FORMATS[params.get("f")] ? params.get("f") : "visio";
   var modeContact = FORMATS[formatChoisi].mode;
   var etat = {};                   // état du rendez-vous, copie locale
@@ -166,10 +182,10 @@
   }
   function creneauxDuFormat(liste){
     var besoin = FORMATS[formatChoisi].duree;
-    return (liste || []).filter(function(c){
+    return horairesMontres((liste || []).filter(function(c){
       var max = c.duree_max != null ? c.duree_max : Math.round((new Date(c.fin) - new Date(c.debut)) / 60000);
       return max >= besoin;
-    });
+    }));
   }
 
   function esc(s){
