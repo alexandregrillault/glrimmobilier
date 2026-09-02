@@ -7633,7 +7633,10 @@ function eqFicheSelectionsHtml(l) {
 // ============================================================
 //  SÉLECTIONS CLIENT — page personnalisée + mail auto
 // ============================================================
-const SEL_FN_URL = SUPABASE_URL + '/functions/v1/selection/';
+// Lien de la sélection envoyé au client : sur le domaine de la maison, comme le
+// lien de rendez-vous (choix d'Alex, 02/09/2026 — plus d'adresse technique).
+// La page vit dans le dépôt du site : glr-site/selection/index.html.
+const SEL_FN_URL = 'https://www.glrimmobilier.com/selection/?t=';
 const SEL_PAGE_URL = 'https://alexandregrillault.github.io/glrimmobilier/selection.html';
 let _eqSelections = {};      // contact_id → dernière sélection
 let _eqSelectionsAll = [];   // toutes les sélections du vendeur (flux d'activité)
