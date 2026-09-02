@@ -32,10 +32,17 @@
 
   /* Choix du créneau */
   .rdv { border:1px solid var(--gold); background:linear-gradient(180deg,#fffdf8,#fdfaf3); }
-  .mode-choix { display:flex; gap:8px; margin:14px 0; }
-  .mode-btn { flex:1; border:1px solid var(--bordure); background:#fff; color:var(--encre); border-radius:22px; padding:10px 16px; font-size:13.5px; cursor:pointer; transition:all .15s; font-family:inherit; }
-  .mode-btn:hover { border-color:var(--gold); }
-  .mode-btn.on { background:var(--gold); border-color:var(--gold); color:#fff; font-weight:700; }
+  /* Deux formats : la visio complète de 45 min, ou l'appel de 15 min */
+  .fmt-choix { display:flex; gap:10px; margin:14px 0 4px; }
+  .fmt { flex:1; text-align:left; border:1px solid var(--bordure); background:#fff; color:var(--encre); border-radius:14px; padding:13px 14px; cursor:pointer; transition:all .15s; font-family:inherit; position:relative; }
+  .fmt:hover { border-color:var(--gold); }
+  .fmt.on { border-color:var(--gold); box-shadow:0 0 0 2px var(--gold) inset; background:#fffdf8; }
+  .fmt-titre { font-family:Georgia,serif; font-size:16px; font-weight:600; color:var(--dark); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .fmt-duree { font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:.8px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--gold); border-radius:5px; padding:2px 7px; }
+  .fmt.on .fmt-duree { background:var(--gold-fonce); }
+  .fmt-sous { font-size:13px; color:var(--encre); margin-top:6px; line-height:1.45; }
+  .fmt-mode { font-size:11.5px; color:var(--muted); margin-top:6px; }
+  .fmt-vide { font-size:13px; color:var(--muted); margin-top:10px; }
 
   .cren-etape { font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin:16px 0 8px; }
   .cren-jrow { display:flex; gap:7px; overflow-x:auto; padding-bottom:6px; -webkit-overflow-scrolling:touch; }
@@ -109,6 +116,7 @@
     .bloc { padding:20px; }
     .logo { height:58px; }
     .rdv-form { flex-direction:column; }
+    .fmt-choix { flex-direction:column; }
   }
 </style></head><body>
 <div class="wrap">
@@ -133,13 +141,36 @@
   var token = params.get("t") || "";       // remplacé par le lien personnel après une réservation publique
   var FN = SUPA + "/functions/v1/rdv/" + encodeURIComponent(token);
   var cont = document.getElementById("contenu");
-  var modeContact = "telephone";   // le mail promet un appel : c'est le choix par défaut
+  // Deux formats (choix d'Alex, septembre 2026) : la visio complète de 45 min
+  // où l'on prend le temps de tout montrer, ou l'appel de 15 min pour une
+  // première esquisse. Le mail présélectionne (?f=visio|appel), la page laisse changer.
+  var FORMATS = {
+    visio: { duree:45, mode:"visio",     titre:"Visio complète",  sous:"On prend le temps de tout vous montrer : le bien, le programme, comment se passe un achat dans le neuf, votre financement, et d'autres lots qui pourraient vous plaire.", modeLbl:"En visio, 45 minutes" },
+    appel: { duree:15, mode:"telephone", titre:"Premier échange", sous:"Vous avez moins de temps ? Un appel de 15 minutes suffit pour une première esquisse : ce bien, votre projet, et les pistes à creuser.", modeLbl:"Par téléphone, 15 minutes" }
+  };
+  var formatChoisi = FORMATS[params.get("f")] ? params.get("f") : "visio";
+  var modeContact = FORMATS[formatChoisi].mode;
   var etat = {};                   // état du rendez-vous, copie locale
   var donnees = null;
   var estPublic = false;           // lien fixe d'un commercial, visiteur inconnu
   var choisiPublic = null;         // créneau retenu, en attente de la présentation
 
   var MODES = { telephone: "Par téléphone", visio: "En visio" };
+  // « Visio · 45 min » à partir de l'état du rendez-vous (durée réelle, sinon format)
+  function libelleRdv(e){
+    var d = e && e.duree;
+    if (!d && e && e.debut && e.fin) d = Math.round((new Date(e.fin) - new Date(e.debut)) / 60000);
+    if (!d && e && FORMATS[e.format]) d = FORMATS[e.format].duree;
+    var m = MODES[e && e.mode] || "";
+    return m + (d ? " · " + d + " min" : "");
+  }
+  function creneauxDuFormat(liste){
+    var besoin = FORMATS[formatChoisi].duree;
+    return (liste || []).filter(function(c){
+      var max = c.duree_max != null ? c.duree_max : Math.round((new Date(c.fin) - new Date(c.debut)) / 60000);
+      return max >= besoin;
+    });
+  }
 
   function esc(s){
     return String(s == null ? "" : s)
@@ -198,12 +229,12 @@
   // ---------- Le bien sur lequel le client a écrit ----------
   function htmlBien(d){
     var b = d.bien || {};
-    var titre = b.typologie || "Votre demande";
+    var titre = b.programme || b.typologie || "Votre demande";
     var ville = b.ville || "";
     var prix = fmtPrix(b.prix);
-    if (!ville && !prix && !b.typologie) return "";
+    if (!ville && !prix && !b.typologie && !b.programme) return "";
     var h = "<div class='bloc'>";
-    h += "<div class='bien-tag'>Le bien qui vous intéresse</div>";
+    h += "<div class='bien-tag'>" + (b.programme ? "Le programme qui vous intéresse" : "Le bien qui vous intéresse") + "</div>";
     h += "<div class='bien-titre'>" + esc(titre) + "</div>";
     if (ville) h += "<div class='bien-ville'>" + esc(ville) + "</div>";
     if (prix) h += "<div class='bien-prix'>" + esc(prix) + "</div>";
@@ -246,10 +277,16 @@
   }
 
   function htmlModes(){
-    return "<div class='mode-choix'>"
-      + "<button class='mode-btn" + (modeContact === "telephone" ? " on" : "") + "' data-mode='telephone'>Par téléphone</button>"
-      + "<button class='mode-btn" + (modeContact === "visio" ? " on" : "") + "' data-mode='visio'>En visio</button>"
-      + "</div>";
+    var h = "<div class='fmt-choix'>";
+    ["visio", "appel"].forEach(function(k){
+      var f = FORMATS[k];
+      h += "<button type='button' class='fmt" + (formatChoisi === k ? " on" : "") + "' data-format='" + k + "' aria-pressed='" + (formatChoisi === k) + "'>"
+         + "<div class='fmt-titre'>" + esc(f.titre) + " <span class='fmt-duree'>" + f.duree + " min</span></div>"
+         + "<div class='fmt-sous'>" + esc(f.sous) + "</div>"
+         + "<div class='fmt-mode'>" + esc(f.modeLbl) + "</div>"
+         + "</button>";
+    });
+    return h + "</div>";
   }
 
   function htmlRdv(d){
@@ -264,7 +301,7 @@
       h += "<div class='coche'>✓</div>";
       h += "<h2>" + (ok ? "Votre rendez-vous est confirmé" : "Votre créneau est réservé") + "</h2>";
       h += "<div class='quand'>" + esc(fmtJourLong(etat.debut)) + " à " + esc(fmtHeure(etat.debut)) + "</div>";
-      h += "<div class='etat'>" + (ok ? "✓ Confirmé · " : "En attente de confirmation · ") + esc(MODES[etat.mode] || "") + "</div>";
+      h += "<div class='etat'>" + (ok ? "✓ Confirmé · " : "En attente de confirmation · ") + esc(libelleRdv(etat)) + "</div>";
       h += "<p style='margin-top:12px;font-size:14px'>" + (ok ? "À très vite avec " + qui + "." : qui + " vous confirme le rendez-vous très vite.") + "</p>";
       return h + "</div>";
     }
@@ -286,13 +323,15 @@
       h += "<h2>Choisissez un autre créneau</h2>";
       h += "<p>Le créneau retenu n'a finalement pas pu être conservé. " + qui + " reste à votre disposition.</p>";
     } else {
-      h += "<h2>Choisissez le moment qui vous arrange</h2>";
-      h += "<p>" + qui + " vous rappelle pour parler de ce bien, répondre à vos questions et vous montrer ce qui existe d'équivalent. Sans engagement.</p>";
+      h += "<h2>Choisissez le format, puis le moment</h2>";
+      h += "<p>" + qui + " s'adapte à votre temps : une visio pour tout voir, ou un appel rapide pour commencer. Sans engagement.</p>";
     }
     h += htmlModes();
 
     if (cr.length){
-      h += htmlCreneaux(cr, "reserver");
+      var crf = creneauxDuFormat(cr);
+      if (!crf.length) h += "<div class='fmt-vide'>Aucun créneau de " + FORMATS[formatChoisi].duree + " min n'est ouvert pour le moment — essayez l'autre format, ou indiquez vos disponibilités ci-dessous.</div>";
+      h += htmlCreneaux(crf, "reserver");
       h += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
       h += "<div id='rdv-libre' style='display:none'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer ma demande</button></div></div>";
     } else if (etat.demande){
@@ -310,7 +349,7 @@
       return "<div class='bloc rdv confirme'><div class='coche'>✓</div>"
         + "<h2>Votre créneau est réservé</h2>"
         + "<div class='quand'>" + esc(fmtJourLong(etat.debut)) + " à " + esc(fmtHeure(etat.debut)) + "</div>"
-        + "<div class='etat'>En attente de confirmation · " + esc(MODES[etat.mode] || "") + "</div>"
+        + "<div class='etat'>En attente de confirmation · " + esc(libelleRdv(etat)) + "</div>"
         + "<p style='margin-top:12px;font-size:14px'>" + qui + " vous confirme le rendez-vous très vite, par mail.</p></div>";
     }
     if (etat.demande){
@@ -322,9 +361,11 @@
     var cr = Array.isArray(d.creneaux) ? d.creneaux : [];
     var h = "<div class='bloc rdv'>";
     if (cr.length){
-      h += "<h2>Choisissez votre créneau</h2>";
+      h += "<h2>Choisissez le format, puis votre créneau</h2>";
       h += htmlModes();
-      h += htmlCreneaux(cr, "public");
+      var crp = creneauxDuFormat(cr);
+      if (!crp.length) h += "<div class='fmt-vide'>Aucun créneau de " + FORMATS[formatChoisi].duree + " min n'est ouvert pour le moment — essayez l'autre format.</div>";
+      h += htmlCreneaux(crp, "public");
       h += "<div id='zone-form'>" + (choisiPublic ? htmlFormulaire(choisiPublic) : "") + "</div>";
     } else {
       h += "<h2>Laissez-moi vos coordonnées</h2>";
@@ -359,11 +400,11 @@
     var h = "<div class='bloc'>";
     if (estPublic){
       h += "<h1>Prenons rendez-vous</h1>";
-      h += "<p>Vingt minutes avec " + qui + ", conseiller chez GLR Immobilier : ce que vous cherchez, ce qui existe aujourd'hui près de chez vous, et à quel prix. Par téléphone ou en visio, sans engagement.</p>";
+      h += "<p>Un échange avec " + qui + ", conseiller chez GLR Immobilier : ce que vous cherchez, ce qui existe aujourd'hui près de chez vous, et à quel prix. En visio pour tout voir, ou par téléphone pour commencer — sans engagement.</p>";
       h += "</div>";
     } else {
       h += "<h1>" + (d.prenom ? "Bonjour " + esc(d.prenom) + "," : "Bonjour,") + "</h1>";
-      h += "<p>Nous avons bien reçu votre demande. " + qui + ", votre conseiller GLR Immobilier, vous rappelle pour en parler — choisissez simplement le créneau qui vous convient.</p>";
+      h += "<p>Nous avons bien reçu votre demande. " + qui + ", votre conseiller GLR Immobilier, vous rappelle pour en parler — choisissez simplement le format et le créneau qui vous conviennent.</p>";
       h += "</div>";
       h += htmlBien(d);
     }
@@ -378,11 +419,14 @@
   }
 
   function brancher(d){
-    Array.prototype.forEach.call(document.querySelectorAll(".mode-btn"), function(btn){
+    Array.prototype.forEach.call(document.querySelectorAll(".fmt"), function(btn){
       btn.addEventListener("click", function(){
-        modeContact = btn.getAttribute("data-mode");
-        Array.prototype.forEach.call(document.querySelectorAll(".mode-btn"), function(b2){ b2.classList.remove("on"); });
-        btn.classList.add("on");
+        var k = btn.getAttribute("data-format");
+        if (!FORMATS[k] || k === formatChoisi) return;
+        formatChoisi = k;
+        modeContact = FORMATS[k].mode;
+        choisiPublic = null;
+        redessiner(d);   // les horaires proposés dépendent de la durée
       });
     });
 
@@ -418,7 +462,7 @@
           demanderConfirmation({
             titre: action === "accepter_proposition" ? "Confirmer ce rendez-vous ?" : "Réserver ce créneau ?",
             quand: fmtJourLong(btn.getAttribute("data-debut")) + " à " + fmtHeure(btn.getAttribute("data-debut")),
-            comment: (MODES[modeContact] || "") + (d && d.vendeur ? " avec " + d.vendeur : "") + " \u00b7 environ 15 minutes",
+            comment: FORMATS[formatChoisi].titre + " \u2014 " + FORMATS[formatChoisi].modeLbl.toLowerCase() + (d && d.vendeur ? " avec " + d.vendeur : ""),
             ok: action === "accepter_proposition" ? "Oui, je confirme" : "Oui, je réserve"
           }).then(function(daccord){
             if (!daccord) return;
@@ -429,11 +473,11 @@
           return;
         }
         Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(b2){ b2.classList.add("off"); });
-        envoyer({ action:action, creneau_id:btn.getAttribute("data-id"), mode:modeContact })
+        envoyer({ action:action, creneau_id:btn.getAttribute("data-id"), mode:modeContact, format:formatChoisi })
         .then(function(res){
           var c = res.corps && res.corps.creneau;
           if (res.corps && res.corps.ok && c){
-            etat = { demande:true, reserve:true, confirme:action === "accepter_proposition", refuse:false, debut:c.debut, fin:c.fin, mode:c.mode, lieu:c.lieu };
+            etat = { demande:true, reserve:true, confirme:action === "accepter_proposition", refuse:false, debut:c.debut, fin:c.fin, mode:c.mode, lieu:c.lieu, format:formatChoisi };
             d.propositions = [];
             redessiner(d);
             window.scrollTo({ top:document.getElementById("bloc-rdv").offsetTop - 20, behavior:"smooth" });
@@ -472,11 +516,12 @@
     var btnEnvoyer = document.getElementById("rdv-envoyer");
     if (btnEnvoyer) btnEnvoyer.addEventListener("click", function(){
       var creneau = (document.getElementById("rdv-creneau").value || "").trim();
-      envoyer({ action:"rdv", creneau:creneau, mode:modeContact }).then(function(res){
+      envoyer({ action:"rdv", creneau:creneau, mode:modeContact, format:formatChoisi }).then(function(res){
         if (!(res.corps && res.corps.ok)){ toast("Envoi impossible — réessayez"); return; }
         etat.demande = true;
         etat.creneau = creneau;
         etat.mode = modeContact;
+        etat.format = formatChoisi;
         d.creneaux = [];
         redessiner(d);
         toast("✓ Demande transmise");
@@ -516,7 +561,7 @@
       envoyer({
         action: "reserver_public",
         creneau_id: choisiPublic ? choisiPublic.id : "",
-        mode: modeContact,
+        mode: modeContact, format: formatChoisi,
         nom: nom, telephone: tel, email: mail,
         projet: val("f-projet"),
         creneau: val("f-dispo"),
@@ -531,9 +576,9 @@
             try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token)); } catch (e) {}
           }
           if (corps.creneau){
-            etat = { demande:true, reserve:true, confirme:false, refuse:false, debut:corps.creneau.debut, fin:corps.creneau.fin, mode:corps.creneau.mode };
+            etat = { demande:true, reserve:true, confirme:false, refuse:false, debut:corps.creneau.debut, fin:corps.creneau.fin, mode:corps.creneau.mode, format:formatChoisi };
           } else {
-            etat = { demande:true, mode:modeContact };
+            etat = { demande:true, mode:modeContact, format:formatChoisi };
           }
           choisiPublic = null;
           redessiner(d);
@@ -581,7 +626,8 @@
         donnees = d;
         estPublic = !!d.public;
         etat = (d.rdv && typeof d.rdv === "object") ? d.rdv : {};
-        if (etat.mode && MODES[etat.mode]) modeContact = etat.mode;
+        if (etat.format && FORMATS[etat.format]) { formatChoisi = etat.format; modeContact = FORMATS[etat.format].mode; }
+        else if (etat.mode && MODES[etat.mode]) modeContact = etat.mode;
         rendu(d);
       })
       .catch(function(){
