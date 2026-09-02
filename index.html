@@ -7723,7 +7723,8 @@ async function eqRdvLienOuvrir(contactId) {
     return;
   }
   _rdvLiens[contactId] = Object.assign({ client_nom: nom }, lien);
-  _rdvLienCtx = { contactId, lien, l, vendeur, url: RDV_FN_URL + lien.token };
+  // Lien personnel du client, sur le domaine GLR comme le lien public (pas d'adresse technique)
+  _rdvLienCtx = { contactId, lien, l, vendeur, url: RDV_SITE_URL + '?t=' + lien.token };
 
   // Sans disponibilité ouverte, le client ne peut qu'écrire : autant le dire tout de suite
   let libres = 0;
