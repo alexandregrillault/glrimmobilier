@@ -63,6 +63,7 @@
     position: sticky;
     top: 0;
     height: 100vh;
+    overflow: hidden;
   }
 
   .logo {
@@ -86,7 +87,21 @@
     line-height: 1.2;
   }
 
-  .nav { margin-top: 20px; flex: 1; }
+  /* La liste des rubriques défile toute seule quand elle dépasse : le logo,
+     le sélecteur d'espace et le pied de menu restent en place. */
+  .nav {
+    margin-top: 20px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .nav::-webkit-scrollbar { width: 6px; }
+  .nav::-webkit-scrollbar-track { background: transparent; }
+  .nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .nav:hover::-webkit-scrollbar-thumb { background: var(--muted); }
   .nav-section {
     font-size: 10px;
     font-weight: 600;
@@ -450,6 +465,8 @@
       padding-top: calc(20px + env(safe-area-inset-top));
       padding-bottom: calc(20px + env(safe-area-inset-bottom));
     }
+    .sidebar { overflow: hidden auto; }
+    .nav { overflow-y: visible; min-height: auto; }
     body.nav-open .sidebar { transform: translateX(0); }
     body.nav-open #sidebar-backdrop { display: block; }
     #nav-burger { display: inline-flex; }
