@@ -7444,13 +7444,53 @@ function eqRemisesLigne(token, i, b) {
   const rs = eqRemisesListe(b);
   const pastilles = rs.map((r, j) => `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:20px;padding:2px 6px 2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}
     <button onclick="eqRemiseSupprimer('${token}',${i},${j})" title="Retirer cette remise" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 3px;opacity:.85">✕</button></span>`).join(' ');
+  const note = String((b && b.note) || '').trim();
   return `<div style="margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${pastilles}
     <button onclick="eqRemiseOuvrir('${token}',${i})" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:2px 11px;color:var(--muted);font-size:11.5px;cursor:pointer">+ Remise</button>
+    <button onclick="eqNoteOuvrir('${token}',${i})" title="Un mot pour le client, affiché sous le prix de ce lot" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:2px 11px;color:var(--muted);font-size:11.5px;cursor:pointer">${note ? 'Modifier la note' : '+ Note'}</button>
+  </div>${note ? `<div style="margin-top:5px;font-size:12px;color:var(--text);border-left:3px solid var(--accent);padding:3px 9px;background:var(--surface2);border-radius:0 8px 8px 0;white-space:pre-wrap">${_vEsc(note)}</div>` : ''}`;
+}
+
+// Note du vendeur sous un lot (choix d'Alex, 02/09/2026) : un mot libre pour
+// signaler au client ce qui compte sur ce bien — dernier lot dispo, vue,
+// travaux, visite possible… Affichée sur la page du client comme « Le mot de
+// <vendeur> », modifiable à tout moment, visible tout de suite.
+function eqNoteOuvrir(token, i) {
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  if (!s || !Array.isArray(s.biens) || !s.biens[i]) return;
+  const b = s.biens[i];
+  document.getElementById('eq-note-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'eq-note-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1600;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:460px;max-width:95vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Note pour le client — ${_vEsc(b.titre || 'ce lot')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Un mot à toi, affiché sous ce lot sur sa page (« Le mot de ${_vEsc(s.vendeur || 'votre conseiller')} »). Deux ou trois phrases maximum.</div>
+    <textarea id="eq-note-texte" rows="4" maxlength="400" placeholder="Ex : Dernier T3 disponible à cet étage, avec la plus grande terrasse du programme. Je peux organiser une visite du show-room samedi." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;line-height:1.5;margin-bottom:14px">${_vEsc(b.note || '')}</textarea>
+    <div style="display:flex;justify-content:space-between;gap:10px">
+      ${b.note ? `<button class="btn btn-secondary" onclick="eqNoteValider('${token}',${i},true)" style="color:var(--danger)">Retirer la note</button>` : '<span></span>'}
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="document.getElementById('eq-note-modal').remove()">Annuler</button>
+        <button class="btn" onclick="eqNoteValider('${token}',${i})">Enregistrer</button>
+      </div>
+    </div>
   </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  document.getElementById('eq-note-texte').focus();
+}
+async function eqNoteValider(token, i, retirer) {
+  const texte = retirer ? '' : (document.getElementById('eq-note-texte')?.value || '').trim().slice(0, 400);
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  if (!s || !Array.isArray(s.biens) || !s.biens[i]) return;
+  const biens = JSON.parse(JSON.stringify(s.biens));
+  if (texte) biens[i].note = texte; else delete biens[i].note;
+  document.getElementById('eq-note-modal')?.remove();
+  await _eqRemisesEnregistrer(token, biens, texte ? 'Note enregistrée' : 'Note retirée');
 }
 
 // Écrit la liste des lots modifiée sur la sélection déjà envoyée
-async function _eqRemisesEnregistrer(token, biens) {
+async function _eqRemisesEnregistrer(token, biens, libelle) {
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/selections?token=eq.' + encodeURIComponent(token), {
       method: 'PATCH',
@@ -7461,7 +7501,7 @@ async function _eqRemisesEnregistrer(token, biens) {
     const s = (_eqSelectionsAll || []).find(x => x.token === token);
     if (s) s.biens = biens;
     if (typeof _eqFicheRender === 'function' && _eqFicheId) _eqFicheRender();
-    if (typeof toast === 'function') toast('✓ Remise mise à jour — visible tout de suite par le client', 'var(--success)');
+    if (typeof toast === 'function') toast('✓ ' + (libelle || 'Remise mise à jour') + ' — visible tout de suite par le client', 'var(--success)');
     return true;
   } catch (e) {
     if (typeof toast === 'function') toast('⚠ Échec de l\'enregistrement de la remise', 'var(--danger)');
@@ -9812,6 +9852,7 @@ function selAjouterLibreRefresh() {
       <span style="white-space:nowrap">
         <button onclick="selAdresseLot(${i})" title="Adresse du programme" style="background:none;border:1px dashed ${b.adresseOk ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.adresseOk ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.adresseOk ? 'Adresse ✓' : 'Adresse ?'}</button>
         <button onclick="selRemiseLot(${i})" title="Remise ou avantage négocié" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:1px 9px;color:var(--muted);font-size:11px;cursor:pointer;margin-right:4px">Remise</button>
+        <button onclick="selNoteLot(${i})" title="Un mot pour le client, affiché sous ce lot" style="background:none;border:1px ${b.note ? 'solid var(--accent)' : 'dashed var(--border)'};border-radius:20px;padding:1px 9px;color:${b.note ? 'var(--accent)' : 'var(--muted)'};font-size:11px;cursor:pointer;margin-right:4px">Note${b.note ? ' ✓' : ''}</button>
         ${b.plan ? `<button onclick="selPlanLot(${i})" title="Choisir ce que le client voit du plan" style="background:none;border:1px dashed ${b.planImg ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.planImg ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.planImg ? 'Plan ✓' : 'Plan ?'}</button>` : ''}
         <button onclick="selEditerLot(${i})" title="Modifier / compléter ce lot" style="background:none;border:none;cursor:pointer;font-size:13px">✎</button>
         <button onclick="_selCtx.libres.splice(${i},1);selAjouterLibreRefresh()" title="Retirer" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button>
@@ -9961,6 +10002,40 @@ function selRemiseRetirer(i, j) {
   b.remises = rs;
   selAjouterLibreRefresh();
   selRemiseLot(i);
+}
+
+// Note du vendeur sur un lot en cours de composition (même chose après envoi
+// depuis la fiche client, voir eqNoteOuvrir)
+function selNoteLot(i) {
+  const b = _selCtx.libres[i];
+  if (!b) return;
+  document.getElementById('sel-note-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'sel-note-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:460px;max-width:95vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Note pour le client — ${_vEsc(b.titre || 'ce lot')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Un mot à toi, affiché sous ce lot sur sa page (« Le mot de … »). Deux ou trois phrases maximum.</div>
+    <textarea id="sel-note-texte" rows="4" maxlength="400" placeholder="Ex : Dernier T3 disponible à cet étage, avec la plus grande terrasse du programme. Je peux organiser une visite du show-room samedi." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;line-height:1.5;margin-bottom:14px">${_vEsc(b.note || '')}</textarea>
+    <div style="display:flex;justify-content:space-between;gap:10px">
+      ${b.note ? `<button class="btn btn-secondary" onclick="selNoteValider(${i},true)" style="color:var(--danger)">Retirer la note</button>` : '<span></span>'}
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="document.getElementById('sel-note-modal').remove()">Annuler</button>
+        <button class="btn" onclick="selNoteValider(${i})">Enregistrer</button>
+      </div>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  document.getElementById('sel-note-texte').focus();
+}
+function selNoteValider(i, retirer) {
+  const b = _selCtx.libres[i];
+  if (!b) return;
+  const texte = retirer ? '' : (document.getElementById('sel-note-texte')?.value || '').trim().slice(0, 400);
+  if (texte) b.note = texte; else delete b.note;
+  document.getElementById('sel-note-modal')?.remove();
+  selAjouterLibreRefresh();
 }
 
 // Recharge un lot dans le formulaire pour le compléter (prix, surface…)
