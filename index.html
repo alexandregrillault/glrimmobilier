@@ -1709,7 +1709,7 @@
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">
         <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">À valider</div><div id="eq-plan-kpi-attente" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px;color:var(--warning)">—</div></div>
         <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Rendez-vous confirmés</div><div id="eq-plan-kpi-confirmes" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px;color:var(--success)">—</div></div>
-        <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Créneaux libres à venir</div><div id="eq-plan-kpi-libres" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px">—</div></div>
+        <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Disponibilités à venir</div><div id="eq-plan-kpi-libres" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px">—</div></div>
       </div>
       <div id="eq-plan-libres-demandes"></div>
       <div class="card" style="padding:18px 20px">
@@ -8615,11 +8615,17 @@ async function eqProposerOuvrir(creneauId, token) {
   const prenom = _creneauVendeur();
   const c = creneauId ? _eqRdv.find(x => x.id === creneauId) : null;
   const dem = token ? _eqRdvDemandes.find(x => x.token === token) : null;
+  // Format demandé par le client : visio (30 min) ou appel (10 min). Le mode
+  // est écrit sur le créneau réservé, ou dans la demande libre.
+  const modeDemande = (c && c.mode) || (dem && dem.avis && dem.avis.rdv && dem.avis.rdv.mode) || 'telephone';
+  const modeProp = modeDemande === 'visio' ? 'visio' : 'telephone';
   _propCtx = {
     creneauRefuse: creneauId || null,
     token: (c && c.selection_token) || token || null,
     contactId: (c && c.contact_id) || (dem && dem.contact_id) || null,
-    nom: (c && c.client_nom) || (dem && dem.client_nom) || 'ce client'
+    nom: (c && c.client_nom) || (dem && dem.client_nom) || 'ce client',
+    mode: modeProp,
+    duree: _crenDureeVoulue(modeProp)
   };
   const old = document.getElementById('eq-prop-modal'); if (old) old.remove();
   const div = document.createElement('div');
@@ -8630,7 +8636,7 @@ async function eqProposerOuvrir(creneauId, token) {
       <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Proposer trois créneaux à ${_vEsc(_propCtx.nom)}</div>
       <button onclick="eqProposerFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Coche jusqu'à trois créneaux parmi tes disponibilités. ${_propCtx.creneauRefuse ? 'Le créneau qu\'il avait choisi sera libéré. ' : ''}Le client en retient un, et le rendez-vous se pose directement dans ton planning.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Il a demandé <strong style="color:var(--text)">${_propCtx.mode === 'visio' ? 'une visio (30 min)' : 'un appel (10 min)'}</strong> : ne sont proposés que les horaires ronds où cette durée tient, plus le premier horaire libre après un rendez-vous. Coche jusqu'à trois créneaux. ${_propCtx.creneauRefuse ? 'Le créneau qu\'il avait choisi sera libéré. ' : ''}Le client en retient un, et le rendez-vous se pose directement dans ton planning.</div>
     <div id="eq-prop-liste" style="font-size:13px;color:var(--muted)">Chargement…</div>
     <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px">
       <button class="btn btn-secondary" onclick="eqCreneauxOuvrir()" style="font-size:12px">Ouvrir de nouveaux créneaux</button>
@@ -8644,12 +8650,35 @@ async function eqProposerOuvrir(creneauId, token) {
   document.body.appendChild(div);
 
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&statut=eq.libre&debut=gte.' + encodeURIComponent(new Date().toISOString()) + '&order=debut.asc&limit=60', {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&statut=eq.libre&debut=gte.' + encodeURIComponent(new Date().toISOString()) + '&order=debut.asc&limit=3000', {
       cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
-    _propCtx.libres = r.ok ? await r.json() : [];
-  } catch (e) { _propCtx.libres = []; }
+    _propCtx.tousLibres = r.ok ? await r.json() : [];
+  } catch (e) { _propCtx.tousLibres = []; }
+  // Débuts possibles : chaque créneau libre à partir duquel la durée
+  // voulue tient d'un seul tenant (créneaux contigus enchaînés).
+  _propCtx.libres = _crenHorairesMontres(_propCtx.tousLibres, _crenDebutsPossibles(_propCtx.tousLibres, _propCtx.duree));
   eqProposerRender();
+}
+
+// Pour chaque créneau libre, la chaîne des créneaux libres contigus qui couvre
+// `duree` minutes à partir de son début — ou rien si ça ne tient pas.
+function _crenChaine(libres, c, duree) {
+  const finDe = {};
+  libres.forEach(x => { const k = new Date(x.debut).getTime(); if (!finDe[k] || new Date(finDe[k].fin) < new Date(x.fin)) finDe[k] = x; });
+  const cible = new Date(c.debut).getTime() + duree * 60000;
+  const chaine = [c];
+  let cur = new Date(c.fin).getTime(), garde = 0;
+  while (cur < cible && garde++ < 20) {
+    const suiv = finDe[cur];
+    if (!suiv || suiv.id === c.id) return null;
+    chaine.push(suiv);
+    cur = new Date(suiv.fin).getTime();
+  }
+  return cur >= cible ? chaine : null;
+}
+function _crenDebutsPossibles(libres, duree) {
+  return libres.filter(c => !!_crenChaine(libres, c, duree));
 }
 
 function eqProposerRender() {
@@ -8657,7 +8686,7 @@ function eqProposerRender() {
   if (!box || !_propCtx) return;
   const libres = _propCtx.libres || [];
   if (!libres.length) {
-    box.innerHTML = '<div style="padding:14px;text-align:center">Aucun créneau libre à proposer — ouvre des disponibilités d\'abord.</div>';
+    box.innerHTML = '<div style="padding:14px;text-align:center">Aucune plage libre de ' + _propCtx.duree + ' min à proposer — ouvre des disponibilités d\'abord.</div>';
     return;
   }
   const hh = (d) => new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -8692,12 +8721,29 @@ async function eqProposerEnvoyer() {
   if (!ids.length) { toast('Choisis au moins un créneau', 'var(--warning)'); return; }
   const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
   try {
-    // Les créneaux choisis sont réservés à ce client le temps qu'il réponde
-    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=in.(' + ids.join(',') + ')', {
-      method: 'PATCH', headers: entetes,
-      body: JSON.stringify({ statut: 'propose', selection_token: _propCtx.token, contact_id: _propCtx.contactId, client_nom: _propCtx.nom })
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    // Chaque proposition prend la durée du format demandé : le premier créneau
+    // d'heure s'allonge jusqu'à la fin voulue et absorbe les suivants, qui
+    // disparaissent. Si le client en retient une, les autres redeviennent des
+    // plages libres (reserver_duree sait y reprendre un appel de 10 min).
+    const tous = _propCtx.tousLibres || [];
+    const consommes = new Set();
+    for (const id of ids) {
+      const c = tous.find(x => x.id === id);
+      const chaine = c ? _crenChaine(tous.filter(x => !consommes.has(x.id)), c, _propCtx.duree) : null;
+      if (!chaine) throw new Error('plage indisponible');
+      chaine.forEach(x => consommes.add(x.id));
+      const finVoulue = new Date(new Date(c.debut).getTime() + _propCtx.duree * 60000).toISOString();
+      const suivants = chaine.slice(1).map(x => x.id);
+      if (suivants.length) {
+        const d = await fetch(SUPABASE_URL + '/rest/v1/creneaux?statut=eq.libre&id=in.(' + suivants.join(',') + ')', { method: 'DELETE', headers: entetes });
+        if (!d.ok) throw new Error('HTTP ' + d.status);
+      }
+      const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + id + '&statut=eq.libre', {
+        method: 'PATCH', headers: entetes,
+        body: JSON.stringify({ statut: 'propose', fin: finVoulue, mode: _propCtx.mode, selection_token: _propCtx.token, contact_id: _propCtx.contactId, client_nom: _propCtx.nom })
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+    }
     // Le créneau refusé retourne à l'offre générale
     if (_propCtx.creneauRefuse) {
       await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + _propCtx.creneauRefuse, {
@@ -8707,7 +8753,7 @@ async function eqProposerEnvoyer() {
     }
     await _planMajSelection(_propCtx.token, { reserve: false, confirme: false, refuse: true, propositions: ids, traite: true });
     await _planCalerRappel(_propCtx.contactId, 1);
-    const proposes = (_propCtx.libres || []).filter(c => ids.indexOf(c.id) >= 0).map(c => ({ debut: c.debut, fin: c.fin }));
+    const proposes = (_propCtx.libres || []).filter(c => ids.indexOf(c.id) >= 0).map(c => ({ debut: c.debut, fin: new Date(new Date(c.debut).getTime() + _propCtx.duree * 60000).toISOString(), mode: _propCtx.mode }));
     const notif = await rdvNotifierClient(_propCtx.token, 'propositions', { creneaux: proposes });
     toast('✓ ' + ids.length + ' créneau(x) proposé(s)' + _rdvNotifMot(notif), 'var(--success)');
   } catch (e) { toast('⚠ Impossible d\'envoyer ces créneaux', 'var(--danger)'); }
@@ -10188,7 +10234,42 @@ function eqVoirSelection(contactId, token) {
 // simultanés ne peuvent pas prendre le même horaire.
 let _creneaux = [];
 const CRENEAU_MODES = { visio: 'Visio', agence: 'Agence', sur_place: 'Sur place', telephone: 'Téléphone' };
-// Depuis le 02/09/2026 le client choisit un format (visio 45 min / appel 15 min)
+// Choix d'Alex (02/09/2026) : les disponibilités s'ouvrent uniquement par
+// créneaux de 10 min ; le client bloque 30 min pour une visio, 10 min pour un
+// appel (même règle sur la feuille sélection et sur le mail de rendez-vous).
+// Des durées courtes, volontairement : un gros créneau fait peur au client.
+const CRENEAU_PAS_MIN = 10;
+const CRENEAU_DUREES = { visio: 30, telephone: 10 };
+// Côté client, seuls les horaires ronds (toutes les 30 min) sont montrés, plus
+// le premier horaire libre juste après un rendez-vous — même règle ici quand
+// on propose des créneaux à la main, pour ne pas noyer le vendeur non plus.
+const CRENEAU_GRILLE_MIN = 30;
+function _crenDureeVoulue(mode) { return CRENEAU_DUREES[mode] || CRENEAU_DUREES.telephone; }
+function _crenHorairesMontres(libres, candidats) {
+  const fins = new Set(libres.map(c => new Date(c.fin).getTime()));
+  return candidats.filter(c => {
+    const d = new Date(c.debut);
+    return d.getMinutes() % CRENEAU_GRILLE_MIN === 0 || !fins.has(d.getTime());
+  });
+}
+
+// Regroupe des créneaux contigus (même statut) en plages : « 09:00–12:00 ».
+// Sert à l'affichage — la base garde bien un créneau par tranche de 10 min.
+function _crenPlages(liste) {
+  const tri = liste.slice().sort((a, b) => new Date(a.debut) - new Date(b.debut));
+  const plages = [];
+  tri.forEach(c => {
+    const d = new Date(c.debut).getTime(), f = new Date(c.fin).getTime();
+    const p = plages[plages.length - 1];
+    if (p && p.fin === d && p.statut === c.statut && p.mode === c.mode && (p.lieu || '') === (c.lieu || '')) {
+      p.fin = f; p.ids.push(c.id); p.creneaux.push(c);
+    } else {
+      plages.push({ debut: d, fin: f, statut: c.statut, mode: c.mode, lieu: c.lieu, ids: [c.id], creneaux: [c] });
+    }
+  });
+  return plages;
+}
+// Depuis le 02/09/2026 le client choisit un format (visio 30 min / appel 10 min)
 // et ne bloque que cette durée : on l'affiche à côté du mode partout où un
 // rendez-vous apparaît. Vaut pour un créneau (debut/fin) comme pour l'état
 // rdv d'un lien (duree, ou debut/fin).
@@ -10238,7 +10319,7 @@ async function eqCreneauxOuvrir(source) {
       <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Mes créneaux de rendez-vous — ${_vEsc(prenom)}</div>
       <button onclick="eqCreneauxFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Les créneaux libres des 3 prochaines semaines sont proposés au client dans ses sélections. Il réserve lui-même, tu reçois l'info dans le flux d'activité.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Tes disponibilités sont découpées en créneaux de <strong style="color:var(--text)">10 min</strong> et proposées au client dans ses sélections et dans le mail de prise de rendez-vous (il ne voit que les horaires ronds, toutes les 30 min). Il réserve lui-même : une <strong style="color:var(--text)">visio bloque 30 min</strong>, un <strong style="color:var(--text)">appel 10 min</strong> — le reste de la plage reste ouvert aux autres clients.</div>
 
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:16px">
       <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:9px">Ouvrir des disponibilités</div>
@@ -10263,9 +10344,6 @@ async function eqCreneauxOuvrir(source) {
             return `<label style="cursor:pointer;user-select:none"><input type="checkbox" data-jour="${jsDay}" ${coche?'checked':''} style="display:none" onchange="this.parentElement.lastElementChild.style.cssText=this.checked?'display:inline-block;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;background:var(--accent);color:#fff;border:1px solid var(--accent)':'display:inline-block;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;background:var(--surface);color:var(--muted);border:1px solid var(--border)'"><span style="display:inline-block;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:600;${coche?'background:var(--accent);color:#fff;border:1px solid var(--accent)':'background:var(--surface);color:var(--muted);border:1px solid var(--border)'}">${j}</span></label>`;
           }).join('')}
         </span>
-        <select id="cren-duree" style="${champ}">
-          <option value="30">30 min</option><option value="45" selected>45 min</option><option value="60">1 h</option>
-        </select>
         <select id="cren-mode" style="${champ}">
           <option value="visio">Visio</option><option value="telephone">Téléphone</option><option value="agence">Agence</option><option value="sur_place">Sur place</option>
         </select>
@@ -10286,7 +10364,7 @@ async function eqCreneauxOuvrir(source) {
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) eqCreneauxFermer(); });
   document.body.appendChild(div);
-  ['cren-date1', 'cren-date2', 'cren-h1', 'cren-h2', 'cren-duree'].forEach(id => {
+  ['cren-date1', 'cren-date2', 'cren-h1', 'cren-h2'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', eqCreneauxApercu);
   });
@@ -10387,7 +10465,7 @@ function _eqCreneauxLignes() {
   const d2 = document.getElementById('cren-date2')?.value;
   const h1 = document.getElementById('cren-h1')?.value;
   const h2 = document.getElementById('cren-h2')?.value;
-  const duree = parseInt(document.getElementById('cren-duree')?.value, 10);
+  const duree = CRENEAU_PAS_MIN;   // 10 min : le client bloque 30 min (visio) ou 10 min (appel)
   const mode = document.getElementById('cren-mode')?.value;
   const lieu = (document.getElementById('cren-lieu')?.value || '').trim();
   const jours = _eqCreneauxJoursCoches();
@@ -10447,9 +10525,11 @@ function eqCreneauxApercu() {
   const { lignes, erreur, ecartes } = _eqCreneauxLignes();
   if (erreur) { box.textContent = '⚠ ' + erreur; return; }
   const nbJours = new Set(lignes.map(l => l.debut.slice(0, 10))).size;
-  const note = ecartes ? ' — ' + ecartes + ' écarté(s) : une activité bloquée occupe déjà la plage' : '';
+  const note = ecartes ? ' — ' + ecartes + ' créneau(x) écarté(s) : une activité bloquée occupe déjà la plage' : '';
+  const heures = lignes.length * CRENEAU_PAS_MIN / 60;
+  const hTxt = Number.isInteger(heures) ? heures + ' h' : heures.toFixed(2).replace('.', ',').replace(/,?0+$/, '') + ' h';
   box.textContent = lignes.length
-    ? '→ ' + lignes.length + ' créneau(x) seront ouverts sur ' + nbJours + ' jour(s)' + note
+    ? '→ ' + hTxt + ' de disponibilité sur ' + nbJours + ' jour(s), soit ' + lignes.length + ' créneaux de ' + CRENEAU_PAS_MIN + ' min' + note
     : (ecartes ? 'Aucun créneau à ouvrir : tes activités bloquées couvrent toute la plage'
                : 'Aucun créneau sur cette plage — vérifie les dates, horaires et jours cochés');
 }
@@ -10458,7 +10538,7 @@ async function eqCreneauxCharger() {
   const prenom = _creneauVendeur();
   const depuis = new Date(Date.now() - 864e5).toISOString();
   try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&debut=gte.' + encodeURIComponent(depuis) + '&order=debut.asc&limit=300', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&debut=gte.' + encodeURIComponent(depuis) + '&order=debut.asc&limit=3000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -10477,28 +10557,41 @@ function eqCreneauxRender() {
   const hh = (d) => new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   const jours = {};
   _creneaux.forEach(c => { const k = String(c.debut).slice(0, 10); (jours[k] = jours[k] || []).push(c); });
-  const libres = _creneaux.filter(c => c.statut === 'libre').length;
+  const libres = _creneaux.filter(c => c.statut === 'libre');
   const pris = _creneaux.filter(c => c.statut === 'reserve').length;
-  box.innerHTML = `<div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:9px">${libres} libre(s) · ${pris} réservé(s)</div>` +
+  const heuresLibres = libres.reduce((s, c) => s + (new Date(c.fin) - new Date(c.debut)) / 36e5, 0);
+  const hTxt = (h) => (Math.round(h * 4) / 4).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' h';
+  box.innerHTML = `<div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:9px">${hTxt(heuresLibres)} de disponibilité (${libres.length} créneaux de ${CRENEAU_PAS_MIN} min) · ${pris} réservé(s)</div>` +
     Object.keys(jours).sort().map(k => {
       const dt = new Date(jours[k][0].debut);
       const titre = dt.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
       const nbLibresJour = jours[k].filter(c => c.statut === 'libre').length;
+      // Les créneaux libres contigus s'affichent en une seule plage
+      // « 09:00–12:00 » ; les rendez-vous réservés restent un par un.
       return `<div style="margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
           <div style="font-size:12px;font-weight:700">${_vEsc(titre.charAt(0).toUpperCase() + titre.slice(1))}</div>
-          ${nbLibresJour ? `<button onclick="eqCreneauxFermerJour('${k}')" title="Supprimer les ${nbLibresJour} créneau(x) libre(s) de ce jour — les réservés ne bougent pas" style="background:none;border:1px solid var(--border);border-radius:7px;padding:2px 8px;color:var(--muted);font-size:11px;cursor:pointer">Fermer ce jour</button>` : ''}
+          ${nbLibresJour ? `<button onclick="eqCreneauxFermerJour('${k}')" title="Supprimer les disponibilités de ce jour — les rendez-vous réservés ne bougent pas" style="background:none;border:1px solid var(--border);border-radius:7px;padding:2px 8px;color:var(--muted);font-size:11px;cursor:pointer">Fermer ce jour</button>` : ''}
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">${jours[k].map(c => {
-          if (c.statut === 'reserve') {
-            return `<span title="Réservé par ${_vEsc(c.client_nom || 'un client')}${c.client_message ? ' — « ' + _vEsc(c.client_message) + ' »' : ''}" style="display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border-radius:9px;padding:6px 10px;font-size:12.5px;font-weight:600">
-              ${hh(c.debut)} · ${_vEsc((c.client_nom || 'Réservé').split(' ')[0])}
-              <button onclick="eqCreneauLiberer('${c.id}')" title="Libérer ce créneau" style="background:none;border:none;color:rgba(255,255,255,.75);cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
-            </span>`;
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${_crenPlages(jours[k]).map(p => {
+          if (p.statut === 'reserve' || p.statut === 'confirme' || p.statut === 'propose' || p.creneaux[0].origine === 'perso') {
+            return p.creneaux.map(c => {
+              if (c.statut === 'reserve' || c.statut === 'confirme') {
+                return `<span title="${c.statut === 'confirme' ? 'Confirmé' : 'Réservé'} par ${_vEsc(c.client_nom || 'un client')} — ${_vEsc(_crenLbl(c))}${c.client_message ? ' — « ' + _vEsc(c.client_message) + ' »' : ''}" style="display:inline-flex;align-items:center;gap:6px;background:${c.statut === 'confirme' ? 'var(--success)' : 'var(--accent)'};color:#fff;border-radius:9px;padding:6px 10px;font-size:12.5px;font-weight:600">
+                  ${hh(c.debut)}–${hh(c.fin)} · ${_vEsc((c.client_nom || 'Réservé').split(' ')[0])}
+                  ${c.statut === 'reserve' ? `<button onclick="eqCreneauLiberer('${c.id}')" title="Libérer ce créneau" style="background:none;border:none;color:rgba(255,255,255,.75);cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>` : ''}
+                </span>`;
+              }
+              if (c.statut === 'propose') {
+                return `<span title="Proposé à ${_vEsc(c.client_nom || 'un client')} — en attente de sa réponse" style="display:inline-flex;align-items:center;gap:6px;border:1px dashed var(--accent);color:var(--muted);border-radius:9px;padding:6px 10px;font-size:12.5px">${hh(c.debut)}–${hh(c.fin)} · proposé</span>`;
+              }
+              return `<span title="${_vEsc(c.titre || _planCatLabel(c.categorie))}" style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);color:var(--muted);border-radius:9px;padding:6px 10px;font-size:12.5px">${hh(c.debut)}–${hh(c.fin)} · ${_vEsc(c.titre || _planCatLabel(c.categorie))}</span>`;
+            }).join('');
           }
-          return `<span title="${_vEsc(_crenLbl(c))}${c.lieu ? ' — ' + _vEsc(c.lieu) : ''}" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:6px 10px;font-size:12.5px">
-            ${hh(c.debut)}
-            <button onclick="eqCreneauSupprimer('${c.id}')" title="Retirer ce créneau" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
+          const nMin = (p.fin - p.debut) / 60000;
+          return `<span title="${_vEsc(CRENEAU_MODES[p.mode] || p.mode || '')}${p.lieu ? ' — ' + _vEsc(p.lieu) : ''} · ${p.ids.length} créneau(x) de ${CRENEAU_PAS_MIN} min" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:6px 10px;font-size:12.5px">
+            ${hh(new Date(p.debut))}–${hh(new Date(p.fin))}${nMin < 45 ? ' <span style="font-size:10.5px;color:var(--muted)">appel seul</span>' : ''}
+            <button onclick="eqCreneauSupprimer('${p.ids.join(',')}')" title="Retirer cette plage" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
           </span>`;
         }).join('')}</div>
       </div>`;
@@ -10542,9 +10635,11 @@ async function eqCreneauxFermerJour(jour) {
   await eqCreneauxCharger();
 }
 
+// `id` peut porter plusieurs identifiants séparés par des virgules : une plage
+// affichée d'un bloc se retire d'un bloc.
 async function eqCreneauSupprimer(id) {
   try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + id + '&statut=eq.libre', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=in.(' + id + ')&statut=eq.libre', {
       method: 'DELETE',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -10637,7 +10732,7 @@ async function renderEquipePlanning() {
   const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
   const depuis = new Date(Date.now() - 60 * 864e5).toISOString(); // 2 mois d'historique pour la navigation
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(v.prenom) + '&debut=gte.' + encodeURIComponent(depuis) + '&order=debut.asc&limit=500', { cache: 'no-store', headers: entetes });
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(v.prenom) + '&debut=gte.' + encodeURIComponent(depuis) + '&order=debut.asc&limit=4000', { cache: 'no-store', headers: entetes });
     _planCreneaux = r.ok ? await r.json() : [];
   } catch (e) { _planCreneaux = []; }
   try {
@@ -10677,7 +10772,9 @@ function renderEquipePlanningListe() {
   const maj = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   maj('eq-plan-kpi-attente', aVenir.filter(c => c.statut === 'reserve').length);
   maj('eq-plan-kpi-confirmes', aVenir.filter(c => c.statut === 'confirme' && c.origine !== 'rappel').length);
-  maj('eq-plan-kpi-libres', aVenir.filter(c => c.statut === 'libre').length);
+  // Les disponibilités se comptent en heures (créneaux de 10 min)
+  const hLibres = aVenir.filter(c => c.statut === 'libre').reduce((s, c) => s + (new Date(c.fin) - new Date(c.debut)) / 36e5, 0);
+  maj('eq-plan-kpi-libres', (Math.round(hLibres * 4) / 4).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' h');
   const proposes = aVenir.filter(c => c.statut === 'propose').length;
   const sousTitre = document.getElementById('eq-plan-sub');
   const nRappels = aVenir.filter(c => c.origine === 'rappel').length;
@@ -10713,10 +10810,17 @@ function renderEquipePlanningListe() {
       + (_planSemaine === 0 ? ' (en cours)' : '');
   }
 
-  const dansLaSemaine = _planCreneaux.filter(c => {
+  const dansLaSemaineBrut = _planCreneaux.filter(c => {
     const t = new Date(c.debut).getTime();
     return t >= lundi.getTime() && t < dimancheSoir.getTime();
   });
+  // Les créneaux libres contigus forment une seule plage à l'écran
+  // (« 09:00–12:00 libre ») ; l'identifiant porte tous les créneaux de la plage.
+  const dansLaSemaine = dansLaSemaineBrut.filter(c => c.statut !== 'libre')
+    .concat(_crenPlages(dansLaSemaineBrut.filter(c => c.statut === 'libre')).map(p => ({
+      id: p.ids.join(','), statut: 'libre', mode: p.mode, lieu: p.lieu,
+      debut: new Date(p.debut).toISOString(), fin: new Date(p.fin).toISOString(), _n: p.ids.length
+    })));
 
   // Rendez-vous à valider ailleurs : on prévient plutôt que de les laisser dormir
   const ailleurs = aVenir.filter(c => c.statut === 'reserve' && !dansLaSemaine.includes(c));
@@ -10752,9 +10856,9 @@ function renderEquipePlanningListe() {
       html += duJour.map(c => {
         const mode = CRENEAU_MODES[c.mode] || c.mode;
         if (c.statut === 'libre') {
-          return `<div title="Créneau libre — ${_vEsc(mode)}${c.lieu ? ' · ' + _vEsc(c.lieu) : ''}" style="display:flex;gap:5px;align-items:center;border:1px dashed var(--border);border-radius:7px;padding:4px 6px;margin-bottom:4px;font-size:11.5px;color:var(--muted)">
-            <span style="flex:1">${hh(c.debut)} libre</span>
-            <button onclick="eqCreneauSupprimerPlanning('${c.id}')" title="Retirer ce créneau" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0;line-height:1">✕</button>
+          return `<div title="Disponible pour les clients — ${_vEsc(mode)}${c.lieu ? ' · ' + _vEsc(c.lieu) : ''} · ${c._n || 1} créneau(x) de ${CRENEAU_PAS_MIN} min" style="display:flex;gap:5px;align-items:center;border:1px dashed var(--border);border-radius:7px;padding:4px 6px;margin-bottom:4px;font-size:11.5px;color:var(--muted)">
+            <span style="flex:1">${hh(c.debut)}–${hh(c.fin)} libre</span>
+            <button onclick="eqCreneauSupprimerPlanning('${c.id}')" title="Retirer cette plage" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0;line-height:1">✕</button>
           </div>`;
         }
         if (c.statut === 'propose') {
@@ -10879,7 +10983,7 @@ async function eqCreneauSupprimerPlanning(id) {
 }
 async function eqCreneauSupprimerSilencieux(id) {
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + id + '&statut=eq.libre', {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=in.(' + id + ')&statut=eq.libre', {
       method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -14029,8 +14133,9 @@ var _planVue = 'heures';            // 'heures' (grille) ou 'semaine' (liste com
 // _planVue depuis un script précédent — avec let il tomberait dans la zone morte.
 const PLAN_H_DEB = 7;               // première heure affichée
 const PLAN_H_FIN = 21;              // dernière heure affichée
-const PLAN_SLOT_MIN = 30;           // finesse de sélection
-const PLAN_SLOT_PX = 21;
+const PLAN_SLOT_MIN = 15;           // finesse de sélection à la souris : le quart d'heure (les créneaux clients, eux, font 10 min)
+const PLAN_SLOT_PX = 16;            // 64 px par heure — un appel de 10 min fait encore ~11 px, lisible
+const PLAN_H_PX = PLAN_SLOT_PX * 60 / PLAN_SLOT_MIN;   // hauteur d'une heure
 
 const PLAN_CATS = [
   { k: 'appel',       l: 'Appels / relances',   c: 'var(--accent)'  },
@@ -14087,7 +14192,7 @@ function _planRenderHeures(box, creneaux, lundi, voirLibres) {
 
   let gutter = '<div style="width:50px;flex:0 0 50px"><div style="height:38px"></div>';
   for (let h = PLAN_H_DEB; h < PLAN_H_FIN; h++) {
-    gutter += `<div style="height:${PLAN_SLOT_PX * 2}px;font-size:10.5px;color:var(--muted);text-align:right;padding-right:6px;transform:translateY(-6px)">${String(h).padStart(2, '0')}h</div>`;
+    gutter += `<div style="height:${PLAN_H_PX}px;font-size:11px;color:var(--muted);text-align:right;padding-right:6px;transform:translateY(-6px);position:relative">${String(h).padStart(2, '0')}h<span style="position:absolute;right:6px;top:${PLAN_H_PX / 2 - 6}px;font-size:9px;opacity:.6">30</span></div>`;
   }
   gutter += '</div>';
 
@@ -14123,19 +14228,19 @@ function _planRenderHeures(box, creneaux, lundi, voirLibres) {
         })()
       : '';
 
-    cols += `<div style="flex:1;min-width:96px">
+    cols += `<div style="flex:1;min-width:118px">
       <div style="height:38px;display:flex;align-items:center;gap:5px;padding:0 4px;border-bottom:1px solid var(--border)">
         <span style="flex:1;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:${estAjd ? 'var(--accent)' : 'var(--muted)'}">${jour.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '')} ${jour.getDate()}</span>
         <button onclick="eqPlanBlocOuvrir('${jourIso}')" title="Poser une activité ce jour-là" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:2px 6px">+</button>
       </div>
-      <div class="plan-jour" data-jour="${jourIso}" style="position:relative;height:${hauteur}px;border-left:1px solid var(--border);${estAjd ? 'background-color:var(--surface2);' : ''}background-image:repeating-linear-gradient(to bottom,transparent 0,transparent ${PLAN_SLOT_PX * 2 - 1}px,var(--border) ${PLAN_SLOT_PX * 2 - 1}px,var(--border) ${PLAN_SLOT_PX * 2}px);cursor:crosshair;touch-action:none;user-select:none">
+      <div class="plan-jour" data-jour="${jourIso}" style="position:relative;height:${hauteur}px;border-left:1px solid var(--border);${estAjd ? 'background-color:var(--surface2);' : ''}background-image:repeating-linear-gradient(to bottom,transparent 0,transparent ${PLAN_H_PX - 1}px,var(--border) ${PLAN_H_PX - 1}px,var(--border) ${PLAN_H_PX}px),repeating-linear-gradient(to bottom,transparent 0,transparent ${PLAN_H_PX / 2 - 1}px,color-mix(in srgb,var(--border) 45%,transparent) ${PLAN_H_PX / 2 - 1}px,color-mix(in srgb,var(--border) 45%,transparent) ${PLAN_H_PX / 2}px);cursor:crosshair;touch-action:none;user-select:none">
         ${ligneNow}${evs}
       </div>
     </div>`;
   }
 
   box.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:9px">Glisse sur une plage horaire pour poser une activité — le créneau devient indisponible pour les clients. Clique sur une activité pour la modifier.</div>
-    <div style="overflow-x:auto"><div style="display:flex;min-width:740px;border:1px solid var(--border);border-radius:10px;padding:8px 8px 10px;background:var(--surface)">${gutter}${cols}</div></div>
+    <div style="overflow-x:auto"><div style="display:flex;min-width:900px;border:1px solid var(--border);border-radius:10px;padding:8px 8px 10px;background:var(--surface)">${gutter}${cols}</div></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:var(--muted)">
       ${PLAN_CATS.map(c => `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:${c.c}"></span>${c.l}</span>`).join('')}
     </div>`;
@@ -14146,12 +14251,12 @@ function _planRenderHeures(box, creneaux, lundi, voirLibres) {
 function _planEvHtml(c, nLanes) {
   const debMin = _planMinutes(c.debut), finMin = _planMinutes(c.fin);
   const haut = Math.max(0, (debMin - PLAN_H_DEB * 60)) / PLAN_SLOT_MIN * PLAN_SLOT_PX;
-  const dur = Math.max(15, (finMin > debMin ? finMin : debMin + 30) - debMin);
-  const h = Math.max(16, dur / PLAN_SLOT_MIN * PLAN_SLOT_PX - 2);
+  const dur = Math.max(10, (finMin > debMin ? finMin : debMin + 30) - debMin);
+  const h = Math.max(11, dur / PLAN_SLOT_MIN * PLAN_SLOT_PX - 1);
   const lane = c._lane || 0;
   const larg = 100 / nLanes;
   const pos = `position:absolute;top:${haut}px;height:${h}px;left:calc(${lane * larg}% + 2px);width:calc(${larg}% - 4px);z-index:2;overflow:hidden`;
-  const petit = h < 34;
+  const petit = h < 30;
   const titre2 = (t, s) => petit
     ? `<div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</div>`
     : `<div style="font-size:10.5px;font-weight:700">${_planHM(c.debut)}</div><div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</div>${s ? `<div style="font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s}</div>` : ''}`;
@@ -14159,9 +14264,10 @@ function _planEvHtml(c, nLanes) {
   if (c.statut === 'libre') {
     // Une disponibilité ne doit pas bloquer le tracé d'une plage à la souris :
     // le bloc laisse passer le clic, seule sa croix reste cliquable.
-    return `<div class="plan-ev plan-libre" title="Créneau libre — un client peut le réserver" style="${pos};border:1px dashed var(--border);border-radius:6px;padding:2px 4px;color:var(--muted);background:transparent;pointer-events:none">
-      <div style="display:flex;gap:3px;align-items:flex-start"><span style="flex:1;font-size:10px">${_planHM(c.debut)} libre</span>
-      <span class="plan-x" onclick="eqCreneauSupprimerPlanning('${c.id}')" title="Retirer ce créneau" style="cursor:pointer;font-size:10px;pointer-events:auto">✕</span></div></div>`;
+    const nMin = Math.round((new Date(c.fin) - new Date(c.debut)) / 60000);
+    return `<div class="plan-ev plan-libre" title="Disponible pour les clients — ${_planHM(c.debut)}–${_planHM(c.fin)}${nMin < CRENEAU_DUREES.visio ? ' (appel de ' + CRENEAU_DUREES.telephone + ' min seulement, trop court pour une visio)' : ''}" style="${pos};border:1px dashed var(--border);border-radius:6px;padding:2px 4px;color:var(--muted);background:transparent;pointer-events:none">
+      <div style="display:flex;gap:3px;align-items:flex-start"><span style="flex:1;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_planHM(c.debut)}–${_planHM(c.fin)} libre</span>
+      <span class="plan-x" onclick="eqCreneauSupprimerPlanning('${c.id}')" title="Retirer cette plage" style="cursor:pointer;font-size:10px;pointer-events:auto">✕</span></div></div>`;
   }
   if (c.origine === 'perso') {
     const coul = _planCatCouleur(c.categorie);
