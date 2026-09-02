@@ -7760,11 +7760,11 @@ function rdvLienRender(libres) {
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Objet</div>
     <input id="rdv-lien-objet" value="${_vEsc(rdvLienObjet())}" style="${champ};margin-bottom:12px">
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Message</div>
-    <textarea id="rdv-lien-mail" rows="8" style="${champ}">${_vEsc(rdvLienMessage())}</textarea>
-    <label style="display:flex;align-items:flex-start;gap:9px;margin-top:12px;font-size:13px;cursor:pointer;user-select:none">
-      <input type="checkbox" id="rdv-lien-avec" checked style="accent-color:var(--accent);cursor:pointer;margin-top:3px">
-      <span>Ajouter mon lien de prise de rendez-vous <span style="color:var(--muted)">— un bouton « Choisir un créneau » en bas du mail, vers tes disponibilités</span></span>
-    </label>
+    <textarea id="rdv-lien-mail" rows="8" oninput="rdvLienBoutonMaj()" style="${champ}">${_vEsc(rdvLienMessage())}</textarea>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-sm btn-secondary" id="rdv-lien-btn" onclick="rdvLienBasculer()" style="font-size:12px">+ Ajouter mon lien de prise de rendez-vous</button>
+      <span style="font-size:12px;color:var(--muted)">Le lien s'insère dans le texte, là où est ton curseur — tu peux ensuite le déplacer ou reformuler la phrase.</span>
+    </div>
     ${libres === 0 ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-top:10px">Tu n'as aucune disponibilité ouverte : avec le lien, le client ne pourra qu'écrire quand il est libre. <button class="btn btn-sm btn-secondary" onclick="rdvLienFermer(); eqCreneauxOuvrir()" style="font-size:11px;margin-left:6px">Ouvrir des créneaux</button></div>` : ''}
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
       <input id="rdv-lien-url" readonly value="${_vEsc(url)}" onclick="this.select()" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--muted);font-family:var(--font-body);font-size:12px">
@@ -7788,6 +7788,8 @@ function rdvLienObjet() {
 
 // Corps proposé : le vendeur le réécrit comme il veut. Pas de prénom dans le
 // bonjour (Alex le trouve peu professionnel) : à lui de mettre Madame / Monsieur.
+// Le lien de rendez-vous est dans le texte lui-même (choix d'Alex, 02/09/2026),
+// pas dans un bouton à part : le vendeur voit exactement ce que le client lira.
 function rdvLienMessage() {
   if (!_rdvLienCtx) return '';
   return 'Bonjour,\n\n'
@@ -7796,12 +7798,36 @@ function rdvLienMessage() {
     + 'Bien à vous,';
 }
 
+// Le bouton « Ajouter mon lien » insère l'adresse dans le texte, à l'endroit du
+// curseur (ou à la fin) ; une fois le lien présent, le même bouton le retire.
+function rdvLienBasculer() {
+  const ta = document.getElementById('rdv-lien-mail');
+  if (!ta || !_rdvLienCtx) return;
+  const url = _rdvLienCtx.url;
+  if (ta.value.indexOf(url) === -1) {
+    const pos = (typeof ta.selectionStart === 'number' && document.activeElement === ta) ? ta.selectionStart : ta.value.length;
+    const avant = ta.value.slice(0, pos), apres = ta.value.slice(pos);
+    const insert = (avant && !/\n$/.test(avant) ? '\n' : '') + 'Choisissez votre créneau ici : ' + url + (apres && !/^\n/.test(apres) ? '\n' : '');
+    ta.value = avant + insert + apres;
+    const fin = avant.length + insert.length;
+    ta.focus(); ta.setSelectionRange(fin, fin);
+  } else {
+    ta.value = ta.value.split('\n').filter(li => li.indexOf(url) === -1).join('\n').replace(/\n{3,}/g, '\n\n');
+  }
+  rdvLienBoutonMaj();
+}
+function rdvLienBoutonMaj() {
+  const ta = document.getElementById('rdv-lien-mail'), b = document.getElementById('rdv-lien-btn');
+  if (!ta || !b || !_rdvLienCtx) return;
+  const present = ta.value.indexOf(_rdvLienCtx.url) !== -1;
+  b.textContent = present ? '− Retirer le lien de rendez-vous' : '+ Ajouter mon lien de prise de rendez-vous';
+}
+
 // Le mail complet en texte, tel qu'il partirait — pour Gmail
 function _rdvLienTexteComplet() {
-  const { url, vendeur } = _rdvLienCtx;
+  const { vendeur } = _rdvLienCtx;
   const corps = ((document.getElementById('rdv-lien-mail') || {}).value || '').trim();
-  const avec = !!(document.getElementById('rdv-lien-avec') || {}).checked;
-  return corps + (avec ? '\n\nChoisir un créneau : ' + url : '') + '\n\n' + (vendeur || '') + '\nGLR Immobilier';
+  return corps + '\n\n' + (vendeur || '') + '\nGLR Immobilier';
 }
 
 function rdvLienGmail() {
@@ -7816,7 +7842,7 @@ async function rdvLienEnvoyer() {
   const { l, lien } = _rdvLienCtx;
   const sujet = ((document.getElementById('rdv-lien-objet') || {}).value || '').trim();
   const texte = ((document.getElementById('rdv-lien-mail') || {}).value || '').trim();
-  const avecLien = !!(document.getElementById('rdv-lien-avec') || {}).checked;
+  const avecLien = texte.indexOf(_rdvLienCtx.url) !== -1;   // le lien est dans le texte, ou pas
   if (!sujet) { toast('Mets un objet au mail', 'var(--warning)'); return; }
   if (!texte) { toast('Le message est vide', 'var(--warning)'); return; }
   const btn = document.getElementById('rdv-lien-envoyer');
