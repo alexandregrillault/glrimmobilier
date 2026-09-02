@@ -8360,7 +8360,7 @@ function renderEqNotifs() {
   _eqRdv.filter(c => c.statut === 'reserve').forEach(c => {
     const html = item('rdv',
       'Valider le RDV de ' + esc(c.client_nom || 'Client') + rep(c.contact_id),
-      esc(_rdvQuand(c)) + ' · ' + esc(CRENEAU_MODES[c.mode] || c.mode) + (c.client_message ? ' · « ' + esc(c.client_message) + ' »' : ''),
+      esc(_rdvQuand(c)) + ' · ' + esc(_crenLbl(c)) + (c.client_message ? ' · « ' + esc(c.client_message) + ' »' : ''),
       btnFiche(c.contact_id) +
       `<button class="btn btn-sm btn-secondary" onclick="eqProposerOuvrir('${c.id}')" style="font-size:11px" title="Refuser ce créneau et en proposer trois autres">Proposer 3 autres</button>
        <button class="btn btn-sm btn-primary" onclick="eqRdvValider('${c.id}')" style="font-size:11px">Valider</button>`,
@@ -8374,7 +8374,7 @@ function renderEqNotifs() {
   _eqRdvDemandes.forEach(d => {
     aujourdhui.push({ t: 0, g: 'demande', d: jour, html: item('rdv',
       'Proposer des créneaux à ' + esc(d.client_nom || 'un client') + rep(d.contact_id),
-      'Souhaite un rendez-vous' + (d.avis.rdv.creneau ? ' — « ' + esc(d.avis.rdv.creneau) + ' »' : '') + (d.avis.rdv.mode ? ' · ' + esc(CRENEAU_MODES[d.avis.rdv.mode] || d.avis.rdv.mode) : ''),
+      'Souhaite un rendez-vous' + (d.avis.rdv.creneau ? ' — « ' + esc(d.avis.rdv.creneau) + ' »' : '') + (d.avis.rdv.mode ? ' · ' + esc(_crenLbl(d.avis.rdv)) : ''),
       btnFiche(d.contact_id) + `<button class="btn btn-sm btn-primary" onclick="eqProposerOuvrir(null,'${d.token}')" style="font-size:11px">Proposer 3 créneaux</button>`,
       'var(--warning)') });
   });
@@ -8424,7 +8424,7 @@ function renderEqNotifs() {
     const hh = new Date(c.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
     const jourRdv = String(c.debut).slice(0, 10);
     const detail = (jourRdv === jour ? '<strong>' + esc(hh) + '</strong> · ' : esc(_rdvQuand(c)) + ' · ')
-      + esc(CRENEAU_MODES[c.mode] || c.mode) + (c.lieu ? ' — ' + esc(c.lieu) : '');
+      + esc(_crenLbl(c)) + (c.lieu ? ' — ' + esc(c.lieu) : '');
     const cible = (jourRdv === jour ? aujourdhui : avenir);
     cible.push({ t: new Date(c.debut).getTime(), g: 'confirme', d: jourRdv,
       html: item('rdv', (c.mode === 'visio' ? 'Visio avec ' : 'RDV avec ') + esc(c.client_nom || 'Client') + rep(c.contact_id), detail, btnFiche(c.contact_id), 'var(--success)') });
@@ -10139,7 +10139,7 @@ function eqVoirSelection(contactId, token) {
       ${tpsTotal ? `<div style="margin-top:5px">${selIc('temps')} <strong style="color:var(--text)">${fmtDuree(tpsTotal)}</strong> de lecture${Number(s.visites) > 1 ? ' sur ' + s.visites + ' visites' : ''}${tpsMax ? ' · le plus regardé : <strong style="color:var(--accent)">' + _vEsc(tpsMax.titre) + '</strong> (' + fmtDuree(tpsMax.sec) + ')' : ''}</div>` : ''}
     </div>
     ${avis.rdv && avis.rdv.demande ? `<div style="border:1px solid var(--accent);background:var(--surface2);border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px">
-      <strong style="color:var(--accent)">${selIc('rdv')} ${avis.rdv.reserve ? 'Rendez-vous réservé' : 'Demande de rendez-vous'}</strong>${avis.rdv.reserve && avis.rdv.debut ? ' — <strong>' + _vEsc(new Date(avis.rdv.debut).toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })) + ' à ' + _vEsc(new Date(avis.rdv.debut).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })) + '</strong>' + (avis.rdv.mode ? ' (' + _vEsc({visio:'visio', agence:'agence', sur_place:'sur place', telephone:'téléphone'}[avis.rdv.mode] || avis.rdv.mode) + ')' : '') : ''}${avis.rdv.bien ? ' — au sujet de « ' + _vEsc(avis.rdv.bien) + ' »' : ''}${!avis.rdv.reserve && avis.rdv.creneau ? ' — créneau proposé : « ' + _vEsc(avis.rdv.creneau) + ' »' : ''}
+      <strong style="color:var(--accent)">${selIc('rdv')} ${avis.rdv.reserve ? 'Rendez-vous réservé' : 'Demande de rendez-vous'}</strong>${avis.rdv.reserve && avis.rdv.debut ? ' — <strong>' + _vEsc(new Date(avis.rdv.debut).toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })) + ' à ' + _vEsc(new Date(avis.rdv.debut).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' })) + '</strong>' + (avis.rdv.mode ? ' (' + _vEsc(({visio:'visio', agence:'agence', sur_place:'sur place', telephone:'téléphone'}[avis.rdv.mode] || avis.rdv.mode) + (_crenDureeMin(avis.rdv) ? ' · ' + _crenDureeMin(avis.rdv) + ' min' : '')) + ')' : '') : ''}${avis.rdv.bien ? ' — au sujet de « ' + _vEsc(avis.rdv.bien) + ' »' : ''}${!avis.rdv.reserve && avis.rdv.creneau ? ' — créneau proposé : « ' + _vEsc(avis.rdv.creneau) + ' »' : ''}
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmtDT(avis.rdv.date) || ''}</div>
     </div>` : ''}
     ${biens.map((b,i) => {
@@ -10176,6 +10176,24 @@ function eqVoirSelection(contactId, token) {
 // simultanés ne peuvent pas prendre le même horaire.
 let _creneaux = [];
 const CRENEAU_MODES = { visio: 'Visio', agence: 'Agence', sur_place: 'Sur place', telephone: 'Téléphone' };
+// Depuis le 02/09/2026 le client choisit un format (visio 45 min / appel 15 min)
+// et ne bloque que cette durée : on l'affiche à côté du mode partout où un
+// rendez-vous apparaît. Vaut pour un créneau (debut/fin) comme pour l'état
+// rdv d'un lien (duree, ou debut/fin).
+function _crenDureeMin(c) {
+  if (!c) return null;
+  if (c.duree) return Number(c.duree) || null;
+  if (c.debut && c.fin) {
+    const m = Math.round((new Date(c.fin) - new Date(c.debut)) / 60000);
+    return m > 0 ? m : null;
+  }
+  return null;
+}
+function _crenLbl(c) {
+  const mode = CRENEAU_MODES[c && c.mode] || (c && c.mode) || '';
+  const d = _crenDureeMin(c);
+  return d ? mode + ' · ' + d + ' min' : mode;
+}
 
 // Le sélecteur à lire dépend de la page d'où l'on vient : sans ce paramètre,
 // ouvrir des créneaux depuis le planning les créait au nom du vendeur affiché
@@ -10466,7 +10484,7 @@ function eqCreneauxRender() {
               <button onclick="eqCreneauLiberer('${c.id}')" title="Libérer ce créneau" style="background:none;border:none;color:rgba(255,255,255,.75);cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
             </span>`;
           }
-          return `<span title="${_vEsc(CRENEAU_MODES[c.mode] || '')}${c.lieu ? ' — ' + _vEsc(c.lieu) : ''}" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:6px 10px;font-size:12.5px">
+          return `<span title="${_vEsc(_crenLbl(c))}${c.lieu ? ' — ' + _vEsc(c.lieu) : ''}" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:6px 10px;font-size:12.5px">
             ${hh(c.debut)}
             <button onclick="eqCreneauSupprimer('${c.id}')" title="Retirer ce créneau" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
           </span>`;
@@ -10754,8 +10772,8 @@ function renderEquipePlanningListe() {
         }
         const enAttente = c.statut === 'reserve';
         const couleur = enAttente ? 'var(--warning)' : 'var(--success)';
-        return `<div title="${enAttente ? 'En attente de ta validation' : 'Rendez-vous confirmé'} — ${_vEsc(mode)}${c.lieu ? ' · ' + _vEsc(c.lieu) : ''} · ${hh(c.debut)}-${hh(c.fin)}${c.client_message ? ' · « ' + _vEsc(c.client_message) + ' »' : ''}" style="border:1px solid ${couleur};border-left:3px solid ${couleur};border-radius:7px;padding:5px 6px;margin-bottom:4px;font-size:11.5px;background:var(--surface)">
-          <div style="font-weight:700">${hh(c.debut)}</div>
+        return `<div title="${enAttente ? 'En attente de ta validation' : 'Rendez-vous confirmé'} — ${_vEsc(_crenLbl(c))}${c.lieu ? ' · ' + _vEsc(c.lieu) : ''} · ${hh(c.debut)}-${hh(c.fin)}${c.client_message ? ' · « ' + _vEsc(c.client_message) + ' »' : ''}" style="border:1px solid ${couleur};border-left:3px solid ${couleur};border-radius:7px;padding:5px 6px;margin-bottom:4px;font-size:11.5px;background:var(--surface)">
+          <div style="font-weight:700">${hh(c.debut)} <span style="font-weight:400;color:var(--muted)">· ${_vEsc(_crenLbl(c))}</span></div>
           <div onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" style="color:var(--text);cursor:${c.contact_id ? 'pointer' : 'default'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_vEsc(c.client_nom || 'Client')}</div>
           <div style="display:flex;gap:4px;align-items:center;margin-top:4px">
             <span style="flex:1;font-size:10px;color:${couleur};text-transform:uppercase;letter-spacing:.3px">${enAttente ? 'à valider' : 'confirmé'}</span>
@@ -14152,8 +14170,8 @@ function _planEvHtml(c, nLanes) {
   }
   const attente = c.statut === 'reserve';
   const coul = attente ? 'var(--warning)' : 'var(--success)';
-  return `<div class="plan-ev" onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" title="${attente ? 'En attente de ta validation' : 'Rendez-vous confirmé'} — ${_vEsc(CRENEAU_MODES[c.mode] || c.mode)} · ${_planHM(c.debut)}–${_planHM(c.fin)}" style="${pos};border:1px solid ${coul};border-left:3px solid ${coul};border-radius:6px;padding:2px 5px;background:var(--surface);cursor:pointer">
-    ${titre2(_vEsc(c.client_nom || 'Client'), attente ? 'à valider' : (CRENEAU_MODES[c.mode] || c.mode))}</div>`;
+  return `<div class="plan-ev" onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" title="${attente ? 'En attente de ta validation' : 'Rendez-vous confirmé'} — ${_vEsc(_crenLbl(c))} · ${_planHM(c.debut)}–${_planHM(c.fin)}" style="${pos};border:1px solid ${coul};border-left:3px solid ${coul};border-radius:6px;padding:2px 5px;background:var(--surface);cursor:pointer">
+    ${titre2(_vEsc(c.client_nom || 'Client'), attente ? 'à valider' : _crenLbl(c))}</div>`;
 }
 
 // ---- Sélection d'une plage à la souris (ou au doigt) ------------------------
