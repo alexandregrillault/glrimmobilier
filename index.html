@@ -7635,9 +7635,9 @@ function _rdvQuand(c) {
 //  d'une demande portail utilise exactement le même lien.
 // ============================================================
 const RDV_FN_URL = SUPABASE_URL + '/functions/v1/rdv/';
-// Lien public d'un commercial, sur le domaine de la maison : www.glrimmobilier.com/rdv/nour/
+// Lien public d'un commercial, sur le domaine de la maison : www.glrimmobilier.com/rdv/?v=nour
 const RDV_SITE_URL = 'https://www.glrimmobilier.com/rdv/';
-// « Théophile » → « theophile » : sans accent ni majuscule, comme le dossier du site
+// « Théophile » → « theophile » : sans accent ni majuscule, tel que la page du site le lit
 function _rdvSlug(prenom) { return String(prenom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 let _rdvLiens = {};      // contact_id -> lien de rendez-vous
 let _rdvLienCtx = null;  // modale en cours
@@ -7862,9 +7862,9 @@ async function rdvLienPublicOuvrir() {
 
   // Adresse sur le domaine GLR, par prénom (choix d'Alex, 02/09/2026 : l'adresse
   // technique supabase.co/functions/v1/rdv/… était trop agressive pour un
-  // client). La page vit dans le repo du site, un dossier par commercial :
-  // glr-site/rdv/<prenom>/index.html — voir _rdvSlug pour l'écriture du prénom.
-  const url = RDV_SITE_URL + _rdvSlug(prenom) + '/';
+  // client). Une seule page sur le site (glr-site/rdv/index.html), le prénom
+  // passe en paramètre : rien à déposer à l'arrivée d'un nouveau commercial.
+  const url = RDV_SITE_URL + '?v=' + _rdvSlug(prenom);
   const libres = (_planCreneaux || []).filter(c => c.statut === 'libre' && new Date(c.debut) > new Date()).length;
   box.innerHTML = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Le même lien toute l'année, à ton prénom et sur le site GLR : signature de mail, SMS, message LinkedIn, carte de visite. Celui qui l'ouvre voit tes disponibilités, choisit son créneau et se présente — sa fiche est créée dans ton portefeuille, et le rendez-vous arrive dans ta page Activité à valider.</div>
