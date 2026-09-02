@@ -8379,6 +8379,16 @@ function renderEqNotifs() {
       'var(--warning)') });
   });
 
+  // Jours de rendez-vous confirmés, par contact : quand le client réserve un
+  // créneau, sa relance est recalée sur le jour du rendez-vous. Ce jour-là, le
+  // rendez-vous confirmé suffit — on ne l'affiche pas une seconde fois en rappel.
+  const joursRdvConfirmes = new Map();
+  _eqRdv.filter(c => c.statut === 'confirme' && c.contact_id && new Date(c.debut) >= now).forEach(c => {
+    const j = String(c.debut).slice(0, 10);
+    if (!joursRdvConfirmes.has(c.contact_id)) joursRdvConfirmes.set(c.contact_id, new Set());
+    joursRdvConfirmes.get(c.contact_id).add(j);
+  });
+
   // 3. Activités programmées et nouveaux leads à appeler
   _eqLeads.forEach(l => {
     const s = eqLeadStatut(l);
@@ -8386,7 +8396,9 @@ function renderEqNotifs() {
     const boutons = btnFiche(l.id) +
       `<button class="btn btn-sm btn-secondary" onclick="eqActReporter('${l.id}')" style="font-size:11px" title="Changer l'intitulé, le jour ou l'heure">Modifier</button>` +
       btnActions(l.id);
-    if (l.rappel_le) {
+    if (l.rappel_le && joursRdvConfirmes.has(l.id) && joursRdvConfirmes.get(l.id).has(l.rappel_le)) {
+      // Rendez-vous confirmé ce jour-là : il apparaît dans « Rendez-vous confirmés » seulement
+    } else if (l.rappel_le) {
       // Intitulé libre s'il y en a un, sinon « Rappeler <client> ». L'heure, quand
       // elle est renseignée, sert aussi à ranger l'activité dans la journée.
       const hAct = l.rappel_heure ? String(l.rappel_heure).slice(0, 5) : '';
