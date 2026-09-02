@@ -651,6 +651,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 2v20l2.5-1.5L10 22l2-1.5L14 22l2.5-1.5L19 22V2l-2.5 1.5L14 2l-2 1.5L10 2 7.5 3.5z"></path><path d="M9 8h6M9 12h6"></path></svg>
         Factures
       </div>
+      <div class="nav-item" onclick="goTo(&#39;journal&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v5l3 2"></path><path d="M3.05 11a9 9 0 1 1 .5 4"></path><path d="M3 4v5h5"></path></svg>
+        Journal
+      </div>
     </nav>
     <nav class="nav" id="nav-equipe" style="display: none;">
       <div class="nav-section">Mon espace</div>
@@ -1893,6 +1897,43 @@
       <div id="promoteurs-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start"></div>
     </div>
 
+
+    <div class="page" id="page-journal">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Journal des modifications</div>
+          <div style="color:var(--muted);font-size:13px" id="journal-count">—</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="journalExport()">Exporter en CSV</button>
+      </div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:16px;max-width:720px">
+        Qui a changé quoi, et quand. Réservé aux gérants : les commerciaux n'y ont accès ni par le menu ni par la base.
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;align-items:center">
+        <input id="journal-search" oninput="journalFiltrer()" placeholder="Rechercher un nom, un statut, une valeur…"
+          style="flex:1 1 260px;min-width:200px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:var(--font-body);font-size:13.5px;outline:none">
+        <select id="journal-f-periode" onchange="loadJournal()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none">
+          <option value="7">7 derniers jours</option>
+          <option value="30" selected>30 derniers jours</option>
+          <option value="90">3 derniers mois</option>
+          <option value="">Depuis le début</option>
+        </select>
+        <select id="journal-f-acteur" onchange="journalFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
+        <select id="journal-f-cible" onchange="journalFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
+        <select id="journal-f-action" onchange="journalFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
+        <button class="btn btn-ghost btn-sm" onclick="journalReinit()">Tout afficher</button>
+      </div>
+      <div class="card" style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Quand</th><th>Qui</th><th>Sur quoi</th><th>Action</th><th>Détail</th></tr></thead>
+          <tbody id="journal-tbody"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;justify-content:center;margin-top:-8px;margin-bottom:24px">
+        <button class="btn btn-ghost btn-sm" id="journal-plus" onclick="journalPlus()" style="display:none">Charger les lignes plus anciennes</button>
+      </div>
+    </div>
+
     <div class="page" id="page-factures">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:12px">
         <div>
@@ -2811,7 +2852,7 @@ async function chargerMonRole() {
 
 // Pages réservées aux gérants
 const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev',
-                      'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures'];
+                      'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal'];
 
 function appliquerRole() {
   // Création manuelle d'un contact : gérants seulement (les commerciaux
@@ -3092,7 +3133,7 @@ const pages = {
   dashboard: 'Tableau de bord', ventes: 'Ventes', charges: 'Charges', 'treso-prev': 'Trésorerie prévisionnelle', vendeurs: 'Vendeurs',
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
-  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs'
+  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications'
 };
 
 let currentSpace = 'gerant';
@@ -3139,6 +3180,7 @@ function goTo(id, el) {
   if (id === 'contacts') loadContacts();
   else if (id === 'programmes') loadProgrammes();
   else if (id === 'promoteurs') loadPromoteurs();
+  else if (id === 'journal') loadJournal();
   else if (id === 'factures') renderFactures();
   else refresh();
 }
@@ -14698,17 +14740,32 @@ async function promoEnregistrer() {
       if (!r.ok) throw new Error();
       id = (await r.json())[0].id;
     }
-    await fetch(SUPABASE_URL + '/rest/v1/promoteurs_responsables?promoteur_id=eq.' + id, { method: 'DELETE', headers: h });
-    const lignes = _promoEditResp
-      .filter(r => (r.prenom || r.nom || r.email || r.telephone))
-      .map((r, k) => ({
-        promoteur_id: id, prenom: r.prenom || null, nom: r.nom || null, fonction: r.fonction || null,
-        telephone: r.telephone || null, email: r.email || null, zones: r.zones || [], zones_note: r.zones_note || null,
-        principal: !!r.principal, ordre: k, notes: r.notes || null,
-        a_verifier: !!r.a_verifier, verif_motifs: r.verif_motifs || []
-      }));
-    if (lignes.length) {
-      const r2 = await fetch(SUPABASE_URL + '/rest/v1/promoteurs_responsables', { method: 'POST', headers: h, body: JSON.stringify(lignes) });
+    // On ne touche qu'à ce qui a changé : le journal doit rester lisible
+    const avant = ((_promoteurs.find(x => x.id === id) || {}).responsables) || [];
+    const gardes = _promoEditResp.filter(r => (r.prenom || r.nom || r.email || r.telephone));
+    const corpsResp = (r, k) => ({
+      promoteur_id: id, prenom: r.prenom || null, nom: r.nom || null, fonction: r.fonction || null,
+      telephone: r.telephone || null, email: r.email || null, zones: r.zones || [], zones_note: r.zones_note || null,
+      principal: !!r.principal, ordre: k, notes: r.notes || null,
+      a_verifier: !!r.a_verifier, verif_motifs: r.verif_motifs || []
+    });
+    const gardesIds = gardes.map(r => r.id).filter(Boolean);
+    const aSupprimer = avant.filter(r => gardesIds.indexOf(r.id) === -1).map(r => r.id);
+    if (aSupprimer.length) {
+      await fetch(SUPABASE_URL + '/rest/v1/promoteurs_responsables?id=in.(' + aSupprimer.join(',') + ')', { method: 'DELETE', headers: h });
+    }
+    const aCreer = [];
+    for (let k = 0; k < gardes.length; k++) {
+      const r = gardes[k], corps2 = corpsResp(r, k);
+      if (!r.id) { aCreer.push(corps2); continue; }
+      const ref = avant.find(x => x.id === r.id) || {};
+      const change = Object.keys(corps2).some(c => JSON.stringify(corps2[c]) !== JSON.stringify(ref[c] == null ? (Array.isArray(corps2[c]) ? [] : null) : ref[c]));
+      if (!change) continue;
+      const rp = await fetch(SUPABASE_URL + '/rest/v1/promoteurs_responsables?id=eq.' + r.id, { method: 'PATCH', headers: h, body: JSON.stringify(corps2) });
+      if (!rp.ok) throw new Error();
+    }
+    if (aCreer.length) {
+      const r2 = await fetch(SUPABASE_URL + '/rest/v1/promoteurs_responsables', { method: 'POST', headers: h, body: JSON.stringify(aCreer) });
       if (!r2.ok) throw new Error();
     }
     promoFermer();
@@ -14729,6 +14786,197 @@ async function promoSupprimer() {
     if (!r.ok) throw new Error();
     promoFermer(); toast('✓ Promoteur supprimé'); await loadPromoteurs();
   } catch (e) { toast('⚠ Suppression réservée aux gérants', 'var(--danger)'); }
+}
+
+
+// ============================================================
+//  JOURNAL — qui a changé quoi, et quand (gérants uniquement)
+// ============================================================
+const JOURNAL_PAR_PAGE = 200;
+let _journal = [];
+let _journalNoms = {};      // ligne_id -> libellé de la fiche
+let _journalFin = false;
+
+const JOURNAL_CIBLES = {
+  'contacts': 'Client',
+  'promoteurs': 'Promoteur',
+  'promoteurs_responsables': 'Responsable promoteur'
+};
+const JOURNAL_ACTIONS = {
+  'statut': 'Changement de statut',
+  'reattribution': 'Réattribution',
+  'suppression': 'Suppression',
+  'creation': 'Création',
+  'modification': 'Modification'
+};
+
+async function loadJournal() {
+  const tb = document.getElementById('journal-tbody');
+  if (tb) tb.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Chargement…</td></tr>';
+  _journal = []; _journalFin = false;
+  await journalCharger(true);
+}
+
+async function journalCharger(remplace) {
+  const jours = (document.getElementById('journal-f-periode') || {}).value || '';
+  let url = SUPABASE_URL + '/rest/v1/journal_audit?select=*&order=quand.desc&limit=' + JOURNAL_PAR_PAGE;
+  if (jours) {
+    const d = new Date(); d.setDate(d.getDate() - parseInt(jours, 10));
+    url += '&quand=gte.' + d.toISOString();
+  }
+  if (!remplace && _journal.length) {
+    url += '&quand=lt.' + _journal[_journal.length - 1].quand;
+  }
+  try {
+    const r = await fetch(url, { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER } });
+    if (!r.ok) throw new Error();
+    const lot = await r.json();
+    if (lot.length < JOURNAL_PAR_PAGE) _journalFin = true;
+    _journal = remplace ? lot : _journal.concat(lot);
+  } catch (e) {
+    const tb = document.getElementById('journal-tbody');
+    if (tb) tb.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Journal illisible — il est réservé aux gérants.</td></tr>';
+    return;
+  }
+  await journalResoudreNoms();
+  journalRemplirFiltres();
+  renderJournal();
+}
+
+function journalPlus() { journalCharger(false); }
+
+// Le journal ne stocke qu'un identifiant de ligne : on va chercher les noms
+async function journalResoudreNoms() {
+  const manquants = { contacts: [], promoteurs: [] };
+  _journal.forEach(l => {
+    if (!l.ligne_id || _journalNoms[l.ligne_id]) return;
+    if (l.cible === 'contacts') manquants.contacts.push(l.ligne_id);
+    else if (l.cible === 'promoteurs' || l.cible === 'promoteurs_responsables') manquants.promoteurs.push(l.ligne_id);
+  });
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  const uniq = a => Array.from(new Set(a));
+  try {
+    const cs = uniq(manquants.contacts);
+    for (let i = 0; i < cs.length; i += 100) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,email&id=in.(' + cs.slice(i, i + 100).join(',') + ')', { headers: h });
+      if (r.ok) (await r.json()).forEach(c => {
+        _journalNoms[c.id] = [c.prenom, c.nom_famille].filter(Boolean).join(' ') || c.nom || c.email || '';
+      });
+    }
+    const ps = uniq(manquants.promoteurs);
+    for (let i = 0; i < ps.length; i += 100) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/promoteurs?select=id,nom&id=in.(' + ps.slice(i, i + 100).join(',') + ')', { headers: h });
+      if (r.ok) (await r.json()).forEach(p => { _journalNoms[p.id] = p.nom; });
+    }
+  } catch (e) { /* on affichera « fiche supprimée » */ }
+}
+
+function journalRemplirFiltres() {
+  const set = (id, vals, tout, libelles) => {
+    const el = document.getElementById(id); if (!el) return;
+    const garde = el.value;
+    el.innerHTML = '<option value="">' + tout + '</option>' +
+      vals.map(v => `<option value="${_esc(v)}">${_esc(libelles ? (libelles[v] || v) : v)}</option>`).join('');
+    el.value = garde;
+  };
+  const uniq = k => Array.from(new Set(_journal.map(l => l[k]).filter(Boolean))).sort();
+  set('journal-f-acteur', uniq('acteur'), 'Tout le monde');
+  set('journal-f-cible', uniq('cible'), 'Tous les objets', JOURNAL_CIBLES);
+  set('journal-f-action', uniq('action'), 'Toutes les actions', JOURNAL_ACTIONS);
+}
+
+function journalFiltrer() { renderJournal(); }
+
+function journalReinit() {
+  ['journal-search', 'journal-f-acteur', 'journal-f-cible', 'journal-f-action'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  renderJournal();
+}
+
+function _journalListe() {
+  const q = _pnorm((document.getElementById('journal-search') || {}).value || '').trim();
+  const fa = (document.getElementById('journal-f-acteur') || {}).value || '';
+  const fc = (document.getElementById('journal-f-cible') || {}).value || '';
+  const fx = (document.getElementById('journal-f-action') || {}).value || '';
+  return _journal.filter(l => {
+    if (fa && l.acteur !== fa) return false;
+    if (fc && l.cible !== fc) return false;
+    if (fx && l.action !== fx) return false;
+    if (!q) return true;
+    const hay = _pnorm([l.acteur, _journalNoms[l.ligne_id], l.champ, l.avant, l.apres,
+      JOURNAL_CIBLES[l.cible] || l.cible, JOURNAL_ACTIONS[l.action] || l.action].join(' '));
+    return q.split(/\s+/).every(m => hay.indexOf(m) !== -1);
+  });
+}
+
+function _journalQuand(iso) {
+  const d = new Date(iso);
+  const auj = new Date(); auj.setHours(0, 0, 0, 0);
+  const hier = new Date(auj); hier.setDate(hier.getDate() - 1);
+  const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (d >= auj) return 'Aujourd\'hui ' + heure;
+  if (d >= hier) return 'Hier ' + heure;
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) + ' ' + heure;
+}
+
+function _journalDetail(l) {
+  const av = l.avant, ap = l.apres;
+  const fl = '<span style="color:var(--muted)">→</span>';
+  const vide = '<span style="color:var(--muted)">—</span>';
+  const v = x => x ? _esc(x) : vide;
+  if (l.action === 'suppression') return v(av);
+  if (l.action === 'creation') return v(ap);
+  if (av == null && ap == null) return vide;
+  const champ = l.champ && l.champ !== 'statut' ? `<span style="color:var(--muted);font-size:11.5px">${_esc(l.champ)}</span><br>` : '';
+  return champ + v(av) + ' ' + fl + ' ' + v(ap);
+}
+
+function renderJournal() {
+  const tb = document.getElementById('journal-tbody');
+  if (!tb) return;
+  const liste = _journalListe();
+  const cnt = document.getElementById('journal-count');
+  if (cnt) cnt.textContent = liste.length === _journal.length
+    ? _journal.length + ' modification(s) sur la période'
+    : liste.length + ' sur ' + _journal.length + ' modification(s)';
+  const plus = document.getElementById('journal-plus');
+  if (plus) plus.style.display = _journalFin ? 'none' : '';
+  if (!liste.length) {
+    tb.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Aucune modification sur cette période.</td></tr>';
+    return;
+  }
+  tb.innerHTML = liste.map(l => {
+    const nom = _journalNoms[l.ligne_id];
+    const objet = nom
+      ? `<strong>${_esc(nom)}</strong><br><span style="color:var(--muted);font-size:11.5px">${_esc(JOURNAL_CIBLES[l.cible] || l.cible)}</span>`
+      : `<span style="color:var(--muted)">fiche supprimée</span><br><span style="color:var(--muted);font-size:11.5px">${_esc(JOURNAL_CIBLES[l.cible] || l.cible)}</span>`;
+    return `<tr>
+      <td style="white-space:nowrap;font-size:12.5px">${_esc(_journalQuand(l.quand))}</td>
+      <td style="white-space:nowrap">${_esc(l.acteur === 'systeme' ? 'Système' : (l.acteur || '—'))}</td>
+      <td>${objet}</td>
+      <td style="white-space:nowrap;font-size:12.5px">${_esc(JOURNAL_ACTIONS[l.action] || l.action)}</td>
+      <td style="font-size:12.5px">${_journalDetail(l)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function journalExport() {
+  const liste = _journalListe();
+  if (!liste.length) { toast('Rien à exporter', 'var(--warning)'); return; }
+  const ech = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const lignes = [['Quand', 'Qui', 'Objet', 'Fiche', 'Action', 'Champ', 'Avant', 'Après'].map(ech).join(';')];
+  liste.forEach(l => lignes.push([
+    new Date(l.quand).toLocaleString('fr-FR'), l.acteur === 'systeme' ? 'Système' : l.acteur,
+    JOURNAL_CIBLES[l.cible] || l.cible, _journalNoms[l.ligne_id] || '(fiche supprimée)',
+    JOURNAL_ACTIONS[l.action] || l.action, l.champ || '', l.avant || '', l.apres || ''
+  ].map(ech).join(';')));
+  const blob = new Blob(['﻿' + lignes.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'journal-glr-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 </script>
