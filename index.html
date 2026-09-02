@@ -7635,6 +7635,10 @@ function _rdvQuand(c) {
 //  d'une demande portail utilise exactement le même lien.
 // ============================================================
 const RDV_FN_URL = SUPABASE_URL + '/functions/v1/rdv/';
+// Lien public d'un commercial, sur le domaine de la maison : www.glrimmobilier.com/rdv/nour/
+const RDV_SITE_URL = 'https://www.glrimmobilier.com/rdv/';
+// « Théophile » → « theophile » : sans accent ni majuscule, comme le dossier du site
+function _rdvSlug(prenom) { return String(prenom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 let _rdvLiens = {};      // contact_id -> lien de rendez-vous
 let _rdvLienCtx = null;  // modale en cours
 
@@ -7856,10 +7860,14 @@ async function rdvLienPublicOuvrir() {
   if (!box) return;
   if (!lien) { box.innerHTML = '<div style="color:var(--danger)">Impossible de préparer le lien — réessaie dans un instant.</div>'; return; }
 
-  const url = RDV_FN_URL + lien.token;
+  // Adresse sur le domaine GLR, par prénom (choix d'Alex, 02/09/2026 : l'adresse
+  // technique supabase.co/functions/v1/rdv/… était trop agressive pour un
+  // client). La page vit dans le repo du site, un dossier par commercial :
+  // glr-site/rdv/<prenom>/index.html — voir _rdvSlug pour l'écriture du prénom.
+  const url = RDV_SITE_URL + _rdvSlug(prenom) + '/';
   const libres = (_planCreneaux || []).filter(c => c.statut === 'libre' && new Date(c.debut) > new Date()).length;
   box.innerHTML = `
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Le même lien toute l'année : signature de mail, SMS, message LinkedIn, carte de visite. Celui qui l'ouvre voit tes disponibilités, choisit son créneau et se présente — sa fiche est créée dans ton portefeuille, et le rendez-vous arrive dans ta page Activité à valider.</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Le même lien toute l'année, à ton prénom et sur le site GLR : signature de mail, SMS, message LinkedIn, carte de visite. Celui qui l'ouvre voit tes disponibilités, choisit son créneau et se présente — sa fiche est créée dans ton portefeuille, et le rendez-vous arrive dans ta page Activité à valider.</div>
     ${libres === 0 ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:12px">Tu n'as aucune disponibilité ouverte : la page proposera seulement de te laisser ses coordonnées. <button class="btn btn-sm btn-secondary" onclick="rdvLienPublicFermer(); eqCreneauxOuvrir('eq-plan-vendeur')" style="font-size:11px;margin-left:6px">Ouvrir des créneaux</button></div>` : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${libres} créneau${libres > 1 ? 'x' : ''} libre${libres > 1 ? 's' : ''} à venir — c'est ce qu'il verra.</div>`}
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
       <input id="rdv-public-url" readonly value="${_vEsc(url)}" onclick="this.select()" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:12.5px">
