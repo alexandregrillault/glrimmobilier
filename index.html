@@ -626,6 +626,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path><path d="M9 9v.01"></path><path d="M9 12v.01"></path><path d="M9 15v.01"></path></svg>
         Programmes
       </div>
+      <div class="nav-item" onclick="goTo(&#39;promoteurs&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v13"></path><path d="M13 21V12a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v9"></path><path d="M2 21h20"></path><path d="M7 10h2M7 14h2M16 15h1"></path></svg>
+        Contacts promoteurs
+      </div>
       <div class="nav-section">Gestion</div>
       <div class="nav-item" onclick="goTo(&#39;ventes&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"></path><path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9c1.51 0 2.93.37 4.18 1.03"></path></svg>
@@ -675,6 +679,10 @@
         Mes villes
       </div>
       <div class="nav-section">Outils</div>
+      <div class="nav-item" onclick="goTo(&#39;promoteurs&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v13"></path><path d="M13 21V12a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v9"></path><path d="M2 21h20"></path><path d="M7 10h2M7 14h2M16 15h1"></path></svg>
+        Contacts promoteurs
+      </div>
       <div class="nav-item" onclick="goTo(&#39;equipe-calcul&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="8" y1="10" x2="16" y2="10"></line><line x1="8" y1="14" x2="12" y2="14"></line></svg>
         Calculateur commission
@@ -1856,6 +1864,35 @@
       <div id="programmes-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px"></div>
     </div>
 
+
+    <div class="page" id="page-promoteurs">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Contacts promoteurs</div>
+          <div style="color:var(--muted);font-size:13px" id="promoteurs-count">0 promoteur</div>
+        </div>
+        <button class="btn btn-primary" onclick="promoOuvrir(null)">+ Ajouter un promoteur</button>
+      </div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:16px;max-width:720px">
+        L'annuaire des partenaires : le lien vers leur intranet, la marche à suivre pour dénoncer un prospect, et le ou les responsables à appeler selon le secteur. Tout est modifiable — clique « Modifier » sur une fiche pour ajouter un responsable ou corriger un contact.
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;align-items:center">
+        <input id="promo-search" oninput="promoFiltrer()" placeholder="Rechercher un promoteur, un responsable, un mail, un téléphone…"
+          style="flex:1 1 320px;min-width:240px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:var(--font-body);font-size:13.5px;outline:none">
+        <select id="promo-f-zone" onchange="promoFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
+        <select id="promo-f-plateforme" onchange="promoFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
+        <select id="promo-f-etat" onchange="promoFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none">
+          <option value="">Toutes les fiches</option>
+          <option value="verifier">À vérifier</option>
+          <option value="sans-contact">Sans responsable</option>
+          <option value="sans-lien">Sans lien intranet</option>
+          <option value="ancien">Pas vérifiées depuis 12 mois</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="promoReinit()">Tout afficher</button>
+      </div>
+      <div id="promoteurs-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start"></div>
+    </div>
+
     <div class="page" id="page-factures">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:12px">
         <div>
@@ -1930,6 +1967,26 @@
 </div>
 
 <!-- MODAL: VENTE -->
+<div class="modal-overlay" id="modal-promoteur">
+  <div class="modal modal-wide">
+    <div class="modal-title" id="modal-promoteur-titre">Promoteur</div>
+    <div id="promo-form-promoteur"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:26px 0 12px">
+      <div style="font-family:var(--font-head);font-size:14px;font-weight:700">Responsables partenaires</div>
+      <button class="btn btn-ghost btn-sm" onclick="promoRespAjouter()">+ Ajouter un responsable</button>
+    </div>
+    <div style="color:var(--muted);font-size:12px;margin-bottom:12px">Coche les départements que chaque responsable prend en charge : la recherche par département s'appuie dessus.</div>
+    <div id="promo-form-resp"></div>
+    <div class="modal-actions" style="justify-content:space-between">
+      <button class="btn btn-danger" id="promo-btn-suppr" onclick="promoSupprimer()">Supprimer</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-ghost" onclick="promoFermer()">Annuler</button>
+        <button class="btn btn-primary" onclick="promoEnregistrer()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-vente">
   <div class="modal">
     <div class="modal-title">Nouvelle vente</div>
@@ -3035,7 +3092,7 @@ const pages = {
   dashboard: 'Tableau de bord', ventes: 'Ventes', charges: 'Charges', 'treso-prev': 'Trésorerie prévisionnelle', vendeurs: 'Vendeurs',
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
-  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads'
+  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs'
 };
 
 let currentSpace = 'gerant';
@@ -3081,6 +3138,7 @@ function goTo(id, el) {
   document.getElementById('topbar-title').textContent = pages[id] || id;
   if (id === 'contacts') loadContacts();
   else if (id === 'programmes') loadProgrammes();
+  else if (id === 'promoteurs') loadPromoteurs();
   else if (id === 'factures') renderFactures();
   else refresh();
 }
@@ -14326,6 +14384,353 @@ async function eqPlanBlocSupprimer(id) {
     if (typeof toast === 'function') toast('⚠ Suppression impossible', 'var(--danger)');
   }
 }
+
+// ============================================================
+//  PROMOTEURS — annuaire des partenaires (intranet + responsables)
+// ============================================================
+const PROMO_ZONES = ['75','77','78','91','92','93','94','95','Autres'];
+let _promoteurs = [];
+let _promoFiltres = { q: '', zone: '', plateforme: '', etat: '' };
+let _promoEdit = null;          // objet en cours de modification
+let _promoEditResp = [];        // responsables en cours de modification
+
+function _pnorm(s) {
+  return (s == null ? '' : String(s)).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+async function loadPromoteurs() {
+  const grid = document.getElementById('promoteurs-grid');
+  if (grid) grid.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/promoteurs?select=*,responsables:promoteurs_responsables(*)&order=nom.asc', {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (!res.ok) {
+      if (grid) grid.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><p>Impossible de charger les promoteurs.</p></div>';
+      return;
+    }
+    _promoteurs = await res.json();
+    _promoteurs.forEach(p => {
+      p.responsables = (p.responsables || []).sort((a, b) => (b.principal - a.principal) || (a.ordre - b.ordre));
+    });
+  } catch (e) {
+    _promoteurs = [];
+  }
+  promoRemplirFiltres();
+  renderPromoteurs();
+}
+
+function promoRemplirFiltres() {
+  const sel = document.getElementById('promo-f-plateforme');
+  if (!sel) return;
+  const val = sel.value;
+  const plats = Array.from(new Set(_promoteurs.map(p => p.plateforme).filter(Boolean))).sort();
+  sel.innerHTML = '<option value="">Toutes les plateformes</option>' +
+    plats.map(p => `<option value="${_esc(p)}">${_esc(p)}</option>`).join('');
+  sel.value = val;
+  const zs = document.getElementById('promo-f-zone');
+  if (zs && !zs.dataset.rempli) {
+    zs.innerHTML = '<option value="">Tous les départements</option>' +
+      PROMO_ZONES.map(z => `<option value="${z}">${z === 'Autres' ? 'Hors Île-de-France' : 'Dpt ' + z}</option>`).join('');
+    zs.dataset.rempli = '1';
+  }
+}
+
+function promoFiltrer() {
+  _promoFiltres.q = (document.getElementById('promo-search') || {}).value || '';
+  _promoFiltres.zone = (document.getElementById('promo-f-zone') || {}).value || '';
+  _promoFiltres.plateforme = (document.getElementById('promo-f-plateforme') || {}).value || '';
+  _promoFiltres.etat = (document.getElementById('promo-f-etat') || {}).value || '';
+  renderPromoteurs();
+}
+
+function promoReinit() {
+  ['promo-search', 'promo-f-zone', 'promo-f-plateforme', 'promo-f-etat'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  promoFiltrer();
+}
+
+function _promoCorrespond(p, f) {
+  if (f.plateforme && p.plateforme !== f.plateforme) return false;
+  if (f.zone && !(p.responsables || []).some(r => (r.zones || []).indexOf(f.zone) !== -1)) return false;
+  if (f.etat === 'verifier' && !p.a_verifier && !(p.responsables || []).some(r => r.a_verifier)) return false;
+  if (f.etat === 'sans-contact' && (p.responsables || []).length) return false;
+  if (f.etat === 'sans-lien' && p.url_intranet) return false;
+  if (f.etat === 'ancien') {
+    if (p.verifie_le) {
+      const d = new Date(p.verifie_le);
+      const limite = new Date(); limite.setFullYear(limite.getFullYear() - 1);
+      if (d > limite) return false;
+    }
+  }
+  const q = (f.q || '').trim();
+  if (!q) return true;
+  const digits = typeof telRequete === 'function' ? telRequete(q) : '';
+  if (digits) {
+    if (typeof telContient === 'function' &&
+        (p.responsables || []).some(r => telContient(r.telephone, digits))) return true;
+    return false;
+  }
+  const hay = _pnorm([
+    p.nom, p.plateforme, p.site_libelle, p.url_intranet, p.notes, p.procedure_denonciation, p.adresse_siege,
+    (p.responsables || []).map(r => [r.prenom, r.nom, r.fonction, r.email, r.zones_note, (r.zones || []).join(' ')].join(' ')).join(' ')
+  ].join(' '));
+  return _pnorm(q).split(/\s+/).every(mot => hay.indexOf(mot) !== -1);
+}
+
+function renderPromoteurs() {
+  const grid = document.getElementById('promoteurs-grid');
+  if (!grid) return;
+  const liste = _promoteurs.filter(p => _promoCorrespond(p, _promoFiltres));
+  const cnt = document.getElementById('promoteurs-count');
+  if (cnt) {
+    const nbResp = _promoteurs.reduce((s, p) => s + (p.responsables || []).length, 0);
+    const aVerif = _promoteurs.filter(p => p.a_verifier || (p.responsables || []).some(r => r.a_verifier)).length;
+    cnt.innerHTML = liste.length === _promoteurs.length
+      ? `${_promoteurs.length} promoteurs · ${nbResp} responsables` + (aVerif ? ` · <span style="color:var(--warning)">${aVerif} à vérifier</span>` : '')
+      : `${liste.length} promoteur(s) sur ${_promoteurs.length}`;
+  }
+  if (!liste.length) {
+    grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">—</div><p>Aucun promoteur ne correspond à cette recherche.</p></div>';
+    return;
+  }
+  grid.innerHTML = liste.map(promoCarte).join('');
+}
+
+function _promoZonePastilles(r) {
+  const z = (r.zones || []);
+  if (!z.length && !r.zones_note) return '';
+  const pills = z.map(x => `<span style="display:inline-block;padding:1px 7px;border-radius:20px;font-size:10.5px;font-weight:600;background:rgba(79,127,232,.13);color:var(--accent2);border:1px solid rgba(79,127,232,.25)">${_esc(x)}</span>`).join(' ');
+  const note = r.zones_note ? `<span style="font-size:11px;color:var(--muted)">${_esc(r.zones_note)}</span>` : '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:5px">${pills}${note}</div>`;
+}
+
+function promoCarte(p) {
+  const aVerif = p.a_verifier || (p.responsables || []).some(r => r.a_verifier);
+  const motifs = (p.verif_motifs || []).concat(
+    (p.responsables || []).reduce((a, r) => a.concat(r.verif_motifs || []), []));
+
+  const badges = [];
+  if (p.plateforme) badges.push(`<span class="badge" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border)">${_esc(p.plateforme)}</span>`);
+  if (aVerif) badges.push(`<span class="badge badge-reservation" title="${_esc(motifs.join(' · '))}">à vérifier</span>`);
+
+  const lien = p.url_intranet
+    ? `<a href="${_esc(p.url_intranet)}" target="_blank" rel="noopener" class="btn btn-primary" style="width:100%;justify-content:center;text-decoration:none;margin-bottom:14px">Ouvrir l'intranet</a>`
+    : `<div style="width:100%;text-align:center;padding:9px 18px;border-radius:9px;border:1px dashed var(--border);color:var(--muted);font-size:13px;margin-bottom:14px">${p.site_libelle ? _esc(p.site_libelle) : 'Pas de lien intranet'}</div>`;
+
+  const resp = (p.responsables || []).length
+    ? (p.responsables || []).map(r => {
+        const nomAff = [r.prenom, r.nom].filter(Boolean).join(' ') || '(sans nom)';
+        const marq = r.a_verifier ? ` <span title="${_esc((r.verif_motifs || []).join(' · '))}" style="color:var(--warning);font-weight:700">*</span>` : '';
+        const role = r.fonction ? `<div style="font-size:11.5px;color:var(--muted)">${_esc(r.fonction)}</div>` : '';
+        const tel = r.telephone ? `<a href="tel:${_esc(String(r.telephone).replace(/\s/g, ''))}" style="color:var(--text);text-decoration:none;font-size:12.5px">${_esc(r.telephone)}</a>` : '';
+        const mail = r.email ? `<a href="mailto:${_esc(r.email)}" style="color:var(--accent2);text-decoration:none;font-size:12.5px;word-break:break-all">${_esc(r.email)}</a>` : '';
+        const note = r.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${_esc(r.notes)}</div>` : '';
+        return `<div style="padding:10px 0;border-top:1px solid var(--border)">
+          <div style="font-weight:600;font-size:13.5px">${_esc(nomAff)}${r.principal ? ' <span style="font-size:10px;color:var(--accent);letter-spacing:.5px">PRINCIPAL</span>' : ''}${marq}</div>
+          ${role}
+          <div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px">${tel}${mail}</div>
+          ${_promoZonePastilles(r)}
+          ${note}
+        </div>`;
+      }).join('')
+    : `<div style="padding:10px 0;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px">Aucun responsable enregistré.</div>`;
+
+  const proc = p.procedure_denonciation
+    ? `<details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--accent2);list-style:none">▸ Comment dénoncer un prospect</summary>
+       <div style="font-size:12.5px;margin-top:6px;white-space:pre-line">${_esc(p.procedure_denonciation)}</div></details>` : '';
+  const infos = [];
+  if (p.adresse_siege) infos.push(`<div style="font-size:11.5px;color:var(--muted);white-space:pre-line;margin-top:8px">${_esc(p.adresse_siege)}</div>`);
+  if (p.notes) infos.push(`<div style="font-size:11.5px;color:var(--muted);margin-top:6px">${_esc(p.notes)}</div>`);
+
+  const verifLe = p.verifie_le
+    ? `<span style="font-size:11px;color:var(--muted)">Vérifié le ${new Date(p.verifie_le).toLocaleDateString('fr-FR')}</span>`
+    : `<span style="font-size:11px;color:var(--muted)">Jamais vérifié ici</span>`;
+
+  return `<div class="card" style="margin-bottom:0;padding:18px 20px;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:4px">
+      <div style="font-family:var(--font-head);font-size:15px;font-weight:700;line-height:1.25">${_esc(p.nom)}</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">${badges.join('')}</div>
+    ${lien}
+    <div style="flex:1">${resp}</div>
+    ${proc}
+    ${infos.join('')}
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+      ${verifLe}
+      <button class="btn btn-ghost btn-sm" onclick="promoOuvrir('${p.id}')">Modifier</button>
+    </div>
+  </div>`;
+}
+
+// ---- Modification ----
+function promoOuvrir(id) {
+  const p = _promoteurs.find(x => x.id === id);
+  _promoEdit = p ? JSON.parse(JSON.stringify(p)) : {
+    id: null, nom: '', plateforme: '', url_intranet: '', site_libelle: '', login: '', mot_de_passe: '',
+    procedure_denonciation: '', adresse_siege: '', notes: '', a_verifier: false, verif_motifs: [], verifie_le: null
+  };
+  _promoEditResp = (_promoEdit.responsables || []).map(r => Object.assign({}, r, { zones: (r.zones || []).slice() }));
+  delete _promoEdit.responsables;
+  promoRendreForm();
+  document.getElementById('modal-promoteur').classList.add('open');
+}
+
+function promoFermer() {
+  document.getElementById('modal-promoteur').classList.remove('open');
+  _promoEdit = null; _promoEditResp = [];
+}
+
+function _pinput() {
+  return 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:100%';
+}
+
+function promoRendreForm() {
+  const p = _promoEdit;
+  const titre = document.getElementById('modal-promoteur-titre');
+  if (titre) titre.textContent = p.id ? 'Modifier ' + p.nom : 'Nouveau promoteur';
+  const bs = document.getElementById('promo-btn-suppr');
+  const gerant = typeof estGerant !== 'function' || estGerant();
+  if (bs) bs.style.visibility = (p.id && gerant) ? 'visible' : 'hidden';
+  const g = (lbl, champ, val, ph) => `<div class="form-group"><label>${lbl}</label>
+    <input id="pf-${champ}" style="${_pinput()}" value="${_esc(val || '')}" placeholder="${ph || ''}"></div>`;
+  document.getElementById('promo-form-promoteur').innerHTML = `
+    <div class="form-grid">
+      ${g('Nom du promoteur', 'nom', p.nom)}
+      ${g('Plateforme', 'plateforme', p.plateforme, 'Immo-Lead, Unlatch…')}
+      <div class="form-group full"><label>Lien vers l'intranet</label>
+        <input id="pf-url_intranet" style="${_pinput()}" value="${_esc(p.url_intranet || '')}" placeholder="https://…"></div>
+      ${g('Nom de l\'espace (si pas de lien)', 'site_libelle', p.site_libelle, 'Dropbox, RAM Connect…')}
+      ${g('Identifiant', 'login', p.login, 'à compléter')}
+      ${g('Mot de passe', 'mot_de_passe', p.mot_de_passe, 'à compléter')}
+      <div class="form-group"><label>Vérifié le</label>
+        <input type="date" id="pf-verifie_le" style="${_pinput()}" value="${p.verifie_le || ''}"></div>
+      <div class="form-group full"><label>Comment dénoncer un prospect</label>
+        <textarea id="pf-procedure_denonciation" rows="2" style="${_pinput()}">${_esc(p.procedure_denonciation || '')}</textarea></div>
+      <div class="form-group full"><label>Adresse du siège</label>
+        <textarea id="pf-adresse_siege" rows="2" style="${_pinput()}">${_esc(p.adresse_siege || '')}</textarea></div>
+      <div class="form-group full"><label>Notes</label>
+        <textarea id="pf-notes" rows="2" style="${_pinput()}">${_esc(p.notes || '')}</textarea></div>
+      <div class="form-group full" style="flex-direction:row;align-items:center;gap:8px">
+        <input type="checkbox" id="pf-a_verifier" ${p.a_verifier ? 'checked' : ''} style="width:auto">
+        <label for="pf-a_verifier" style="margin:0">Fiche à vérifier${(p.verif_motifs || []).length ? ' — ' + _esc((p.verif_motifs || []).join(' · ')) : ''}</label>
+      </div>
+    </div>`;
+  promoRendreResp();
+}
+
+function promoRendreResp() {
+  const box = document.getElementById('promo-form-resp');
+  if (!box) return;
+  if (!_promoEditResp.length) {
+    box.innerHTML = '<div style="color:var(--muted);font-size:12.5px;padding:8px 0">Aucun responsable. Clique « + Ajouter un responsable ».</div>';
+    return;
+  }
+  box.innerHTML = _promoEditResp.map((r, i) => `
+    <div style="border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--surface2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin:0">
+          <input type="checkbox" ${r.principal ? 'checked' : ''} onchange="promoRespChamp(${i},'principal',this.checked)" style="width:auto">
+          Contact principal
+        </label>
+        <button class="btn btn-danger btn-sm" onclick="promoRespSuppr(${i})">Retirer</button>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Prénom</label><input style="${_pinput()}" value="${_esc(r.prenom || '')}" oninput="promoRespChamp(${i},'prenom',this.value)"></div>
+        <div class="form-group"><label>Nom</label><input style="${_pinput()}" value="${_esc(r.nom || '')}" oninput="promoRespChamp(${i},'nom',this.value)"></div>
+        <div class="form-group"><label>Fonction</label><input style="${_pinput()}" value="${_esc(r.fonction || '')}" oninput="promoRespChamp(${i},'fonction',this.value)" placeholder="Responsable prescription…"></div>
+        <div class="form-group"><label>Téléphone</label><input style="${_pinput()}" value="${_esc(r.telephone || '')}" oninput="promoRespChamp(${i},'telephone',this.value)"></div>
+        <div class="form-group full"><label>Email</label><input style="${_pinput()}" value="${_esc(r.email || '')}" oninput="promoRespChamp(${i},'email',this.value)"></div>
+        <div class="form-group full"><label>Départements pris en charge</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${PROMO_ZONES.map(z => `<label style="display:flex;align-items:center;gap:4px;font-size:12px;padding:4px 9px;border:1px solid var(--border);border-radius:20px;cursor:pointer;background:var(--surface);margin:0">
+              <input type="checkbox" ${(r.zones || []).indexOf(z) !== -1 ? 'checked' : ''} onchange="promoRespZone(${i},'${z}',this.checked)" style="width:auto">${z === 'Autres' ? 'Hors IDF' : z}</label>`).join('')}
+          </div>
+        </div>
+        <div class="form-group full"><label>Précision sur la zone</label>
+          <input style="${_pinput()}" value="${_esc(r.zones_note || '')}" oninput="promoRespChamp(${i},'zones_note',this.value)" placeholder="92 sud uniquement, Grand Lyon…"></div>
+        <div class="form-group full"><label>Note</label>
+          <input style="${_pinput()}" value="${_esc(r.notes || '')}" oninput="promoRespChamp(${i},'notes',this.value)"></div>
+      </div>
+      ${(r.verif_motifs || []).length ? `<div style="font-size:11.5px;color:var(--warning);margin-top:8px">À vérifier : ${_esc((r.verif_motifs || []).join(' · '))}</div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin-top:6px">
+          <input type="checkbox" ${r.a_verifier ? 'checked' : ''} onchange="promoRespChamp(${i},'a_verifier',this.checked)" style="width:auto">Toujours à vérifier</label>` : ''}
+    </div>`).join('');
+}
+
+function promoRespChamp(i, champ, val) { if (_promoEditResp[i]) _promoEditResp[i][champ] = val; }
+function promoRespZone(i, zone, coche) {
+  const r = _promoEditResp[i]; if (!r) return;
+  r.zones = r.zones || [];
+  const k = r.zones.indexOf(zone);
+  if (coche && k === -1) r.zones.push(zone);
+  if (!coche && k !== -1) r.zones.splice(k, 1);
+  r.zones.sort();
+}
+function promoRespAjouter() {
+  _promoEditResp.push({ prenom: '', nom: '', fonction: '', telephone: '', email: '', zones: [], zones_note: '', principal: !_promoEditResp.length, notes: '', a_verifier: false, verif_motifs: [] });
+  promoRendreResp();
+}
+function promoRespSuppr(i) { _promoEditResp.splice(i, 1); promoRendreResp(); }
+
+async function promoEnregistrer() {
+  const val = id => { const el = document.getElementById('pf-' + id); return el ? el.value.trim() : ''; };
+  const corps = {
+    nom: val('nom'), plateforme: val('plateforme') || null, url_intranet: val('url_intranet') || null,
+    site_libelle: val('site_libelle') || null, login: val('login') || null, mot_de_passe: val('mot_de_passe') || null,
+    procedure_denonciation: val('procedure_denonciation') || null, adresse_siege: val('adresse_siege') || null,
+    notes: val('notes') || null,
+    a_verifier: !!(document.getElementById('pf-a_verifier') || {}).checked,
+    verifie_le: val('verifie_le') || null
+  };
+  if (!corps.nom) { toast('⚠ Le nom du promoteur est obligatoire', 'var(--danger)'); return; }
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  try {
+    let id = _promoEdit.id;
+    if (id) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/promoteurs?id=eq.' + id, { method: 'PATCH', headers: h, body: JSON.stringify(corps) });
+      if (!r.ok) throw new Error();
+    } else {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/promoteurs', {
+        method: 'POST', headers: Object.assign({ 'Prefer': 'return=representation' }, h), body: JSON.stringify(corps)
+      });
+      if (!r.ok) throw new Error();
+      id = (await r.json())[0].id;
+    }
+    await fetch(SUPABASE_URL + '/rest/v1/promoteurs_responsables?promoteur_id=eq.' + id, { method: 'DELETE', headers: h });
+    const lignes = _promoEditResp
+      .filter(r => (r.prenom || r.nom || r.email || r.telephone))
+      .map((r, k) => ({
+        promoteur_id: id, prenom: r.prenom || null, nom: r.nom || null, fonction: r.fonction || null,
+        telephone: r.telephone || null, email: r.email || null, zones: r.zones || [], zones_note: r.zones_note || null,
+        principal: !!r.principal, ordre: k, notes: r.notes || null,
+        a_verifier: !!r.a_verifier, verif_motifs: r.verif_motifs || []
+      }));
+    if (lignes.length) {
+      const r2 = await fetch(SUPABASE_URL + '/rest/v1/promoteurs_responsables', { method: 'POST', headers: h, body: JSON.stringify(lignes) });
+      if (!r2.ok) throw new Error();
+    }
+    promoFermer();
+    toast('✓ Promoteur enregistré');
+    await loadPromoteurs();
+  } catch (e) {
+    toast('⚠ Enregistrement impossible', 'var(--danger)');
+  }
+}
+
+async function promoSupprimer() {
+  if (!_promoEdit || !_promoEdit.id) return;
+  if (!confirm('Supprimer ' + _promoEdit.nom + ' et ses responsables ?')) return;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/promoteurs?id=eq.' + _promoEdit.id, {
+      method: 'DELETE', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' }
+    });
+    if (!r.ok) throw new Error();
+    promoFermer(); toast('✓ Promoteur supprimé'); await loadPromoteurs();
+  } catch (e) { toast('⚠ Suppression réservée aux gérants', 'var(--danger)'); }
+}
+
 </script>
 
 </body></html>
