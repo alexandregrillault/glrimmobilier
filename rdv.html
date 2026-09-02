@@ -120,7 +120,11 @@
   }
 </style></head><body>
 <div class="wrap">
-  <header><img class="logo" src="logo-glr.png" alt="GLR Immobilier" onerror="this.outerHTML='<div class=&quot;marque&quot;>GLR IMMOBILIER</div>'"><div class="filet"></div></header>
+  <header><img class="logo" alt="GLR Immobilier" onerror="this.outerHTML='<div class=&quot;marque&quot;>GLR IMMOBILIER</div>'"><div class="filet"></div></header>
+  <script>
+    // Le logo est à côté de la page sur GitHub Pages, et dans /rdv/ sur le site glrimmobilier.com
+    (function(){ var i = document.querySelector("img.logo"); if (i) i.src = /glrimmobilier\.com$/i.test(location.hostname) ? "/rdv/logo-glr.png" : "logo-glr.png"; })();
+  </script>
   <div id="contenu"><div class="etat-vide">Chargement…</div></div>
   <footer>GLR Immobilier — <a href="https://www.glrimmobilier.com" target="_blank" rel="noopener">glrimmobilier.com</a></footer>
 </div>
@@ -139,7 +143,16 @@
   var SUPA = "https://hydqfbxdtpmbuooexekp.supabase.co";
   var params = new URLSearchParams(location.search);
   var token = params.get("t") || "";       // remplacé par le lien personnel après une réservation publique
-  var FN = SUPA + "/functions/v1/rdv/" + encodeURIComponent(token);
+  // Adresse par prénom, sans jeton : glrimmobilier.com/rdv/nour (la même page
+  // est déposée dans un dossier par commercial sur le site) ou ?v=nour. Le
+  // serveur retrouve le lien public du commercial et renvoie son jeton.
+  var slugVendeur = (params.get("v") || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!token && !slugVendeur){
+    var m = location.pathname.match(/\/rdv\/([a-z0-9-]+)\/?$/i);
+    if (m) slugVendeur = m[1].toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+  var FN = token ? SUPA + "/functions/v1/rdv/" + encodeURIComponent(token)
+                 : SUPA + "/functions/v1/rdv/?v=" + encodeURIComponent(slugVendeur);
   var cont = document.getElementById("contenu");
   // Deux formats (choix d'Alex, septembre 2026) : la visio de 30 min où l'on
   // prend le temps de montrer, ou l'appel de 10 min pour une première esquisse.
@@ -624,16 +637,21 @@
   }
 
   function charger(){
-    if (!token){
+    if (!token && !slugVendeur){
       cont.innerHTML = "<div class='etat-vide'><h2>Lien incomplet</h2><p>Ouvrez le lien reçu par mail, il contient votre identifiant.</p></div>";
       return;
     }
-    fetch(FN + "?data=1", { cache:"no-store" })
+    fetch(FN + (FN.indexOf("?") >= 0 ? "&" : "?") + "data=1", { cache:"no-store" })
       .then(function(r){ return r.json(); })
       .then(function(d){
         if (!d || !d.ok){
           cont.innerHTML = "<div class='etat-vide'><h2>Ce lien n'est plus valable</h2><p>Contactez votre conseiller GLR Immobilier, il vous en renverra un.</p></div>";
           return;
+        }
+        // Page par prénom : le serveur a retrouvé le lien public, on continue avec son jeton
+        if (!token && d.token){
+          token = d.token;
+          FN = SUPA + "/functions/v1/rdv/" + encodeURIComponent(token);
         }
         if (d.expired){
           cont.innerHTML = "<div class='etat-vide'><h2>Ce lien a expiré</h2><p>Contactez votre conseiller GLR Immobilier, il vous en renverra un.</p></div>";
