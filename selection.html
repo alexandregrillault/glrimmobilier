@@ -268,7 +268,12 @@
   }
 </style></head><body>
 <div class="wrap">
-  <header><img class="logo" src="logo-glr.png" alt="GLR Immobilier" onerror="this.outerHTML='<div class=&quot;marque&quot;>GLR IMMOBILIER</div>'"><div class="filet"></div></header>
+  <header><img class="logo" alt="GLR Immobilier" onerror="this.outerHTML='<div class=&quot;marque&quot;>GLR IMMOBILIER</div>'"><div class="filet"></div></header>
+  <script>
+    // Le logo est à côté de la page sur GitHub Pages, et dans /selection/ sur le site glrimmobilier.com
+    var LOGO_SRC = /glrimmobilier\.com$/i.test(location.hostname) ? "/selection/logo-glr.png" : "logo-glr.png";
+    (function(){ var i = document.querySelector("img.logo"); if (i) i.src = LOGO_SRC; })();
+  </script>
   <div id="contenu" class="etat">Chargement de votre sélection…</div>
 </div>
 
@@ -837,7 +842,7 @@
         if (visu.plan) h += "<div class='voir-plan'>Voir le plan en grand</div>";
         h += "</div>";
       } else {
-        h += "<div class='img-vide'><div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf + "<img src='logo-glr.png' alt='GLR Immobilier' onerror=\"this.outerHTML='<span class=&quot;txt&quot;>GLR</span>'\"></div>";
+        h += "<div class='img-vide'><div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf + "<img src='" + LOGO_SRC + "' alt='GLR Immobilier' onerror=\"this.outerHTML='<span class=&quot;txt&quot;>GLR</span>'\"></div>";
       }
       h += "<div class='body'>";
       if (b.ville) h += "<div class='eyebrow'>" + esc(b.ville) + "</div>";
