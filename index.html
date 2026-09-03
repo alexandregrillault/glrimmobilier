@@ -2318,6 +2318,10 @@
           <option value="mailto">Application mail de l'ordinateur (Mail, Outlook installé…)</option>
         </select>
       </div>
+      <div class="form-group">
+        <label>Lien de visio (salle permanente)</label>
+        <input type="url" id="vd-visio" placeholder="https://meet.google.com/xxx-xxxx-xxx" title="Ta salle de réunion fixe (Google Meet, Teams…). Elle part dans le mail de confirmation et l'agenda du client, et s'affiche dans ton rappel avant chaque visio.">
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal(&#39;vendeur&#39;)">Annuler</button>
@@ -3474,7 +3478,8 @@ function saveVendeur() {
         role: document.getElementById('vd-role').value,
         tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
         email: document.getElementById('vd-email').value.trim(),
-        messagerie: document.getElementById('vd-messagerie').value
+        messagerie: document.getElementById('vd-messagerie').value,
+        visio: _visioNettoyer(document.getElementById('vd-visio').value)
       };
     }
     window._editingVendeurId = null;
@@ -3485,7 +3490,8 @@ function saveVendeur() {
       role: document.getElementById('vd-role').value,
       tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
       email: document.getElementById('vd-email').value.trim(),
-      messagerie: document.getElementById('vd-messagerie').value
+      messagerie: document.getElementById('vd-messagerie').value,
+      visio: _visioNettoyer(document.getElementById('vd-visio').value)
     });
     toast('✓ Vendeur ajouté !');
   }
@@ -5143,6 +5149,7 @@ function openEditVendeur(id) {
   document.getElementById('vd-taux').value = v.tauxDefaut || '';
   document.getElementById('vd-email').value = v.email || '';
   document.getElementById('vd-messagerie').value = v.messagerie || 'gmail';
+  document.getElementById('vd-visio').value = v.visio || '';
   document.querySelector('#modal-vendeur .modal-title').textContent = '✎ Modifier le vendeur';
   window._editingVendeurId = id;
   document.getElementById('modal-vendeur').classList.add('open');
@@ -8094,10 +8101,23 @@ function _visioBip(){
   } catch(e){ /* son bloqué tant que la page n'a pas été cliquée : sans importance */ }
 }
 
-// Lien de visio éventuellement collé dans le lieu ou le message du client
+// Une adresse de visio propre, ou rien
+function _visioNettoyer(v){
+  const u = String(v || '').trim();
+  return /^https?:\/\/\S+$/.test(u) ? u : '';
+}
+// Salle de visio fixe d'un vendeur (fiche vendeur, champ « Lien de visio »)
+function _visioDuVendeur(prenom){
+  const cible = String(prenom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const v = ((typeof data !== 'undefined' && data && data.vendeurs) || []).find(x => String(x.prenom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === cible);
+  return _visioNettoyer(v && v.visio) || null;
+}
+// Lien de visio d'un rendez-vous : collé dans le lieu ou le message du client,
+// sinon la salle fixe du vendeur (celle que le client a reçue dans sa confirmation)
 function _visioLien(c){
   const m = String([c.lieu, c.client_message].filter(Boolean).join(' ')).match(/https?:\/\/[^\s<>"']+/);
-  return m ? m[0] : null;
+  if (m) return m[0];
+  return c.mode === 'visio' ? _visioDuVendeur(c.vendeur) : null;
 }
 function _visioHeure(c){
   return new Date(c.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
@@ -8120,8 +8140,8 @@ function _visioBandeau(c, minutes){
     + '<span style="flex:1;min-width:200px">'
     + '<span style="display:block;font-size:13.5px;font-weight:800">Visio avec ' + _vEsc(c.client_nom || 'un client') + ' ' + restant + '</span>'
     + '<span style="display:block;font-size:12px;color:var(--muted);margin-top:2px">' + _vEsc(_visioHeure(c)) + (c.lieu && !lien ? ' · ' + _vEsc(c.lieu) : '') + '</span></span>'
-    + (c.contact_id ? '<button class="btn btn-sm btn-primary" onclick="eqOuvrirFiche(\'' + c.contact_id + '\')" style="font-size:12px">Ouvrir la fiche</button>' : '')
-    + (lien ? '<a class="btn btn-sm btn-secondary" href="' + _vEsc(lien) + '" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none">Lien visio</a>' : '')
+    + (c.contact_id ? '<button class="btn btn-sm btn-secondary" onclick="eqOuvrirFiche(\'' + c.contact_id + '\')" style="font-size:12px">Ouvrir la fiche</button>' : '')
+    + (lien ? '<a class="btn btn-sm btn-primary" href="' + _vEsc(lien) + '" target="_blank" rel="noopener" style="font-size:12px;text-decoration:none">Rejoindre la visio</a>' : '')
     + '<button onclick="visioMasquer(\'' + c.id + '\')" style="background:none;border:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer">Masquer</button>';
 }
 
@@ -8591,7 +8611,9 @@ function renderEqNotifs() {
       + esc(_crenLbl(c)) + (c.lieu ? ' — ' + esc(c.lieu) : '');
     const cible = (jourRdv === jour ? aujourdhui : avenir);
     cible.push({ t: new Date(c.debut).getTime(), g: 'confirme', d: jourRdv,
-      html: item('rdv', (c.mode === 'visio' ? 'Visio avec ' : 'RDV avec ') + esc(c.client_nom || 'Client') + rep(c.contact_id), detail, btnFiche(c.contact_id), 'var(--success)') });
+      html: item('rdv', (c.mode === 'visio' ? 'Visio avec ' : 'RDV avec ') + esc(c.client_nom || 'Client') + rep(c.contact_id), detail,
+        btnFiche(c.contact_id) + (c.mode === 'visio' && _visioLien(c) ? `<a class="btn btn-sm btn-primary" href="${esc(_visioLien(c))}" target="_blank" rel="noopener" style="font-size:11px;text-decoration:none">Rejoindre la visio</a>` : ''),
+        'var(--success)') });
   });
 
   // ---- Assemblage : trois cases cliquables + liste dépliée groupée par date
@@ -8752,7 +8774,7 @@ async function eqRdvValider(id) {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     await _planMajSelection(c && c.selection_token, { confirme: true, refuse: false, confirme_le: new Date().toISOString() });
-    const notif = await rdvNotifierClient(c && c.selection_token, 'confirme', { debut: c && c.debut, fin: c && c.fin, mode: c && c.mode });
+    const notif = await rdvNotifierClient(c && c.selection_token, 'confirme', { debut: c && c.debut, fin: c && c.fin, mode: c && c.mode, visio: c ? _visioLien(c) : null });
     toast('✓ Rendez-vous confirmé — il est dans ton planning' + _rdvNotifMot(notif), 'var(--success)');
   } catch (e) { toast('⚠ Validation impossible', 'var(--danger)'); }
   await eqRdvCharger();
@@ -11141,7 +11163,7 @@ async function eqPlanValider(id) {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     await _planMajSelection(c && c.selection_token, { confirme: true, refuse: false, confirme_le: new Date().toISOString() });
-    const notif = await rdvNotifierClient(c && c.selection_token, 'confirme', { debut: c && c.debut, fin: c && c.fin, mode: c && c.mode });
+    const notif = await rdvNotifierClient(c && c.selection_token, 'confirme', { debut: c && c.debut, fin: c && c.fin, mode: c && c.mode, visio: c ? _visioLien(c) : null });
     toast('✓ Rendez-vous confirmé' + _rdvNotifMot(notif), 'var(--success)');
   } catch (e) { toast('⚠ Validation impossible', 'var(--danger)'); }
   renderEquipePlanning();
