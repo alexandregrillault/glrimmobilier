@@ -14522,8 +14522,9 @@ var _planVue = 'heures';            // 'heures' (grille) ou 'semaine' (liste com
 const PLAN_H_DEB = 7;               // première heure affichée
 const PLAN_H_FIN = 21;              // dernière heure affichée
 const PLAN_SLOT_MIN = 15;           // finesse de sélection à la souris : le quart d'heure (les créneaux clients, eux, font 10 min)
-const PLAN_SLOT_PX = 16;            // 64 px par heure — un appel de 10 min fait encore ~11 px, lisible
+const PLAN_SLOT_PX = 20;            // 80 px par heure (64 avant le 03/09/2026) : un appel de 10 min fait ~13 px, et garde une ligne lisible grâce à PLAN_EV_MIN_PX
 const PLAN_H_PX = PLAN_SLOT_PX * 60 / PLAN_SLOT_MIN;   // hauteur d'une heure
+const PLAN_EV_MIN_PX = 24;          // hauteur minimale d'une activité posée : une ligne lisible, même pour un appel de 10 min
 
 const PLAN_CATS = [
   { k: 'appel',       l: 'Appels / relances',   c: 'var(--accent)'  },
@@ -14640,13 +14641,23 @@ function _planEvHtml(c, nLanes) {
   const debMin = _planMinutes(c.debut), finMin = _planMinutes(c.fin);
   const haut = Math.max(0, (debMin - PLAN_H_DEB * 60)) / PLAN_SLOT_MIN * PLAN_SLOT_PX;
   const dur = Math.max(10, (finMin > debMin ? finMin : debMin + 30) - debMin);
-  const h = Math.max(11, dur / PLAN_SLOT_MIN * PLAN_SLOT_PX - 1);
+  const hReel = Math.max(11, dur / PLAN_SLOT_MIN * PLAN_SLOT_PX - 1);
+  // Un appel de 10 min ne fait que 10 px : trop peu pour lire un nom. Toute
+  // activité (sauf une simple disponibilité) garde une hauteur minimale d'une
+  // ligne, quitte à déborder un peu sur le créneau suivant — elle passe alors
+  // au-dessus, et le survol donne le détail.
+  const etire = c.statut !== 'libre' && hReel < PLAN_EV_MIN_PX;
+  const h = etire ? PLAN_EV_MIN_PX : hReel;
   const lane = c._lane || 0;
   const larg = 100 / nLanes;
-  const pos = `position:absolute;top:${haut}px;height:${h}px;left:calc(${lane * larg}% + 2px);width:calc(${larg}% - 4px);z-index:2;overflow:hidden`;
+  // Deux appels de 10 min qui s'enchaînent : le second recouvre le bas du
+  // premier, dont la ligne de texte, collée en haut, reste entièrement visible.
+  const z = etire ? 3 + Math.round(haut) : 2;
+  const pos = `position:absolute;top:${haut}px;height:${h}px;left:calc(${lane * larg}% + 2px);width:calc(${larg}% - 4px);z-index:${z};overflow:hidden;box-sizing:border-box`;
   const petit = h < 30;
+  // Bloc court : une seule ligne « 14:00 Nom » en haut ; bloc normal : heure, nom, détail
   const titre2 = (t, s) => petit
-    ? `<div style="font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</div>`
+    ? `<div style="display:flex;gap:5px;align-items:center;font-size:10.5px;line-height:1;padding-top:1px"><span style="font-weight:700;flex-shrink:0">${_planHM(c.debut)}</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</span></div>`
     : `<div style="font-size:10.5px;font-weight:700">${_planHM(c.debut)}</div><div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</div>${s ? `<div style="font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s}</div>` : ''}`;
 
   if (c.statut === 'libre') {
@@ -14663,20 +14674,20 @@ function _planEvHtml(c, nLanes) {
     // Trait plein = plage bloquée, trait pointillé = le client peut réserver dessus
     const bloque = c.bloquant !== false;
     const trait = bloque ? 'solid' : 'dashed';
-    return `<div class="plan-ev" onclick="eqPlanBlocOuvrir(null,null,null,'${c.id}')" title="${nom} — ${_planHM(c.debut)}–${_planHM(c.fin)} · ${_vEsc(_planCatLabel(c.categorie))} · ${bloque ? 'créneau bloqué pour les clients' : 'plage ouverte aux clients'}${c.lieu ? ' · ' + _vEsc(c.lieu) : ''}" style="${pos};border:1px ${trait} ${coul};border-left:3px solid ${coul};border-radius:6px;padding:2px 5px;background:var(--surface);cursor:pointer">
+    return `<div class="plan-ev" onclick="eqPlanBlocOuvrir(null,null,null,'${c.id}')" title="${nom} — ${_planHM(c.debut)}–${_planHM(c.fin)} · ${_vEsc(_planCatLabel(c.categorie))} · ${bloque ? 'créneau bloqué pour les clients' : 'plage ouverte aux clients'}${c.lieu ? ' · ' + _vEsc(c.lieu) : ''}" style="${pos};border:1px ${trait} ${coul};border-left:3px solid ${coul};border-radius:6px;padding:${petit ? '0 5px' : '2px 5px'};background:var(--surface);cursor:pointer">
       ${titre2(nom, _vEsc(_planCatLabel(c.categorie)) + (bloque ? '' : ' · ouvert'))}</div>`;
   }
   if (c.origine === 'rappel') {
-    return `<div class="plan-ev" onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" title="Activité programmée — ${_vEsc(c.client_message || 'rappel')} · se modifie depuis « Mes activités »" style="${pos};border:1px solid var(--accent2);border-left:3px solid var(--accent2);border-radius:6px;padding:2px 5px;background:var(--surface);cursor:pointer">
+    return `<div class="plan-ev" onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" title="Activité programmée — ${_vEsc(c.client_message || 'rappel')} · se modifie depuis « Mes activités »" style="${pos};border:1px solid var(--accent2);border-left:3px solid var(--accent2);border-radius:6px;padding:${petit ? '0 5px' : '2px 5px'};background:var(--surface);cursor:pointer">
       ${titre2(_vEsc(c.client_nom || 'Client'), 'activité')}</div>`;
   }
   if (c.statut === 'propose') {
-    return `<div class="plan-ev" title="Créneau proposé à ${_vEsc(c.client_nom || 'un client')}" style="${pos};border:1px dashed var(--accent);border-radius:6px;padding:2px 5px;color:var(--muted);background:transparent">
+    return `<div class="plan-ev" title="Créneau proposé à ${_vEsc(c.client_nom || 'un client')}" style="${pos};border:1px dashed var(--accent);border-radius:6px;padding:${petit ? '0 5px' : '2px 5px'};color:var(--muted);background:transparent">
       ${titre2('proposé à ' + _vEsc(String(c.client_nom || 'client').split(' ')[0]), '')}</div>`;
   }
   const attente = c.statut === 'reserve';
   const coul = attente ? 'var(--warning)' : 'var(--success)';
-  return `<div class="plan-ev" onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" title="${attente ? 'En attente de ta validation' : 'Rendez-vous confirmé'} — ${_vEsc(_crenLbl(c))} · ${_planHM(c.debut)}–${_planHM(c.fin)}" style="${pos};border:1px solid ${coul};border-left:3px solid ${coul};border-radius:6px;padding:2px 5px;background:var(--surface);cursor:pointer">
+  return `<div class="plan-ev" onclick="${c.contact_id ? `eqOuvrirFiche('${c.contact_id}')` : ''}" title="${attente ? 'En attente de ta validation' : 'Rendez-vous confirmé'} — ${_vEsc(_crenLbl(c))} · ${_planHM(c.debut)}–${_planHM(c.fin)}" style="${pos};border:1px solid ${coul};border-left:3px solid ${coul};border-radius:6px;padding:${petit ? '0 5px' : '2px 5px'};background:var(--surface);cursor:pointer">
     ${titre2(_vEsc(c.client_nom || 'Client'), attente ? 'à valider' : _crenLbl(c))}</div>`;
 }
 
