@@ -2794,6 +2794,40 @@ function _hideLogin(){
   if (app) app.style.display = '';
 }
 
+// ---- Ouvrir une fiche client depuis un lien reçu par mail -------------------
+// Le mail « Nouveau rendez-vous » envoyé au vendeur porte un bouton
+// « Ouvrir la fiche » : index.html?fiche=<id du contact>. On atterrit sur ses
+// leads, la fiche déjà ouverte, sans avoir à chercher le client dans la liste.
+async function _ficheDepuisLien(){
+  const id = new URLSearchParams(location.search).get('fiche');
+  if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return;
+  // L'adresse redevient propre : un rafraîchissement ne rouvre pas la fiche
+  try { history.replaceState(null, '', location.pathname); } catch(e) {}
+  const navVers = (cible) => [...document.querySelectorAll('.nav-item')]
+    .find(el => (el.getAttribute('onclick') || '').includes("goTo('" + cible + "'")) || null;
+  goTo('equipe-leads', navVers('equipe-leads'));
+  // Un gérant reçoit aussi ces liens : on se place d'abord sur le vendeur de la fiche
+  if (estGerant()) {
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=vendeur&id=eq.' + id, {
+        cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+      });
+      const rows = r.ok ? await r.json() : [];
+      const prenom = rows.length ? String(rows[0].vendeur || '') : '';
+      const v = (data.vendeurs || []).find(x => x.prenom === prenom);
+      if (v) {
+        selectedVendeurId = v.id;
+        _eqLeadsPopulateSelect();
+        const sel = document.getElementById('eq-leads-vendeur');
+        if (sel) sel.value = v.id;
+      }
+    } catch(e) { /* on tente avec le vendeur déjà sélectionné */ }
+  }
+  await renderEquipeLeads();
+  if ((_eqLeads || []).some(l => l.id === id)) eqOuvrirFiche(id);
+  else toast('Client introuvable dans cette liste — cherche-le dans Contacts', 'var(--warning)');
+}
+
 async function _startApp(){
   _hideLogin();
   await chargerMonRole();
@@ -2813,6 +2847,7 @@ async function _startApp(){
   await loadContacts();
   _visioDemarrer();
   setInterval(function(){ _sbJetonFrais(600000); }, 10 * 60 * 1000);
+  await _ficheDepuisLien();
 }
 
 async function handleLogin(){
@@ -9376,6 +9411,16 @@ async function _selChargerProgrammes() {
   return _selProgrammes;
 }
 
+// Un clic à côté de la fenêtre ne referme plus une sélection en cours : l'écran
+// est sensible au moindre clic et tout le travail repartait à zéro (retour des
+// équipes, 3 septembre 2026). On sort par le bouton Annuler, qui prévient quand
+// des biens ont déjà été ajoutés — même principe que le bouton de validation.
+function _selAnnuler() {
+  const n = (_selCtx && Array.isArray(_selCtx.libres)) ? _selCtx.libres.length : 0;
+  if (n && !confirm('Fermer cette sélection ? Le' + (n > 1 ? 's ' : ' ') + n + ' bien' + (n > 1 ? 's' : '') + ' ajouté' + (n > 1 ? 's' : '') + ' seront perdus.')) return;
+  _selFermer();
+}
+
 function _selFermer() { const m = document.getElementById('eq-sel-modal'); if (m) m.remove(); _selCtx = null; }
 
 // ---- Ouverture du modal de création
@@ -9434,11 +9479,11 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
     </div>
     <button onclick="selAjouterLibre()" style="background:var(--surface2);border:1px dashed var(--border);border-radius:9px;padding:7px 14px;color:var(--text);font-size:12px;cursor:pointer;margin-bottom:18px">+ Ajouter ce lot</button>
     <div style="display:flex;justify-content:flex-end;gap:10px">
-      <button onclick="_selFermer()" class="btn btn-secondary">Annuler</button>
+      <button onclick="_selAnnuler()" class="btn btn-secondary">Annuler</button>
       <button id="sel-btn-valider" onclick="selCreer()" class="btn">Créer la sélection</button>
     </div>
   </div>`;
-  div.addEventListener('click', (e) => { if (e.target === div) _selFermer(); });
+  // Clic à côté : on ne ferme pas — une sélection en cours ne doit pas sauter
   document.body.appendChild(div);
   _selSalutationApercu();
   if (_selCtx.edition) {
@@ -10108,7 +10153,7 @@ function selAdresseLot(i) {
       </div>
     </div>
   </div>`;
-  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  // Clic à côté : on ne ferme pas — la saisie en cours ne doit pas sauter
   document.body.appendChild(div);
   _selAdresseDocuments(b.lien);
 }
@@ -10185,7 +10230,7 @@ function selRemiseLot(i) {
       <button class="btn" onclick="selRemiseValider(${i})">Ajouter</button>
     </div>
   </div>`;
-  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  // Clic à côté : on ne ferme pas — la saisie en cours ne doit pas sauter
   document.body.appendChild(div);
   document.getElementById('sel-remise-lib').focus();
 }
@@ -10230,7 +10275,7 @@ function selNoteLot(i) {
       </div>
     </div>
   </div>`;
-  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  // Clic à côté : on ne ferme pas — la saisie en cours ne doit pas sauter
   document.body.appendChild(div);
   document.getElementById('sel-note-texte').focus();
 }
