@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Confirmer un rendez-vous — GLR Immobilier</title>
+<link rel="icon" href="logo-glr.png">
+<style>
+  :root{color-scheme:light only}
+  *{box-sizing:border-box}
+  body{margin:0;background:#f7f5f1;color:#1a1d23;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;
+       display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px 14px}
+  .carte{width:100%;max-width:440px;background:#fbf8f1;border:1px solid #e8e3d9;border-radius:20px;
+         padding:30px 24px 26px;text-align:center;box-shadow:0 10px 30px rgba(26,29,35,.06)}
+  .logo{display:block;margin:0 auto;height:auto;border:0;width:104px}
+  .filet{width:48px;height:2px;background:#c8a96e;margin:14px auto 18px}
+  .sur{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;font-weight:700;color:#b3945a}
+  h1{font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:600;margin:8px 0 14px;line-height:1.3}
+  .quand{background:#fff;border:1px solid #c8a96e;border-radius:14px;padding:16px 18px;margin:16px 0}
+  .jour{font-family:Georgia,serif;font-size:19px;font-weight:700}
+  .heure{font-family:Georgia,serif;font-size:28px;font-weight:700;color:#b3945a;margin-top:2px}
+  .detail{font-size:13px;color:#6b7280;margin-top:6px}
+  .detail a{color:#b3945a}
+  p{font-size:15px;line-height:1.6;color:#3f4550;margin:0 0 12px}
+  button{width:100%;background:#c8a96e;color:#fff;border:0;border-radius:12px;padding:16px 20px;
+         font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px}
+  button[disabled]{opacity:.6;cursor:default}
+  a.second{display:inline-block;margin-top:16px;font-size:13.5px;color:#b3945a}
+  .ok{color:#2f7d5d;font-weight:700}
+</style>
+</head>
+<body>
+<div class="carte" id="carte">
+  <img class="logo" src="logo-glr.png" alt="GLR Immobilier" onerror="this.src='https://alexandregrillault.github.io/glrimmobilier/logo-glr.png'">
+  <div class="filet"></div>
+  <div id="corps"><p>Chargement…</p></div>
+</div>
+
+<script>
+// Page de validation d'un rendez-vous, ouverte depuis le mail d'alerte du vendeur.
+// Toute l'intelligence est dans la fonction rdv-valider : ici on affiche, et on
+// envoie le clic. La page vit dans le dépôt (et non dans la fonction) parce que
+// la passerelle Supabase renvoie toute page en texte brut — un téléphone
+// afficherait alors le code source.
+var FN = 'https://hydqfbxdtpmbuooexekp.supabase.co/functions/v1/rdv-valider';
+var DASHBOARD = 'https://alexandregrillault.github.io/glrimmobilier/index.html';
+var jeton = new URLSearchParams(location.search).get('t') || '';
+var corps = document.getElementById('corps');
+
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+var MODES = { telephone: 'Appel', visio: 'Visio' };
+
+function jourLong(d){
+  var s = new Date(d).toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long', timeZone:'Europe/Paris' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function heure(d){
+  return new Date(d).toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit', timeZone:'Europe/Paris' });
+}
+function encartQuand(r){
+  return '<div class="quand"><div class="jour">' + esc(jourLong(r.debut)) + '</div>'
+    + '<div class="heure">' + esc(heure(r.debut)) + '</div>'
+    + '<div class="detail">' + esc(MODES[r.mode] || 'Rendez-vous') + (r.duree ? ' · ' + r.duree + ' min' : '') + '</div>'
+    + (r.visio ? '<div class="detail"><a href="' + esc(r.visio) + '">Rejoindre la visio</a></div>' : '')
+    + '</div>';
+}
+function lienFiche(r){
+  return '<a class="second" href="' + esc((r && r.fiche) || DASHBOARD) + '">Ouvrir la fiche</a>';
+}
+function afficher(html){ corps.innerHTML = html; }
+
+function ecranPerime(){
+  afficher('<div class="sur">Lien de validation</div><h1>Ce lien n\'est plus valable</h1>'
+    + '<p>Il a peut-être déjà servi, ou le rendez-vous a changé depuis. Ouvre le dashboard pour voir où il en est.</p>'
+    + '<a class="second" href="' + DASHBOARD + '">Ouvrir le dashboard</a>');
+}
+
+function ecran(etat, d){
+  var r = d && d.rdv;
+  var qui = (r && r.client) ? r.client : 'le client';
+  if (etat === 'perime' || !r) return ecranPerime();
+
+  if (etat === 'a_confirmer') {
+    afficher('<div class="sur">À confirmer</div>'
+      + '<h1>' + esc(MODES[r.mode] || 'Rendez-vous') + ' avec ' + esc(qui) + '</h1>'
+      + encartQuand(r)
+      + '<p>En confirmant, ' + esc(qui) + ' reçoit tout de suite son mail de confirmation, avec le rendez-vous pour son agenda'
+      + (r.visio ? ' et le lien de la visio' : '') + '.</p>'
+      + '<button id="btn">Confirmer le rendez-vous</button>'
+      + lienFiche(r));
+    document.getElementById('btn').addEventListener('click', confirmer);
+    return;
+  }
+  if (etat === 'deja_confirme') {
+    return afficher('<div class="sur">Rendez-vous</div><h1>C\'est déjà confirmé</h1>' + encartQuand(r)
+      + '<p>' + esc(qui) + ' a bien reçu sa confirmation. Rien de plus à faire.</p>' + lienFiche(r));
+  }
+  if (etat === 'sans_objet') {
+    return afficher('<div class="sur">Rendez-vous</div><h1>Ce créneau n\'attend plus de validation</h1>'
+      + '<p>Il a été libéré ou reporté depuis. Ouvre la fiche pour voir où en est ' + esc(qui) + '.</p>' + lienFiche(r));
+  }
+  if (etat === 'confirme') {
+    return afficher('<div class="sur ok">C\'est fait</div><h1>Rendez-vous confirmé</h1>' + encartQuand(r)
+      + (d.client_prevenu
+        ? '<p>' + esc(qui) + ' vient de recevoir sa confirmation par mail. Le rendez-vous est dans ton planning.</p>'
+        : '<p>Le rendez-vous est dans ton planning. En revanche le mail de confirmation n\'est pas parti — préviens ' + esc(qui) + ' toi-même.</p>')
+      + lienFiche(r));
+  }
+  return afficher('<div class="sur">Rendez-vous</div><h1>La validation n\'a pas abouti</h1>'
+    + '<p>Réessaie dans un instant, ou confirme depuis le dashboard.</p>' + lienFiche(r));
+}
+
+function ecranReseau(){
+  afficher('<div class="sur">Connexion</div><h1>Impossible de joindre le CRM</h1>'
+    + '<p>Vérifie ta connexion et recharge la page.</p>'
+    + '<a class="second" href="' + DASHBOARD + '">Ouvrir le dashboard</a>');
+}
+
+async function charger(){
+  if (!jeton) return ecranPerime();
+  try {
+    var r = await fetch(FN + '?data=1&t=' + encodeURIComponent(jeton), { cache: 'no-store' });
+    var d = await r.json();
+    ecran(d.etat, d);
+  } catch (e) { ecranReseau(); }
+}
+
+async function confirmer(){
+  var b = document.getElementById('btn');
+  if (b) { b.disabled = true; b.textContent = 'Confirmation…'; }
+  try {
+    var r = await fetch(FN, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ t: jeton })
+    });
+    var d = await r.json();
+    ecran(d.etat, d);
+  } catch (e) {
+    ecranReseau();
+  }
+}
+
+charger();
+</script>
+</body>
+</html>
