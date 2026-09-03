@@ -8012,6 +8012,7 @@ function rdvLienRender(libres) {
       <span style="font-size:12px;color:var(--muted)">${_vEsc(etat)}</span>
       <div style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="rdvLienGmail()" title="Si tu préfères finir dans ta boîte mail — la messagerie se règle dans ta fiche vendeur">Ouvrir dans ${_vEsc(_messagerieDuVendeur(vendeur).nom)}</button>
+        <button class="btn btn-secondary" onclick="rdvLienApercu()" title="Voir le mail mis en page, tel que le client le recevra — sans l'envoyer">Aperçu</button>
         ${l.email ? `<button class="btn btn-primary" id="rdv-lien-envoyer" onclick="rdvLienEnvoyer()">Envoyer</button>` : ''}
       </div>
     </div>`;
@@ -9545,6 +9546,7 @@ async function _selEcranMiseAJour(token, biens, ajoutes, retires) {
       <span id="sel-mail-etat" style="flex:1;font-size:12px;color:var(--muted)"></span>
       <button onclick="eqCopy(document.getElementById('sel-mail').value,'Mail')" class="btn btn-secondary">Copier le mail</button>
       <button onclick="selOuvrirGmail('${_vEsc(l.email||'')}')" class="btn btn-secondary" title="En secours : le mail part en texte simple depuis ta boîte">Ouvrir dans Gmail</button>
+      <button onclick="selApercuMail('${_vEsc(token)}', true)" class="btn btn-secondary" title="Voir le mail mis en page, tel que le client le recevra — sans l'envoyer">Aperçu</button>
       <button id="sel-mail-envoyer" onclick="selEnvoyerMail('${_vEsc(token)}', '${l.id}', true)" class="btn btn-primary" ${l.email ? '' : 'disabled title="Pas d\'email sur la fiche"'}>Envoyer le mail</button>
       <button onclick="_selFermer()" class="btn">Terminé</button>
     </div>`;
@@ -10347,6 +10349,7 @@ async function selCreer() {
       <span id="sel-mail-etat" style="flex:1;font-size:12px;color:var(--muted)"></span>
       <button onclick="eqCopy(document.getElementById('sel-mail').value,'Mail')" class="btn btn-secondary">Copier le mail</button>
       <button onclick="selOuvrirGmail('${_vEsc(l.email||'')}')" class="btn btn-secondary" title="En secours : le mail part en texte simple depuis ta boîte">Ouvrir dans Gmail</button>
+      <button onclick="selApercuMail('${_vEsc(token)}', false)" class="btn btn-secondary" title="Voir le mail mis en page, tel que le client le recevra — sans l'envoyer">Aperçu</button>
       <button id="sel-mail-envoyer" onclick="selEnvoyerMail('${_vEsc(token)}', '${l.id}', false)" class="btn btn-primary" ${l.email ? '' : 'disabled title="Pas d\'email sur la fiche"'}>Envoyer le mail</button>
       <button onclick="selTerminer('${l.id}')" class="btn">Terminé</button>
     </div>`;
@@ -10583,6 +10586,47 @@ async function eqModeleEnregistrer(){
   } catch(e){
     dire('⚠ Échec de l\'enregistrement — réessaye.', 'var(--danger)');
   }
+}
+
+// ---- Aperçu d'un mail avant envoi --------------------------------------------
+// Le mail est fabriqué par la fonction d'envoi elle-même (apercu: true) et
+// affiché tel que le client le recevra : même gabarit, mêmes textes, rien ne part.
+function mailApercuAfficher(res) {
+  const old = document.getElementById('mail-apercu-modal'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'mail-apercu-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1900;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  const entete = '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border)">'
+    + '<div style="min-width:0"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Aperçu — ce que le client recevra' + (res.email ? ' à ' + _vEsc(res.email) : '') + '</div>'
+    + '<div style="font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + _vEsc(res.sujet || '') + '</div>'
+    + (res.piece_jointe ? '<div style="font-size:11.5px;color:var(--muted)">Pièce jointe : ' + _vEsc(res.piece_jointe) + '</div>' : '') + '</div>'
+    + '<button onclick="document.getElementById(\'mail-apercu-modal\').remove()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;flex-shrink:0">✕</button></div>';
+  div.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:680px;max-width:96vw;height:88vh;display:flex;flex-direction:column;overflow:hidden">' + entete
+    + '<iframe id="mail-apercu-cadre" title="Aperçu du mail" style="flex:1;border:none;background:#f7f5f1"></iframe></div>';
+  document.body.appendChild(div);
+  const f = document.getElementById('mail-apercu-cadre');
+  if (f) f.srcdoc = res.html || '';
+}
+async function mailApercuDemander(token, type, extra, bouton) {
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Aperçu…'; }
+  const res = await rdvNotifierClient(token, type, Object.assign({}, extra || {}, { apercu: true }));
+  if (bouton) { bouton.disabled = false; bouton.textContent = 'Aperçu'; }
+  if (res && res.ok && res.html) { mailApercuAfficher(res); return; }
+  const e = res && res.error;
+  toast(e === 'sujet_manquant' ? 'Mets un objet au mail' : e === 'texte_manquant' ? 'Le message est vide' : '⚠ Aperçu impossible — réessaie', 'var(--warning)');
+}
+function selApercuMail(token, maj) {
+  const sujet = ((document.getElementById('sel-sujet') || {}).value || '').trim();
+  const texte = ((document.getElementById('sel-mail') || {}).value || '').trim();
+  mailApercuDemander(token, 'selection', { sujet, texte, maj: !!maj }, (typeof event !== 'undefined' && event && event.target) ? event.target : null);
+}
+function rdvLienApercu() {
+  if (!_rdvLienCtx) return;
+  const { lien } = _rdvLienCtx;
+  const sujet = ((document.getElementById('rdv-lien-objet') || {}).value || '').trim();
+  const texte = ((document.getElementById('rdv-lien-mail') || {}).value || '').trim();
+  mailApercuDemander(lien.token, 'libre', { sujet, texte }, (typeof event !== 'undefined' && event && event.target) ? event.target : null);
 }
 
 // Envoi du mail de sélection depuis le CRM (rdv-notif, Brevo) : mise en page GLR,
