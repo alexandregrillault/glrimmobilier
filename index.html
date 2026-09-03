@@ -704,6 +704,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v13"></path><path d="M13 21V12a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v9"></path><path d="M2 21h20"></path><path d="M7 10h2M7 14h2M16 15h1"></path></svg>
         Contacts promoteurs
       </div>
+      <div class="nav-item" onclick="goTo(&#39;mails&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>
+        Mails automatiques
+      </div>
       <div class="nav-item" onclick="goTo(&#39;equipe-calcul&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="8" y1="10" x2="16" y2="10"></line><line x1="8" y1="14" x2="12" y2="14"></line></svg>
         Calculateur commission
@@ -1885,6 +1889,15 @@
       <div id="programmes-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px"></div>
     </div>
 
+
+    <!-- PAGE: MAILS AUTOMATIQUES — le guide des mails envoyés aux clients (fichier mails.html, à côté d'index.html) -->
+    <div class="page" id="page-mails">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="section-sub">Tout ce que le CRM envoie à nos clients par mail : quand, en quel nom, et à quoi ça ressemble. Mis à jour à chaque amélioration.</div>
+        <a href="mails.html" target="_blank" rel="noopener" class="btn btn-secondary" style="font-size:12px;text-decoration:none">Ouvrir dans un onglet</a>
+      </div>
+      <iframe id="mails-cadre" title="Les mails du CRM" style="width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--border);border-radius:12px;background:var(--surface)"></iframe>
+    </div>
 
     <div class="page" id="page-promoteurs">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:12px">
@@ -3163,7 +3176,8 @@ const pages = {
   dashboard: 'Tableau de bord', ventes: 'Ventes', charges: 'Charges', 'treso-prev': 'Trésorerie prévisionnelle', vendeurs: 'Vendeurs',
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
-  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications'
+  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications',
+  'mails': 'Mails automatiques'
 };
 
 let currentSpace = 'gerant';
@@ -3184,6 +3198,17 @@ function switchSpace(space) {
     goTo('equipe-dashboard', null);
     renderEquipeSelector();
   }
+}
+
+// ---- Guide des mails automatiques ----
+// Le guide vit dans mails.html, à côté d'index.html : le mettre à jour, c'est
+// remplacer ce fichier. Le cadre le recharge à chaque ouverture (pas de cache)
+// et lui passe le thème du dashboard.
+function loadMailsGuide() {
+  const f = document.getElementById('mails-cadre');
+  if (!f) return;
+  const theme = document.body.classList.contains('light') ? 'light' : 'dark';
+  f.src = 'mails.html?embed=1&theme=' + theme + '&v=' + Date.now();
 }
 
 // ---- Thème clair / sombre ----
@@ -3210,6 +3235,7 @@ function goTo(id, el) {
   if (id === 'contacts') loadContacts();
   else if (id === 'programmes') loadProgrammes();
   else if (id === 'promoteurs') loadPromoteurs();
+  else if (id === 'mails') loadMailsGuide();
   else if (id === 'journal') loadJournal();
   else if (id === 'factures') renderFactures();
   else refresh();
@@ -9502,11 +9528,11 @@ async function _selEcranMiseAJour(token, biens, ajoutes, retires) {
   const mail = 'Bonjour ' + dest + ',\n\nJe viens de mettre à jour votre sélection'
     + (quoi ? ' (' + quoi + ')' : '') + ' : elle compte maintenant ' + biens.length + ' bien' + (biens.length > 1 ? 's' : '')
     + '.\n\nLe lien reste le même :\n' + lien
-    + '\n\nLes nouveaux biens sont signalés directement sur la page.\n\nBien à vous,\n'
+    + '\n\n' + (ajoutes === 1 ? 'Le nouveau bien est signalé' : 'Les nouveaux biens sont signalés') + ' directement sur la page.\n\nBien à vous,\n'
     + (_selCtx.lead && _selCtx.lead.vendeur ? _selCtx.lead.vendeur : '') + '\nGLR Immobilier';
   corpsEl.innerHTML = `
     <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:2px">✓ Sélection mise à jour</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${biens.length} bien(s)${quoi ? ' — ' + _vEsc(quoi) : ''}. Le lien du client n'a pas changé : il n'a rien à faire, la page se met à jour toute seule.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${biens.length} bien${biens.length > 1 ? 's' : ''}${quoi ? ' — ' + _vEsc(quoi) : ''}. Le lien du client n'a pas changé : il n'a rien à faire, la page se met à jour toute seule.</div>
     <label style="font-size:12px;color:var(--muted)">Lien de la sélection (inchangé)</label>
     <div style="display:flex;gap:8px;margin:4px 0 14px">
       <input id="sel-lien" value="${_vEsc(lien)}" readonly style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px">
@@ -10257,7 +10283,7 @@ async function selCreer() {
   const selVend = document.getElementById('eq-leads-vendeur');
   const vendeurPrenom = selVend && selVend.selectedIndex > 0 ? selVend.options[selVend.selectedIndex].text.trim().split(' ')[0] : (l.vendeur || '');
   const token = _selToken();
-  const message = document.getElementById('sel-message').value.trim();
+  const message = accordBiens(document.getElementById('sel-message').value.trim(), biens.length);
   // Civilité + nom de famille : « Bonjour Monsieur Dupont » sur la page et dans le mail
   const civilite = document.getElementById('sel-civilite')?.value || '';
   const nomFamille = _selNomPropre(document.getElementById('sel-nom-famille')?.value || '');
@@ -10301,12 +10327,12 @@ async function selCreer() {
     lien: lien,
     vendeur: vendeurPrenom || ''
   };
-  const mail = _modeleMailRemplir(modele.corps, valeursMail);
-  const sujet = _modeleMailRemplir(modele.sujet, valeursMail);
+  const mail = accordBiens(_modeleMailRemplir(modele.corps, valeursMail), biens.length);
+  const sujet = accordBiens(_modeleMailRemplir(modele.sujet, valeursMail), biens.length);
   const corps = document.getElementById('eq-sel-corps');
   corps.innerHTML = `
     <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:2px">✓ Sélection créée</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${biens.length} bien(s) — le mail est prêt, tu n'as plus qu'à l'envoyer.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${biens.length} bien${biens.length > 1 ? 's' : ''} — le mail est prêt, tu n'as plus qu'à l'envoyer.${biens.length === 1 ? ' Un seul bien : les tournures au pluriel du modèle sont passées au singulier.' : ''}</div>
     <div style="font-size:12px;color:var(--muted);margin:-8px 0 14px">Il part au nom de ${_vEsc(vendeurPrenom || 'toi')}, mis en page GLR : ton texte, la liste des biens et un bouton « Découvrir ma sélection ». Le lien nu de ton modèle est remplacé par ce bouton.</div>
     <label style="font-size:12px;color:var(--muted)">Lien de la sélection</label>
     <div style="display:flex;gap:8px;margin:4px 0 14px">
@@ -10326,6 +10352,59 @@ async function selCreer() {
     </div>`;
   if (typeof toast === 'function') toast('✓ Sélection créée', 'var(--success)');
   eqMajVue(true);   // l'icône de suivi et les activités apparaissent sans recharger
+}
+
+// ============================================================
+//  ACCORD SINGULIER / PLURIEL — une sélection d'un seul lot ne parle pas
+//  « des biens ». Au moment de l'envoi, quand il n'y a qu'un bien, les
+//  tournures au pluriel des textes (petit mot du vendeur, modèle de mail,
+//  objet, mail de mise à jour) passent au singulier. La majuscule initiale
+//  est conservée. (demande d'Alex, 03/09/2026)
+// ============================================================
+const ACCORD_SINGULIER = [
+  ['une sélection de biens qui correspondent', 'un bien qui correspond'],
+  ['une sélection de biens correspondant', 'un bien correspondant'],
+  ['une sélection de biens', 'un bien'],
+  ['sélection de biens', 'sélection'],
+  ['des biens qui correspondent', 'un bien qui correspond'],
+  ['les biens qui correspondent', 'le bien qui correspond'],
+  ['biens qui correspondent', 'bien qui correspond'],
+  ['biens qui pourraient', 'bien qui pourrait'],
+  ['les biens sélectionnés', 'le bien sélectionné'],
+  ['ces biens sélectionnés', 'ce bien sélectionné'],
+  ['biens sélectionnés', 'bien sélectionné'],
+  ['les biens retenus', 'le bien retenu'],
+  ['ces biens retenus', 'ce bien retenu'],
+  ['biens retenus', 'bien retenu'],
+  ['les nouveaux biens', 'le nouveau bien'],
+  ['ces nouveaux biens', 'ce nouveau bien'],
+  ['des nouveaux biens', 'un nouveau bien'],
+  ['de nouveaux biens', 'un nouveau bien'],
+  ['nouveaux biens', 'nouveau bien'],
+  ['plusieurs biens', 'un bien'],
+  ['quelques biens', 'un bien'],
+  ['ces biens', 'ce bien'],
+  ['ces lots', 'ce lot'],
+  ['les lots', 'le lot'],
+  ['sur chacun d\'entre eux', 'sur celui-ci'],
+  ['sur chacun d\'eux', 'sur celui-ci'],
+  ['sur chacun', 'sur celui-ci'],
+  ['sur chaque bien', 'sur ce bien'],
+  ['pour chaque bien', 'pour ce bien'],
+  ['chaque bien', 'ce bien'],
+  ['les biens', 'le bien'],
+  ['des biens', 'un bien'],
+  ['sont signalés', 'est signalé'],
+  ['sont indiqués', 'est indiqué']
+];
+function accordBiens(texte, n) {
+  let t = String(texte || '');
+  if (n !== 1) return t;
+  ACCORD_SINGULIER.forEach(([plur, sing]) => {
+    const re = new RegExp(plur.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    t = t.replace(re, (m) => (m[0] === m[0].toUpperCase() && m[0] !== m[0].toLowerCase()) ? sing[0].toUpperCase() + sing.slice(1) : sing);
+  });
+  return t;
 }
 
 // ============================================================
@@ -10412,7 +10491,7 @@ function _eqModeleRender(prenom, m){
           <button onclick="eqModeleInserer('${e[0]}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--accent);border-radius:7px;padding:2px 9px;color:var(--accent);font-family:var(--font-body);font-size:12px;font-weight:700;cursor:pointer">${esc(e[0])}</button>
           <span style="font-size:12px;color:var(--muted)">${esc(e[1])}</span>
         </div>`; }).join('')}
-      <div style="font-size:11.5px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">Ces étiquettes sont remplacées automatiquement au moment de l'envoi. Le reste du texte est à toi.</div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">Ces étiquettes sont remplacées automatiquement au moment de l'envoi. Le reste du texte est à toi. Quand la sélection n'a qu'un seul bien, les tournures au pluriel (« sélection de biens », « chaque bien », « ces biens »…) passent d'elles-mêmes au singulier.</div>
     </div>
     <label style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Objet du mail</label>
     <input id="eq-modele-sujet" value="${esc(m.sujet).replace(/"/g,'&quot;')}" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;margin:5px 0 14px">
