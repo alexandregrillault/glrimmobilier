@@ -7766,16 +7766,22 @@ function rdvLienFermer() { const m = document.getElementById('rdv-lien-modal'); 
 // chevauchent sont retirées, la relance de la fiche est calée sur ce jour, et
 // le client reçoit le même mail de confirmation (agenda joint, lien de visio)
 // que s'il avait réservé lui-même.
+// Règle d'Alex (03/09/2026) : celui qui fixe le rendez-vous récupère la
+// paternité du client, même si la fiche était à un collègue, et le mail part en
+// son nom. Le transfert est fait côté serveur (rdv_fixer_paternite), tracé dans
+// l'historique de la fiche.
 const RDV_FORMATS = { visio: { duree: 30, mode: 'visio', lbl: 'Visio', sous: '30 min' }, appel: { duree: 10, mode: 'telephone', lbl: 'Appel', sous: '10 min' } };
 let _rdvFixeCtx = null;
 
 function eqRdvFixerOuvrir(contactId) {
   const l = (_eqLeads || []).find(x => x.id === contactId);
   if (!l) { toast('Fiche introuvable', 'var(--danger)'); return; }
-  const vendeur = l.vendeur || _creneauVendeur();
+  // Celui qui fixe le rendez-vous, pas le propriétaire de la fiche
+  const vendeur = _creneauVendeur() || l.vendeur;
   if (!vendeur) { toast('Sélectionne d\'abord ton nom', 'var(--warning)'); return; }
   const nom = nomComplet(l) || 'ce client';
-  _rdvFixeCtx = { contactId, l, vendeur, format: 'visio' };
+  const transfert = !!(l.vendeur && l.vendeur !== vendeur);
+  _rdvFixeCtx = { contactId, l, vendeur, format: 'visio', transfert };
   const old = document.getElementById('rdv-fixe-modal'); if (old) old.remove();
   const champ = 'background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box';
   const auj = new Date(); const pad = (n) => String(n).padStart(2, '0');
@@ -7792,6 +7798,7 @@ function eqRdvFixerOuvrir(contactId) {
       <button onclick="eqRdvFixerFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
     </div>
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Le rendez-vous se pose dans ton planning et ${l.email ? 'le client reçoit la confirmation par mail, avec le rendez-vous pour son agenda' : 'reste dans ton planning — pas d\'email sur la fiche pour prévenir le client'}.</div>
+    ${transfert ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:14px">Ce client est à <strong>${_vEsc(l.vendeur)}</strong>. En fixant le rendez-vous, il passe chez toi : la paternité te revient, le transfert est tracé sur la fiche, et le mail part en ton nom.</div>` : ''}
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Format</div>
     <div id="rdv-fixe-formats" style="display:flex;gap:8px;margin-bottom:14px">
       ${Object.keys(RDV_FORMATS).map(f => `<button data-f="${f}" onclick="eqRdvFixerFormat('${f}')" style="flex:1;border-radius:10px;padding:10px 6px;cursor:pointer;font-family:var(--font-body);font-size:13px;color:var(--text);background:var(--surface2);border:1px solid var(--border)"><strong>${RDV_FORMATS[f].lbl}</strong><br><span style="font-size:11px;color:var(--muted)">${RDV_FORMATS[f].sous}</span></button>`).join('')}
@@ -7824,7 +7831,8 @@ function eqRdvFixerFormat(f) {
 }
 async function eqRdvFixerValider() {
   if (!_rdvFixeCtx) return;
-  const { contactId, l, vendeur, format } = _rdvFixeCtx;
+  const { contactId, l, vendeur, format, transfert } = _rdvFixeCtx;
+  const ancienVendeur = l.vendeur || null;
   const fmt = RDV_FORMATS[format];
   const jour = (document.getElementById('rdv-fixe-date') || {}).value || '';
   const heure = ((document.getElementById('rdv-fixe-heure') || {}).value || '').slice(0, 5);
@@ -7839,6 +7847,17 @@ async function eqRdvFixerValider() {
   if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
   const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
   try {
+    // 0. La paternité revient à celui qui fixe le rendez-vous (côté serveur,
+    //    avec l'historique) ; ses 14 jours repartent
+    const rp = await fetch(SUPABASE_URL + '/rest/v1/rpc/rdv_fixer_paternite', {
+      method: 'POST', headers: entetes, body: JSON.stringify({ p_contact: contactId, p_vendeur: vendeur })
+    });
+    if (!rp.ok) throw new Error('paternite');
+    if (l.vendeur !== vendeur) {
+      const ancien = l.vendeur;
+      l.vendeur = vendeur; l.vendeur_depuis = new Date().toISOString();
+      if (ancien) l.vendeur_historique = (Array.isArray(l.vendeur_historique) ? l.vendeur_historique : []).concat([{ vendeur: ancien, du: null, au: l.vendeur_depuis, motif: 'rendez-vous fixé par ' + vendeur }]);
+    }
     // 1. Le lien personnel du client : c'est lui qui porte l'état du rendez-vous
     //    (page « Voir mon rendez-vous ») et sert d'identifiant au mail
     const lien = await rdvLienRecuperer(contactId, vendeur);
@@ -7869,7 +7888,7 @@ async function eqRdvFixerValider() {
     // 5. La relance de la fiche se cale sur le jour du rendez-vous (sans heure :
     //    le rendez-vous occupe déjà le planning, pas de second bloc)
     const jourRdv = jour;
-    const trace = '[' + new Date().toLocaleDateString('sv-SE') + '] Rendez-vous ' + (format === 'visio' ? 'visio' : 'téléphonique') + ' fixé par ' + vendeur + ' pour le ' + debut.toLocaleDateString('fr-FR') + ' à ' + heure.replace(':', 'h') + (note ? ' — ' + note : '');
+    const trace = '[' + new Date().toLocaleDateString('sv-SE') + '] Rendez-vous ' + (format === 'visio' ? 'visio' : 'téléphonique') + ' fixé par ' + vendeur + ' pour le ' + debut.toLocaleDateString('fr-FR') + ' à ' + heure.replace(':', 'h') + (note ? ' — ' + note : '') + (transfert ? ' — PATERNITÉ TRANSFÉRÉE de ' + ancienVendeur + ' à ' + vendeur : '');
     await _eqLeadPatch(contactId, { rappel_le: jourRdv, rappel_heure: null, rappel_titre: null, notes: (l.notes ? l.notes.trim() + '\n' : '') + trace });
     // 6. Le client est prévenu, avec le rendez-vous pour son agenda et le lien de visio
     let mot = '';
