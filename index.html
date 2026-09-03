@@ -5319,9 +5319,14 @@ function _eqLeadsPopulateSelect() {
     data.vendeurs.map(v => `<option value="${v.id}" ${current===v.id?'selected':''}>${v.prenom} ${v.nom}</option>`).join('');
 }
 
-// Pipeline simplifié : 4 étapes + case "Sans réponse" à part + 3 statuts finaux
-const STATUTS_PIPELINE = ['Nouveau','Sélections','Retour documentation','Finaliser la vente'];
-const STATUTS_LEAD = ['Nouveau','Sélections','Retour documentation','Finaliser la vente','Sans réponse','En veille','Vendu','Perdu','Non qualifié'];
+// Pipeline simplifié : 5 étapes + case "Sans réponse" à part + 3 statuts finaux
+// « Suivi » = pris en main, une activité est programmée, mais rien n'est encore
+// parti et les critères ne sont pas forcément pris. Il comble le seul trou du
+// pipeline (demande d'Alex, 03/09/2026) : planifier une activité sur un client
+// laissait « Nouveau » un client déjà travaillé — et « Sélections » aurait été
+// prématuré tant qu'on ne lui a pas parlé. Il n'est proposé qu'à cet endroit-là.
+const STATUTS_PIPELINE = ['Nouveau','Suivi','Sélections','Retour documentation','Finaliser la vente'];
+const STATUTS_LEAD = ['Nouveau','Suivi','Sélections','Retour documentation','Finaliser la vente','Sans réponse','En veille','Vendu','Perdu','Non qualifié'];
 // Statuts qui ferment le lead : plus de rappel, plus de sélection, sorti des activités
 // « Non qualifié » = hors cible / pas de projet réel / injoignable définitivement — à ne plus travailler
 const STATUTS_FINAUX = ['Vendu','Perdu','Non qualifié'];
@@ -6041,7 +6046,7 @@ async function eqLeadStatutChange(id, statut) {
   // qui dira dans six mois quels programmes il manque au catalogue.
   if (statut === STATUT_VEILLE) { eqVeilleOuvrir(id); return; }
   // Étapes actives du pipeline → on choisit quand rappeler le client (J+1 / J+2 / J+3 / date)
-  if (['Sélections','Retour documentation','Finaliser la vente'].includes(statut)) {
+  if (['Suivi','Sélections','Retour documentation','Finaliser la vente'].includes(statut)) {
     const dejaVu = _eqLeads.find(x => x.id === id) || {};
     eqRappelPicker(statut, (rappel, t, h) => _eqLeadPatch(id, Object.assign({ statut, statut_maj: new Date().toISOString() }, _eqActivitePatch(rappel, t, h))),
       false, { titre: dejaVu.rappel_titre, heure: dejaVu.rappel_heure });
@@ -6072,6 +6077,10 @@ function eqRappelPicker(titre, cb, obligatoire, valeurs) {
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Étape : ${titre}${obligatoire ? ' — trois jours maximum, une sélection ne reste jamais sans relance' : ''}</div>
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Intitulé <span style="text-transform:none;letter-spacing:0">(facultatif)</span></div>
     <input id="eq-rappel-titre" value="${echapVal(v.titre)}" placeholder="Ex : Rappeler pour le financement" maxlength="80" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;margin-bottom:14px">
+    ${v.proposerSuivi ? `<label style="display:flex;align-items:center;gap:9px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:14px;font-size:12.5px;cursor:pointer">
+      <input type="checkbox" id="eq-rappel-suivi" checked style="width:16px;height:16px;accent-color:var(--accent);flex:none">
+      <span>Ce client est encore <strong>Nouveau</strong> — le passer en <strong>Suivi</strong></span>
+    </label>` : ''}
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Quel jour ?</div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button onclick="eqRappelChoisi('${plus(0)}')" style="flex:1;background:var(--accent)18;border:1px solid var(--accent);border-radius:10px;padding:10px 6px;color:var(--text);cursor:pointer;font-size:13px"><strong>Aujourd’hui</strong><br><span style="font-size:10px;color:var(--muted)">${jour(0)}</span></button>
@@ -6100,10 +6109,12 @@ function eqRappelChoisi(date) {
   const cb = _eqRappelCb; _eqRappelCb = null;
   const champTitre = document.getElementById('eq-rappel-titre');
   const champHeure = document.getElementById('eq-rappel-heure');
+  const champSuivi = document.getElementById('eq-rappel-suivi');
   const titreAct = date ? ((champTitre && champTitre.value.trim()) || null) : null;
   const heureAct = date ? ((champHeure && champHeure.value.slice(0, 5)) || null) : null;
+  const passerEnSuivi = !!(champSuivi && champSuivi.checked);
   const el = document.getElementById('eq-rappel-picker'); if (el) el.remove();
-  if (cb) cb(date, titreAct, heureAct);
+  if (cb) cb(date, titreAct, heureAct, passerEnSuivi);
 }
 // Corps de mise à jour commun aux quatre endroits qui planifient une activité
 function _eqActivitePatch(date, titreAct, heureAct) {
@@ -6587,7 +6598,7 @@ function renderEquipeLeadsTable() {
   const pipe = document.getElementById('eq-leads-pipeline');
   if (pipe) {
     const total = _eqLeads.length || 1;
-    const icones = { 'Nouveau':'', 'Sélections':'', 'Retour documentation':'', 'Finaliser la vente':'' };
+    const icones = { 'Nouveau':'', 'Suivi':'', 'Sélections':'', 'Retour documentation':'', 'Finaliser la vente':'' };
     pipe.innerHTML = STATUTS_PIPELINE.map((s,i) => {
       const n = _eqLeads.filter(l => eqLeadStatut(l) === s).length;
       const pct = Math.round(n/total*100);
@@ -7093,8 +7104,15 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _eqFiche
 function eqFicheRappelEdit() {
   const l = _eqLeads.find(x => x.id === _eqFicheId);
   if (!l) return;
-  eqRappelPicker('Planifier le prochain rappel', (rappel, t, h) => _eqLeadPatch(l.id, _eqActivitePatch(rappel, t, h)),
-    false, { titre: l.rappel_titre, heure: l.rappel_heure });
+  // Un client qu'on programme n'est plus un lead que personne n'a touché : s'il
+  // est encore « Nouveau », la fenêtre propose de le passer en « Suivi ». Case
+  // décochée = il reste Nouveau (un premier appel programmé avant tout contact).
+  const encoreNouveau = eqLeadStatut(l) === 'Nouveau';
+  eqRappelPicker('Planifier le prochain rappel', (rappel, t, h, suivi) => {
+    const corps = _eqActivitePatch(rappel, t, h);
+    if (rappel && encoreNouveau && suivi) { corps.statut = 'Suivi'; corps.statut_maj = new Date().toISOString(); }
+    return _eqLeadPatch(l.id, corps);
+  }, false, { titre: l.rappel_titre, heure: l.rappel_heure, proposerSuivi: encoreNouveau });
 }
 // Reporter la MÊME activité sans quitter la fiche : intitulé et heure conservés,
 // seule la date bouge. Une activité en retard repart d'aujourd'hui, pas de sa
