@@ -9365,9 +9365,11 @@ async function _selEcranMiseAJour(token, biens, ajoutes, retires) {
     <label style="font-size:12px;color:var(--muted)">Mail de mise à jour — à envoyer seulement si tu le souhaites</label>
     <input id="sel-sujet" value="${_vEsc(sujet)}" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;margin:4px 0 8px">
     <textarea id="sel-mail" rows="9" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;margin:0 0 14px;resize:vertical">${_vEsc(mail)}</textarea>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
+      <span id="sel-mail-etat" style="flex:1;font-size:12px;color:var(--muted)"></span>
       <button onclick="eqCopy(document.getElementById('sel-mail').value,'Mail')" class="btn btn-secondary">Copier le mail</button>
-      <button onclick="selOuvrirGmail('${_vEsc(l.email||'')}')" class="btn btn-secondary">Ouvrir dans Gmail</button>
+      <button onclick="selOuvrirGmail('${_vEsc(l.email||'')}')" class="btn btn-secondary" title="En secours : le mail part en texte simple depuis ta boîte">Ouvrir dans Gmail</button>
+      <button id="sel-mail-envoyer" onclick="selEnvoyerMail('${_vEsc(token)}', '${l.id}', true)" class="btn btn-primary" ${l.email ? '' : 'disabled title="Pas d\'email sur la fiche"'}>Envoyer le mail</button>
       <button onclick="_selFermer()" class="btn">Terminé</button>
     </div>`;
 }
@@ -10155,6 +10157,7 @@ async function selCreer() {
   corps.innerHTML = `
     <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:2px">✓ Sélection créée</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${biens.length} bien(s) — le mail est prêt, tu n'as plus qu'à l'envoyer.</div>
+    <div style="font-size:12px;color:var(--muted);margin:-8px 0 14px">Il part au nom de ${_vEsc(vendeurPrenom || 'toi')}, mis en page GLR : ton texte, la liste des biens et un bouton « Découvrir ma sélection ». Le lien nu de ton modèle est remplacé par ce bouton.</div>
     <label style="font-size:12px;color:var(--muted)">Lien de la sélection</label>
     <div style="display:flex;gap:8px;margin:4px 0 14px">
       <input id="sel-lien" value="${_vEsc(lien)}" readonly style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px">
@@ -10164,9 +10167,11 @@ async function selCreer() {
     <input id="sel-sujet" value="${_vEsc(sujet).replace(/"/g,'&quot;')}" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;margin:4px 0 12px">
     <label style="font-size:12px;color:var(--muted)">Mail — d'après ton modèle, modifiable avant envoi</label>
     <textarea id="sel-mail" rows="11" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;margin:4px 0 14px;resize:vertical">${_vEsc(mail)}</textarea>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
+      <span id="sel-mail-etat" style="flex:1;font-size:12px;color:var(--muted)"></span>
       <button onclick="eqCopy(document.getElementById('sel-mail').value,'Mail')" class="btn btn-secondary">Copier le mail</button>
-      <button onclick="selOuvrirGmail('${_vEsc(l.email||'')}')" class="btn btn-secondary">Ouvrir dans Gmail</button>
+      <button onclick="selOuvrirGmail('${_vEsc(l.email||'')}')" class="btn btn-secondary" title="En secours : le mail part en texte simple depuis ta boîte">Ouvrir dans Gmail</button>
+      <button id="sel-mail-envoyer" onclick="selEnvoyerMail('${_vEsc(token)}', '${l.id}', false)" class="btn btn-primary" ${l.email ? '' : 'disabled title="Pas d\'email sur la fiche"'}>Envoyer le mail</button>
       <button onclick="selTerminer('${l.id}')" class="btn">Terminé</button>
     </div>`;
   if (typeof toast === 'function') toast('✓ Sélection créée', 'var(--success)');
@@ -10349,6 +10354,30 @@ async function eqModeleEnregistrer(){
   } catch(e){
     dire('⚠ Échec de l\'enregistrement — réessaye.', 'var(--danger)');
   }
+}
+
+// Envoi du mail de sélection depuis le CRM (rdv-notif, Brevo) : mise en page GLR,
+// au nom du vendeur, liste des biens et bouton vers la page. Le texte est celui
+// de la fenêtre, modifiable ; Gmail reste le secours si l'envoi échoue.
+async function selEnvoyerMail(token, contactId, maj) {
+  const sujet = ((document.getElementById('sel-sujet') || {}).value || '').trim();
+  const texte = ((document.getElementById('sel-mail') || {}).value || '').trim();
+  if (!sujet) { toast('Mets un objet au mail', 'var(--warning)'); return; }
+  if (!texte) { toast('Le message est vide', 'var(--warning)'); return; }
+  const btn = document.getElementById('sel-mail-envoyer');
+  const etat = document.getElementById('sel-mail-etat');
+  if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
+  const res = await rdvNotifierClient(token, 'selection', { sujet, texte, maj: !!maj });
+  if (res && res.ok) {
+    if (btn) { btn.textContent = '✓ Mail envoyé'; }
+    if (etat) etat.textContent = 'Envoyé à ' + (res.email || 'ce client') + ' — la trace est dans les notes de la fiche.';
+    toast('✓ Mail envoyé à ' + (res.email || 'ce client'), 'var(--success)');
+    eqMajVue(true);
+    return;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Envoyer le mail'; }
+  const e = res && res.error;
+  toast(e === 'sans_cle' ? '⚠ Mail non envoyé : clé Brevo à renseigner' : e === 'sans_email' ? '⚠ Pas d\'email sur la fiche' : '⚠ Envoi impossible — réessaie, ou passe par Gmail', 'var(--danger)');
 }
 
 function selOuvrirGmail(email) {
