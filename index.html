@@ -8762,7 +8762,8 @@ function renderEqNotifs() {
       'Valider le RDV de ' + esc(c.client_nom || 'Client') + rep(c.contact_id),
       esc(_rdvQuand(c)) + ' · ' + esc(_crenLbl(c)) + (c.client_message ? ' · « ' + esc(c.client_message) + ' »' : ''),
       btnFiche(c.contact_id) +
-      `<button class="btn btn-sm btn-secondary" onclick="eqProposerOuvrir('${c.id}')" style="font-size:11px" title="Refuser ce créneau et en proposer trois autres">Proposer 3 autres</button>
+      `<button class="btn btn-sm btn-secondary" onclick="rdvEcarterCreneau('${c.id}')" style="font-size:11px" title="Refuser ce rendez-vous et libérer le créneau — le client n'est pas prévenu">Refuser</button>
+       <button class="btn btn-sm btn-secondary" onclick="eqProposerOuvrir('${c.id}')" style="font-size:11px" title="Refuser ce créneau et en proposer trois autres">Proposer 3 autres</button>
        <button class="btn btn-sm btn-primary" onclick="eqRdvValider('${c.id}')" style="font-size:11px">Valider</button>`,
       'var(--warning)');
     // t = -1 : les rendez-vous à confirmer passent devant tout le reste de la journée
@@ -8775,7 +8776,8 @@ function renderEqNotifs() {
     aujourdhui.push({ t: 0, g: 'demande', d: jour, html: item('rdv',
       'Proposer des créneaux à ' + esc(d.client_nom || 'un client') + rep(d.contact_id),
       'Souhaite un rendez-vous' + (d.avis.rdv.creneau ? ' — « ' + esc(d.avis.rdv.creneau) + ' »' : '') + (d.avis.rdv.mode ? ' · ' + esc(_crenLbl(d.avis.rdv)) : ''),
-      btnFiche(d.contact_id) + `<button class="btn btn-sm btn-primary" onclick="eqProposerOuvrir(null,'${d.token}')" style="font-size:11px">Proposer 3 créneaux</button>`,
+      btnFiche(d.contact_id) + `<button class="btn btn-sm btn-secondary" onclick="rdvEcarterDemande('${d.token}')" style="font-size:11px" title="Écarter cette demande — le client n'est pas prévenu">Écarter</button>
+       <button class="btn btn-sm btn-primary" onclick="eqProposerOuvrir(null,'${d.token}')" style="font-size:11px">Proposer 3 créneaux</button>`,
       'var(--warning)') });
   });
 
@@ -15949,6 +15951,16 @@ function grBoutonFiche(id) {
   return id ? `<button class="btn btn-sm btn-secondary" onclick="ouvrirFicheClient('${id}')" style="font-size:11px">Fiche</button>` : '';
 }
 
+// « Écarter » / « Refuser » : referme une demande qu'on ne veut pas traiter
+function grBoutonEcarter(type, cle) {
+  const creneau = type === 'creneau';
+  const titre = creneau
+    ? "Refuser ce rendez-vous et libérer le créneau — le client n'est pas prévenu"
+    : "Écarter cette demande — le client n'est pas prévenu";
+  const fn = creneau ? 'rdvEcarterCreneau' : 'rdvEcarterDemande';
+  return `<button class="btn btn-sm btn-secondary" onclick="${fn}('${cle}')" title="${titre}" style="font-size:11px">${creneau ? 'Refuser' : 'Écarter'}</button>`;
+}
+
 function grBadgeVendeur(v) {
   return `<span style="display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;color:var(--accent2)">${_vEsc(v || '—')}</span>`;
 }
@@ -16012,7 +16024,7 @@ async function renderGerantRdv(force) {
         _vEsc(grNomClient(c)) + ' ' + grBadgeVendeur(c.vendeur),
         detail,
         c.client_message ? _vEsc(c.client_message) : '',
-        grBoutonFiche(c.contact_id));
+        grBoutonEcarter('creneau', c.id) + grBoutonFiche(c.contact_id));
     }).join(''),
     'Rien à valider.');
 
@@ -16030,7 +16042,7 @@ async function renderGerantRdv(force) {
         _vEsc(grNomClient(x.x)) + ' ' + grBadgeVendeur(x.x.vendeur),
         detail,
         r.creneau ? _vEsc(r.creneau) : '',
-        grBoutonFiche(x.x.contact_id));
+        grBoutonEcarter('demande', x.x.token) + grBoutonFiche(x.x.contact_id));
     }).join(''),
     'Aucune demande en attente.');
 
@@ -16172,6 +16184,164 @@ function grDemarrer() {
   if (!estGerant()) return;
   grRdvCharger().then(grMajPastille).catch(() => {});
   setInterval(() => { grRdvCharger().then(grMajPastille).catch(() => {}); }, 5 * 60 * 1000);
+}
+
+
+// ============================================================
+//  ÉCARTER UNE DEMANDE DE RENDEZ-VOUS
+//  Une demande sans créneau, ou un créneau réservé qu'on ne veut pas honorer,
+//  ne doit pas rester indéfiniment dans les activités. « Écarter » la referme :
+//  le client n'est PAS prévenu (choix d'Alex, 04/09/2026 — rien ne part en son
+//  nom sans qu'il l'ait écrit), la trace datée reste dans les notes de sa fiche,
+//  et il passe en Non qualifié si la case reste cochée.
+//  Marche des deux côtés : page Activité du vendeur et page Rendez-vous du gérant.
+// ============================================================
+let _ecarterCtx = null;
+
+function _ecarterNom(x) {
+  if (!x) return 'ce client';
+  return x.client_nom || x.nom
+    || ((typeof _grNoms !== 'undefined' && _grNoms) ? _grNoms[x.contact_id] : '')
+    || 'ce client';
+}
+
+function rdvEcarterDemande(token) {
+  const dansEquipe = ((typeof _eqRdvDemandes !== 'undefined' && _eqRdvDemandes) || []).find(x => x.token === token);
+  const dansGerant = ((typeof _grLots !== 'undefined' && _grLots) || []).find(x => x.token === token);
+  const d = dansEquipe || dansGerant;
+  if (!d) { toast('Demande introuvable — recharge la page', 'var(--warning)'); return; }
+  _ecarterCtx = { type: 'demande', token: token, contactId: d.contact_id, nom: _ecarterNom(d), vendeur: d.vendeur || '' };
+  _ecarterRender();
+}
+
+function rdvEcarterCreneau(id) {
+  const c = ((typeof _eqRdv !== 'undefined' && _eqRdv) || []).find(x => x.id === id)
+    || ((typeof _grCreneaux !== 'undefined' && _grCreneaux) || []).find(x => x.id === id);
+  if (!c) { toast('Rendez-vous introuvable — recharge la page', 'var(--warning)'); return; }
+  _ecarterCtx = { type: 'creneau', creneauId: id, token: c.selection_token, contactId: c.contact_id,
+    nom: _ecarterNom(c), vendeur: c.vendeur || '', debut: c.debut, mode: c.mode };
+  _ecarterRender();
+}
+
+function rdvEcarterFermer() {
+  const m = document.getElementById('rdv-ecarter-modal');
+  if (m) m.remove();
+  _ecarterCtx = null;
+}
+
+function _ecarterRender() {
+  const x = _ecarterCtx;
+  if (!x) return;
+  const creneau = x.type === 'creneau';
+  const quand = creneau && x.debut ? (typeof grQuand === 'function' ? grQuand(x.debut) : new Date(x.debut).toLocaleString('fr-FR')) : '';
+  const old = document.getElementById('rdv-ecarter-modal'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'rdv-ecarter-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:440px;max-width:95vw">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+      <div style="font-family:var(--font-head);font-size:16px;font-weight:700">${creneau ? 'Refuser le rendez-vous' : 'Écarter la demande'} de ${_vEsc(x.nom)}</div>
+      <button onclick="rdvEcarterFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">
+      ${creneau
+        ? 'Le créneau ' + _vEsc(quand) + ' est libéré et redevient disponible pour un autre client.'
+        : 'La demande sort des activités : plus besoin de lui proposer des créneaux.'}
+      <strong style="color:var(--text)">Le client n'est pas prévenu</strong> — aucun mail ne part.
+    </div>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Motif <span style="text-transform:none;letter-spacing:0">(facultatif, gardé dans les notes)</span></div>
+    <input id="ecarter-motif" maxlength="120" placeholder="Ex : hors cible, budget trop bas, déjà accompagné" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;margin-bottom:14px">
+    <label style="display:flex;align-items:center;gap:9px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:12.5px;cursor:pointer">
+      <input type="checkbox" id="ecarter-nq" checked style="width:16px;height:16px;accent-color:var(--accent);flex:none">
+      <span>Passer <strong>${_vEsc(x.nom)}</strong> en <strong>Non qualifié</strong> <span style="color:var(--muted)">— décoche si tu veux le garder dans ton pipeline</span></span>
+    </label>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-secondary" onclick="rdvEcarterFermer()">Annuler</button>
+      <button class="btn btn-primary" id="ecarter-ok" onclick="rdvEcarterConfirmer()">${creneau ? 'Refuser le rendez-vous' : 'Écarter la demande'}</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) rdvEcarterFermer(); });
+  document.body.appendChild(div);
+  const champ = document.getElementById('ecarter-motif');
+  if (champ) champ.focus();
+}
+
+// Écrit la trace dans les notes de la fiche, et le statut si la case est cochée.
+// Écriture directe (pas _eqLeadPatch) : la fiche peut appartenir à un autre
+// vendeur et l'action peut venir de l'espace gérant.
+async function _ecarterMarquerFiche(contactId, trace, nonQualifie) {
+  if (!contactId) return;
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=notes&id=eq.' + contactId, { cache: 'no-store', headers: entetes });
+    const rows = r.ok ? await r.json() : [];
+    const notes = (rows[0] && rows[0].notes) ? String(rows[0].notes).trim() + '\n' : '';
+    const corps = { notes: notes + trace };
+    if (nonQualifie) { corps.statut = 'Non qualifié'; corps.statut_maj = new Date().toISOString(); corps.rappel_le = null; }
+    await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + contactId, {
+      method: 'PATCH',
+      headers: Object.assign({}, entetes, { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }),
+      body: JSON.stringify(corps)
+    });
+    // La liste de leads chargée à l'écran suit, sans recharger toute la page
+    const l = ((typeof _eqLeads !== 'undefined' && _eqLeads) || []).find(y => y.id === contactId);
+    if (l) Object.assign(l, corps);
+  } catch (e) { /* la demande est écartée quand même : on ne bloque pas là-dessus */ }
+}
+
+async function rdvEcarterConfirmer() {
+  const x = _ecarterCtx;
+  if (!x) return;
+  const btn = document.getElementById('ecarter-ok');
+  if (btn) { btn.disabled = true; btn.textContent = 'Un instant…'; }
+  const motif = (document.getElementById('ecarter-motif') || {}).value || '';
+  const nq = !!(document.getElementById('ecarter-nq') || {}).checked;
+  const moi = (typeof MON_ROLE !== 'undefined' && MON_ROLE && MON_ROLE.prenom) || x.vendeur || '—';
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  try {
+    // 1. Un créneau réservé retourne à l'offre générale, sans prévenir le client
+    if (x.type === 'creneau' && x.creneauId) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + x.creneauId, {
+        method: 'PATCH', headers: entetes,
+        body: JSON.stringify({ statut: 'libre', contact_id: null, selection_token: null, client_nom: null, client_message: null, reserve_le: null })
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+    }
+    // 2. La demande est refermée : `traite` la sort des activités des deux côtés
+    if (x.token && typeof _planMajSelection === 'function') {
+      await _planMajSelection(x.token, {
+        reserve: false, confirme: false, refuse: true, traite: true,
+        ecarte: true, ecarte_le: new Date().toISOString(), ecarte_par: moi, ecarte_motif: motif || null
+      });
+    }
+    // 3. Trace sur la fiche, et statut si la case est restée cochée
+    const trace = '[' + new Date().toLocaleDateString('sv-SE') + '] '
+      + (x.type === 'creneau'
+        ? 'Rendez-vous du ' + new Date(x.debut).toLocaleDateString('fr-FR') + ' à '
+          + new Date(x.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h') + ' refusé'
+        : 'Demande de rendez-vous écartée')
+      + ' par ' + moi + (motif ? ' — ' + motif : '') + (nq ? ' — passé en Non qualifié' : '') + ' (client non prévenu)';
+    await _ecarterMarquerFiche(x.contactId, trace, nq);
+    toast(x.type === 'creneau' ? '✓ Rendez-vous refusé, créneau libéré' : '✓ Demande écartée', 'var(--warning)');
+  } catch (e) {
+    toast('⚠ Impossible d\'écarter cette demande', 'var(--danger)');
+    if (btn) { btn.disabled = false; btn.textContent = x.type === 'creneau' ? 'Refuser le rendez-vous' : 'Écarter la demande'; }
+    return;
+  }
+  rdvEcarterFermer();
+  await _ecarterRafraichir();
+}
+
+async function _ecarterRafraichir() {
+  const active = document.querySelector('.page.active');
+  const page = active ? active.id : '';
+  if (page === 'page-gerant-rdv' && typeof renderGerantRdv === 'function') { await renderGerantRdv(true); return; }
+  if (typeof eqRdvCharger === 'function') { try { await eqRdvCharger(); } catch (e) { /* la vue se remettra au prochain passage */ } }
+  if (typeof renderEqNotifs === 'function') renderEqNotifs();
+  if (typeof renderEquipePlanning === 'function' && page === 'page-equipe-planning') renderEquipePlanning();
+  if (typeof eqMajVue === 'function') eqMajVue(true);
+  // La page Rendez-vous du gérant devra se recharger la prochaine fois qu'on l'ouvre
+  if (typeof _grCharge !== 'undefined') _grCharge = 0;
 }
 
 </script>
