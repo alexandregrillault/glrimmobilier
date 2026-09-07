@@ -343,6 +343,10 @@
       h += "<p>Le créneau que vous aviez choisi n'était finalement pas disponible. Choisissez celui qui vous arrange : il sera confirmé immédiatement.</p>";
       h += htmlModes();
       h += htmlCreneaux(props, "accepter_proposition");
+      // Aucun des trois ne va : le client donne ses disponibilités plutôt que
+      // de rester sans issue. La demande repart aussitôt chez le conseiller.
+      h += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
+      h += "<div id='rdv-libre' style='display:none'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer mes disponibilités</button></div></div>";
       return h + "</div>";
     }
 
@@ -552,6 +556,7 @@
         etat.mode = modeContact;
         etat.format = formatChoisi;
         d.creneaux = [];
+        d.propositions = [];
         redessiner(d);
         toast("✓ Demande transmise");
       }).catch(function(){ toast("Envoi impossible — vérifiez votre connexion"); });

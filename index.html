@@ -11148,8 +11148,14 @@ function _eqCreneauxLignes() {
 // une visite déjà calée.
 function _crenSurActiviteBloquante(deb, fin) {
   const liste = (typeof _creneaux !== 'undefined' && Array.isArray(_creneaux)) ? _creneaux : [];
-  return liste.some(c => c.origine === 'perso' && c.bloquant !== false
-    && new Date(c.debut).getTime() < fin && new Date(c.fin).getTime() > deb);
+  // Un rendez-vous client occupe la plage sans y avoir de ligne partout : une
+  // visio de 30 min n'existe qu'en 10:00–10:30, les créneaux de 10:10 et 10:20
+  // ayant été absorbés à la réservation. Sans ce garde-fou, les rouvrir
+  // laisserait un deuxième client réserver pendant le rendez-vous.
+  return liste.some(c => (
+      (c.origine === 'perso' && c.bloquant !== false)
+      || (['reserve', 'propose', 'confirme'].includes(c.statut) && c.origine !== 'perso' && c.origine !== 'rappel')
+    ) && new Date(c.debut).getTime() < fin && new Date(c.fin).getTime() > deb);
 }
 
 // Aperçu en direct : « 24 créneaux sur 6 jours »
@@ -11246,7 +11252,7 @@ async function eqCreneauxGenerer() {
       body: JSON.stringify(lignes)
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    toast('✓ ' + lignes.length + ' créneau(x) ouvert(s)' + (ecartes ? ' — ' + ecartes + ' écarté(s), activité déjà posée' : ''), 'var(--success)');
+    toast('✓ ' + lignes.length + ' créneau(x) ouvert(s)' + (ecartes ? ' — ' + ecartes + ' écarté(s), activité ou rendez-vous déjà posé' : ''), 'var(--success)');
   } catch (e) {
     toast('⚠ Impossible d\'ouvrir ces créneaux', 'var(--danger)');
   }
@@ -15070,19 +15076,29 @@ async function eqPlanBlocOuvrir(jourIso, h1, h2, id) {
 
     <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Type d’activité</div>
     <select id="bloc-cat" onchange="eqPlanBlocCatChange()" style="${champ};width:100%;box-sizing:border-box;margin-bottom:9px">
+      ${c ? '' : '<option value="__libre">Libre — rouvrir la plage à mes clients</option>'}
       ${PLAN_CATS.map(x => `<option value="${x.k}" ${catCourante === x.k ? 'selected' : ''}>${x.l}</option>`).join('')}
       ${perso.length ? '<optgroup label="Mes types">' + perso.map(x => `<option value="${_vEsc(x)}" ${catCourante === x ? 'selected' : ''}>${_vEsc(x)}</option>`).join('') + '</optgroup>' : ''}
       <option value="__autre">+ Créer un type…</option>
     </select>
     <input type="text" id="bloc-cat-autre" placeholder="Nom du type (ex : Porte-à-porte)" maxlength="40" style="${champ};width:100%;box-sizing:border-box;display:none;margin-bottom:9px">
 
-    <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Intitulé <span style="text-transform:none;letter-spacing:0">(facultatif)</span></div>
-    <input type="text" id="bloc-titre" value="${c ? _vEsc(c.titre || '') : ''}" placeholder="Ex : Appels du matin" maxlength="80" style="${champ};width:100%;box-sizing:border-box;margin-bottom:12px">
+    <div id="bloc-zone-mode" style="display:none;margin-bottom:12px">
+      <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Format proposé au client</div>
+      <select id="bloc-mode" style="${champ};width:100%;box-sizing:border-box">
+        <option value="visio">Visio</option><option value="telephone">Téléphone</option><option value="agence">Agence</option><option value="sur_place">Sur place</option>
+      </select>
+    </div>
+
+    <div id="bloc-zone-titre">
+      <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Intitulé <span style="text-transform:none;letter-spacing:0">(facultatif)</span></div>
+      <input type="text" id="bloc-titre" value="${c ? _vEsc(c.titre || '') : ''}" placeholder="Ex : Appels du matin" maxlength="80" style="${champ};width:100%;box-sizing:border-box;margin-bottom:12px">
+    </div>
 
     <div style="font-size:10.5px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Lieu ou lien <span style="text-transform:none;letter-spacing:0">(facultatif)</span></div>
     <input type="text" id="bloc-lieu" value="${c ? _vEsc(c.lieu || '') : ''}" placeholder="Agence, adresse, lien visio…" style="${champ};width:100%;box-sizing:border-box;margin-bottom:12px">
 
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:16px">
+    <div id="bloc-zone-bloque" style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:16px">
       <label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;cursor:pointer;user-select:none">
         <input type="checkbox" id="bloc-bloque" ${bloqueDefaut ? 'checked' : ''} onchange="eqPlanBlocMajBlocage()" style="accent-color:var(--accent);cursor:pointer;margin-top:3px">
         <span><strong>Bloquer ce créneau pour mes clients</strong>
@@ -15094,7 +15110,7 @@ async function eqPlanBlocOuvrir(jourIso, h1, h2, id) {
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
       ${c ? `<button class="btn btn-secondary" onclick="eqPlanBlocSupprimer('${c.id}')" style="color:var(--danger);border-color:var(--danger)">Supprimer</button>` : ''}
       <button class="btn btn-secondary" onclick="eqPlanBlocFermer()">Annuler</button>
-      <button class="btn btn-primary" onclick="eqPlanBlocEnregistrer()">${c ? 'Enregistrer' : 'Poser l’activité'}</button>
+      <button class="btn btn-primary" id="bloc-valider" onclick="eqPlanBlocEnregistrer()">${c ? 'Enregistrer' : 'Poser l’activité'}</button>
     </div>
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) eqPlanBlocFermer(); });
@@ -15145,6 +15161,54 @@ function eqPlanBlocCatChange() {
   const autre = sel.value === '__autre';
   inp.style.display = autre ? 'block' : 'none';
   if (autre) inp.focus();
+  // « Libre » ne pose pas d'activité : elle rouvre la plage. Tout ce qui décrit
+  // une activité (intitulé, blocage) n'a plus de sens et disparaît.
+  const libre = sel.value === '__libre';
+  const zTitre = document.getElementById('bloc-zone-titre');
+  const zBloque = document.getElementById('bloc-zone-bloque');
+  const zMode = document.getElementById('bloc-zone-mode');
+  const btn = document.getElementById('bloc-valider');
+  if (zTitre) zTitre.style.display = libre ? 'none' : '';
+  if (zBloque) zBloque.style.display = libre ? 'none' : '';
+  if (zMode) zMode.style.display = libre ? 'block' : 'none';
+  if (btn) btn.textContent = libre ? 'Ouvrir la plage' : (_planBlocId ? 'Enregistrer' : 'Poser l’activité');
+}
+
+// « Libre » : rouvrir des disponibilités sur une plage, depuis le planning.
+// Mêmes créneaux de 10 min que la fenêtre « Mes créneaux », et surtout : rien
+// n'est modifié ni supprimé. Insertion pure, les créneaux déjà là et les
+// rendez-vous en cours sont laissés tels quels.
+async function _eqPlanOuvrirLibre(prenom, debut, fin, mode, lieu) {
+  const pas = CRENEAU_PAS_MIN * 60000;
+  const occupe = (a, b) => (_planCreneaux || []).some(c =>
+    (c.origine === 'perso' ? c.bloquant !== false : c.statut !== 'libre')
+    && new Date(c.debut).getTime() < b && new Date(c.fin).getTime() > a);
+  const lignes = [];
+  let sautes = 0;
+  for (let t = debut.getTime(); t + pas <= fin.getTime(); t += pas) {
+    if (t <= Date.now()) { sautes++; continue; }
+    if (occupe(t, t + pas)) { sautes++; continue; }
+    lignes.push({ vendeur: prenom, debut: new Date(t).toISOString(), fin: new Date(t + pas).toISOString(), mode, lieu: lieu || null, statut: 'libre' });
+  }
+  if (!lignes.length) {
+    if (typeof toast === 'function') toast('Rien à ouvrir : la plage est déjà prise ou passée', 'var(--warning)');
+    return;
+  }
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?on_conflict=vendeur,debut', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify(lignes)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    eqPlanBlocFermer();
+    _planBlocId = null;
+    if (typeof toast === 'function') toast('✓ Plage rouverte — ' + lignes.length + ' créneau(x)'
+      + (sautes ? ', ' + sautes + ' sauté(s) (déjà occupé)' : '') + ' · rien d’autre n’a bougé', 'var(--success)');
+    await renderEquipePlanning();
+  } catch (e) {
+    if (typeof toast === 'function') toast('⚠ Impossible d’ouvrir cette plage', 'var(--danger)');
+  }
 }
 
 async function eqPlanBlocEnregistrer() {
@@ -15164,6 +15228,13 @@ async function eqPlanBlocEnregistrer() {
   const debut = new Date(date + 'T' + h1 + ':00');
   const fin = new Date(date + 'T' + h2 + ':00');
   if (isNaN(debut) || isNaN(fin) || fin <= debut) { toast('⚠ L’heure de fin doit suivre celle de début', 'var(--warning)'); return; }
+
+  // « Libre » n'est pas une activité : elle rouvre la plage aux clients
+  if (cat === '__libre') {
+    const modeLibre = document.getElementById('bloc-mode')?.value || 'visio';
+    await _eqPlanOuvrirLibre(prenom, debut, fin, modeLibre, lieu);
+    return;
+  }
 
   const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
   const corps = {

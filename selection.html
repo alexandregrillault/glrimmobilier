@@ -323,8 +323,10 @@
   // volontairement : un gros créneau fait peur au client. Il ne bloque que
   // cette durée dans l'agenda du conseiller.
   var FORMATS = {
-    visio: { duree:30, mode:"visio",     titre:"Visio",           sous:"On prend le temps de vous montrer : les biens retenus, les programmes, comment se passe un achat dans le neuf, votre financement, et d'autres lots qui pourraient vous plaire.", modeLbl:"En visio, 30 minutes" },
-    appel: { duree:10, mode:"telephone", titre:"Premier échange", sous:"Vous avez moins de temps ? Dix minutes par téléphone suffisent pour une première esquisse : vos coups de cœur, votre projet, et les pistes à creuser.", modeLbl:"Par téléphone, 10 minutes" }
+    // Le client a déjà eu son conseiller au téléphone : on ne se présente pas,
+    // on fait le point sur la sélection (textes adaptés le 03/09/2026).
+    visio: { duree:30, mode:"visio",     titre:"Visio",           sous:"On reprend ensemble les biens qui vous ont plu, écran partagé : les plans, les prix, les étapes jusqu'à la signature — et ce qui est sorti depuis notre échange.", modeLbl:"En visio, 30 minutes" },
+    appel: { duree:10, mode:"telephone", titre:"Point rapide",    sous:"Dix minutes par téléphone pour faire le point : vos coups de cœur dans cette sélection, vos questions, et la suite à donner.", modeLbl:"Par téléphone, 10 minutes" }
   };
   // Les disponibilités du conseiller sont découpées en créneaux de 10 min ; pour
   // ne pas noyer le client sous les horaires, on ne lui montre que les heures
@@ -497,13 +499,25 @@
     return h + "</div>";
   }
 
+  // Une sélection d'un seul lot ne parle pas « des biens » : les tournures au
+  // pluriel des textes fixes passent au singulier (même règle que dans le CRM).
+  function accordUnBien(t){
+    if (!Array.isArray(biens) || biens.length !== 1) return t;
+    return String(t || "")
+      .replace(/les biens qui vous ont plu/gi, "le bien qui vous a plu")
+      .replace(/les biens retenus/gi, "le bien retenu")
+      .replace(/vos coups de cœur/gi, "votre coup de cœur")
+      .replace(/chaque bien/gi, "ce bien")
+      .replace(/les biens/gi, "le bien")
+      .replace(/ces biens/gi, "ce bien");
+  }
   function htmlModes(){
     var h = "<div class='fmt-choix'>";
     ["visio", "appel"].forEach(function(k){
       var f = FORMATS[k];
       h += "<button type='button' class='fmt" + (formatChoisi === k ? " on" : "") + "' data-format='" + k + "' aria-pressed='" + (formatChoisi === k) + "'>"
          + "<div class='fmt-titre'>" + esc(f.titre) + " <span class='fmt-duree'>" + f.duree + " min</span></div>"
-         + "<div class='fmt-sous'>" + esc(f.sous) + "</div>"
+         + "<div class='fmt-sous'>" + esc(accordUnBien(f.sous)) + "</div>"
          + "<div class='fmt-mode'>" + esc(f.modeLbl) + "</div>"
          + "</button>";
     });
@@ -536,6 +550,10 @@
       var prf = creneauxDuFormat(props);
       if (!prf.length) h += "<div class='fmt-vide'>Aucun de ces créneaux ne tient en " + FORMATS[formatChoisi].duree + " min — essayez l'autre format.</div>";
       h += htmlCreneaux(prf, "accepter_proposition");
+      // Aucun des trois ne va : le client donne ses disponibilités plutôt que
+      // de rester sans issue. La demande repart aussitôt chez le conseiller.
+      h += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
+      h += "<div id='rdv-libre' style='display:none;margin-top:14px'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer mes disponibilités</button></div></div>";
       return h;
     }
 
@@ -546,12 +564,12 @@
       h += "<h3>Choisissez un autre créneau</h3>";
       h += "<p>Le créneau retenu n'a finalement pas pu être conservé. " + qui + " reste à votre disposition.</p>";
     } else if (lots.length){
-      h += "<h3>On en parle quand vous voulez</h3>";
+      h += "<h3>Parlons de " + (lots.length > 1 ? "ces biens" : "ce bien") + "</h3>";
       h += "<div class='rdv-lots'>" + esc(lots.length > 1 ? lots.length + " lots retenus" : lots[0]) + "</div>";
-      h += "<p>Choisissez le format puis le moment qui vous arrange : " + qui + " vous rappelle pour répondre à vos questions et affiner la sélection.</p>";
+      h += "<p>Choisissez le format puis le moment qui vous arrange : " + qui + " vous rappelle pour en parler, répondre à vos questions et affiner la sélection.</p>";
     } else {
-      h += "<h3>Envie d'en parler ?</h3>";
-      h += "<p>Choisissez le format puis le moment d'un échange avec " + qui + ", sans engagement.</p>";
+      h += "<h3>On fait le point ?</h3>";
+      h += "<p>Vous avez vu la sélection : choisissez le format puis le moment, " + qui + " vous rappelle pour en discuter et ajuster si besoin.</p>";
     }
 
     h += "<div id='rdv-contexte' style='font-size:12.5px;color:var(--gold);margin-bottom:10px'></div>";
@@ -899,7 +917,7 @@
     // Bloc rendez-vous (créneaux proposés, sinon demande libre)
     h += "<div class='rdv' id='bloc-rdv'>" + htmlRdv(d) + "</div>";
 
-    h += "<footer>Donnez votre avis sur chaque bien : votre conseiller adaptera la prochaine sélection.";
+    h += "<footer>" + (biens.length === 1 ? "Donnez votre avis sur ce bien" : "Donnez votre avis sur chaque bien") + " : votre conseiller adaptera la prochaine sélection.";
     h += "<div class='partage'><button id='btn-partage'>Partager cette sélection</button></div>";
     h += "<div style='margin-top:14px'>GLR Immobilier</div></footer>";
 
@@ -1109,6 +1127,8 @@
       envoyer({ action: "rdv", creneau: creneau, bien: rdvContexte, mode: modeContact, format: formatChoisi }, "✓ Demande de rendez-vous transmise").then(function(ok){
         if (!ok) return;
         etatAvis.rdv = { demande: true, creneau: creneau, mode: modeContact, format: formatChoisi };
+        d.propositions = [];
+        d.creneaux = [];
         document.getElementById("bloc-rdv").innerHTML = htmlRdv(d);
         brancherRdv(d);
       });
