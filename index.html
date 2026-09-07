@@ -673,6 +673,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 2v20l2.5-1.5L10 22l2-1.5L14 22l2.5-1.5L19 22V2l-2.5 1.5L14 2l-2 1.5L10 2 7.5 3.5z"></path><path d="M9 8h6M9 12h6"></path></svg>
         Factures
       </div>
+      <div class="nav-item" onclick="goTo(&#39;pilotage&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M7 15l4-5 3 3 5-7"></path></svg>
+        Pilotage commercial
+      </div>
       <div class="nav-item" onclick="goTo(&#39;journal&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v5l3 2"></path><path d="M3.05 11a9 9 0 1 1 .5 4"></path><path d="M3 4v5h5"></path></svg>
         Journal
@@ -1946,6 +1950,89 @@
     </div>
 
 
+    <div class="page" id="page-pilotage">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Pilotage commercial</div>
+          <div style="color:var(--muted);font-size:13px" id="pil-etat">—</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="pilExport()">Exporter la vue en CSV</button>
+      </div>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:16px;max-width:760px">
+        Le travail de chaque vendeur : ce qu'il a fait sur la période, ce que sont devenus les leads qu'il a reçus, et l'état de son portefeuille aujourd'hui. Réservé aux gérants.
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
+        <select id="pil-periode" onchange="pilPeriodeChange('pil')" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%">
+          <option value="7">7 derniers jours</option>
+          <option value="30" selected>30 derniers jours</option>
+          <option value="mois">Mois en cours</option>
+          <option value="mois-1">Mois dernier</option>
+          <option value="90">3 derniers mois</option>
+          <option value="180">6 derniers mois</option>
+          <option value="libre">Dates libres</option>
+        </select>
+        <span id="pil-dates" style="display:none;gap:6px;align-items:center;font-size:12.5px;color:var(--muted);flex-wrap:wrap">du <input type="date" id="pil-du" onchange="pilCharger()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px"> au <input type="date" id="pil-au" onchange="pilCharger()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px"></span>
+      </div>
+      <div id="pil-onglets" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+        <button data-v="equipe" onclick="pilVue('equipe', this)" style="background:var(--accent);border:1px solid var(--accent);border-radius:10px;padding:9px 16px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Équipe</button>
+        <button data-v="vendeur" onclick="pilVue('vendeur', this)" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 16px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer">Vendeur</button>
+        <button data-v="comparer" onclick="pilVue('comparer', this)" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 16px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer">Comparer</button>
+        <button data-v="evolution" onclick="pilVue('evolution', this)" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 16px;color:var(--text);font-size:13px;font-weight:600;cursor:pointer">Évolution</button>
+      </div>
+
+      <div id="pil-vue-equipe">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
+          <select id="pil-groupe" onchange="pilRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%">
+            <option value="activite">Activité sur la période</option>
+            <option value="conversion">Conversion des leads reçus et délais</option>
+            <option value="portefeuille">Portefeuille aujourd'hui</option>
+          </select>
+          <select id="pil-tri" onchange="pilRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%"></select>
+        </div>
+        <div class="card" id="pil-equipe-corps" style="padding:0"></div>
+      </div>
+
+      <div id="pil-vue-vendeur" style="display:none">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
+          <select id="pil-vendeur" onchange="pilRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%"><option value="">Choisir un vendeur…</option></select>
+        </div>
+        <div class="card" id="pil-vendeur-corps" style="padding:18px 20px"></div>
+      </div>
+
+      <div id="pil-vue-comparer" style="display:none">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
+          <select id="pil-cmp-mode" onchange="pilCmpMode()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%">
+            <option value="ab">Plusieurs vendeurs, même période</option>
+            <option value="periodes">Même vendeur, deux périodes</option>
+            <option value="equipe">Un vendeur face au reste de l'équipe</option>
+          </select>
+          <span id="pil-cmp-a-bloc" style="display:none"><select id="pil-cmp-a" onchange="pilRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%"><option value="">Vendeur…</option></select></span>
+          <span id="pil-cmp-b-bloc" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"></span>
+          <span id="pil-cmp-p-bloc" style="display:none;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="pil-cmp-p-periode" onchange="pilPeriodeChange('pil-cmp-p')" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%">
+              <option value="precedente" selected>Période précédente (même durée)</option>
+              <option value="mois-1">Mois dernier</option>
+              <option value="libre">Dates libres</option>
+            </select>
+            <span id="pil-cmp-p-dates" style="display:none;gap:6px;align-items:center;font-size:12.5px;color:var(--muted);flex-wrap:wrap">du <input type="date" id="pil-cmp-p-du" onchange="pilRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px"> au <input type="date" id="pil-cmp-p-au" onchange="pilRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px"></span>
+          </span>
+        </div>
+        <div class="card" id="pil-cmp-corps" style="padding:0"></div>
+      </div>
+
+      <div id="pil-vue-evolution" style="display:none">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">
+          <select id="pil-evo-ind" onchange="pilRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%"></select>
+          <select id="pil-evo-mois" onchange="pilRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%">
+            <option value="6" selected>6 derniers mois</option>
+            <option value="12">12 derniers mois</option>
+          </select>
+          <input type="hidden" id="pil-evo-qui" value="">
+        </div>
+        <div class="card" id="pil-evo-corps" style="padding:18px 20px"></div>
+      </div>
+    </div>
+
     <div class="page" id="page-journal">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:12px">
         <div>
@@ -1956,28 +2043,6 @@
       </div>
       <div style="color:var(--muted);font-size:13px;margin-bottom:16px;max-width:720px">
         Qui a changé quoi, et quand. Réservé aux gérants : les commerciaux n'y ont accès ni par le menu ni par la base.
-      </div>
-      <!-- Rapport d'activité : par vendeur ou pour l'équipe, avec classement (demande d'Alex, 07/09/2026) -->
-      <div class="card" style="margin-bottom:22px">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-          <div style="font-family:var(--font-head);font-size:15px;font-weight:700">Rapport d'activité</div>
-          <button class="btn btn-ghost btn-sm" onclick="rapportExport()">Exporter en CSV</button>
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
-          <select id="rapport-perimetre" onchange="rapportGenerer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none"><option value="">Toute l'équipe</option></select>
-          <select id="rapport-periode" onchange="rapportPeriodeChange()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none">
-            <option value="7">7 derniers jours</option>
-            <option value="30" selected>30 derniers jours</option>
-            <option value="mois">Mois en cours</option>
-            <option value="mois-1">Mois dernier</option>
-            <option value="90">3 derniers mois</option>
-            <option value="libre">Dates libres</option>
-          </select>
-          <span id="rapport-dates" style="display:none;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)">du <input type="date" id="rapport-du" onchange="rapportGenerer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px"> au <input type="date" id="rapport-au" onchange="rapportGenerer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px"></span>
-          <select id="rapport-tri" onchange="rapportRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none"></select>
-          <span id="rapport-etat" style="font-size:12.5px;color:var(--muted)"></span>
-        </div>
-        <div id="rapport-corps" style="overflow-x:auto"></div>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;align-items:center">
         <input id="journal-search" oninput="journalFiltrer()" placeholder="Rechercher un nom, un statut, une valeur…"
@@ -2949,7 +3014,7 @@ async function chargerMonRole() {
 
 // Pages réservées aux gérants
 const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev',
-                      'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal'];
+                      'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage'];
 
 function appliquerRole() {
   // Création manuelle d'un contact : gérants seulement (les commerciaux
@@ -3230,7 +3295,7 @@ const pages = {
   dashboard: 'Tableau de bord', ventes: 'Ventes', charges: 'Charges', 'treso-prev': 'Trésorerie prévisionnelle', vendeurs: 'Vendeurs',
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
-  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications',
+  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'pilotage': 'Pilotage commercial',
   'mails': 'Mails automatiques'
 };
 
@@ -3292,6 +3357,7 @@ function goTo(id, el) {
   else if (id === 'promoteurs') loadPromoteurs();
   else if (id === 'mails') loadMailsGuide();
   else if (id === 'journal') loadJournal();
+  else if (id === 'pilotage') pilInit();
   else if (id === 'factures') renderFactures();
   else refresh();
 }
@@ -15942,157 +16008,485 @@ const JOURNAL_ACTIONS = {
 };
 
 // ============================================================
-//  RAPPORT D'ACTIVITÉ — par vendeur ou pour l'équipe (gérants)
-//  Les chiffres viennent de la fonction SQL rapport_activite(depuis, jusqu'à) :
-//  leads reçus, appels sans réponse, statuts changés, passages en Sélections,
-//  activités, sélections envoyées, RDV confirmés, perdus/non qualifiés,
-//  ventes et honoraires. Équipe = classement sur la colonne choisie ;
-//  vendeur seul = ses chiffres avec son rang dans l'équipe sur chaque colonne.
+//  PILOTAGE COMMERCIAL — analyser le travail de chaque vendeur (gérants)
+//  Quatre vues : Équipe (classement), Vendeur (fiche complète + points à
+//  retenir), Comparer (A/B, deux périodes, vendeur/équipe), Évolution (mois).
+//  Données : perf_vendeurs(depuis, jusqu'à) et perf_mensuel(depuis, jusqu'à),
+//  deux fonctions SQL réservées aux gérants. Demande d'Alex, 07/09/2026.
 // ============================================================
-const RAPPORT_COLS = [
-  ['leads_recus', 'Leads reçus', 'Nouveaux leads arrivés sur le vendeur pendant la période'],
-  ['appels_sans_reponse', 'Sans réponse', 'Tentatives d\'appel notées « Pas de réponse »'],
-  ['statuts_changes', 'Statuts changés', 'Changements de statut faits par le vendeur'],
-  ['passes_selections', 'Appelés', 'Clients passés en Sélections (donc joints)'],
-  ['activites', 'Activités', 'Activités planifiées ou reportées (tracées depuis le 07/09/2026)'],
-  ['selections_envoyees', 'Sélections envoyées', 'Feuilles sélection envoyées aux clients'],
-  ['rdv_confirmes', 'RDV confirmés', 'Rendez-vous clients confirmés dans la période'],
-  ['perdus', 'Perdus / NQ', 'Passages en Perdu ou Non qualifié'],
-  ['ventes', 'Ventes', 'Ventes datées dans la période'],
-  ['honoraires', 'Honoraires', 'Honoraires société des ventes de la période']
+const PIL_GROUPES = [
+  ['activite', 'Activité sur la période', [
+    ['leads_recus', 'Leads reçus', 'n', 'Nouveaux leads arrivés sur le vendeur', 0],
+    ['sans_reponse', 'Sans réponse', 'n', 'Tentatives d\'appel notées « Pas de réponse »', 0],
+    ['appeles', 'Clients joints', 'n', 'Passages en Sélections (journal, depuis le 02/09/2026)', 1],
+    ['activites', 'Activités', 'n', 'Activités planifiées ou reportées (journal, depuis le 07/09/2026)', 1],
+    ['selections_envoyees', 'Sélections', 'n', 'Feuilles sélection envoyées', 1],
+    ['taux_ouverture', 'Ouvertes', '%', 'Part des sélections envoyées que le client a ouvertes', 1],
+    ['rdv_confirmes', 'RDV', 'n', 'Rendez-vous clients confirmés', 1],
+    ['perdus', 'Perdus / NQ', 'n', 'Passages en Perdu ou Non qualifié', 0],
+    ['ventes', 'Ventes', 'n', 'Ventes datées dans la période', 1],
+    ['honoraires', 'Honoraires', '€', 'Honoraires société', 1]
+  ]],
+  ['conversion', 'Conversion des leads reçus (cohorte) et délais', [
+    ['coh_leads', 'Leads reçus', 'n', 'Leads reçus dans la période — c\'est la cohorte suivie ci-contre', 0],
+    ['taux_joints', 'Joints', '%', 'Part de ces leads qui ont été joints (statut avancé ou sélection envoyée)', 1],
+    ['taux_selection', 'Sélection', '%', 'Part de ces leads qui ont reçu une sélection', 1],
+    ['taux_rdv', 'RDV', '%', 'Part de ces leads qui ont eu un rendez-vous confirmé', 1],
+    ['taux_perdus', 'Perdus / NQ', '%', 'Part de ces leads passés en Perdu ou Non qualifié', 0],
+    ['taux_sans_action', 'Jamais touchés', '%', 'Part de ces leads sans aucune action à ce jour', -1],
+    ['delai_premiere_action_h', '1re action', 'h', 'Délai médian entre la réception du lead et la première action', -1],
+    ['delai_selection_j', 'Lead → sélection', 'j', 'Délai médian entre la réception et la première sélection', -1],
+    ['delai_rdv_j', 'Lead → RDV', 'j', 'Délai médian entre la réception et le premier rendez-vous', -1]
+  ]],
+  ['portefeuille', 'Portefeuille aujourd\'hui', [
+    ['pf_actifs', 'Leads actifs', 'n', 'Leads en cours (ni perdus, ni non qualifiés, ni en veille)', 0],
+    ['pf_en_retard', 'En retard', 'n', 'Leads actifs dont l\'activité prévue est dépassée', -1],
+    ['pf_sans_action_7j', 'Sans action 7 j', 'n', 'Leads actifs (hors Sans réponse) sans action depuis plus de 7 jours', -1],
+    ['pf_nouveaux_non_traites', 'Nouveaux > 48 h', 'n', 'Leads encore Nouveau, jamais touchés, reçus il y a plus de 48 h', -1],
+    ['pool_perdus', 'Perdus au pool', 'n', 'Leads retombés dans le pool (14 jours sans action) sur la période', -1]
+  ]]
 ];
-let _rapport = [];        // lignes de la fonction SQL, une par vendeur
-let _rapportPeriode = null;
+// Tous les indicateurs à plat : clé → [libellé, unité, aide, sens (1 = plus c'est haut mieux c'est, -1 = inverse, 0 = neutre)]
+const PIL_IND = {};
+PIL_GROUPES.forEach(g => g[2].forEach(c => { PIL_IND[c[0]] = { lib: c[1], unite: c[2], aide: c[3], sens: c[4], groupe: g[0] }; }));
 
-function rapportPeriodeChange() {
-  const p = (document.getElementById('rapport-periode') || {}).value;
-  const dates = document.getElementById('rapport-dates');
-  if (dates) dates.style.display = p === 'libre' ? 'inline-flex' : 'none';
-  if (p !== 'libre') rapportGenerer();
+const PIL_COULEURS = ['#4f7fe8', '#e8792f', '#2fa36b', '#b04fe8', '#e84f6a', '#2f9fc4', '#8a8a2f', '#666'];
+
+let _pil = { lignes: [], periode: null, lignesB: [], periodeB: null, mensuel: [], vue: 'equipe', tri: 'selections_envoyees' };
+
+// Ratios calculés côté dashboard à partir des comptes bruts
+function _pilEnrichir(l) {
+  const pct = (a, b) => Number(b) > 0 ? Math.round(Number(a) / Number(b) * 1000) / 10 : null;
+  l.taux_ouverture = pct(l.selections_ouvertes, l.selections_envoyees);
+  l.taux_joints = pct(l.coh_joints, l.coh_leads);
+  l.taux_selection = pct(l.coh_selection, l.coh_leads);
+  l.taux_rdv = pct(l.coh_rdv, l.coh_leads);
+  l.taux_perdus = pct(l.coh_perdus, l.coh_leads);
+  l.taux_sans_action = pct(l.coh_sans_action, l.coh_leads);
+  return l;
+}
+// Ligne « Équipe » : sommes pour les comptes, ratios recalculés sur les sommes, médiane approchée par la moyenne pondérée
+function _pilEquipe(lignes) {
+  const t = { vendeur: 'Équipe' };
+  const somme = k => lignes.reduce((s, x) => s + Number(x[k] || 0), 0);
+  ['leads_recus','sans_reponse','statuts_changes','appeles','activites','selections_envoyees','selections_ouvertes','rdv_confirmes','perdus','ventes','honoraires',
+   'coh_leads','coh_joints','coh_selection','coh_rdv','coh_perdus','coh_sans_action','coh_veille','pf_actifs','pf_en_retard','pf_sans_action_7j','pf_nouveaux_non_traites','pool_perdus']
+    .forEach(k => { t[k] = somme(k); });
+  ['delai_premiere_action_h','delai_selection_j','delai_rdv_j'].forEach(k => {
+    const avec = lignes.filter(x => x[k] != null);
+    const poids = { delai_premiere_action_h: 'coh_leads', delai_selection_j: 'coh_selection', delai_rdv_j: 'coh_rdv' }[k];
+    const w = avec.reduce((s, x) => s + Number(x[poids] || 0), 0);
+    t[k] = w > 0 ? Math.round(avec.reduce((s, x) => s + Number(x[k]) * Number(x[poids] || 0), 0) / w * 10) / 10 : null;
+  });
+  return _pilEnrichir(t);
 }
 
-function _rapportBornes() {
-  const p = (document.getElementById('rapport-periode') || {}).value || '30';
+function pilFmt(k, v) {
+  if (v == null || v === '') return '—';
+  const u = (PIL_IND[k] || {}).unite;
+  if (u === '€') return Number(v).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  if (u === '%') return Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %';
+  if (u === 'h') return Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' h';
+  if (u === 'j') return Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' j';
+  return Number(v).toLocaleString('fr-FR');
+}
+
+// ---- Période ---------------------------------------------------------------
+function _pilBornes(prefixe) {
+  const p = (document.getElementById(prefixe + '-periode') || {}).value || '30';
   const fin = new Date(); fin.setHours(23, 59, 59, 999);
   let debut = new Date(); debut.setHours(0, 0, 0, 0);
-  if (p === 'mois') { debut.setDate(1); }
+  if (p === 'mois') debut.setDate(1);
   else if (p === 'mois-1') { debut.setDate(1); debut.setMonth(debut.getMonth() - 1); fin.setDate(0); }
+  else if (p === 'precedente') return null; // calculée à partir de la période A
   else if (p === 'libre') {
-    const du = (document.getElementById('rapport-du') || {}).value, au = (document.getElementById('rapport-au') || {}).value;
+    const du = (document.getElementById(prefixe + '-du') || {}).value, au = (document.getElementById(prefixe + '-au') || {}).value;
     if (!du || !au) return null;
     debut = new Date(du + 'T00:00:00'); fin.setTime(new Date(au + 'T23:59:59.999').getTime());
-  } else { debut.setDate(debut.getDate() - parseInt(p, 10) + 1); }
+  } else debut.setDate(debut.getDate() - parseInt(p, 10) + 1);
   return { debut, fin };
 }
-
-function rapportInit() {
-  const sel = document.getElementById('rapport-perimetre');
-  if (sel && sel.options.length <= 1) {
-    ((data && data.vendeurs) || []).slice().sort((a, b) => String(a.prenom).localeCompare(String(b.prenom), 'fr'))
-      .forEach(v => { const o = document.createElement('option'); o.value = v.prenom; o.textContent = v.prenom; sel.appendChild(o); });
-  }
-  const tri = document.getElementById('rapport-tri');
-  if (tri && !tri.options.length) {
-    RAPPORT_COLS.forEach(([k, lib]) => { const o = document.createElement('option'); o.value = k; o.textContent = 'Classer par : ' + lib; tri.appendChild(o); });
-    tri.value = 'selections_envoyees';
-  }
-  if (!_rapport.length) rapportGenerer();
+function _pilPeriodeTexte(b) {
+  return b ? 'du ' + b.debut.toLocaleDateString('fr-FR') + ' au ' + b.fin.toLocaleDateString('fr-FR') : '—';
+}
+function pilPeriodeChange(prefixe) {
+  const p = (document.getElementById(prefixe + '-periode') || {}).value;
+  const dates = document.getElementById(prefixe + '-dates');
+  if (dates) dates.style.display = p === 'libre' ? 'inline-flex' : 'none';
+  if (p !== 'libre') pilCharger();
 }
 
-async function rapportGenerer() {
-  const b = _rapportBornes();
-  const etat = document.getElementById('rapport-etat');
+async function _pilAppel(fn, b) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + fn, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_depuis: b.debut.toISOString(), p_jusqua: new Date(b.fin.getTime() + 1).toISOString() })
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+// ---- Chargement ------------------------------------------------------------
+function pilInit() {
+  const remplir = (id, vide) => {
+    const sel = document.getElementById(id); if (!sel || sel.options.length > 1) return;
+    ((data && data.vendeurs) || []).slice().sort((a, b) => String(a.prenom).localeCompare(String(b.prenom), 'fr'))
+      .forEach(v => { const o = document.createElement('option'); o.value = v.prenom; o.textContent = v.prenom; sel.appendChild(o); });
+  };
+  remplir('pil-vendeur'); remplir('pil-cmp-a');
+  _pilChipsRemplir();
+  const tri = document.getElementById('pil-tri');
+  if (tri && !tri.options.length) {
+    PIL_GROUPES.forEach(g => g[2].forEach(([k, lib]) => { const o = document.createElement('option'); o.value = k; o.textContent = 'Classer par : ' + lib; tri.appendChild(o); }));
+    tri.value = _pil.tri;
+  }
+  const evo = document.getElementById('pil-evo-ind');
+  if (evo && !evo.options.length) {
+    [['leads','Leads reçus'],['sans_reponse','Sans réponse'],['appeles','Clients joints'],['selections','Sélections envoyées'],['rdv','RDV confirmés'],['ventes','Ventes'],['honoraires','Honoraires']]
+      .forEach(([k, lib]) => { const o = document.createElement('option'); o.value = k; o.textContent = lib; evo.appendChild(o); });
+    evo.value = 'selections';
+  }
+  pilCharger();
+}
+
+async function pilCharger() {
+  const etat = document.getElementById('pil-etat');
+  const b = _pilBornes('pil');
   if (!b) { if (etat) etat.textContent = 'Choisis les deux dates'; return; }
   if (etat) etat.textContent = 'Calcul…';
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/rapport_activite', {
-      method: 'POST',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ p_depuis: b.debut.toISOString(), p_jusqua: new Date(b.fin.getTime() + 1).toISOString() })
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    _rapport = await r.json();
-    _rapportPeriode = b;
-    if (etat) etat.textContent = 'Du ' + b.debut.toLocaleDateString('fr-FR') + ' au ' + b.fin.toLocaleDateString('fr-FR');
+    const lignes = await _pilAppel('perf_vendeurs', b);
+    _pil.lignes = lignes.map(_pilEnrichir);
+    _pil.periode = b;
+    if (etat) etat.textContent = 'Période ' + _pilPeriodeTexte(b) + ' · portefeuille à ce jour';
   } catch (e) {
-    _rapport = [];
-    if (etat) etat.textContent = 'Rapport indisponible (réservé aux gérants)';
+    _pil.lignes = []; _pil.periode = null;
+    if (etat) etat.textContent = 'Données indisponibles (réservé aux gérants)';
   }
-  rapportRender();
+  pilRender();
 }
 
-function _rapportFmt(k, v) {
-  if (k === 'honoraires') return Number(v || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-  return Number(v || 0).toLocaleString('fr-FR');
+function pilVue(v, el) {
+  _pil.vue = v;
+  document.querySelectorAll('#pil-onglets button').forEach(b => {
+    const actif = b === el || b.dataset.v === v;
+    b.style.background = actif ? 'var(--accent)' : 'var(--surface2)';
+    b.style.color = actif ? '#fff' : 'var(--text)';
+    b.style.borderColor = actif ? 'var(--accent)' : 'var(--border)';
+  });
+  ['equipe', 'vendeur', 'comparer', 'evolution'].forEach(x => {
+    const bloc = document.getElementById('pil-vue-' + x); if (bloc) bloc.style.display = x === v ? '' : 'none';
+  });
+  pilRender();
 }
 
-// Rang d'un vendeur sur une colonne (1 = meilleur ; ex æquo partagent le rang)
-function _rapportRang(prenom, k) {
-  const val = Number((_rapport.find(x => x.vendeur === prenom) || {})[k] || 0);
-  return 1 + _rapport.filter(x => Number(x[k] || 0) > val).length;
+function pilRender() {
+  if (_pil.vue === 'equipe') _pilRenderEquipe();
+  else if (_pil.vue === 'vendeur') _pilRenderVendeur();
+  else if (_pil.vue === 'comparer') _pilRenderComparer();
+  else if (_pil.vue === 'evolution') _pilRenderEvolution();
 }
 
-function rapportRender() {
-  const box = document.getElementById('rapport-corps');
-  if (!box) return;
-  const qui = (document.getElementById('rapport-perimetre') || {}).value || '';
-  const tri = (document.getElementById('rapport-tri') || {}).value || 'selections_envoyees';
-  const triSel = document.getElementById('rapport-tri');
-  if (triSel) triSel.style.display = qui ? 'none' : '';
-  if (!_rapport.length) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Aucune donnée sur cette période.</div>'; return; }
+// ---- Rang d'un vendeur sur un indicateur (1 = meilleur selon le sens) ------
+function _pilRang(lignes, prenom, k) {
+  const sens = (PIL_IND[k] || {}).sens || 1;
+  const moi = lignes.find(x => x.vendeur === prenom);
+  if (!moi || moi[k] == null) return null;
+  const v = Number(moi[k]);
+  const mieux = lignes.filter(x => x.vendeur !== prenom && x[k] != null && (sens >= 0 ? Number(x[k]) > v : Number(x[k]) < v)).length;
+  return { rang: mieux + 1, sur: lignes.filter(x => x[k] != null).length };
+}
+function _pilCouleurRang(k, r) {
+  if (!r || (PIL_IND[k] || {}).sens === 0 || r.sur < 2) return 'var(--muted)';
+  if (r.rang === 1) return 'var(--success)';
+  if (r.rang === r.sur) return 'var(--danger)';
+  return 'var(--muted)';
+}
 
-  if (qui) {
-    // Un seul vendeur : ses chiffres, et son rang dans l'équipe sur chaque indicateur
-    const l = _rapport.find(x => x.vendeur === qui);
-    if (!l) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Rien pour ' + _esc(qui) + ' sur cette période.</div>'; return; }
-    const n = _rapport.length;
-    box.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">' + RAPPORT_COLS.map(([k, lib, aide]) => {
-      const rang = _rapportRang(qui, k);
-      const bon = k === 'perdus' || k === 'appels_sans_reponse' ? null : (rang === 1 ? 'var(--success)' : rang >= n ? 'var(--danger)' : 'var(--muted)');
-      return `<div title="${_esc(aide)}" style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px">
-        <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">${_esc(lib)}</div>
-        <div style="font-family:var(--font-head);font-size:24px;font-weight:800;margin-top:4px">${_rapportFmt(k, l[k])}</div>
-        <div style="font-size:11.5px;color:${bon || 'var(--muted)'};margin-top:2px">${rang}${rang === 1 ? 'er' : 'e'} sur ${n}</div>
-      </div>`;
-    }).join('') + '</div>';
+// ---- Vue Équipe : classement, un groupe de colonnes à la fois --------------
+function _pilRenderEquipe() {
+  const box = document.getElementById('pil-equipe-corps'); if (!box) return;
+  const groupe = (document.getElementById('pil-groupe') || {}).value || 'activite';
+  const tri = (document.getElementById('pil-tri') || {}).value || _pil.tri;
+  _pil.tri = tri;
+  const cols = (PIL_GROUPES.find(g => g[0] === groupe) || PIL_GROUPES[0])[2];
+  if (!_pil.lignes.length) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Aucune donnée.</div>'; return; }
+  const sens = (PIL_IND[tri] || {}).sens || 1;
+  const lignes = _pil.lignes.slice().sort((a, b) => {
+    const va = a[tri] == null ? -Infinity : Number(a[tri]), vb = b[tri] == null ? -Infinity : Number(b[tri]);
+    return (sens < 0 ? va - vb : vb - va) || String(a.vendeur).localeCompare(String(b.vendeur), 'fr');
+  });
+  const equipe = _pilEquipe(_pil.lignes);
+  const th = ([k, lib, u, aide]) => `<th onclick="document.getElementById('pil-tri').value='${k}';_pil.tri='${k}';pilRender()" title="${_esc(aide)} — cliquer pour classer" style="cursor:pointer;text-align:right;white-space:normal;line-height:1.25;vertical-align:bottom;padding:8px 9px;font-size:10px;letter-spacing:.3px;${k === tri ? 'color:var(--accent)' : ''}">${_esc(lib)}${k === tri ? ' ↓' : ''}</th>`;
+  const td = (l, k) => {
+    const r = _pilRang(_pil.lignes, l.vendeur, k);
+    const coul = _pilCouleurRang(k, r);
+    return `<td style="text-align:right;white-space:nowrap;padding:8px 9px;font-size:12.5px;${k === tri ? 'font-weight:700;' : ''}${coul !== 'var(--muted)' ? 'color:' + coul : ''}">${pilFmt(k, l[k])}</td>`;
+  };
+  box.innerHTML = `<div style="overflow-x:auto;max-width:100%"><table style="width:100%;table-layout:auto">
+    <thead><tr><th style="width:30px;padding:8px 9px;vertical-align:bottom">#</th><th style="padding:8px 9px;vertical-align:bottom">Vendeur</th>${cols.map(th).join('')}</tr></thead>
+    <tbody>${lignes.map((l, i) => `<tr>
+      <td style="font-weight:800;padding:8px 9px;color:${i === 0 ? 'var(--success)' : 'var(--muted)'}">${i + 1}</td>
+      <td style="font-weight:600;padding:8px 9px;font-size:12.5px;white-space:nowrap;cursor:pointer" onclick="document.getElementById('pil-vendeur').value='${_esc(l.vendeur)}';pilVue('vendeur')" title="Ouvrir la fiche de ${_esc(l.vendeur)}">${_esc(l.vendeur)}</td>
+      ${cols.map(c => td(l, c[0])).join('')}
+    </tr>`).join('')}
+    <tr style="border-top:2px solid var(--border)"><td></td><td style="font-weight:700;padding:8px 9px;font-size:12.5px">Équipe</td>${cols.map(c => `<td style="text-align:right;white-space:nowrap;padding:8px 9px;font-size:12.5px;font-weight:700">${pilFmt(c[0], equipe[c[0]])}</td>`).join('')}</tr>
+    </tbody></table></div>
+    <div style="font-size:11.5px;color:var(--muted);padding:10px 14px 4px">Vert = meilleur de l'équipe sur la colonne, rouge = dernier. Pour les délais, les retards et les leads non traités, « meilleur » veut dire le plus bas. Cliquer un prénom ouvre sa fiche.</div>`;
+}
+
+// ---- Vue Vendeur : fiche complète + points à retenir -----------------------
+function _pilRenderVendeur() {
+  const box = document.getElementById('pil-vendeur-corps'); if (!box) return;
+  const qui = (document.getElementById('pil-vendeur') || {}).value || '';
+  if (!qui) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Choisis un vendeur.</div>'; return; }
+  const l = _pil.lignes.find(x => x.vendeur === qui);
+  if (!l) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Rien pour ' + _esc(qui) + ' sur cette période.</div>'; return; }
+  const equipe = _pilEquipe(_pil.lignes);
+  const n = _pil.lignes.length;
+  const tuile = ([k, lib, u, aide]) => {
+    const r = _pilRang(_pil.lignes, qui, k);
+    const coul = _pilCouleurRang(k, r);
+    return `<div title="${_esc(aide)}" style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px 13px;min-width:0;overflow:hidden">
+      <div style="font-size:10.5px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(lib)}</div>
+      <div style="font-family:var(--font-head);font-size:22px;font-weight:800;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${pilFmt(k, l[k])}</div>
+      <div style="font-size:11px;margin-top:2px;line-height:1.35"><span style="color:${coul};white-space:nowrap">${r ? r.rang + (r.rang === 1 ? 'er' : 'e') + ' sur ' + r.sur : '—'}</span><span style="color:var(--muted)"> · équipe ${pilFmt(k, equipe[k])}</span></div>
+    </div>`;
+  };
+  const groupes = PIL_GROUPES.map(g => `<div style="margin-bottom:16px">
+    <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin:0 0 8px 2px">${_esc(g[1])}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px">${g[2].map(tuile).join('')}</div>
+  </div>`).join('');
+  box.innerHTML = _pilARetenir(l, equipe, n) + groupes;
+}
+
+// Points à retenir : écarts marquants par rapport à l'équipe, formulés pour un retour au vendeur
+function _pilARetenir(l, equipe, n) {
+  const forts = [], faibles = [], notes = [];
+  const cmp = (k, texteFort, texteFaible, seuilRel) => {
+    const v = l[k], e = equipe[k];
+    if (v == null || e == null || Number(e) === 0) return;
+    const sens = (PIL_IND[k] || {}).sens || 1;
+    const rel = (Number(v) - Number(e)) / Math.abs(Number(e));
+    const r = _pilRang(_pil.lignes, l.vendeur, k);
+    const ligne = (t) => t.replace('{v}', pilFmt(k, v)).replace('{e}', pilFmt(k, e)) + (r && r.sur > 1 ? ' (' + r.rang + (r.rang === 1 ? 'er' : 'e') + ' sur ' + r.sur + ')' : '');
+    if (sens > 0) { if (rel >= seuilRel) forts.push(ligne(texteFort)); else if (rel <= -seuilRel) faibles.push(ligne(texteFaible)); }
+    else if (sens < 0) { if (rel <= -seuilRel) forts.push(ligne(texteFort)); else if (rel >= seuilRel) faibles.push(ligne(texteFaible)); }
+  };
+  cmp('taux_joints', 'Joint {v} de ses leads reçus, contre {e} pour l\'équipe', 'Ne joint que {v} de ses leads reçus, contre {e} pour l\'équipe', 0.2);
+  cmp('taux_selection', 'Sélection envoyée à {v} de ses leads, contre {e}', 'Sélection envoyée à seulement {v} de ses leads, contre {e}', 0.2);
+  cmp('taux_rdv', 'Rendez-vous obtenu avec {v} de ses leads, contre {e}', 'Rendez-vous avec seulement {v} de ses leads, contre {e}', 0.2);
+  cmp('delai_premiere_action_h', 'Première action en {v} (médiane), équipe à {e}', 'Première action en {v} (médiane), équipe à {e} — les leads refroidissent', 0.3);
+  cmp('delai_selection_j', 'Sélection envoyée {v} après le lead, équipe à {e}', 'Sélection envoyée {v} après le lead, équipe à {e}', 0.3);
+  cmp('taux_ouverture', 'Ses sélections sont ouvertes à {v}, contre {e}', 'Ses sélections ne sont ouvertes qu\'à {v}, contre {e} — vérifier l\'objet du mail et le suivi', 0.2);
+  cmp('taux_sans_action', 'Seulement {v} de ses leads jamais touchés, contre {e}', '{v} de ses leads jamais touchés, contre {e} pour l\'équipe', 0.3);
+  if (Number(l.pf_en_retard) > 0 || Number(l.pf_sans_action_7j) > 0 || Number(l.pf_nouveaux_non_traites) > 0) {
+    notes.push('Portefeuille : ' + [
+      Number(l.pf_en_retard) > 0 ? l.pf_en_retard + ' activité(s) en retard' : '',
+      Number(l.pf_sans_action_7j) > 0 ? l.pf_sans_action_7j + ' lead(s) sans action depuis 7 jours' : '',
+      Number(l.pf_nouveaux_non_traites) > 0 ? l.pf_nouveaux_non_traites + ' nouveau(x) jamais touché(s) depuis plus de 48 h' : ''
+    ].filter(Boolean).join(', '));
+  }
+  if (Number(l.pool_perdus) > 0) notes.push(l.pool_perdus + ' lead(s) perdus au pool sur la période, faute d\'action dans les 14 jours');
+  if (Number(l.leads_recus) > 0 && Number(l.sans_reponse) / Number(l.leads_recus) > 1.2) notes.push('Beaucoup d\'appels sans réponse (' + l.sans_reponse + ' pour ' + l.leads_recus + ' leads) : l\'effort est là, la joignabilité pèche — varier les horaires d\'appel et passer par le mail de prise de rendez-vous');
+  const bloc = (titre, coul, items) => items.length ? `<div style="flex:1 1 260px;min-width:0;background:var(--surface2);border:1px solid var(--border);border-left:3px solid ${coul};border-radius:10px;padding:10px 14px">
+      <div style="font-size:10.5px;color:${coul};letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:6px">${titre}</div>
+      ${items.map(t => `<div style="font-size:12.5px;line-height:1.45;margin-bottom:4px">${_esc(t)}</div>`).join('')}
+    </div>` : '';
+  const html = bloc('Points forts', 'var(--success)', forts) + bloc('Points à travailler', 'var(--danger)', faibles) + bloc('À surveiller', 'var(--warning)', notes);
+  return `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px">${html || '<div style="font-size:12.5px;color:var(--muted)">Pas d\'écart marquant avec l\'équipe sur cette période.</div>'}</div>`;
+}
+
+// ---- Vue Comparer -----------------------------------------------------------
+// Puces de sélection des vendeurs à comparer (autant qu'on veut, plus « Équipe »)
+let _pilCmpChoix = null;
+function _pilChipsRemplir() {
+  const bloc = document.getElementById('pil-cmp-b-bloc'); if (!bloc || bloc.children.length) return;
+  const noms = ((data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean).sort((a, b) => a.localeCompare(b, 'fr'));
+  if (!_pilCmpChoix) _pilCmpChoix = new Set(noms.slice(0, 2));
+  bloc.innerHTML = noms.concat(['Équipe']).map(n => `<button type="button" data-n="${_esc(n)}" onclick="pilCmpToggle(this.dataset.n)" style="border-radius:20px;padding:7px 13px;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text)">${_esc(n)}</button>`).join('')
+    + `<button type="button" onclick="pilCmpTous()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline">tous</button>`;
+  _pilChipsPeindre();
+}
+function _pilChipsPeindre() {
+  document.querySelectorAll('#pil-cmp-b-bloc button[data-n]').forEach(b => {
+    const on = _pilCmpChoix && _pilCmpChoix.has(b.dataset.n);
+    b.style.background = on ? 'var(--accent)' : 'var(--surface2)';
+    b.style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+    b.style.color = on ? '#fff' : 'var(--text)';
+  });
+}
+function pilCmpToggle(n) {
+  if (!_pilCmpChoix) _pilCmpChoix = new Set();
+  if (_pilCmpChoix.has(n)) _pilCmpChoix.delete(n); else _pilCmpChoix.add(n);
+  _pilChipsPeindre(); pilRender();
+}
+function pilCmpTous() {
+  _pilCmpChoix = new Set(((data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean).concat(['Équipe']));
+  _pilChipsPeindre(); pilRender();
+}
+function pilCmpMode() {
+  const mode = (document.getElementById('pil-cmp-mode') || {}).value || 'ab';
+  const a = document.getElementById('pil-cmp-a-bloc'), b = document.getElementById('pil-cmp-b-bloc'), p = document.getElementById('pil-cmp-p-bloc');
+  if (a) a.style.display = mode === 'ab' ? 'none' : '';
+  if (b) b.style.display = mode === 'ab' ? 'flex' : 'none';
+  if (p) p.style.display = mode === 'periodes' ? '' : 'none';
+  _pilRenderComparer();
+}
+// Tableau à N colonnes : un vendeur par colonne, meilleur en vert et dernier en rouge sur chaque ligne
+function _pilTableauMulti(colonnes, titreLigne) {
+  return PIL_GROUPES.map(g => {
+    if (g[0] === 'portefeuille' && colonnes.some(c => c.periodeB)) return '';
+    return `<div style="margin-bottom:18px;overflow-x:auto;max-width:100%"><table style="width:100%">
+      <thead><tr><th style="padding:8px 10px;vertical-align:bottom;width:28%">${_esc(g[1])}</th>${colonnes.map(c => `<th style="text-align:right;white-space:normal;line-height:1.25;vertical-align:bottom;padding:8px 10px;font-size:10px;letter-spacing:.3px">${_esc(c.titre)}</th>`).join('')}</tr></thead>
+      <tbody>${g[2].map(([k, lib, u, aide]) => {
+        const sens = (PIL_IND[k] || {}).sens || 0;
+        const vals = colonnes.filter(c => c.l && c.l[k] != null && c.titre !== 'Équipe').map(c => Number(c.l[k]));
+        const meilleur = vals.length > 1 ? (sens >= 0 ? Math.max(...vals) : Math.min(...vals)) : null;
+        const pire = vals.length > 1 ? (sens >= 0 ? Math.min(...vals) : Math.max(...vals)) : null;
+        return `<tr><td title="${_esc(aide)}" style="padding:8px 10px;white-space:nowrap;font-size:12.5px">${_esc(lib)}</td>${colonnes.map(c => {
+          const v = c.l ? c.l[k] : null;
+          let coul = '';
+          if (sens !== 0 && c.titre !== 'Équipe' && v != null && meilleur !== pire) coul = Number(v) === meilleur ? 'color:var(--success);font-weight:700' : Number(v) === pire ? 'color:var(--danger)' : '';
+          return `<td style="text-align:right;padding:8px 10px;white-space:nowrap;font-size:12.5px;${c.titre === 'Équipe' ? 'font-weight:700;' : ''}${coul}">${pilFmt(k, v)}</td>`;
+        }).join('')}</tr>`;
+      }).join('')}</tbody></table></div>`;
+  }).join('');
+}
+async function _pilRenderComparer() {
+  const box = document.getElementById('pil-cmp-corps'); if (!box) return;
+  const mode = (document.getElementById('pil-cmp-mode') || {}).value || 'ab';
+  if (!_pil.lignes.length) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Aucune donnée.</div>'; return; }
+
+  if (mode === 'ab') {
+    const choix = Array.from(_pilCmpChoix || []);
+    if (choix.length < 2) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Coche au moins deux vendeurs (ou un vendeur et Équipe).</div>'; return; }
+    const colonnes = choix.filter(n => n !== 'Équipe').sort((a, b) => a.localeCompare(b, 'fr'))
+      .map(n => ({ titre: n, l: _pil.lignes.find(x => x.vendeur === n) || null }));
+    if (choix.includes('Équipe')) colonnes.push({ titre: 'Équipe', l: _pilEquipe(_pil.lignes) });
+    box.innerHTML = _pilTableauMulti(colonnes)
+      + '<div style="font-size:11.5px;color:var(--muted);padding:0 14px 12px">Sur chaque ligne : vert = meilleur des vendeurs cochés, rouge = dernier. La colonne Équipe est le total (ou le taux global) et n\'entre pas dans le classement.</div>';
     return;
   }
 
-  // Équipe : classement sur la colonne choisie, total en pied
-  const lignes = _rapport.slice().sort((a, b) => Number(b[tri] || 0) - Number(a[tri] || 0) || String(a.vendeur).localeCompare(String(b.vendeur), 'fr'));
-  const total = {};
-  RAPPORT_COLS.forEach(([k]) => { total[k] = lignes.reduce((s, x) => s + Number(x[k] || 0), 0); });
-  const max = {};
-  RAPPORT_COLS.forEach(([k]) => { max[k] = Math.max.apply(null, lignes.map(x => Number(x[k] || 0))); });
-  box.innerHTML = `<table>
-    <thead><tr><th style="width:36px">#</th><th>Vendeur</th>${RAPPORT_COLS.map(([k, lib, aide]) => `<th onclick="document.getElementById('rapport-tri').value='${k}';rapportRender()" title="${_esc(aide)} — cliquer pour classer" style="cursor:pointer;text-align:right;white-space:nowrap;${k === tri ? 'color:var(--accent)' : ''}">${_esc(lib)}${k === tri ? ' ↓' : ''}</th>`).join('')}</tr></thead>
-    <tbody>${lignes.map((l, i) => `<tr>
-      <td style="font-weight:800;color:${i === 0 ? 'var(--success)' : 'var(--muted)'}">${i + 1}</td>
-      <td style="font-weight:600">${_esc(l.vendeur)}</td>
-      ${RAPPORT_COLS.map(([k]) => `<td style="text-align:right;${k === tri ? 'font-weight:700' : ''}${max[k] > 0 && Number(l[k] || 0) === max[k] && k !== 'perdus' && k !== 'appels_sans_reponse' ? ';color:var(--success)' : ''}">${_rapportFmt(k, l[k])}</td>`).join('')}
-    </tr>`).join('')}
-    <tr style="border-top:2px solid var(--border)"><td></td><td style="font-weight:700">Équipe</td>${RAPPORT_COLS.map(([k]) => `<td style="text-align:right;font-weight:700">${_rapportFmt(k, total[k])}</td>`).join('')}</tr>
-    </tbody></table>`;
+  const a = (document.getElementById('pil-cmp-a') || {}).value || '';
+  if (!a) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Choisis un vendeur.</div>'; return; }
+  const la = _pil.lignes.find(x => x.vendeur === a);
+  let lb = null, titreA = a, titreB = '';
+  if (mode === 'equipe') {
+    lb = _pilEquipe(_pil.lignes.filter(x => x.vendeur !== a)); titreB = 'Reste de l\'équipe';
+  } else {
+    // Même vendeur, deuxième période : « précédente » = même durée juste avant la période A
+    let b2 = _pilBornes('pil-cmp-p');
+    const pp = (document.getElementById('pil-cmp-p-periode') || {}).value;
+    if (pp === 'precedente' && _pil.periode) {
+      const duree = _pil.periode.fin.getTime() - _pil.periode.debut.getTime();
+      b2 = { debut: new Date(_pil.periode.debut.getTime() - duree - 1), fin: new Date(_pil.periode.debut.getTime() - 1) };
+      b2.debut.setHours(0, 0, 0, 0);
+    }
+    if (!b2) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Choisis les dates de la seconde période.</div>'; return; }
+    box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Calcul…</div>';
+    try {
+      if (!_pil.periodeB || _pil.periodeB.debut.getTime() !== b2.debut.getTime() || _pil.periodeB.fin.getTime() !== b2.fin.getTime()) {
+        _pil.lignesB = (await _pilAppel('perf_vendeurs', b2)).map(_pilEnrichir);
+        _pil.periodeB = b2;
+      }
+    } catch (e) { box.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:14px 18px">Seconde période indisponible.</div>'; return; }
+    lb = _pil.lignesB.find(x => x.vendeur === a) || null;
+    titreA = a + ' — ' + _pilPeriodeTexte(_pil.periode); titreB = a + ' — ' + _pilPeriodeTexte(b2);
+  }
+  if (!la || !lb) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Pas de données pour cette comparaison.</div>'; return; }
+  const ecart = (k) => {
+    const va = la[k], vb = lb[k];
+    if (va == null || vb == null) return ['—', 'var(--muted)'];
+    const d = Number(va) - Number(vb);
+    const sens = (PIL_IND[k] || {}).sens || 0;
+    const u = (PIL_IND[k] || {}).unite;
+    let txt = (d > 0 ? '+' : '') + (u === '%' || u === 'h' || u === 'j' ? Number(d).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + (u === '%' ? ' pt' : ' ' + u) : pilFmt(k, d));
+    if (u === 'n' && Number(vb) !== 0) txt += ' (' + (d > 0 ? '+' : '') + Math.round(d / Math.abs(Number(vb)) * 100) + ' %)';
+    const bon = sens === 0 || d === 0 ? 'var(--muted)' : ((d > 0) === (sens > 0) ? 'var(--success)' : 'var(--danger)');
+    return [txt, bon];
+  };
+  box.innerHTML = PIL_GROUPES.map(g => {
+    // En mode deux périodes, le portefeuille est une photo d'aujourd'hui : identique des deux côtés, on ne le compare pas
+    if (mode === 'periodes' && g[0] === 'portefeuille') return '';
+    return `<div style="margin-bottom:18px;overflow-x:auto;max-width:100%"><table style="width:100%">
+      <thead><tr><th style="padding:8px 10px">${_esc(g[1])}</th><th style="text-align:right;white-space:normal;line-height:1.25;padding:8px 10px;font-size:10px">${_esc(titreA)}</th><th style="text-align:right;white-space:normal;line-height:1.25;padding:8px 10px;font-size:10px">${_esc(titreB)}</th><th style="text-align:right;white-space:nowrap;padding:8px 10px;font-size:10px">Écart</th></tr></thead>
+      <tbody>${g[2].map(([k, lib, u, aide]) => { const e = ecart(k); return `<tr>
+        <td title="${_esc(aide)}" style="padding:8px 10px;white-space:nowrap;font-size:12.5px">${_esc(lib)}</td>
+        <td style="text-align:right;padding:8px 10px;white-space:nowrap;font-size:12.5px;font-weight:600">${pilFmt(k, la[k])}</td>
+        <td style="text-align:right;padding:8px 10px;white-space:nowrap;font-size:12.5px">${pilFmt(k, lb[k])}</td>
+        <td style="text-align:right;padding:8px 10px;white-space:nowrap;font-size:12.5px;font-weight:700;color:${e[1]}">${_esc(e[0])}</td>
+      </tr>`; }).join('')}</tbody></table></div>`;
+  }).join('');
 }
 
-function rapportExport() {
-  if (!_rapport.length) { toast('Rien à exporter', 'var(--warning)'); return; }
-  const qui = (document.getElementById('rapport-perimetre') || {}).value || '';
-  const tri = (document.getElementById('rapport-tri') || {}).value || 'selections_envoyees';
-  const lignes = (qui ? _rapport.filter(x => x.vendeur === qui) : _rapport.slice().sort((a, b) => Number(b[tri] || 0) - Number(a[tri] || 0)));
+// ---- Vue Évolution : une courbe par vendeur, par mois -----------------------
+async function _pilRenderEvolution() {
+  const box = document.getElementById('pil-evo-corps'); if (!box) return;
+  const nbMois = parseInt((document.getElementById('pil-evo-mois') || {}).value || '6', 10);
+  const ind = (document.getElementById('pil-evo-ind') || {}).value || 'selections';
+  const fin = new Date(); fin.setHours(23, 59, 59, 999);
+  const debut = new Date(fin.getFullYear(), fin.getMonth() - nbMois + 1, 1);
+  const cle = debut.toISOString().slice(0, 7) + '_' + nbMois;
+  if (_pil.mensuelCle !== cle) {
+    box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:14px 18px">Calcul…</div>';
+    try { _pil.mensuel = await _pilAppel('perf_mensuel', { debut, fin }); _pil.mensuelCle = cle; }
+    catch (e) { box.innerHTML = '<div style="color:var(--danger);font-size:13px;padding:14px 18px">Évolution indisponible.</div>'; return; }
+  }
+  const rows = _pil.mensuel;
+  const vendeurs = Array.from(new Set(rows.map(r => r.vendeur))).sort((a, b) => a.localeCompare(b, 'fr'));
+  const mois = Array.from(new Set(rows.map(r => r.mois))).sort();
+  const filtre = (document.getElementById('pil-evo-qui') || {}).value || '';
+  const montres = filtre ? vendeurs.filter(v => v === filtre) : vendeurs;
+  const val = (v, m) => { const r = rows.find(x => x.vendeur === v && x.mois === m); return r ? Number(r[ind] || 0) : 0; };
+  const max = Math.max(1, ...montres.map(v => Math.max(...mois.map(m => val(v, m)))));
+  const W = 760, H = 260, pl = 54, pr = 44, pt = 14, pb = 34;
+  const x = i => pl + (mois.length > 1 ? i * (W - pl - pr) / (mois.length - 1) : (W - pl - pr) / 2);
+  const y = v => pt + (H - pt - pb) * (1 - v / max);
+  const fmtM = m => { const d = new Date(m + 'T12:00:00'); return d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }); };
+  const fmtV = v => ind === 'honoraires' ? Math.round(v).toLocaleString('fr-FR') + ' €' : v.toLocaleString('fr-FR');
+  const grille = [0, .25, .5, .75, 1].map(f => `<line x1="${pl}" x2="${W - pr}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="var(--border)" stroke-width="1"/><text x="${pl - 8}" y="${y(max * f) + 4}" text-anchor="end" font-size="10" fill="var(--muted)">${fmtV(max * f)}</text>`).join('');
+  const axes = mois.map((m, i) => `<text x="${x(i)}" y="${H - 12}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${fmtM(m)}</text>`).join('');
+  const courbes = montres.map((v, vi) => {
+    const c = PIL_COULEURS[vendeurs.indexOf(v) % PIL_COULEURS.length];
+    const pts = mois.map((m, i) => [x(i), y(val(v, m)), val(v, m)]);
+    return `<polyline fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round" points="${pts.map(p => p[0] + ',' + p[1]).join(' ')}"/>`
+      + pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="3.4" fill="${c}"><title>${_esc(v)} — ${fmtV(p[2])}</title></circle>`).join('');
+  }).join('');
+  const legende = vendeurs.map(v => `<span onclick="document.getElementById('pil-evo-qui').value='${_esc(v)}';pilRender()" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;opacity:${montres.includes(v) ? 1 : .4}"><span style="width:10px;height:10px;border-radius:50%;background:${PIL_COULEURS[vendeurs.indexOf(v) % PIL_COULEURS.length]}"></span>${_esc(v)}</span>`).join('');
+  // Tableau des valeurs sous la courbe, pour lire les chiffres exacts
+  const table = `<div style="overflow-x:auto;max-width:100%;margin-top:14px"><table style="min-width:100%"><thead><tr><th style="padding:9px 12px">Vendeur</th>${mois.map(m => `<th style="text-align:right;white-space:nowrap;padding:9px 12px">${_esc(fmtM(m))}</th>`).join('')}<th style="text-align:right;white-space:nowrap;padding:9px 12px">Total</th></tr></thead>
+    <tbody>${montres.map(v => `<tr><td style="padding:8px 12px;font-weight:600;white-space:nowrap">${_esc(v)}</td>${mois.map(m => `<td style="text-align:right;padding:8px 12px;white-space:nowrap">${fmtV(val(v, m))}</td>`).join('')}<td style="text-align:right;padding:8px 12px;white-space:nowrap;font-weight:700">${fmtV(mois.reduce((s, m) => s + val(v, m), 0))}</td></tr>`).join('')}</tbody></table></div>`;
+  box.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:8px;padding:0 4px">${legende}${filtre ? `<button onclick="document.getElementById('pil-evo-qui').value='';pilRender()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline">tous</button>` : ''}</div>
+    <div style="overflow-x:auto;max-width:100%"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:520px;height:auto;display:block">${grille}${axes}${courbes}</svg></div>${table}`;
+}
+
+// ---- Export CSV de la vue affichée ----------------------------------------
+function pilExport() {
   const ech = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const out = [['Rang', 'Vendeur'].concat(RAPPORT_COLS.map(c => c[1])).map(ech).join(';')];
-  lignes.forEach((l, i) => out.push([qui ? _rapportRang(qui, tri) : i + 1, l.vendeur].concat(RAPPORT_COLS.map(([k]) => k === 'honoraires' ? Number(l[k] || 0).toFixed(2).replace('.', ',') : Number(l[k] || 0))).map(ech).join(';')));
-  const b = _rapportPeriode || _rapportBornes();
-  const nom = 'rapport-' + (qui || 'equipe') + '-' + (b ? b.debut.toISOString().slice(0, 10) + '_' + b.fin.toISOString().slice(0, 10) : 'periode') + '.csv';
+  const num = (k, v) => v == null ? '' : String(Number(v)).replace('.', ',');
+  let out = [], nom = 'pilotage';
+  if (_pil.vue === 'evolution') {
+    const ind = (document.getElementById('pil-evo-ind') || {}).value || 'selections';
+    out.push(['Vendeur', 'Mois', 'Valeur'].map(ech).join(';'));
+    _pil.mensuel.forEach(r => out.push([r.vendeur, r.mois, num(ind, r[ind])].map(ech).join(';')));
+    nom = 'evolution-' + ind;
+  } else {
+    if (!_pil.lignes.length) { toast('Rien à exporter', 'var(--warning)'); return; }
+    const cles = Object.keys(PIL_IND);
+    out.push(['Vendeur'].concat(cles.map(k => PIL_IND[k].lib + (PIL_IND[k].unite === 'n' ? '' : ' (' + PIL_IND[k].unite + ')'))).map(ech).join(';'));
+    const lignes = _pil.lignes.concat([_pilEquipe(_pil.lignes)]);
+    lignes.forEach(l => out.push([l.vendeur].concat(cles.map(k => num(k, l[k]))).map(ech).join(';')));
+    nom = 'pilotage-' + (_pil.periode ? _pil.periode.debut.toISOString().slice(0, 10) + '_' + _pil.periode.fin.toISOString().slice(0, 10) : 'periode');
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob(['﻿' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
-  a.download = nom; a.click();
+  a.download = nom + '.csv'; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 async function loadJournal() {
-  if (typeof rapportInit === 'function') rapportInit();
   const tb = document.getElementById('journal-tbody');
   if (tb) tb.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Chargement…</td></tr>';
   _journal = []; _journalFin = false;
