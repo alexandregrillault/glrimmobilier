@@ -11231,7 +11231,7 @@ function eqCreneauxRender() {
           const nMin = (p.fin - p.debut) / 60000;
           return `<span title="${_vEsc(CRENEAU_MODES[p.mode] || p.mode || '')}${p.lieu ? ' — ' + _vEsc(p.lieu) : ''} · ${p.ids.length} créneau(x) de ${CRENEAU_PAS_MIN} min" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:6px 10px;font-size:12.5px">
             ${hh(new Date(p.debut))}–${hh(new Date(p.fin))}${nMin < 45 ? ' <span style="font-size:10.5px;color:var(--muted)">appel seul</span>' : ''}
-            <button onclick="eqCreneauSupprimer('${p.ids.join(',')}')" title="Retirer cette plage" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
+            <button onclick="eqCreneauSupprimer('${p.ids.join(',')}', ${p.debut}, ${p.fin})" title="Retirer cette plage — une confirmation est demandée" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button>
           </span>`;
         }).join('')}</div>
       </div>`;
@@ -11275,9 +11275,32 @@ async function eqCreneauxFermerJour(jour) {
   await eqCreneauxCharger();
 }
 
+// Plage lisible pour la question de confirmation : « Mardi 9 septembre de 09:00 à 18:00 »
+function _crenLibellePlage(debut, fin) {
+  const d = new Date(debut), f = new Date(fin);
+  if (isNaN(d) || isNaN(f)) return '';
+  const hm = (x) => x.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const j = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return j.charAt(0).toUpperCase() + j.slice(1) + ' de ' + hm(d) + ' à ' + hm(f);
+}
+
+// Une plage affichée d'un bloc porte TOUS les identifiants de ses créneaux de
+// 10 min : un clic sur la croix efface la journée entière. On le dit avant.
+function _crenConfirmerRetrait(id, debut, fin) {
+  const n = String(id || '').split(',').filter(Boolean).length;
+  const quand = _crenLibellePlage(debut, fin);
+  return confirm('Retirer cette disponibilité ?'
+    + (quand ? '\n\n' + quand : '')
+    + '\n' + n + ' créneau' + (n > 1 ? 'x' : '') + ' de ' + CRENEAU_PAS_MIN + ' min '
+    + (n > 1 ? 'seront retirés' : 'sera retiré') + '.'
+    + '\n\nTes rendez-vous ne sont pas touchés.'
+    + '\nPour rouvrir la plage ensuite : « Poser une activité » → type « Libre ».');
+}
+
 // `id` peut porter plusieurs identifiants séparés par des virgules : une plage
 // affichée d'un bloc se retire d'un bloc.
-async function eqCreneauSupprimer(id) {
+async function eqCreneauSupprimer(id, debut, fin) {
+  if (!_crenConfirmerRetrait(id, debut, fin)) return;
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=in.(' + id + ')&statut=eq.libre', {
       method: 'DELETE',
@@ -11498,7 +11521,7 @@ function renderEquipePlanningListe() {
         if (c.statut === 'libre') {
           return `<div title="Disponible pour les clients — ${_vEsc(mode)}${c.lieu ? ' · ' + _vEsc(c.lieu) : ''} · ${c._n || 1} créneau(x) de ${CRENEAU_PAS_MIN} min" style="display:flex;gap:5px;align-items:center;border:1px dashed var(--border);border-radius:7px;padding:4px 6px;margin-bottom:4px;font-size:11.5px;color:var(--muted)">
             <span style="flex:1">${hh(c.debut)}–${hh(c.fin)} libre</span>
-            <button onclick="eqCreneauSupprimerPlanning('${c.id}')" title="Retirer cette plage" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0;line-height:1">✕</button>
+            <button onclick="eqCreneauSupprimerPlanning('${c.id}', '${c.debut}', '${c.fin}')" title="Retirer cette plage — une confirmation est demandée" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0;line-height:1">✕</button>
           </div>`;
         }
         if (c.statut === 'propose') {
@@ -11617,8 +11640,11 @@ async function eqPlanLiberer(id) {
   renderEquipePlanning();
 }
 
-async function eqCreneauSupprimerPlanning(id) {
+async function eqCreneauSupprimerPlanning(id, debut, fin) {
+  if (!_crenConfirmerRetrait(id, debut, fin)) return;
   await eqCreneauSupprimerSilencieux(id);
+  const n = String(id || '').split(',').filter(Boolean).length;
+  if (typeof toast === 'function') toast('✓ ' + n + ' créneau(x) retiré(s)', 'var(--success)');
   renderEquipePlanning();
 }
 async function eqCreneauSupprimerSilencieux(id) {
@@ -14918,7 +14944,7 @@ function _planEvHtml(c, nLanes) {
     const nMin = Math.round((new Date(c.fin) - new Date(c.debut)) / 60000);
     return `<div class="plan-ev plan-libre" title="Disponible pour les clients — ${_planHM(c.debut)}–${_planHM(c.fin)}${nMin < CRENEAU_DUREES.visio ? ' (appel de ' + CRENEAU_DUREES.telephone + ' min seulement, trop court pour une visio)' : ''}" style="${pos};border:1px dashed var(--border);border-radius:6px;padding:2px 4px;color:var(--muted);background:transparent;pointer-events:none">
       <div style="display:flex;gap:3px;align-items:flex-start"><span style="flex:1;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_planHM(c.debut)}–${_planHM(c.fin)} libre</span>
-      <span class="plan-x" onclick="eqCreneauSupprimerPlanning('${c.id}')" title="Retirer cette plage" style="cursor:pointer;font-size:10px;pointer-events:auto">✕</span></div></div>`;
+      <span class="plan-x" onclick="eqCreneauSupprimerPlanning('${c.id}', '${c.debut}', '${c.fin}')" title="Retirer cette plage — une confirmation est demandée" style="cursor:pointer;font-size:10px;pointer-events:auto">✕</span></div></div>`;
   }
   if (c.origine === 'perso') {
     const coul = _planCatCouleur(c.categorie);
