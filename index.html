@@ -6071,8 +6071,12 @@ function eqRappelPicker(titre, cb, obligatoire, valeurs) {
   div.id = 'eq-rappel-picker';
   div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2000;display:flex;align-items:center;justify-content:center';
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:340px;max-width:90vw">
-    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Planifier une activité</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Étape : ${titre}${obligatoire ? ' — trois jours maximum, une sélection ne reste jamais sans relance' : ''}</div>
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">${echapVal(v.entete || 'Planifier une activité')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${v.sousTitre ? echapVal(v.sousTitre) : 'Étape : ' + titre + (obligatoire ? ' — trois jours maximum, une sélection ne reste jamais sans relance' : '')}</div>
+    ${v.proposerStatut ? `<label style="display:flex;align-items:center;gap:9px;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:9px 12px;margin-bottom:14px;font-size:12.5px;cursor:pointer">
+      <input type="checkbox" id="eq-rappel-statut" checked style="width:16px;height:16px;accent-color:var(--accent);flex:none">
+      <span>Passer <strong>${echapVal(v.proposerStatut.client || 'ce client')}</strong> en <strong>${echapVal(v.proposerStatut.vers)}</strong>${v.proposerStatut.de ? ' <span style="color:var(--muted)">(actuellement ' + echapVal(v.proposerStatut.de) + ')</span>' : ''}</span>
+    </label>` : ''}
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Intitulé <span style="text-transform:none;letter-spacing:0">(facultatif)</span></div>
     <input id="eq-rappel-titre" value="${echapVal(v.titre)}" placeholder="Ex : Rappeler pour le financement" maxlength="80" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;margin-bottom:14px">
     ${v.proposerSuivi ? `<label style="display:flex;align-items:center;gap:9px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;margin-bottom:14px;font-size:12.5px;cursor:pointer">
@@ -6111,8 +6115,10 @@ function eqRappelChoisi(date) {
   const titreAct = date ? ((champTitre && champTitre.value.trim()) || null) : null;
   const heureAct = date ? ((champHeure && champHeure.value.slice(0, 5)) || null) : null;
   const passerEnSuivi = !!(champSuivi && champSuivi.checked);
+  const champStatut = document.getElementById('eq-rappel-statut');
+  const statutCoche = !!(champStatut && champStatut.checked);
   const el = document.getElementById('eq-rappel-picker'); if (el) el.remove();
-  if (cb) cb(date, titreAct, heureAct, passerEnSuivi);
+  if (cb) cb(date, titreAct, heureAct, passerEnSuivi, statutCoche);
 }
 // Corps de mise à jour commun aux quatre endroits qui planifient une activité
 function _eqActivitePatch(date, titreAct, heureAct) {
@@ -9520,6 +9526,7 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
   if (!l) return;
   const selEdit = tokenEdition ? (_eqSelectionsAll || []).find(x => x.token === tokenEdition) : null;
   _selCtx = { lead: l, libres: selEdit ? JSON.parse(JSON.stringify(selEdit.biens || [])) : [] };
+  _selRetourDocFaitPour = null;
   if (selEdit) _selCtx.edition = {
     token: tokenEdition,
     biensAvant: JSON.parse(JSON.stringify(selEdit.biens || [])),
@@ -10773,6 +10780,8 @@ async function selEnvoyerMail(token, contactId, maj) {
     if (etat) etat.textContent = 'Envoyé à ' + (res.email || 'ce client') + ' — la trace est dans les notes de la fiche.';
     toast('✓ Mail envoyé à ' + (res.email || 'ce client'), 'var(--success)');
     eqMajVue(true);
+    // Première sélection : on enchaîne sans attendre sur le retour documentation
+    if (!maj) selProposerRetourDoc(contactId, true);
     return;
   }
   if (btn) { btn.disabled = false; btn.textContent = 'Envoyer le mail'; }
@@ -10788,14 +10797,37 @@ function selOuvrirGmail(email) {
 
 function selTerminer(contactId) {
   _selFermer();
+  // Le retour documentation a déjà été planifié juste après l'envoi du mail : rien à redemander
+  if (_selRetourDocFaitPour === contactId) return;
+  selProposerRetourDoc(contactId);
+}
+
+// Dès qu'une sélection part (mail envoyé depuis le CRM, ou bouton Terminé si le
+// vendeur est passé par Gmail / le lien copié), on propose tout de suite de passer
+// le client en « Retour documentation » et de caler le jour, ou le créneau, de ce
+// retour. Une sélection ne part jamais sans relance : rappel imposé sous 3 jours.
+// (demande d'Alex, 07/09/2026)
+let _selRetourDocFaitPour = null;
+function selProposerRetourDoc(contactId, apresEnvoi) {
   const l = _eqLeads.find(x => x.id === contactId);
-  const s = l ? eqLeadStatut(l) : '';
-  // Une sélection ne part jamais sans relance programmée : rappel imposé sous 3 jours
-  const statutCible = (s === 'Nouveau' || s === 'Sélections') ? 'Retour documentation' : s;
-  eqRappelPicker('Sélection envoyée — quand relances-tu ?', async (rappel, t, h) => {
-    await _eqLeadPatch(contactId, Object.assign({ statut: statutCible, statut_maj: new Date().toISOString() }, _eqActivitePatch(rappel, t, h)));
+  if (!l) return;
+  const s = eqLeadStatut(l);
+  const dejaEnRetour = ['Retour documentation', 'Finaliser la vente', 'Vendu', 'Perdu'].includes(s);
+  const client = nomComplet(l) || 'ce client';
+  eqRappelPicker('Sélection envoyée', async (rappel, t, h, _suivi, statutCoche) => {
+    _selRetourDocFaitPour = contactId;
+    const patch = _eqActivitePatch(rappel, t, h);
+    if (!dejaEnRetour && statutCoche) Object.assign(patch, { statut: 'Retour documentation', statut_maj: new Date().toISOString() });
+    await _eqLeadPatch(contactId, patch);
+    if (apresEnvoi) _selFermer();
     eqMajVue(true);
-  }, true, { titre: l && l.rappel_titre, heure: l && l.rappel_heure });
+  }, true, {
+    titre: l.rappel_titre, heure: l.rappel_heure,
+    entete: 'Sélection envoyée à ' + client,
+    sousTitre: (dejaEnRetour ? 'Quand fais-tu le retour documentation ? ' : 'Le retour documentation est la prochaine étape : choisis le jour, ou le créneau. ')
+      + 'Avec une heure, il se pose dans ton planning. Trois jours maximum — une sélection ne reste jamais sans relance.',
+    proposerStatut: dejaEnRetour ? null : { client, vers: 'Retour documentation', de: s }
+  });
 }
 
 // ---- Suivi : icône dans le tableau + détail des avis
