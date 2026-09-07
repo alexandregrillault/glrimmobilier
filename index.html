@@ -8728,6 +8728,44 @@ function eqActMenu(id, ev){
 }
 function eqActMenuFermer(){ const d = document.getElementById('eq-act-menu'); if (d) d.remove(); }
 
+// ---- Propositions de créneaux en attente de réponse -------------------------
+// Quand un vendeur répond à une demande par trois créneaux, la demande sort de
+// ses activités (rdv.traite). Sans ce regroupement plus personne ne suit le
+// client : les créneaux proposés passent, et il disparaît du radar.
+const EQ_ATTENTE_TIEDE = 3;   // jours avant que l'attente remonte dans la journée
+
+// État du rendez-vous par jeton, qu'il vienne d'une sélection ou d'un lien simple
+function _eqRdvEtatParToken() {
+  const m = {};
+  (_eqSelectionsAll || []).forEach(x => { if (x.token) m[x.token] = (x.avis && x.avis.rdv) || {}; });
+  Object.values(_rdvLiens || {}).forEach(x => { if (x.token && !m[x.token]) m[x.token] = x.rdv || {}; });
+  return m;
+}
+
+function _eqPropositionsEnAttente() {
+  const etats = _eqRdvEtatParToken();
+  const now = Date.now();
+  const groupes = new Map();
+  (_eqRdv || []).filter(c => c.statut === 'propose').forEach(c => {
+    const cle = c.contact_id || c.selection_token || c.client_nom || c.id;
+    if (!groupes.has(cle)) groupes.set(cle, { contact_id: c.contact_id, client_nom: c.client_nom, token: c.selection_token, creneaux: [] });
+    groupes.get(cle).creneaux.push(c);
+  });
+  const out = [];
+  groupes.forEach(g => {
+    const r = etats[g.token] || {};
+    // Le client a fini par retenir un créneau : ce n'est plus une attente
+    if (r.reserve || r.confirme) return;
+    g.creneaux.sort((a, b) => new Date(a.debut) - new Date(b.debut));
+    const prochain = g.creneaux.find(c => new Date(c.debut).getTime() > now);
+    // Depuis l'envoi des créneaux si on l'a, sinon depuis la demande du client
+    const depuis = r.propose_le || r.date || g.creneaux[0].created_at;
+    const jours = depuis ? Math.max(0, Math.floor((now - new Date(depuis).getTime()) / 86400000)) : 0;
+    out.push(Object.assign({}, g, { prochain, depuis, jours, mort: !prochain }));
+  });
+  return out.sort((a, b) => b.jours - a.jours);
+}
+
 function renderEqNotifs() {
   const liste = document.getElementById('eq-notif-liste');
   const badge = document.getElementById('eq-notif-badge');
@@ -8779,6 +8817,31 @@ function renderEqNotifs() {
       btnFiche(d.contact_id) + `<button class="btn btn-sm btn-secondary" onclick="rdvEcarterDemande('${d.token}')" style="font-size:11px" title="Écarter cette demande — le client n'est pas prévenu">Écarter</button>
        <button class="btn btn-sm btn-primary" onclick="eqProposerOuvrir(null,'${d.token}')" style="font-size:11px">Proposer 3 créneaux</button>`,
       'var(--warning)') });
+  });
+
+  // 2 bis. Créneaux proposés, en attente de la réponse du client. Le vendeur a
+  // rendu la main : sans cette ligne, un client qui ne répond jamais sort du
+  // radar le jour où ses créneaux sont passés.
+  _eqPropositionsEnAttente().forEach(p => {
+    const nb = p.creneaux.length;
+    const combien = nb + ' créneau' + (nb > 1 ? 'x' : '') + ' proposé' + (nb > 1 ? 's' : '')
+      + (p.depuis ? ' le ' + esc(fmtJ(p.depuis)) : '');
+    const detail = p.mort
+      ? combien + ' — tous passés, aucune réponse'
+      : combien + ' · prochain ' + esc(_rdvQuand(p.prochain))
+        + (p.jours ? ' — sans réponse depuis ' + p.jours + ' j' : ' — envoyés aujourd\'hui');
+    const boutons = btnFiche(p.contact_id) + (p.contact_id
+      ? `<button class="btn btn-sm btn-${p.mort ? 'primary' : 'secondary'}" onclick="eqRdvLienOuvrir('${p.contact_id}')" style="font-size:11px" title="Écrire au client pour le relancer">Relancer</button>`
+      : '');
+    const couleur = p.mort ? 'var(--danger)' : (p.jours >= EQ_ATTENTE_TIEDE ? 'var(--warning)' : null);
+    const html = item(p.mort ? 'expire' : 'temps',
+      'En attente de ' + esc(p.client_nom || 'Client') + rep(p.contact_id), detail, boutons, couleur);
+    if (p.mort) {
+      const dernier = p.creneaux[p.creneaux.length - 1].debut;
+      retard.push({ t: new Date(dernier).getTime(), g: 'attente', d: String(dernier).slice(0, 10), html });
+    } else {
+      aujourdhui.push({ t: 1, g: 'attente', d: jour, calme: p.jours < EQ_ATTENTE_TIEDE, html });
+    }
   });
 
   // Jours de rendez-vous confirmés, par contact : quand le client réserve un
@@ -8852,7 +8915,9 @@ function renderEqNotifs() {
   retard.sort((a, b) => b.t - a.t);
   aujourdhui.sort((a, b) => a.t - b.t);
   avenir.sort((a, b) => a.t - b.t);
-  const nUrgent = retard.length + aujourdhui.length;
+  // Une proposition partie il y a moins de trois jours n'est pas un retard : elle
+  // s'affiche dans la journée mais ne fait pas sonner la pastille.
+  const nUrgent = retard.length + aujourdhui.filter(x => !x.calme).length;
   if (badge) { badge.style.display = nUrgent ? '' : 'none'; badge.textContent = nUrgent; }
 
   // Date longue mise en avant : « Jeudi 6 août » + écart relatif
@@ -8875,6 +8940,7 @@ function renderEqNotifs() {
     ['demande',  'Demandes de rendez-vous'],
     ['premier',  'Premiers appels'],
     ['rappel',   'Rappels et relances'],
+    ['attente',  'En attente du client'],
     ['confirme', 'Rendez-vous confirmés']
   ];
   // Les rappels se relisent étape par étape : l'ordre du pipeline d'abord,
@@ -8985,12 +9051,6 @@ function renderEqNotifs() {
     html += `<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:${couleur};margin:4px 0 6px">Aujourd'hui</div>` + parFamille(duJour);
   }
 
-  // Balle dans le camp du client (créneaux proposés, en attente de réponse)
-  const enAttenteClient = _eqRdv.filter(c => c.statut === 'propose');
-  if (enAttenteClient.length) {
-    const clients = [...new Set(enAttenteClient.map(c => c.client_nom || 'un client'))];
-    html += `<div style="font-size:12px;color:var(--muted);padding:8px 2px 2px;border-top:1px dashed var(--border);margin-top:4px">En attente de réponse client : ${esc(clients.join(', '))} — ${enAttenteClient.length} créneau(x) proposé(s)</div>`;
-  }
   liste.innerHTML = html;
 }
 
@@ -9155,7 +9215,7 @@ async function eqProposerEnvoyer() {
         body: JSON.stringify({ statut: 'libre', contact_id: null, selection_token: null, client_nom: null, client_message: null, reserve_le: null })
       });
     }
-    await _planMajSelection(_propCtx.token, { reserve: false, confirme: false, refuse: true, propositions: ids, traite: true });
+    await _planMajSelection(_propCtx.token, { reserve: false, confirme: false, refuse: true, propositions: ids, traite: true, propose_le: new Date().toISOString() });
     await _planCalerRappel(_propCtx.contactId, 1);
     const proposes = (_propCtx.libres || []).filter(c => ids.indexOf(c.id) >= 0).map(c => ({ debut: c.debut, fin: new Date(new Date(c.debut).getTime() + _propCtx.duree * 60000).toISOString(), mode: _propCtx.mode }));
     const notif = await rdvNotifierClient(_propCtx.token, 'propositions', { creneaux: proposes });
