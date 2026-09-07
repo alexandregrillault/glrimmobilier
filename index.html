@@ -6824,6 +6824,95 @@ async function eqQualifSetTexteQ(champ, valeur) {
   _eqFicheRender();
 }
 
+// ---- Historique de la fiche (demande d'Alex, 07/09/2026) ----------------
+// Liste déroulante avec tout ce qui s'est passé sur le client : changements de
+// statut, réattributions et activités (journal_audit, tracés par trigger côté
+// base), appels sans réponse (colonne appels), rendez-vous confirmés (creneaux)
+// et bascules de paternité (vendeur_historique). Chargé à l'ouverture de la
+// fiche, sans bloquer l'affichage ; replié par défaut.
+let _eqHisto = { id: null, lignes: null, erreur: false };
+let _eqHistoOuvert = false;
+
+async function _eqHistoCharger(id) {
+  _eqHisto = { id: id, lignes: null, erreur: false };
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    const [rJ, rC] = await Promise.all([
+      fetch(SUPABASE_URL + '/rest/v1/journal_audit?select=quand,acteur,action,champ,avant,apres&cible=eq.contacts&ligne_id=eq.' + id + '&order=quand.desc&limit=300', { cache: 'no-store', headers: entetes }),
+      fetch(SUPABASE_URL + '/rest/v1/creneaux?select=debut,mode,statut,vendeur,reserve_le&contact_id=eq.' + id + '&statut=in.(confirme,reserve)&origine=is.null&order=debut.desc&limit=50', { cache: 'no-store', headers: entetes })
+    ]);
+    const journal = rJ.ok ? await rJ.json() : [];
+    const rdv = rC.ok ? await rC.json() : [];
+    if (_eqHisto.id !== id) return; // une autre fiche a été ouverte entre-temps
+    const l = _eqLeads.find(x => x.id === id) || {};
+    const lignes = [];
+    journal.forEach(j => {
+      let texte = '';
+      if (j.action === 'statut') texte = 'Statut : ' + (j.avant || '—') + ' → ' + (j.apres || '—');
+      else if (j.action === 'reattribution') texte = 'Réattribué : ' + (j.avant || 'sans vendeur') + ' → ' + (j.apres || 'sans vendeur');
+      else if (j.action === 'activite') texte = !j.apres ? 'Activité retirée (' + j.avant + ')' : !j.avant ? 'Activité planifiée : ' + j.apres : 'Activité reportée : ' + j.avant + ' → ' + j.apres;
+      else if (j.action === 'creation') texte = 'Fiche créée';
+      else texte = j.action + (j.champ ? ' (' + j.champ + ')' : '');
+      lignes.push({ quand: j.quand, qui: j.acteur, texte: texte, type: j.action });
+    });
+    (Array.isArray(l.appels) ? l.appels : []).forEach(a => lignes.push({ quand: a.le, qui: a.vendeur, texte: 'Appel sans réponse', type: 'appel' }));
+    rdv.forEach(c => {
+      const d = new Date(c.debut);
+      lignes.push({ quand: c.reserve_le || c.debut, qui: c.vendeur,
+        texte: (c.statut === 'confirme' ? 'Rendez-vous confirmé' : 'Créneau réservé') + ' (' + (c.mode === 'visio' ? 'visio' : 'téléphone') + ') le ' + d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h'),
+        type: 'rdv' });
+    });
+    (Array.isArray(l.vendeur_historique) ? l.vendeur_historique : []).forEach(h => {
+      if (h.au) lignes.push({ quand: h.au, qui: h.vendeur, texte: 'Fin de paternité de ' + (h.vendeur || '—') + (h.motif ? ' — ' + h.motif : ''), type: 'paternite' });
+    });
+    if (l.recu_le || l.date_lead) lignes.push({ quand: l.recu_le || l.date_lead, qui: l.source || '', texte: 'Demande reçue' + (l.reference_annonce ? ' — ' + l.reference_annonce : ''), type: 'creation' });
+    lignes.sort((a, b) => new Date(b.quand) - new Date(a.quand));
+    _eqHisto.lignes = lignes;
+  } catch (e) {
+    _eqHisto.erreur = true;
+  }
+  if (_eqFicheId === id) _eqHistoRafraichir();
+}
+
+function eqHistoriqueBasculer() {
+  _eqHistoOuvert = !_eqHistoOuvert;
+  _eqHistoRafraichir();
+}
+
+function _eqHistoRafraichir() {
+  const el = document.getElementById('eq-fiche-historique');
+  const l = _eqLeads.find(x => x.id === _eqFicheId);
+  if (el && l) el.outerHTML = eqHistoriqueHtml(l);
+}
+
+function eqHistoriqueHtml(l) {
+  const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const h = (_eqHisto.id === l.id) ? _eqHisto : { lignes: null, erreur: false };
+  const n = h.lignes ? h.lignes.length : null;
+  const compteur = h.erreur ? 'indisponible' : n === null ? 'chargement…' : n + ' événement' + (n > 1 ? 's' : '');
+  const couleur = { statut: 'var(--accent)', reattribution: 'var(--warning)', activite: 'var(--success)', appel: 'var(--muted)', rdv: 'var(--accent2)', paternite: 'var(--warning)', creation: 'var(--muted)' };
+  let corps = '';
+  if (_eqHistoOuvert) {
+    if (h.erreur) corps = '<div style="font-size:12px;color:var(--danger);padding:8px 12px">Historique impossible à charger — réessaie en rouvrant la fiche</div>';
+    else if (n === null) corps = '<div style="font-size:12px;color:var(--muted);padding:8px 12px">Chargement…</div>';
+    else if (!n) corps = '<div style="font-size:12px;color:var(--muted);padding:8px 12px">Rien encore sur cette fiche</div>';
+    else corps = '<div style="max-height:320px;overflow-y:auto">' + h.lignes.map(x => {
+      const d = new Date(x.quand);
+      const quand = isNaN(d) ? '—' : d.toLocaleDateString('fr-FR') + (String(x.quand).length > 10 ? ' ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h') : '');
+      return `<div style="display:grid;grid-template-columns:118px 90px 1fr;gap:10px;align-items:baseline;padding:7px 12px;border-top:1px solid var(--border);font-size:12.5px">
+        <span style="color:var(--muted);white-space:nowrap">${esc(quand)}</span>
+        <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.qui || '—')}</span>
+        <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${couleur[x.type] || 'var(--muted)'};margin-right:7px;vertical-align:middle"></span>${esc(x.texte)}</span>
+      </div>`;
+    }).join('') + '</div>';
+  }
+  return `<div id="eq-fiche-historique" style="margin:0 0 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <div onclick="eqHistoriqueBasculer()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px">
+      <span style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;flex:1">Historique — ${esc(compteur)}</span>
+      <span style="color:var(--muted);font-size:12px">${_eqHistoOuvert ? 'masquer ▾' : 'afficher ▸'}</span>
+    </div>${corps}</div>`;
+}
+
 function eqFicheFermer() {
   // Avant de fermer : on envoie tout de suite ce qui attendait encore la fin
   // du délai de frappe (fermer par la croix, par Échap ou en cliquant à côté
@@ -6988,6 +7077,7 @@ function eqOuvrirFiche(id) {
     document.body.appendChild(panel);
   }
   _eqFicheRender();
+  _eqHistoCharger(id);
   // Charge la liste des villes et les prix d'annonces en arrière-plan puis rafraîchit
   if (!_eqVillesDispo) _eqChargerVilles().then(() => { if (_eqFicheId) _eqFicheRender(); });
   const lead = _eqLeads.find(x => x.id === id);
@@ -7017,11 +7107,17 @@ async function eqVilleAjoute(valeur) {
 // on les interroge en plus (ex : "paris 14" → Paris 14e 75014)
 let _eqVilleTimer = null;
 let _eqVilleDerniereRecherche = '';
-function eqVilleRechercheInput(q) {
+// `mode` = 'residence' : même moteur pour la commune de résidence de la fiche
+// (autre boîte de suggestions, pas de département ni de repère programme, et
+// le choix remplit le champ au lieu d'ajouter une ville de recherche)
+function eqVilleRechercheInput(q, mode) {
   q = String(q || '').trim();
   _eqVilleDerniereRecherche = q;
   clearTimeout(_eqVilleTimer);
-  const box = document.getElementById('eq-ville-sugg');
+  const residence = mode === 'residence';
+  const idBox = residence ? 'eq-commune-sugg' : 'eq-ville-sugg';
+  const fnChoix = residence ? 'eqCommuneChoisie' : 'eqVilleChoisie';
+  const box = document.getElementById(idBox);
   if (!box) return;
   if (q.length < 2) { box.innerHTML = ''; box.style.display = 'none'; return; }
   box.style.display = 'block';
@@ -7059,10 +7155,10 @@ function eqVilleRechercheInput(q) {
       const lb = locales.some(v => v.toLowerCase() === b.nom.toLowerCase()) ? 0 : 1;
       return la - lb;
     });
-    const boxNow = document.getElementById('eq-ville-sugg');
+    const boxNow = document.getElementById(idBox);
     if (!boxNow) return;
     // Départements proposés en tête : recherche d'un secteur entier (« 92 », « Hauts-de-Seine »)
-    const htmlDepts = _eqDeptsCorrespondants(q).map(d => {
+    const htmlDepts = (residence ? [] : _eqDeptsCorrespondants(q)).map(d => {
       const val = d.nom + ' (' + d.code + ')';
       return `<button onclick="eqVilleChoisie(this.dataset.v)" data-v="${esc(val).replace(/"/g,'&quot;')}" style="display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:var(--surface2);border:none;border-bottom:1px solid var(--border);padding:9px 12px;color:var(--text);font-size:13px;cursor:pointer">
         <span>\u25EC <strong>${esc(d.nom)}</strong> <span style="color:var(--muted)">${esc(d.code)}</span></span>
@@ -7073,8 +7169,8 @@ function eqVilleRechercheInput(q) {
       ? '<div style="font-size:12px;color:var(--muted);padding:8px 12px">Aucune commune trouvée</div>'
       : htmlDepts + items.map(c => {
           const val = c.cp ? c.nom + ' ' + c.cp : c.nom;
-          const prog = locales.some(v => v.toLowerCase() === c.nom.toLowerCase());
-          return `<button onclick="eqVilleChoisie(this.dataset.v)" data-v="${esc(val).replace(/"/g,'&quot;')}" style="display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:9px 12px;color:var(--text);font-size:13px;cursor:pointer">
+          const prog = !residence && locales.some(v => v.toLowerCase() === c.nom.toLowerCase());
+          return `<button onclick="${fnChoix}(this.dataset.v)" data-v="${esc(val).replace(/"/g,'&quot;')}" style="display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:9px 12px;color:var(--text);font-size:13px;cursor:pointer">
             <span><strong>${esc(c.nom)}</strong>${c.cp ? ' <span style="color:var(--muted)">' + esc(c.cp) + '</span>' : ''}${prog ? ' <span style="font-size:10px;color:var(--accent);font-weight:700">★ Programme</span>' : ''}</span>
             <span style="font-size:11px;color:var(--muted)">${esc(c.dept)}</span>
           </button>`;
@@ -7096,6 +7192,14 @@ function _eqDeptsCorrespondants(q) {
   return out;
 }
 
+// Commune de résidence choisie dans les suggestions : on remplit le champ et on enregistre
+function eqCommuneChoisie(val) {
+  const champ = document.getElementById('eq-champ-commune_residence');
+  if (champ) champ.value = val;
+  const box = document.getElementById('eq-commune-sugg');
+  if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+  eqTexteFlush('commune_residence', val, true);
+}
 function eqVilleChoisie(val) {
   eqVilleAjoute(val); // la fiche se re-rend : champ vidé, suggestions fermées
 }
@@ -7410,10 +7514,6 @@ function _eqFicheRender() {
   const inputQ = (champ, valeur, placeholder) =>
     `<input id="eq-champ-${champ}" value="${esc(valeur||'').replace(/"/g,'&quot;')}" placeholder="${placeholder}" inputmode="numeric" oninput="eqTexteInput('${champ}', this.value, true)" onchange="eqTexteFlush('${champ}', this.value, true)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
      <div id="eq-etat-${champ}" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>`;
-  // Même chose en texte libre (commune de résidence) : rangé dans qualif, clavier normal
-  const inputQTexte = (champ, valeur, placeholder) =>
-    `<input id="eq-champ-${champ}" value="${esc(valeur||'').replace(/"/g,'&quot;')}" placeholder="${placeholder}" autocomplete="off" oninput="eqTexteInput('${champ}', this.value, true)" onchange="eqTexteFlush('${champ}', this.value, true)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
-     <div id="eq-etat-${champ}" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>`;
 
   panel.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:4px">
@@ -7472,6 +7572,8 @@ ${(() => {
 
     ${eqAppelsHtml(l)}
 
+    ${eqHistoriqueHtml(l)}
+
     ${eqCriteresChips(l)}
 
     ${eqFicheSelectionsHtml(l)}
@@ -7483,7 +7585,10 @@ ${(() => {
 
     <div style="display:${_eqCriteresOuverts ? 'grid' : 'none'};grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start">
       ${carte(titreQ('Projet') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('projet', [['residence_principale','Résidence principale'],['investissement','Investissement']], q.projet)}</div>`)}
-      ${carte(titreQ('Commune de résidence') + `<div style="font-size:10.5px;color:var(--muted);margin:-4px 0 7px">Où le client habite aujourd’hui — pas la ville recherchée.</div>` + inputQTexte('commune_residence', q.commune_residence, 'Ex : Boulogne-Billancourt'))}
+      ${carte(titreQ('Commune de résidence') + `<div style="font-size:10.5px;color:var(--muted);margin:-4px 0 7px">Où le client habite aujourd’hui — pas la ville recherchée.</div>
+        <input id="eq-champ-commune_residence" value="${esc(q.commune_residence||'').replace(/"/g,'&quot;')}" placeholder="Rechercher une commune… (ex : Boulogne)" autocomplete="off" oninput="eqVilleRechercheInput(this.value, 'residence');eqTexteInput('commune_residence', this.value, true)" onchange="eqTexteFlush('commune_residence', this.value, true)" onkeydown="if(event.key==='Enter'){eqCommuneChoisie(this.value.trim());this.blur()}" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
+        <div id="eq-etat-commune_residence" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>
+        <div id="eq-commune-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
       ${carte(titreQ('Typologie — plusieurs choix possibles') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btnsMulti('eqTypoToggle', [['T1','T1'],['T2','T2'],['T3','T3'],['T4','T4'],['T5+','T5+']], String(l.typologie||'').split(/\s*,\s*/).filter(Boolean))}</div>`)}
       ${carte(titreQ('Ville(s) de recherche') + `
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:${villes.length?'8px':'0'}">
