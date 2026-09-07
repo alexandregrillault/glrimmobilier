@@ -1731,7 +1731,7 @@
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">
         <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">À valider</div><div id="eq-plan-kpi-attente" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px;color:var(--warning)">—</div></div>
         <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Rendez-vous confirmés</div><div id="eq-plan-kpi-confirmes" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px;color:var(--success)">—</div></div>
-        <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Disponibilités à venir</div><div id="eq-plan-kpi-libres" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px">—</div></div>
+        <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Semaines ouvertes aux clients</div><div id="eq-plan-kpi-libres" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px">—</div><div id="eq-plan-kpi-libres-sub" style="font-size:11px;color:var(--muted);margin-top:2px"></div></div>
       </div>
       <div id="eq-plan-libres-demandes"></div>
       <div class="card" style="padding:18px 20px">
@@ -8828,7 +8828,18 @@ async function eqCreneauRappelSync(l) {
     const vendeur = l.vendeur || (MON_ROLE && MON_ROLE.prenom);
     if (!vendeur) return;
 
-    await fetch(SUPABASE_URL + '/rest/v1/creneaux', {
+    // 2. Les créneaux LIBRES du vendeur qui tombent dans la plage sont retirés :
+    // la base impose un seul créneau par (vendeur, début), et les disponibilités
+    // sont découpées en blocs de 10 min — une activité à 12h00 sur une journée
+    // ouverte aux clients tombait pile sur le bloc libre de 12h00 et l'insertion
+    // était refusée en silence (cas Théophile, 07/09/2026). Un rendez-vous
+    // confirmé, lui, n'est jamais touché.
+    await fetch(SUPABASE_URL + '/rest/v1/creneaux?vendeur=eq.' + encodeURIComponent(vendeur)
+      + '&statut=eq.libre&fin=gt.' + encodeURIComponent(debut.toISOString()) + '&debut=lt.' + encodeURIComponent(fin.toISOString()), {
+      method: 'DELETE', headers: entetes
+    });
+
+    const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux', {
       method: 'POST', headers: entetes,
       body: JSON.stringify({
         vendeur: vendeur,
@@ -8842,6 +8853,12 @@ async function eqCreneauRappelSync(l) {
         origine: 'rappel'
       })
     });
+    if (!res.ok) {
+      // Un rendez-vous client occupe déjà exactement cette heure : l'activité
+      // est bien enregistrée, mais le vendeur doit le savoir au lieu de croire
+      // que son planning est à jour.
+      if (typeof toast === 'function') toast('⚠ Activité enregistrée, mais pas posée dans le planning : un rendez-vous occupe déjà ' + heure.replace(':', 'h') + ' ce jour-là', 'var(--warning)');
+    }
     await _eqPlanRecharger();
   } catch (e) { /* le planning n'est pas bloquant : l'activité reste dans la page Activité */ }
 }
@@ -11618,9 +11635,22 @@ function renderEquipePlanningListe() {
   const maj = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   maj('eq-plan-kpi-attente', aVenir.filter(c => c.statut === 'reserve').length);
   maj('eq-plan-kpi-confirmes', aVenir.filter(c => c.statut === 'confirme' && c.origine !== 'rappel').length);
-  // Les disponibilités se comptent en heures (créneaux de 10 min)
-  const hLibres = aVenir.filter(c => c.statut === 'libre').reduce((s, c) => s + (new Date(c.fin) - new Date(c.debut)) / 36e5, 0);
-  maj('eq-plan-kpi-libres', (Math.round(hLibres * 4) / 4).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' h');
+  // Combien de semaines ont encore au moins un créneau libre pour les clients
+  // (demande d'Alex, 07/09/2026) : c'est ce qui dit s'il faut rouvrir des
+  // disponibilités. 1 semaine ou moins = rouge, 2 = orange, 3 et plus = vert.
+  const libres = aVenir.filter(c => c.statut === 'libre');
+  const hLibres = libres.reduce((s, c) => s + (new Date(c.fin) - new Date(c.debut)) / 36e5, 0);
+  const lundi0 = _planLundi(0).getTime();
+  const semaines = new Set(libres.map(c => Math.floor((new Date(c.debut).getTime() - lundi0) / (7 * 864e5))));
+  const nSem = semaines.size;
+  const elSem = document.getElementById('eq-plan-kpi-libres');
+  if (elSem) {
+    elSem.textContent = nSem + (nSem > 1 ? ' semaines' : ' semaine');
+    elSem.style.color = nSem <= 1 ? 'var(--danger)' : nSem === 2 ? 'var(--warning)' : 'var(--success)';
+  }
+  maj('eq-plan-kpi-libres-sub', nSem === 0
+    ? 'Aucun créneau libre à venir — ouvre des disponibilités'
+    : (Math.round(hLibres * 4) / 4).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' h de créneaux libres' + (nSem <= 2 ? ' — pense à ouvrir la suite' : ''));
   const proposes = aVenir.filter(c => c.statut === 'propose').length;
   const sousTitre = document.getElementById('eq-plan-sub');
   const nRappels = aVenir.filter(c => c.origine === 'rappel').length;
