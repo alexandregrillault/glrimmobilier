@@ -1966,9 +1966,9 @@
           <option value="90">3 derniers mois</option>
           <option value="">Depuis le début</option>
         </select>
-        <select id="journal-f-acteur" onchange="journalFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
-        <select id="journal-f-cible" onchange="journalFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
-        <select id="journal-f-action" onchange="journalFiltrer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
+        <select id="journal-f-acteur" onchange="loadJournal()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
+        <select id="journal-f-cible" onchange="loadJournal()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
+        <select id="journal-f-action" onchange="loadJournal()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;color:var(--text);font-size:13px;outline:none"></select>
         <button class="btn btn-ghost btn-sm" onclick="journalReinit()">Tout afficher</button>
       </div>
       <div class="card" style="overflow-x:auto">
@@ -15915,7 +15915,8 @@ const JOURNAL_ACTIONS = {
   'reattribution': 'Réattribution',
   'suppression': 'Suppression',
   'creation': 'Création',
-  'modification': 'Modification'
+  'modification': 'Modification',
+  'activite': 'Activité'
 };
 
 async function loadJournal() {
@@ -15932,6 +15933,14 @@ async function journalCharger(remplace) {
     const d = new Date(); d.setDate(d.getDate() - parseInt(jours, 10));
     url += '&quand=gte.' + d.toISOString();
   }
+  // Acteur, objet et action se filtrent côté base : filtrer seulement les 200
+  // lignes chargées faisait disparaître un vendeur dont les dernières actions
+  // étaient plus anciennes (cas Nour, 07/09/2026), puisque son nom n'était
+  // même pas proposé dans la liste.
+  const val = id => (document.getElementById(id) || {}).value || '';
+  if (val('journal-f-acteur')) url += '&acteur=eq.' + encodeURIComponent(val('journal-f-acteur'));
+  if (val('journal-f-cible')) url += '&cible=eq.' + encodeURIComponent(val('journal-f-cible'));
+  if (val('journal-f-action')) url += '&action=eq.' + encodeURIComponent(val('journal-f-action'));
   if (!remplace && _journal.length) {
     url += '&quand=lt.' + _journal[_journal.length - 1].quand;
   }
@@ -15987,10 +15996,12 @@ function journalRemplirFiltres() {
       vals.map(v => `<option value="${_esc(v)}">${_esc(libelles ? (libelles[v] || v) : v)}</option>`).join('');
     el.value = garde;
   };
-  const uniq = k => Array.from(new Set(_journal.map(l => l[k]).filter(Boolean))).sort();
-  set('journal-f-acteur', uniq('acteur'), 'Tout le monde');
-  set('journal-f-cible', uniq('cible'), 'Tous les objets', JOURNAL_CIBLES);
-  set('journal-f-action', uniq('action'), 'Toutes les actions', JOURNAL_ACTIONS);
+  const uniq = (k, base) => Array.from(new Set((base || []).concat(_journal.map(l => l[k]).filter(Boolean)))).sort((a, b) => a.localeCompare(b, 'fr'));
+  // Toute l'équipe est proposée, même sans ligne dans le lot chargé
+  const equipe = ((typeof data !== 'undefined' && data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean);
+  set('journal-f-acteur', uniq('acteur', equipe.concat('systeme')), 'Tout le monde', { systeme: 'Système' });
+  set('journal-f-cible', uniq('cible', Object.keys(JOURNAL_CIBLES)), 'Tous les objets', JOURNAL_CIBLES);
+  set('journal-f-action', uniq('action', Object.keys(JOURNAL_ACTIONS)), 'Toutes les actions', JOURNAL_ACTIONS);
 }
 
 function journalFiltrer() { renderJournal(); }
@@ -15999,7 +16010,7 @@ function journalReinit() {
   ['journal-search', 'journal-f-acteur', 'journal-f-cible', 'journal-f-action'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
-  renderJournal();
+  loadJournal();
 }
 
 function _journalListe() {
