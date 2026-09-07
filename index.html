@@ -7737,8 +7737,9 @@ async function eqRdvCharger() {
   _eqRdv = [];
   if (!prenom) return;
   try {
-    // Réservés + proposés (à traiter), et confirmés à venir (pour la section « À venir » des activités)
-    const filtreRdv = encodeURIComponent('(statut.in.(reserve,propose),and(statut.eq.confirme,debut.gte.' + new Date().toISOString() + '))');
+    // Réservés + proposés (à traiter), et confirmés pas encore terminés (pour la section
+    // « À venir » des activités — un rendez-vous en cours doit rester visible, avec son bouton visio)
+    const filtreRdv = encodeURIComponent('(statut.in.(reserve,propose),and(statut.eq.confirme,fin.gte.' + new Date().toISOString() + '))');
     const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&or=' + filtreRdv + '&order=debut.asc&limit=200', {
       cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -8363,7 +8364,7 @@ function _visioBandeau(c, minutes){
     document.body.appendChild(b);
   }
   const lien = _visioLien(c);
-  const restant = minutes <= 0 ? 'maintenant' : 'dans ' + minutes + ' min';
+  const restant = minutes < 0 ? 'en cours' : minutes === 0 ? 'maintenant' : 'dans ' + minutes + ' min';
   b.innerHTML = '<span style="width:36px;height:36px;border-radius:9px;background:var(--warning);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">▶</span>'
     + '<span style="flex:1;min-width:200px">'
     + '<span style="display:block;font-size:13.5px;font-weight:800">Visio avec ' + _vEsc(c.client_nom || 'un client') + ' ' + restant + '</span>'
@@ -8385,8 +8386,10 @@ async function _visioVerifier(){
   const maintenant = Date.now();
   const proche = (_eqRdv || [])
     .filter(function(c){ return c.statut === 'confirme' && c.mode === 'visio' && !_visioMasquees[c.id]; })
-    .map(function(c){ return { c: c, dans: Math.round((new Date(c.debut).getTime() - maintenant) / 60000) }; })
-    .filter(function(x){ return x.dans >= 0 && x.dans <= VISIO_RAPPEL_MIN; })
+    .map(function(c){ return { c: c, dans: Math.round((new Date(c.debut).getTime() - maintenant) / 60000), fin: new Date(c.fin || c.debut).getTime() }; })
+    // Du rappel (15 min avant) jusqu'à la fin du créneau : un vendeur qui arrive à 12h01
+    // doit encore trouver son bouton « Rejoindre la visio »
+    .filter(function(x){ return x.dans <= VISIO_RAPPEL_MIN && x.fin >= maintenant; })
     .sort(function(a, b){ return a.dans - b.dans; })[0];
   if (!proche){ _visioBandeau(null); return; }
   const premiereFois = !_visioNotifiees[proche.c.id];
@@ -8848,7 +8851,7 @@ function renderEqNotifs() {
   // créneau, sa relance est recalée sur le jour du rendez-vous. Ce jour-là, le
   // rendez-vous confirmé suffit — on ne l'affiche pas une seconde fois en rappel.
   const joursRdvConfirmes = new Map();
-  _eqRdv.filter(c => c.statut === 'confirme' && c.contact_id && new Date(c.debut) >= now).forEach(c => {
+  _eqRdv.filter(c => c.statut === 'confirme' && c.contact_id && new Date(c.fin || c.debut) >= now).forEach(c => {
     const j = String(c.debut).slice(0, 10);
     if (!joursRdvConfirmes.has(c.contact_id)) joursRdvConfirmes.set(c.contact_id, new Set());
     joursRdvConfirmes.get(c.contact_id).add(j);
@@ -8896,8 +8899,9 @@ function renderEqNotifs() {
     }
   });
 
-  // 4. RDV confirmés à venir — ceux du jour se rangent à leur heure dans la journée
-  _eqRdv.filter(c => c.statut === 'confirme' && new Date(c.debut) >= now).forEach(c => {
+  // 4. RDV confirmés à venir ou en cours (jusqu'à la fin du créneau, pour garder
+  // le bouton « Rejoindre la visio ») — ceux du jour se rangent à leur heure dans la journée
+  _eqRdv.filter(c => c.statut === 'confirme' && new Date(c.fin || c.debut) >= now).forEach(c => {
     const hh = new Date(c.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
     const jourRdv = String(c.debut).slice(0, 10);
     const detail = (jourRdv === jour ? '<strong>' + esc(hh) + '</strong> · ' : esc(_rdvQuand(c)) + ' · ')
