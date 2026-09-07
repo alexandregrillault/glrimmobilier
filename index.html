@@ -1957,6 +1957,28 @@
       <div style="color:var(--muted);font-size:13px;margin-bottom:16px;max-width:720px">
         Qui a changé quoi, et quand. Réservé aux gérants : les commerciaux n'y ont accès ni par le menu ni par la base.
       </div>
+      <!-- Rapport d'activité : par vendeur ou pour l'équipe, avec classement (demande d'Alex, 07/09/2026) -->
+      <div class="card" style="margin-bottom:22px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+          <div style="font-family:var(--font-head);font-size:15px;font-weight:700">Rapport d'activité</div>
+          <button class="btn btn-ghost btn-sm" onclick="rapportExport()">Exporter en CSV</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
+          <select id="rapport-perimetre" onchange="rapportGenerer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none"><option value="">Toute l'équipe</option></select>
+          <select id="rapport-periode" onchange="rapportPeriodeChange()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none">
+            <option value="7">7 derniers jours</option>
+            <option value="30" selected>30 derniers jours</option>
+            <option value="mois">Mois en cours</option>
+            <option value="mois-1">Mois dernier</option>
+            <option value="90">3 derniers mois</option>
+            <option value="libre">Dates libres</option>
+          </select>
+          <span id="rapport-dates" style="display:none;gap:6px;align-items:center;font-size:12.5px;color:var(--muted)">du <input type="date" id="rapport-du" onchange="rapportGenerer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px"> au <input type="date" id="rapport-au" onchange="rapportGenerer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px"></span>
+          <select id="rapport-tri" onchange="rapportRender()" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none"></select>
+          <span id="rapport-etat" style="font-size:12.5px;color:var(--muted)"></span>
+        </div>
+        <div id="rapport-corps" style="overflow-x:auto"></div>
+      </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;align-items:center">
         <input id="journal-search" oninput="journalFiltrer()" placeholder="Rechercher un nom, un statut, une valeur…"
           style="flex:1 1 260px;min-width:200px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:var(--font-body);font-size:13.5px;outline:none">
@@ -15919,7 +15941,158 @@ const JOURNAL_ACTIONS = {
   'activite': 'Activité'
 };
 
+// ============================================================
+//  RAPPORT D'ACTIVITÉ — par vendeur ou pour l'équipe (gérants)
+//  Les chiffres viennent de la fonction SQL rapport_activite(depuis, jusqu'à) :
+//  leads reçus, appels sans réponse, statuts changés, passages en Sélections,
+//  activités, sélections envoyées, RDV confirmés, perdus/non qualifiés,
+//  ventes et honoraires. Équipe = classement sur la colonne choisie ;
+//  vendeur seul = ses chiffres avec son rang dans l'équipe sur chaque colonne.
+// ============================================================
+const RAPPORT_COLS = [
+  ['leads_recus', 'Leads reçus', 'Nouveaux leads arrivés sur le vendeur pendant la période'],
+  ['appels_sans_reponse', 'Sans réponse', 'Tentatives d\'appel notées « Pas de réponse »'],
+  ['statuts_changes', 'Statuts changés', 'Changements de statut faits par le vendeur'],
+  ['passes_selections', 'Appelés', 'Clients passés en Sélections (donc joints)'],
+  ['activites', 'Activités', 'Activités planifiées ou reportées (tracées depuis le 07/09/2026)'],
+  ['selections_envoyees', 'Sélections envoyées', 'Feuilles sélection envoyées aux clients'],
+  ['rdv_confirmes', 'RDV confirmés', 'Rendez-vous clients confirmés dans la période'],
+  ['perdus', 'Perdus / NQ', 'Passages en Perdu ou Non qualifié'],
+  ['ventes', 'Ventes', 'Ventes datées dans la période'],
+  ['honoraires', 'Honoraires', 'Honoraires société des ventes de la période']
+];
+let _rapport = [];        // lignes de la fonction SQL, une par vendeur
+let _rapportPeriode = null;
+
+function rapportPeriodeChange() {
+  const p = (document.getElementById('rapport-periode') || {}).value;
+  const dates = document.getElementById('rapport-dates');
+  if (dates) dates.style.display = p === 'libre' ? 'inline-flex' : 'none';
+  if (p !== 'libre') rapportGenerer();
+}
+
+function _rapportBornes() {
+  const p = (document.getElementById('rapport-periode') || {}).value || '30';
+  const fin = new Date(); fin.setHours(23, 59, 59, 999);
+  let debut = new Date(); debut.setHours(0, 0, 0, 0);
+  if (p === 'mois') { debut.setDate(1); }
+  else if (p === 'mois-1') { debut.setDate(1); debut.setMonth(debut.getMonth() - 1); fin.setDate(0); }
+  else if (p === 'libre') {
+    const du = (document.getElementById('rapport-du') || {}).value, au = (document.getElementById('rapport-au') || {}).value;
+    if (!du || !au) return null;
+    debut = new Date(du + 'T00:00:00'); fin.setTime(new Date(au + 'T23:59:59.999').getTime());
+  } else { debut.setDate(debut.getDate() - parseInt(p, 10) + 1); }
+  return { debut, fin };
+}
+
+function rapportInit() {
+  const sel = document.getElementById('rapport-perimetre');
+  if (sel && sel.options.length <= 1) {
+    ((data && data.vendeurs) || []).slice().sort((a, b) => String(a.prenom).localeCompare(String(b.prenom), 'fr'))
+      .forEach(v => { const o = document.createElement('option'); o.value = v.prenom; o.textContent = v.prenom; sel.appendChild(o); });
+  }
+  const tri = document.getElementById('rapport-tri');
+  if (tri && !tri.options.length) {
+    RAPPORT_COLS.forEach(([k, lib]) => { const o = document.createElement('option'); o.value = k; o.textContent = 'Classer par : ' + lib; tri.appendChild(o); });
+    tri.value = 'selections_envoyees';
+  }
+  if (!_rapport.length) rapportGenerer();
+}
+
+async function rapportGenerer() {
+  const b = _rapportBornes();
+  const etat = document.getElementById('rapport-etat');
+  if (!b) { if (etat) etat.textContent = 'Choisis les deux dates'; return; }
+  if (etat) etat.textContent = 'Calcul…';
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/rapport_activite', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_depuis: b.debut.toISOString(), p_jusqua: new Date(b.fin.getTime() + 1).toISOString() })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _rapport = await r.json();
+    _rapportPeriode = b;
+    if (etat) etat.textContent = 'Du ' + b.debut.toLocaleDateString('fr-FR') + ' au ' + b.fin.toLocaleDateString('fr-FR');
+  } catch (e) {
+    _rapport = [];
+    if (etat) etat.textContent = 'Rapport indisponible (réservé aux gérants)';
+  }
+  rapportRender();
+}
+
+function _rapportFmt(k, v) {
+  if (k === 'honoraires') return Number(v || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  return Number(v || 0).toLocaleString('fr-FR');
+}
+
+// Rang d'un vendeur sur une colonne (1 = meilleur ; ex æquo partagent le rang)
+function _rapportRang(prenom, k) {
+  const val = Number((_rapport.find(x => x.vendeur === prenom) || {})[k] || 0);
+  return 1 + _rapport.filter(x => Number(x[k] || 0) > val).length;
+}
+
+function rapportRender() {
+  const box = document.getElementById('rapport-corps');
+  if (!box) return;
+  const qui = (document.getElementById('rapport-perimetre') || {}).value || '';
+  const tri = (document.getElementById('rapport-tri') || {}).value || 'selections_envoyees';
+  const triSel = document.getElementById('rapport-tri');
+  if (triSel) triSel.style.display = qui ? 'none' : '';
+  if (!_rapport.length) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Aucune donnée sur cette période.</div>'; return; }
+
+  if (qui) {
+    // Un seul vendeur : ses chiffres, et son rang dans l'équipe sur chaque indicateur
+    const l = _rapport.find(x => x.vendeur === qui);
+    if (!l) { box.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:8px 0">Rien pour ' + _esc(qui) + ' sur cette période.</div>'; return; }
+    const n = _rapport.length;
+    box.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">' + RAPPORT_COLS.map(([k, lib, aide]) => {
+      const rang = _rapportRang(qui, k);
+      const bon = k === 'perdus' || k === 'appels_sans_reponse' ? null : (rang === 1 ? 'var(--success)' : rang >= n ? 'var(--danger)' : 'var(--muted)');
+      return `<div title="${_esc(aide)}" style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px">
+        <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">${_esc(lib)}</div>
+        <div style="font-family:var(--font-head);font-size:24px;font-weight:800;margin-top:4px">${_rapportFmt(k, l[k])}</div>
+        <div style="font-size:11.5px;color:${bon || 'var(--muted)'};margin-top:2px">${rang}${rang === 1 ? 'er' : 'e'} sur ${n}</div>
+      </div>`;
+    }).join('') + '</div>';
+    return;
+  }
+
+  // Équipe : classement sur la colonne choisie, total en pied
+  const lignes = _rapport.slice().sort((a, b) => Number(b[tri] || 0) - Number(a[tri] || 0) || String(a.vendeur).localeCompare(String(b.vendeur), 'fr'));
+  const total = {};
+  RAPPORT_COLS.forEach(([k]) => { total[k] = lignes.reduce((s, x) => s + Number(x[k] || 0), 0); });
+  const max = {};
+  RAPPORT_COLS.forEach(([k]) => { max[k] = Math.max.apply(null, lignes.map(x => Number(x[k] || 0))); });
+  box.innerHTML = `<table>
+    <thead><tr><th style="width:36px">#</th><th>Vendeur</th>${RAPPORT_COLS.map(([k, lib, aide]) => `<th onclick="document.getElementById('rapport-tri').value='${k}';rapportRender()" title="${_esc(aide)} — cliquer pour classer" style="cursor:pointer;text-align:right;white-space:nowrap;${k === tri ? 'color:var(--accent)' : ''}">${_esc(lib)}${k === tri ? ' ↓' : ''}</th>`).join('')}</tr></thead>
+    <tbody>${lignes.map((l, i) => `<tr>
+      <td style="font-weight:800;color:${i === 0 ? 'var(--success)' : 'var(--muted)'}">${i + 1}</td>
+      <td style="font-weight:600">${_esc(l.vendeur)}</td>
+      ${RAPPORT_COLS.map(([k]) => `<td style="text-align:right;${k === tri ? 'font-weight:700' : ''}${max[k] > 0 && Number(l[k] || 0) === max[k] && k !== 'perdus' && k !== 'appels_sans_reponse' ? ';color:var(--success)' : ''}">${_rapportFmt(k, l[k])}</td>`).join('')}
+    </tr>`).join('')}
+    <tr style="border-top:2px solid var(--border)"><td></td><td style="font-weight:700">Équipe</td>${RAPPORT_COLS.map(([k]) => `<td style="text-align:right;font-weight:700">${_rapportFmt(k, total[k])}</td>`).join('')}</tr>
+    </tbody></table>`;
+}
+
+function rapportExport() {
+  if (!_rapport.length) { toast('Rien à exporter', 'var(--warning)'); return; }
+  const qui = (document.getElementById('rapport-perimetre') || {}).value || '';
+  const tri = (document.getElementById('rapport-tri') || {}).value || 'selections_envoyees';
+  const lignes = (qui ? _rapport.filter(x => x.vendeur === qui) : _rapport.slice().sort((a, b) => Number(b[tri] || 0) - Number(a[tri] || 0)));
+  const ech = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const out = [['Rang', 'Vendeur'].concat(RAPPORT_COLS.map(c => c[1])).map(ech).join(';')];
+  lignes.forEach((l, i) => out.push([qui ? _rapportRang(qui, tri) : i + 1, l.vendeur].concat(RAPPORT_COLS.map(([k]) => k === 'honoraires' ? Number(l[k] || 0).toFixed(2).replace('.', ',') : Number(l[k] || 0))).map(ech).join(';')));
+  const b = _rapportPeriode || _rapportBornes();
+  const nom = 'rapport-' + (qui || 'equipe') + '-' + (b ? b.debut.toISOString().slice(0, 10) + '_' + b.fin.toISOString().slice(0, 10) : 'periode') + '.csv';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + out.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = nom; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 async function loadJournal() {
+  if (typeof rapportInit === 'function') rapportInit();
   const tb = document.getElementById('journal-tbody');
   if (tb) tb.innerHTML = '<tr><td colspan="5" style="color:var(--muted)">Chargement…</td></tr>';
   _journal = []; _journalFin = false;
