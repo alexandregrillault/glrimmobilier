@@ -9197,13 +9197,14 @@ function renderEqNotifs() {
   };
 
   // ---- Chaque journée se lit par famille d'activité plutôt qu'en liste continue
+  // Les rendez-vous confirmés se lisent en haut, juste sous ceux à valider
   const ACT_FAMILLES = [
     ['valider',  'Rendez-vous à valider'],
+    ['confirme', 'Rendez-vous confirmés'],
     ['demande',  'Demandes de rendez-vous'],
     ['premier',  'Premiers appels'],
     ['rappel',   'Rappels et relances'],
-    ['attente',  'En attente du client'],
-    ['confirme', 'Rendez-vous confirmés']
+    ['attente',  'En attente du client']
   ];
   // Les rappels se relisent étape par étape : l'ordre du pipeline d'abord,
   // les étapes qui ne sont pas des étapes de vente ensuite.
@@ -15757,6 +15758,23 @@ function promoCarte(p) {
     ? `<a href="${_esc(p.url_intranet)}" target="_blank" rel="noopener" class="btn btn-primary" style="width:100%;justify-content:center;text-decoration:none;margin-bottom:14px">Ouvrir l'intranet</a>`
     : `<div style="width:100%;text-align:center;padding:9px 18px;border-radius:9px;border:1px dashed var(--border);color:var(--muted);font-size:13px;margin-bottom:14px">${p.site_libelle ? _esc(p.site_libelle) : 'Pas de lien intranet'}</div>`;
 
+  // Identifiant et mot de passe copiables d'un clic, sans ouvrir la fiche
+  const ligneAcces = (label, valeur, champ, masque) => {
+    if (!valeur) return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)"><span style="width:82px;flex:none">${label}</span><span style="flex:1">à compléter</span></div>`;
+    const aff = masque ? '••••••••' : _esc(valeur);
+    return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
+      <span style="width:82px;flex:none;color:var(--muted)">${label}</span>
+      <span id="promo-${champ}-${p.id}" data-masque="${masque ? '1' : '0'}" style="flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all;${masque ? 'cursor:pointer;letter-spacing:1px' : ''}"${masque ? ` onclick="promoVoirMdp('${p.id}')" title="Afficher"` : ''}>${aff}</span>
+      <button class="btn btn-ghost btn-sm" style="flex:none;padding:3px 10px" onclick="promoCopier('${p.id}','${champ}')">Copier</button>
+    </div>`;
+  };
+  const acces = (p.login || p.mot_de_passe)
+    ? `<div style="display:flex;flex-direction:column;gap:6px;margin:-6px 0 14px;padding:10px 12px;border-radius:9px;background:var(--surface2);border:1px solid var(--border)">
+        ${ligneAcces('Identifiant', p.login, 'login', false)}
+        ${ligneAcces('Mot de passe', p.mot_de_passe, 'mot_de_passe', true)}
+      </div>`
+    : '';
+
   const resp = (p.responsables || []).length
     ? (p.responsables || []).map(r => {
         const nomAff = [r.prenom, r.nom].filter(Boolean).join(' ') || '(sans nom)';
@@ -15792,6 +15810,7 @@ function promoCarte(p) {
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px">${badges.join('')}</div>
     ${lien}
+    ${acces}
     <div style="flex:1">${resp}</div>
     ${proc}
     ${infos.join('')}
@@ -15800,6 +15819,25 @@ function promoCarte(p) {
       <button class="btn btn-ghost btn-sm" onclick="promoOuvrir('${p.id}')">Modifier</button>
     </div>
   </div>`;
+}
+
+// ---- Copie des accès depuis la carte ----
+function promoCopier(id, champ) {
+  const p = _promoteurs.find(x => String(x.id) === String(id));
+  const valeur = p && p[champ];
+  if (!valeur) { toast('Rien à copier', 'var(--danger)'); return; }
+  const label = champ === 'login' ? 'Identifiant copié' : 'Mot de passe copié';
+  const done = () => toast('✓ ' + label, 'var(--success)');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(valeur).then(done).catch(() => _eqCopyFallback(valeur, done));
+  } else _eqCopyFallback(valeur, done);
+}
+function promoVoirMdp(id) {
+  const el = document.getElementById('promo-mot_de_passe-' + id);
+  const p = _promoteurs.find(x => String(x.id) === String(id));
+  if (!el || !p) return;
+  if (el.dataset.masque === '1') { el.textContent = p.mot_de_passe || ''; el.dataset.masque = '0'; el.style.letterSpacing = '0'; el.title = 'Masquer'; }
+  else { el.textContent = '••••••••'; el.dataset.masque = '1'; el.style.letterSpacing = '1px'; el.title = 'Afficher'; }
 }
 
 // ---- Modification ----
