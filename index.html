@@ -7688,6 +7688,12 @@ ${(() => {
       ${cur === 'Nouveau' ? `<button onclick="eqLeadAppele('${l.id}')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Appelé</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqOuvrirSelection('${l.id}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Envoyer une sélection</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqRdvFixerOuvrir('${l.id}')" title="Vous venez de convenir d'un rendez-vous au téléphone : tu le poses dans ton planning et le client reçoit la confirmation par mail" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Fixer un rendez-vous</button>` : ''}
+      ${(() => {
+        // Rendez-vous à venir de ce client (réservé ou confirmé) : on peut le déplacer d'ici
+        const rdvs = (typeof _eqRdv !== 'undefined' ? (_eqRdv || []) : []).filter(x => x.contact_id === l.id && ['reserve', 'confirme'].includes(x.statut) && new Date(x.fin || x.debut) >= new Date())
+          .sort((a, b) => new Date(a.debut) - new Date(b.debut));
+        return rdvs.map(x => `<button onclick="eqRdvDeplacerOuvrir('${x.id}')" title="Changer le jour ou l'heure de ce rendez-vous — le client est prévenu du nouvel horaire" style="background:var(--surface2);border:1px solid var(--success);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Déplacer le RDV du ${_vEsc(_rdvQuand(x).replace(/^./, m => m.toLowerCase()))}${x.statut === 'reserve' ? ' (à valider)' : ''}</button>`).join('');
+      })()}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqRdvLienOuvrir('${l.id}')" title="Envoyer un mail au client depuis le CRM, en ton nom — avec ton lien de prise de rendez-vous si tu veux" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Écrire au client</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqAppelSansReponse('${l.id}')" title="Il n'a pas décroché : on note la tentative, avec la date, et tu choisis quand rappeler" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Pas de réponse</button>` : ''}
     </div>
@@ -8150,6 +8156,154 @@ function eqRdvFixerFormat(f) {
     b.style.borderColor = actif ? 'var(--accent)' : 'var(--border)';
     b.style.background = actif ? 'var(--accent)18' : 'var(--surface2)';
   });
+}
+
+// ---- Déplacer un rendez-vous (08/09/2026) ---------------------------------
+// Cas Anaïs : une visio de 19h à passer à 18h30. Le vendeur change le jour ou
+// l'heure d'un rendez-vous client (réservé ou confirmé) sans l'annuler : la
+// durée est conservée, le rendez-vous est confirmé au nouvel horaire, les
+// disponibilités qui le chevauchent sont retirées, la page « Voir mon
+// rendez-vous » suit, la relance de la fiche aussi, et le client reçoit un mail
+// « Votre rendez-vous a été déplacé » avec le nouvel horaire pour son agenda
+// (même identifiant : il remplace l'ancien dans son calendrier).
+let _rdvDepCtx = null;
+
+async function eqRdvDeplacerOuvrir(creneauId) {
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  let c = (typeof _eqRdv !== 'undefined' && (_eqRdv || []).find(x => x.id === creneauId))
+    || (typeof _planCreneaux !== 'undefined' && (_planCreneaux || []).find(x => x.id === creneauId)) || null;
+  if (!c) {
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&id=eq.' + creneauId, { cache: 'no-store', headers: entetes });
+      if (r.ok) c = (await r.json())[0] || null;
+    } catch (e) { c = null; }
+  }
+  if (!c || !['reserve', 'confirme'].includes(c.statut) || ['rappel', 'perso'].includes(c.origine || '')) { toast('Rendez-vous introuvable', 'var(--danger)'); return; }
+  const l = c.contact_id ? (_eqLeads || []).find(x => x.id === c.contact_id) : null;
+  let email = l && l.email;
+  if (!email && c.contact_id) {
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=email&id=eq.' + c.contact_id, { cache: 'no-store', headers: entetes });
+      if (r.ok) email = ((await r.json())[0] || {}).email || '';
+    } catch (e) { email = ''; }
+  }
+  const debut = new Date(c.debut), fin = new Date(c.fin || c.debut);
+  const duree = Math.max(10, Math.round((fin - debut) / 60000) || _crenDureeVoulue(c.mode === 'visio' ? 'visio' : 'telephone'));
+  _rdvDepCtx = { c, l, email: email || '', duree };
+  const pad = (n) => String(n).padStart(2, '0');
+  const jourIso = debut.getFullYear() + '-' + pad(debut.getMonth() + 1) + '-' + pad(debut.getDate());
+  const heure = pad(debut.getHours()) + ':' + pad(debut.getMinutes());
+  const auj = new Date(); const minIso = auj.getFullYear() + '-' + pad(auj.getMonth() + 1) + '-' + pad(auj.getDate());
+  const nom = c.client_nom || (l && nomComplet(l)) || 'ce client';
+  const champ = 'background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box';
+  const old = document.getElementById('rdv-dep-modal'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'rdv-dep-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1600;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:440px;max-width:95vw;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+      <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Déplacer le rendez-vous avec ${_vEsc(nom)}</div>
+      <button onclick="eqRdvDeplacerFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Actuellement <strong style="color:var(--text)">${_vEsc(_rdvQuand(c).replace(/^./, m => m.toLowerCase()))}</strong> · ${_vEsc(_crenLbl(c))} (${duree} min)${c.statut === 'reserve' ? ' — en attente de validation : il sera confirmé au nouvel horaire' : ''}.</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <div style="flex:1"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Nouveau jour</div><input type="date" id="rdv-dep-date" value="${jourIso}" min="${minIso}" style="${champ};width:100%"></div>
+      <div style="flex:1"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Nouvelle heure</div><input type="time" id="rdv-dep-heure" value="${heure}" step="300" style="${champ};width:100%"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Note pour toi <span style="text-transform:none;letter-spacing:0">(facultatif)</span></div>
+    <input id="rdv-dep-note" maxlength="200" placeholder="Ex : à sa demande, réunion qui s'éternise" style="${champ};width:100%;margin-bottom:14px">
+    ${email ? `<label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="rdv-dep-mail" checked style="accent-color:var(--accent)">Prévenir ${_vEsc(email)} du nouvel horaire (mail + rendez-vous pour son agenda)</label>`
+      : '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Pas d\'email sur la fiche : le client n\'est pas prévenu par le CRM.</div>'}
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn btn-secondary" onclick="eqRdvDeplacerFermer()">Annuler</button>
+      <button class="btn btn-primary" id="rdv-dep-ok" onclick="eqRdvDeplacerValider()">Déplacer${email ? ' et prévenir' : ''}</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) eqRdvDeplacerFermer(); });
+  document.body.appendChild(div);
+}
+function eqRdvDeplacerFermer() { const m = document.getElementById('rdv-dep-modal'); if (m) m.remove(); _rdvDepCtx = null; }
+
+async function eqRdvDeplacerValider() {
+  if (!_rdvDepCtx) return;
+  const { c, l, email, duree } = _rdvDepCtx;
+  const jour = (document.getElementById('rdv-dep-date') || {}).value || '';
+  const heure = ((document.getElementById('rdv-dep-heure') || {}).value || '').slice(0, 5);
+  const note = ((document.getElementById('rdv-dep-note') || {}).value || '').trim();
+  const envoyer = !!(email && (document.getElementById('rdv-dep-mail') || {}).checked);
+  if (!jour || !heure) { toast('Indique le jour et l\'heure', 'var(--warning)'); return; }
+  const debut = new Date(jour + 'T' + heure + ':00');
+  if (isNaN(debut)) { toast('Date ou heure invalide', 'var(--warning)'); return; }
+  if (debut.getTime() < Date.now() - 5 * 60000) { toast('Ce moment est déjà passé', 'var(--warning)'); return; }
+  const fin = new Date(debut.getTime() + duree * 60000);
+  if (debut.toISOString() === new Date(c.debut).toISOString() && c.statut === 'confirme') { toast('C\'est déjà l\'horaire du rendez-vous', 'var(--warning)'); return; }
+  const btn = document.getElementById('rdv-dep-ok');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  const vendeur = c.vendeur || _creneauVendeur();
+  const q = (u) => encodeURIComponent(u);
+  try {
+    // 0. Un autre rendez-vous ou une activité bloquante du vendeur sur la nouvelle plage ? On refuse.
+    const rc = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=id,statut,origine,client_nom,titre,contact_id,bloquant&vendeur=eq.' + q(vendeur)
+      + '&statut=neq.libre&id=neq.' + c.id + '&debut=lt.' + q(fin.toISOString()) + '&fin=gt.' + q(debut.toISOString()), { cache: 'no-store', headers: entetes });
+    const chevauche = rc.ok ? (await rc.json()).filter(x => !(x.origine === 'rappel' && x.contact_id === c.contact_id) && !(x.origine === 'perso' && x.bloquant === false)) : [];
+    if (chevauche.length) {
+      const x = chevauche[0];
+      toast('⚠ Ce moment est déjà pris : ' + (x.client_nom || x.titre || 'une activité') + ' — choisis un autre horaire', 'var(--danger)');
+      if (btn) { btn.disabled = false; btn.textContent = 'Déplacer' + (email ? ' et prévenir' : ''); }
+      return;
+    }
+    // 1. Les disponibilités libres qui chevauchent le nouvel horaire ne sont plus proposables
+    await fetch(SUPABASE_URL + '/rest/v1/creneaux?vendeur=eq.' + q(vendeur) + '&statut=eq.libre&debut=lt.' + q(fin.toISOString()) + '&fin=gt.' + q(debut.toISOString()), {
+      method: 'DELETE', headers: entetes
+    });
+    // 2. Le rendez-vous lui-même : nouvel horaire, confirmé
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + c.id, {
+      method: 'PATCH', headers: Object.assign({}, entetes, { 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ debut: debut.toISOString(), fin: fin.toISOString(), statut: 'confirme', bloquant: true })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    // 3. La page « Voir mon rendez-vous » du client suit le nouvel horaire
+    await _planMajSelection(c.selection_token, { reserve: true, confirme: true, refuse: false, propositions: null, creneau_id: c.id,
+      debut: debut.toISOString(), fin: fin.toISOString(), mode: c.mode, deplace_le: new Date().toISOString(), deplace_par: vendeur,
+      confirme_le: new Date().toISOString() });
+    // 4. La relance de la fiche : si elle était calée sur l'ancien jour, elle suit
+    if (c.contact_id) {
+      const ancienJour = new Date(c.debut); const pad = (n) => String(n).padStart(2, '0');
+      const ancienIso = ancienJour.getFullYear() + '-' + pad(ancienJour.getMonth() + 1) + '-' + pad(ancienJour.getDate());
+      const trace = '[' + new Date().toLocaleDateString('sv-SE') + '] Rendez-vous ' + (c.mode === 'visio' ? 'visio' : 'téléphonique') + ' déplacé par ' + vendeur
+        + ' : ' + ancienJour.toLocaleDateString('fr-FR') + ' ' + pad(ancienJour.getHours()) + 'h' + pad(ancienJour.getMinutes())
+        + ' → ' + debut.toLocaleDateString('fr-FR') + ' ' + heure.replace(':', 'h') + (note ? ' — ' + note : '');
+      const patch = {};
+      const rappelActuel = l ? l.rappel_le : null;
+      let notesActuelles = l ? (l.notes || '') : null;
+      if (!l) {
+        try {
+          const rl = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=rappel_le,notes&id=eq.' + c.contact_id, { cache: 'no-store', headers: entetes });
+          if (rl.ok) { const row = (await rl.json())[0] || {}; notesActuelles = row.notes || ''; if (row.rappel_le === ancienIso) patch.rappel_le = jour; }
+        } catch (e) { notesActuelles = ''; }
+      } else if (rappelActuel === ancienIso) { patch.rappel_le = jour; }
+      patch.notes = (notesActuelles ? String(notesActuelles).trim() + '\n' : '') + trace;
+      if (l && typeof _eqLeadPatch === 'function') await _eqLeadPatch(c.contact_id, patch);
+      else await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + c.contact_id, { method: 'PATCH', headers: Object.assign({}, entetes, { 'Prefer': 'return=minimal' }), body: JSON.stringify(patch) });
+    }
+    // 5. Le client est prévenu du nouvel horaire (agenda joint, lien de visio)
+    let mot = '';
+    if (envoyer) {
+      const res = await rdvNotifierClient(c.selection_token, 'deplace', { debut: debut.toISOString(), fin: fin.toISOString(), mode: c.mode, visio: _visioLien(Object.assign({}, c, { debut: debut.toISOString() })), ancien_debut: c.debut });
+      mot = _rdvNotifMot(res);
+    }
+    eqRdvDeplacerFermer();
+    toast('✓ Rendez-vous déplacé au ' + debut.toLocaleDateString('fr-FR') + ' à ' + heure.replace(':', 'h') + mot, 'var(--success)');
+    try { if (typeof eqRdvCharger === 'function') await eqRdvCharger(); } catch (e) {}
+    if (typeof renderEqNotifs === 'function') renderEqNotifs();
+    if (typeof _eqPlanRecharger === 'function') _eqPlanRecharger();
+    if (typeof eqMajVue === 'function') eqMajVue(true);
+    if (typeof _eqFicheId !== 'undefined' && _eqFicheId && typeof _eqFicheRender === 'function') _eqFicheRender();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Déplacer' + (email ? ' et prévenir' : ''); }
+    toast('⚠ Le rendez-vous n\'a pas pu être déplacé — réessaie', 'var(--danger)');
+  }
 }
 async function eqRdvFixerValider() {
   if (!_rdvFixeCtx) return;
@@ -9156,6 +9310,7 @@ function renderEqNotifs() {
       btnFiche(c.contact_id) +
       `<button class="btn btn-sm btn-secondary" onclick="rdvEcarterCreneau('${c.id}')" style="font-size:11px" title="Refuser ce rendez-vous et libérer le créneau — le client n'est pas prévenu">Refuser</button>
        <button class="btn btn-sm btn-secondary" onclick="eqProposerOuvrir('${c.id}')" style="font-size:11px" title="Refuser ce créneau et en proposer trois autres">Proposer 3 autres</button>
+       <button class="btn btn-sm btn-secondary" onclick="eqRdvDeplacerOuvrir('${c.id}')" style="font-size:11px" title="Convenu d'un autre horaire avec le client : le rendez-vous est confirmé à ce nouvel horaire et le client est prévenu">Déplacer</button>
        <button class="btn btn-sm btn-primary" onclick="eqRdvValider('${c.id}')" style="font-size:11px">Valider</button>`,
       'var(--warning)');
     // t = -1 : les rendez-vous à confirmer passent devant tout le reste de la journée
@@ -9289,7 +9444,9 @@ function renderEqNotifs() {
     const cible = (jourRdv === jour ? aujourdhui : avenir);
     cible.push({ t: new Date(c.debut).getTime(), g: 'confirme', d: jourRdv,
       html: item('rdv', (c.mode === 'visio' ? 'Visio avec ' : 'RDV avec ') + esc(c.client_nom || 'Client') + rep(c.contact_id), detail,
-        btnFiche(c.contact_id) + (c.mode === 'visio' && _visioLien(c) ? `<a class="btn btn-sm btn-primary" href="${esc(_visioLien(c))}" target="_blank" rel="noopener" style="font-size:11px;text-decoration:none">Rejoindre la visio</a>` : ''),
+        btnFiche(c.contact_id)
+        + `<button class="btn btn-sm btn-secondary" onclick="eqRdvDeplacerOuvrir('${c.id}')" style="font-size:11px" title="Changer le jour ou l'heure — le client est prévenu du nouvel horaire">Déplacer</button>`
+        + (c.mode === 'visio' && _visioLien(c) ? `<a class="btn btn-sm btn-primary" href="${esc(_visioLien(c))}" target="_blank" rel="noopener" style="font-size:11px;text-decoration:none">Rejoindre la visio</a>` : ''),
         'var(--success)') });
   });
 
@@ -12408,6 +12565,7 @@ function renderEquipePlanningListe() {
           <div style="display:flex;gap:4px;align-items:center;margin-top:4px">
             <span style="flex:1;font-size:10px;color:${couleur};text-transform:uppercase;letter-spacing:.3px">${enAttente ? 'à valider' : 'confirmé'}</span>
             ${enAttente ? `<button onclick="eqPlanValider('${c.id}')" title="Valider ce rendez-vous" style="background:var(--success);border:none;border-radius:5px;color:#fff;cursor:pointer;font-size:10px;padding:2px 6px">✓</button>` : ''}
+            <button onclick="eqRdvDeplacerOuvrir('${c.id}')" title="Déplacer ce rendez-vous (autre jour ou autre heure) — le client est prévenu du nouvel horaire" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:10px;padding:2px 6px">Déplacer</button>
             <button onclick="eqPlanLiberer('${c.id}')" title="${enAttente ? 'Refuser ce créneau' : 'Annuler ce rendez-vous'}" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:10px;padding:2px 6px">✕</button>
           </div>
         </div>`;
