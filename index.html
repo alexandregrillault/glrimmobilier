@@ -892,7 +892,7 @@
         </div>
         <button class="btn btn-secondary" onclick="renderGerantRdv(true)" title="Rafraîchir">↻</button>
       </div>
-      <div id="gr-kpis" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px"></div>
+      <div id="gr-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:16px"></div>
       <div id="gr-corps"></div>
     </div>
 
@@ -8215,7 +8215,10 @@ async function eqRdvFixerValider() {
     //    intitulé et datée avant le rendez-vous (« Faire la sélection » la
     //    veille) : elle reste en place, le rendez-vous vit dans le planning.
     const preparation = !!(l.rappel_le && l.rappel_titre && l.rappel_le < jourRdv);
-    await _eqLeadPatch(contactId, Object.assign(preparation ? {} : { rappel_le: jourRdv, rappel_heure: null, rappel_titre: null }, { notes: (l.notes ? l.notes.trim() + '\n' : '') + trace }));
+    //    Un rendez-vous confirmé sort le client de « Nouveau » : il passe en « Suivi »
+    //    (la base le fait aussi d'elle-même, déclencheur trg_creneaux_confirme_suivi)
+    const suivi = l.statut === 'Nouveau' ? { statut: 'Suivi', statut_maj: new Date().toISOString() } : {};
+    await _eqLeadPatch(contactId, Object.assign(preparation ? {} : { rappel_le: jourRdv, rappel_heure: null, rappel_titre: null }, suivi, { notes: (l.notes ? l.notes.trim() + '\n' : '') + trace }));
     // 6. Le client est prévenu, avec le rendez-vous pour son agenda et le lien de visio
     let mot = '';
     if (envoyer) {
@@ -9448,6 +9451,10 @@ async function eqRdvValider(id) {
     await _planMajSelection(c && c.selection_token, { confirme: true, refuse: false, confirme_le: new Date().toISOString() });
     const notif = await rdvNotifierClient(c && c.selection_token, 'confirme', { debut: c && c.debut, fin: c && c.fin, mode: c && c.mode, visio: c ? _visioLien(c) : null });
     toast('✓ Rendez-vous confirmé — il est dans ton planning' + _rdvNotifMot(notif), 'var(--success)');
+    // Un rendez-vous confirmé sort le client de « Nouveau » : la base le passe en
+    // « Suivi » (déclencheur trg_creneaux_confirme_suivi) — on suit ici sans recharger
+    const lead = c && c.contact_id && (_eqLeads || []).find(x => x.id === c.contact_id);
+    if (lead && lead.statut === 'Nouveau') { lead.statut = 'Suivi'; lead.statut_maj = new Date().toISOString(); }
   } catch (e) { toast('⚠ Validation impossible', 'var(--danger)'); }
   await eqRdvCharger();
   renderEqNotifs();
@@ -17305,6 +17312,7 @@ const GR_OUVRE_FIN = 19;     // du lundi au samedi (dimanche ignoré)
 const GR_JOUR_OUVRE = GR_OUVRE_FIN - GR_OUVRE_DEB;
 const GR_SEUIL_ORANGE = 2;   // h ouvrées : le client commence à attendre
 const GR_SEUIL_ROUGE = 4;    // h ouvrées : trop long
+const GR_JOURS_A_VENIR = 7;  // « Les jours qui arrivent » : de demain à J+7
 
 let _grCreneaux = [];   // créneaux réservés, proposés, et confirmés du jour
 let _grLots = [];       // liens de RDV + sélections, pour les demandes et les délais
@@ -17481,7 +17489,22 @@ function grRdvPaquets() {
     && new Date(c.debut) >= j0 && new Date(c.debut) < j1)
     .sort((a, b) => new Date(a.debut) - new Date(b.debut));
 
-  return { aValider, aTraiter, enAttente, sansSuite, journee };
+  // 5. Les jours qui arrivent : rendez-vous confirmés de demain à J+7, toute
+  //    l'équipe, regroupés par journée (demande du 08/09/2026)
+  const jFin = new Date(j0); jFin.setDate(jFin.getDate() + 1 + GR_JOURS_A_VENIR);
+  const aVenir = _grCreneaux.filter(c => c.statut === 'confirme'
+    && new Date(c.debut) >= j1 && new Date(c.debut) < jFin)
+    .sort((a, b) => new Date(a.debut) - new Date(b.debut));
+  const parJour = [];
+  aVenir.forEach(c => {
+    const d = new Date(c.debut); d.setHours(0, 0, 0, 0);
+    const cle = d.toLocaleDateString('sv-SE');
+    let g = parJour.find(x => x.cle === cle);
+    if (!g) { g = { cle, date: d, creneaux: [] }; parJour.push(g); }
+    g.creneaux.push(c);
+  });
+
+  return { aValider, aTraiter, enAttente, sansSuite, journee, aVenir, parJour };
 }
 
 function grRdvTotaux() {
@@ -17570,7 +17593,8 @@ async function renderGerantRdv(force) {
     kpi('À valider', p.aValider.length, p.aValider.length ? 'var(--warning)' : 'var(--text)', 'le client a réservé') +
     kpi('À traiter', p.aTraiter.length, p.aTraiter.length ? 'var(--warning)' : 'var(--text)', 'demande sans créneau') +
     kpi('En attente du client', p.enAttente.length, 'var(--text)', 'créneaux proposés') +
-    kpi("Aujourd'hui", p.journee.length, 'var(--accent)', 'rendez-vous confirmés');
+    kpi("Aujourd'hui", p.journee.length, 'var(--accent)', 'rendez-vous confirmés') +
+    kpi(GR_JOURS_A_VENIR + ' prochains jours', p.aVenir.length, 'var(--accent)', 'rendez-vous confirmés à venir');
 
   const sousTitre = document.getElementById('gr-sous-titre');
   if (sousTitre) sousTitre.textContent = (p.aValider.length + p.aTraiter.length)
@@ -17662,10 +17686,38 @@ async function renderGerantRdv(force) {
     }).join(''),
     'Aucun rendez-vous confirmé aujourd\'hui.');
 
+  // ---- 5. Les jours qui arrivent : de demain à J+7, une sous-liste par journée
+  const ligneRdv = (c) => {
+    const heure = new Date(c.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+    return `<div style="display:flex;gap:12px;align-items:center;padding:8px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:6px;background:var(--surface2)">
+      <strong style="font-family:var(--font-head);font-size:14px;min-width:52px">${heure}</strong>
+      <span style="flex:1;min-width:180px">
+        <div style="font-weight:700;font-size:13px">${_vEsc(grNomClient(c))} ${grBadgeVendeur(c.vendeur)}</div>
+        <div style="font-size:11.5px;color:var(--muted)">${_vEsc(_crenLbl(c))}</div>
+      </span>
+      ${grBoutonFiche(c.contact_id)}
+    </div>`;
+  };
+  const titreJour = (g) => {
+    const t = g.date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const ecart = Math.round((g.date - new Date(new Date().setHours(0, 0, 0, 0))) / 86400000);
+    const rel = ecart === 1 ? 'demain' : 'dans ' + ecart + ' j';
+    const n = g.creneaux.length;
+    return `<div style="display:flex;align-items:center;gap:8px;margin:12px 0 6px">
+      <span style="font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)">${t.charAt(0).toUpperCase() + t.slice(1)}</span>
+      <span style="font-size:10.5px;color:var(--muted)">${rel}</span>
+      <span style="font-size:10.5px;font-weight:700;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:0 7px">${n}</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+    </div>`;
+  };
+  h += grCarte('Les jours qui arrivent', 'rendez-vous confirmés de demain à J+' + GR_JOURS_A_VENIR + ', toute l\'équipe',
+    p.parJour.map(g => titreJour(g) + g.creneaux.map(ligneRdv).join('')).join(''),
+    'Aucun rendez-vous confirmé sur les ' + GR_JOURS_A_VENIR + ' prochains jours.');
+
   // ---- Récapitulatif par vendeur
   const vendeurs = [...new Set([].concat(
     p.aValider.map(x => x.c.vendeur), p.aTraiter.map(x => x.x.vendeur),
-    p.enAttente.map(x => x.g.vendeur), p.journee.map(c => c.vendeur),
+    p.enAttente.map(x => x.g.vendeur), p.journee.map(c => c.vendeur), p.aVenir.map(c => c.vendeur),
     Object.keys(_grDelais)
   ).filter(Boolean))].sort();
   const lignesV = vendeurs.map(v => {
@@ -17674,6 +17726,7 @@ async function renderGerantRdv(force) {
     const attente = av.length + at.length;
     const plusVieux = Math.max(0, ...av.map(x => x.attente), ...at.map(x => x.attente));
     const jour = p.journee.filter(c => c.vendeur === v).length;
+    const aVenir = p.aVenir.filter(c => c.vendeur === v).length;
     const d = _grDelais[v];
     const coul = attente ? grCouleurTexte(plusVieux, av.some(x => x.passe)) : 'var(--muted)';
     const coulChiffre = (coul === 'var(--muted)' && attente) ? 'var(--text)' : coul;
@@ -17682,6 +17735,7 @@ async function renderGerantRdv(force) {
       <td style="text-align:center;font-weight:800;color:${coulChiffre}">${attente || '—'}</td>
       <td style="text-align:center;font-size:12.5px;color:var(--muted)">${attente ? grDuree(plusVieux) : '—'}</td>
       <td style="text-align:center;font-size:12.5px">${jour || '—'}</td>
+      <td style="text-align:center;font-size:12.5px">${aVenir || '—'}</td>
       <td style="text-align:center;font-size:12.5px;color:var(--muted)">${d ? grDuree(d.moy) + ' <span style="font-size:11px">(' + d.n + ')</span>' : '—'}</td>
     </tr>`;
   }).join('');
@@ -17692,6 +17746,7 @@ async function renderGerantRdv(force) {
         <th style="padding:6px 8px">En attente</th>
         <th style="padding:6px 8px">Le plus ancien</th>
         <th style="padding:6px 8px">RDV aujourd'hui</th>
+        <th style="padding:6px 8px">RDV à venir (${GR_JOURS_A_VENIR} j)</th>
         <th style="padding:6px 8px">Réaction moyenne (30 j)</th>
       </tr></thead>
       <tbody>${lignesV}</tbody>
