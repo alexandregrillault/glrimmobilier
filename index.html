@@ -5879,7 +5879,7 @@ function veilleMatch(l, p, zone) {
 // --- Paternité des leads (règle v2) -----------------------------------------
 // 1. Un lead reçu par plusieurs vendeurs avant toute action apparaît chez chacun
 //    (recu_par) : la paternité revient au premier qui fait une action commerciale.
-//    Passer un lead de Nouveau à « Sans réponse » ne compte pas comme une action.
+//    Passer un lead en « Sans réponse » (quel que soit son statut) ne compte pas comme une action.
 // 2. Une fois la première action faite, la règle des 14 jours reste en complément :
 //    le vendeur garde le contact tant qu'il le travaille ; le délai repart à chaque
 //    action. Les contacts antérieurs à la mise en place (paternite_geree = false)
@@ -5924,14 +5924,14 @@ function paterniteEtat(c) {
   const vendeur = c.vendeur || '';
   const fmt = (d) => { const dt = new Date(d); return isNaN(dt) ? '?' : dt.toLocaleDateString('fr-FR'); };
   // Compétition : lead reçu par plusieurs vendeurs avant toute action commerciale.
-  // La paternité revient au premier qui agit (Nouveau → Sans réponse ne compte pas).
+  // La paternité revient au premier qui agit (passer en Sans réponse ne compte pas).
   const recus = Array.isArray(c.recu_par) ? c.recu_par : [];
   if (eqCompetitionOuverte(c) && recus.length >= 2 && c.paternite_geree !== false) {
     const noms = recus.map(r => r && r.vendeur).filter(Boolean);
     return { type:'competition', vendeur, texte:'' + noms.join(' / '), couleur:'var(--warning)',
       detail:'En compétition : lead reçu par ' + noms.join(' et ') +
         ' — la paternité revient au premier qui fait une action commerciale' +
-        ' (statut, note, qualif, rappel, sélection ou RDV ; passer de Nouveau à « Sans réponse » ne compte pas)',
+        ' (statut, note, qualif, rappel, sélection ou RDV ; passer en « Sans réponse » ne compte pas)',
       histo: Array.isArray(c.vendeur_historique) ? c.vendeur_historique : [] };
   }
   if (!vendeur) return { type:'libre', vendeur:'', texte:'libre', couleur:'var(--muted)',
@@ -7695,7 +7695,7 @@ ${(() => {
         return rdvs.map(x => `<button onclick="eqRdvDeplacerOuvrir('${x.id}')" title="Changer le jour ou l'heure de ce rendez-vous — le client est prévenu du nouvel horaire" style="background:var(--surface2);border:1px solid var(--success);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Déplacer le RDV du ${_vEsc(_rdvQuand(x).replace(/^./, m => m.toLowerCase()))}${x.statut === 'reserve' ? ' (à valider)' : ''}</button>`).join('');
       })()}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqRdvLienOuvrir('${l.id}')" title="Envoyer un mail au client depuis le CRM, en ton nom — avec ton lien de prise de rendez-vous si tu veux" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Écrire au client</button>` : ''}
-      ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqAppelSansReponse('${l.id}')" title="Il n'a pas décroché : on note la tentative, avec la date, et tu choisis quand rappeler" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Pas de réponse</button>` : ''}
+      ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqAppelSansReponse('${l.id}')" title="Il n'a pas décroché : on note la tentative du jour, rien d'autre — ça ne donne pas la paternité" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Pas de réponse</button>` : ''}
     </div>
 
     ${eqAppelsHtml(l)}
@@ -9859,17 +9859,15 @@ function eqAppelsResume(l) {
 
 // « Il n'a pas décroché » : la tentative est datée côté base, et on enchaîne
 // tout de suite sur la question qui compte — quand le rappelle-t-on ?
+// Règle du 08/09/2026 : « Pas de réponse » note seulement que quelqu'un a appelé
+// ce jour-là. Pas de planification d'activité derrière (elle faisait compter le
+// geste comme une action commerciale et donnait la paternité) ; le rappel déjà
+// posé, s'il y en a un, n'est pas touché.
 async function eqAppelSansReponse(id) {
   const l = (_eqLeads || []).find(x => x.id === id);
   if (!l) return;
-  const n = eqAppelsListe(l).length + 1;
-  eqRappelPicker('Tentative n°' + n + ' sans réponse — quand rappelles-tu ?', async (rappel, t, h) => {
-    await _eqLeadPatch(id, Object.assign(
-      { statut: 'Sans réponse', statut_maj: new Date().toISOString() },
-      _eqActivitePatch(rappel, t, h)
-    ));
-    await eqAppelsRelire(id);
-  }, false, { titre: l.rappel_titre, heure: l.rappel_heure });
+  await _eqLeadPatch(id, { statut: 'Sans réponse', statut_maj: new Date().toISOString() });
+  await eqAppelsRelire(id);
 }
 
 // La liste des tentatives est écrite par la base : on la relit après coup
