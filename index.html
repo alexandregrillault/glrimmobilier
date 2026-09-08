@@ -7077,7 +7077,7 @@ async function _eqChargerAnnonces() {
 // ce vendeur — c'est le bug du même prix partout. Sur ces références on
 // n'affiche plus que le prix lu dans le mail du client lui-même.
 function _eqSansAccent(x) {
-  return String(x == null ? '' : x).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  return String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
 }
 function _eqRefGenerique(ref) {
   const r = _eqSansAccent(ref);
@@ -9988,7 +9988,27 @@ async function _planEnvoyer(nom, blob) {
     return r.ok;
   } catch (e) { return false; }
 }
+// Un plan déposé en PDF (lot hors Otaree) : la première page est rendue en image
+async function _planImagePdf(url) {
+  const pdfjs = await loadPdfJs();
+  const doc = await pdfjs.getDocument({ url }).promise;
+  const page = await doc.getPage(1);
+  const v0 = page.getViewport({ scale: 1 });
+  const vp = page.getViewport({ scale: Math.min(4, 2000 / Math.max(v0.width, v0.height)) });
+  const c = document.createElement('canvas');
+  c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  await page.render({ canvasContext: x, viewport: vp }).promise;
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error('plan illisible'));
+    im.src = c.toDataURL('image/png');
+  });
+}
 function _planImage(url) {
+  if (/\.pdf(?:$|\?)/i.test(String(url || ''))) return _planImagePdf(url);
   return new Promise((res, rej) => {
     const im = new Image();
     im.crossOrigin = 'anonymous';
@@ -10329,8 +10349,411 @@ function selDocsApercu() {
   const n = fi && fi.files ? fi.files.length : 0;
   if (!n && !dejaLa) { zone.textContent = ''; return; }
   const noms = fi && fi.files ? [...fi.files].map(f => _selNomDoc(f.name)) : [];
+  const titreSaisi = !!(document.getElementById('sel-l-titre') && document.getElementById('sel-l-titre').value.trim());
+  const aide = (_selCtx && _selCtx.lotOrigine) || titreSaisi
+    ? 'lit les documents et complète les cases vides du formulaire'
+    : (n > 1 ? 'lit les documents, les regroupe par lot et ajoute chaque lot à la sélection' : 'lit le document et ajoute le lot à la sélection');
   zone.innerHTML = (dejaLa ? '<div>' + dejaLa + ' document(s) déjà joint(s) à ce lot</div>' : '')
-    + (n ? '<div>' + n + ' fichier(s) à envoyer : ' + _vEsc(noms.join(', ')) + '</div>' : '');
+    + (n ? '<div>' + n + ' fichier(s) à envoyer : ' + _vEsc(noms.join(', ')) + '</div>'
+      + '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button type="button" id="sel-docs-analyser" onclick="selAnalyserDocs()" class="btn" style="font-size:12px;padding:6px 12px">Analyser les documents</button><span style="font-size:11px;color:var(--muted)">' + aide + '</span></div>'
+      + '<div id="sel-docs-etat" style="margin-top:5px"></div>' : '');
+}
+
+/* ===== Analyse des documents d'un lot hors Otaree (septembre 2026) ==========
+   Le vendeur dépose d'un coup les fiches et plans de plusieurs lots. Sans IA
+   ni envoi à un service : pdf.js lit le texte des PDF dans le navigateur
+   (comme pour le relevé BNP), on repère le numéro de lot, la typologie, la
+   surface, l'étage, le prix, la ville, la livraison, le parking, on regroupe
+   les fichiers par lot (le plan de A avec la fiche de A), les documents
+   communs (notice, plan de masse, plaquette, photo) sont joints à tous les
+   lots, et chaque lot est ajouté à la sélection avec ses documents.
+   Un scan ou une image n'a pas de texte : seul son nom de fichier
+   (« A106_plan.jpg ») le rattache au bon lot.
+   Titre déjà saisi, ou lot rouvert avec ✎ : on complète seulement les cases
+   vides du formulaire, sans créer de lot.
+   ============================================================================ */
+
+// Un fichier n'est envoyé qu'une fois au stockage, même s'il sert à plusieurs lots
+const _selDocCache = new Map();
+function _selDocCleFichier(f) { return [f.name, f.size, f.lastModified].join('|'); }
+async function _selEnvoyerDocUneFois(f, i) {
+  const k = _selDocCleFichier(f);
+  if (_selDocCache.has(k)) return _selDocCache.get(k);
+  const url = await _selEnvoyerDoc(f, i);
+  if (url) _selDocCache.set(k, url);
+  return url;
+}
+
+function _selNorm(t) {
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+function _selEstPdf(f) { return /pdf/i.test(f.type || '') || /\.pdf$/i.test(f.name || ''); }
+function _selEstImage(f) { return /^image\//i.test(f.type || '') || /\.(jpe?g|png|webp|gif|heic)$/i.test(f.name || ''); }
+
+// Texte des premières pages d'un PDF, ligne par ligne
+async function _selTextePdf(file, maxPages) {
+  if (!_selEstPdf(file)) return '';
+  try {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const n = Math.min(doc.numPages, maxPages || 6);
+    const pages = [];
+    for (let p = 1; p <= n; p++) {
+      const page = await doc.getPage(p);
+      const tc = await page.getTextContent();
+      let lastY = null, ligne = [];
+      const lignes = [];
+      tc.items.forEach(it => {
+        if (!it || typeof it.str !== 'string') return;
+        const y = Math.round(it.transform ? it.transform[5] : 0);
+        if (lastY !== null && Math.abs(y - lastY) > 2) { lignes.push(ligne.join(' ')); ligne = []; }
+        ligne.push(it.str); lastY = y;
+      });
+      lignes.push(ligne.join(' '));
+      pages.push(lignes.join('\n'));
+    }
+    return pages.join('\n').replace(/[\u00a0\u202f]/g, ' ').replace(/[ \t]+/g, ' ');
+  } catch (e) { return ''; }
+}
+
+const _SEL_ANNEXE_RX = /(parking|stationnement|box|cave|cellier|garage|jardin|terrasse|balcon)\s*$/i;
+// Numéros de lot cités dans un texte, du plus fréquent au plus rare
+function _selNumerosLot(texte) {
+  const votes = {};
+  const rx = /\b(?:lot|appartement|appt|logement)\s*(?:n\s*[°ºo]?\s*)?[:.\-]?\s*([A-Za-z]{0,2}\s?-?\d{1,4}(?:[.\-/]\d{1,3})?[A-Za-z]?)(?![\d,.]|[ \t]\d{3}\b)/gi;
+  let m;
+  while ((m = rx.exec(texte))) {
+    if (!/^[A-Z]{0,2}\s?-?\d/.test(m[1])) continue;                // « lot de 3 » : pas un numéro
+    if (/^[TF]\s?\d$/i.test(m[1])) continue;                        // « appartement T3 » : une typologie
+    const avant = _selMemeLigne(texte, m.index, 30);
+    if (_SEL_ANNEXE_RX.test(avant)) continue;                     // « parking lot 45 »
+    const apres = texte.slice(m.index + m[0].length, m.index + m[0].length + 14);
+    if (/^\s*(pi[èe]ces?|m²|m2|%|€|euros?|chambres?|logements?|lots?)\b/i.test(apres)) continue;
+    const num = m[1].replace(/\s+/g, '').toUpperCase();
+    if (/^(19|20)\d{2}$/.test(num)) continue;                     // une année
+    votes[num] = (votes[num] || 0) + 1;
+  }
+  return Object.keys(votes).sort((a, b) => votes[b] - votes[a]);
+}
+// Numéro de lot lisible dans un nom de fichier (« AlterEgo_A106_plan.pdf » → A106)
+function _selNumeroDepuisNom(nom) {
+  const base = String(nom || '').replace(/\.[a-z0-9]{1,5}$/i, '');
+  let m = base.match(/(?:^|[ _\-.(])(?:lot|appt?|logt?|appartement|logement)[ _\-.]*(?:n[°º]?[ _\-.]*)?([A-Za-z]{0,2}\d{1,4}[A-Za-z]?)(?=$|[ _\-.)])/i);
+  if (m) return m[1].toUpperCase();
+  m = base.match(/(?:^|[ _\-.(])([A-Z]{1,2}\d{2,4})(?=$|[ _\-.)])/);
+  if (m && !/^[TF]\d$/.test(m[1])) return m[1].toUpperCase();
+  m = base.match(/(?:^|[ _\-.(])(\d{2,4})(?=$|[ _\-.)])/);
+  if (m && !/^(19|20)\d{2}$/.test(m[1])) return m[1];
+  return '';
+}
+// Bout de texte juste avant une position, sans remonter à la ligne précédente
+function _selMemeLigne(t, i, n) {
+  const a = t.slice(Math.max(0, i - n), i);
+  const k = a.lastIndexOf('\n');
+  return k === -1 ? a : a.slice(k + 1);
+}
+function _selNombre(s) { return parseFloat(String(s).replace(/\s/g, '').replace(',', '.')); }
+function _selTypologie(t) {
+  const votes = {};
+  let m;
+  const rx = /\b([TF])\s?([1-7])\b(?!\s?(?:19|20)\d{2}\b)/g;   // T3, F2 — pas « T4 2028 »
+  while ((m = rx.exec(t))) { const k = 'T' + m[2]; votes[k] = (votes[k] || 0) + 1; }
+  const rp = /\b([1-7])\s*pi[èe]ces?\b/gi;
+  while ((m = rp.exec(t))) { const k = 'T' + m[1]; votes[k] = (votes[k] || 0) + 1; }
+  const ks = Object.keys(votes).sort((a, b) => votes[b] - votes[a]);
+  if (ks.length) return ks[0];
+  return /\bstudio\b/i.test(t) ? 'Studio' : '';
+}
+function _selSurface(t) {
+  let m = t.match(/surface\s*(?:habitable|hab\.?|loi\s*carrez|carrez|totale|du\s*lot|logement|du\s*logement)?\s*(?:\([^)]{0,30}\))?\s*[:=\-]?\s*(\d{1,3}(?:[.,]\d{1,2})?)\s*m/i);
+  if (m) { const v = _selNombre(m[1]); if (v >= 8 && v <= 400) return m[1].replace('.', ',') + ' m²'; }
+  const rx = /(\d{1,3}(?:[.,]\d{1,2})?)\s*m(?:²|2\b|\s*carr)/gi;
+  let best = null;
+  while ((m = rx.exec(t))) {
+    const avant = _selMemeLigne(t, m.index, 40);
+    if (/(terrasse|balcon|loggia|jardin|cave|parking|cellier|masse|terrain|parcelle)/i.test(avant)) continue;
+    const v = _selNombre(m[1]);
+    if (v >= 12 && v <= 400 && (best === null || v > best.v)) best = { v, s: m[1] };
+  }
+  return best ? best.s.replace('.', ',') + ' m²' : '';
+}
+function _selExterieur(t) {
+  const m = t.match(/\b(terrasse|balcon|loggia|jardin)\b[^0-9\n]{0,30}?(\d{1,3}(?:[.,]\d{1,2})?)\s*m/i);
+  if (!m) return '';
+  const v = _selNombre(m[2]);
+  if (!(v > 0 && v <= 500)) return '';
+  return m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase() + ' ' + m[2].replace('.', ',') + ' m²';
+}
+function _selEtage(t) {
+  let m = t.match(/\b(\d{1,2})\s*(?:er|e|è|ème|eme|nd)?\s*[ée]tage(?!s)\b/i);
+  if (m && +m[1] <= 40) return m[1];
+  m = t.match(/[ée]tage\s*[:=\-]?\s*(\d{1,2})\b/i);
+  if (m && +m[1] <= 40) return m[1];
+  if (/rez[- ]de[- ]jardin|\bRDJ\b/i.test(t)) return 'RDJ';
+  if (/rez[- ]de[- ]chauss|\bRDC\b/i.test(t)) return 'RDC';
+  return '';
+}
+function _selPrix(t) {
+  const cand = [];
+  const pousse = (v, score, i) => { if (v >= 60000 && v <= 5000000) cand.push({ v, score, i }); };
+  let m;
+  const rx = /(\d{1,3}(?:[ .]\d{3}){1,2})(?:[.,]\d{2})?\s*(?:€|euros?|\beur\b|ttc)/gi;
+  while ((m = rx.exec(t))) {
+    const v = parseInt(m[1].replace(/[ .]/g, ''), 10);
+    const avant = _selNorm(_selMemeLigne(t, m.index, 60));
+    let score = 1;
+    if (/prix/.test(avant)) score += 2;
+    if (/ttc|tva\s*20/.test(avant)) score += 1;
+    if (/tva\s*(?:5[.,]5|10)|reduite|réduite|lli|lmnp/.test(avant)) score -= 1;   // prix à taux réduit : on garde le plein
+    if (/(parking|stationnement|frais|honoraires|remise|mensualit|loyer|apport|notaire|revenu|garantie|depot|caution|box|cave)/.test(avant)) score -= 3;
+    pousse(v, score, m.index);
+  }
+  const rp = /prix[^0-9\n]{0,40}(\d{3}(?:[ .]\d{3}){1,2})\b/gi;
+  while ((m = rp.exec(t))) pousse(parseInt(m[1].replace(/[ .]/g, ''), 10), 3, m.index);
+  if (!cand.length) return '';
+  cand.sort((a, b) => b.score - a.score || b.v - a.v);
+  return new Intl.NumberFormat('fr-FR').format(cand[0].v) + ' €';
+}
+function _selParking(t) {
+  const m = t.match(/\b(?:parking|stationnement|box|garage)\b[^0-9\n]{0,25}?(?:n\s*[°ºo]?\s*)?([A-Za-z]{0,2}\s?-?\d{1,4})\b(?!\s?\d{3})(?!\s*(?:€|m|%))/i);
+  if (m && /^[A-Z]{0,2}\s?-?\d/.test(m[1])) {
+    const p = m[1].replace(/\s+/g, '').toUpperCase();
+    if (!/^(19|20)\d{2}$/.test(p)) return p;
+  }
+  if (/\b(parking|stationnement)\b[^\n]{0,20}\b(inclus|compris|offert)/i.test(t)) return 'Inclus';
+  return '';
+}
+function _selLivraison(t) {
+  const m = t.match(/livraison[^\n]{0,30}?\b(?:(\d)\s*(?:er|e|è|ème|eme)?\s*(?:trimestre|trim\.?)\s*(\d{4})|T(\d)\s*(\d{4})|(\d{4})\s*[-–—]?\s*T(\d)|(\d)\s*(?:er|e|è|ème|eme)?\s*(?:semestre|sem\.?)\s*(\d{4})|S(\d)\s*(\d{4})|(janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)\s*(\d{4})|(\d{1,2})\/(\d{4})|((?:20)\d{2}))\b/i);
+  if (!m) return '';
+  if (m[1]) return m[2] + '-T' + m[1];
+  if (m[3]) return m[4] + '-T' + m[3];
+  if (m[5]) return m[5] + '-T' + m[6];
+  if (m[7]) return m[8] + '-S' + m[7];
+  if (m[9]) return m[10] + '-S' + m[9];
+  if (m[11]) return m[11].charAt(0).toUpperCase() + m[11].slice(1).toLowerCase() + ' ' + m[12];
+  if (m[13]) return m[14] + '-T' + Math.min(4, Math.ceil(+m[13] / 3));
+  return m[15] || '';
+}
+const _SEL_VILLE_LIAISONS = ['sur', 'sous', 'le', 'la', 'les', 'en', 'aux', 'de', 'des', 'du', 'et', 'a', 'à', 'les', 'lès', 'lez', 'saint', 'sainte', 'st', 'ste', "d'", "l'"];
+function _selVilleJolie(v) {
+  const brut = String(v || '').trim();
+  if (brut !== brut.toUpperCase()) return brut;   // déjà en minuscules accentuées : on ne touche pas
+  return brut.toLowerCase().replace(/(^|[\s-])([a-z\u00E0-\u00FF])/g, (x, sep, c) => sep + c.toUpperCase())
+    .replace(/([\s-])(Sur|Sous|Le|La|Les|En|Aux|De|Des|Du|Et|Lès|Lez)(?=[\s-])/g, (x, a, w) => a + w.toLowerCase());
+}
+function _selVille(t) {
+  const votes = {}, formes = {};
+  const rx = /\b(\d{5})[ \t]+([A-Z\u00C0-\u00DE][A-Za-z\u00C0-\u00FF'\u2019-]+(?:[ \t]+[A-Za-z\u00C0-\u00FF'\u2019-]+){0,4})/g;
+  let m;
+  while ((m = rx.exec(t))) {
+    const cp = m[1];
+    if (/^(0|96|97|98|99)/.test(cp)) continue;
+    const mots = m[2].split(/[ \t]+/);
+    const garde = [mots[0]];
+    for (let i = 1; i < mots.length; i++) {
+      const w = mots[i];
+      if (/^[A-Z\u00C0-\u00DD]/.test(w) && !/^(Tel|Tél|Cedex|CEDEX|France|FRANCE|Www|Tel\.|SAS|SA|SARL|SCI|SCCV|RCS|Siret|SIRET)$/.test(w)) garde.push(w);
+      else if (_SEL_VILLE_LIAISONS.indexOf(w.toLowerCase()) !== -1 && i < mots.length - 1) garde.push(w);
+      else break;
+    }
+    const v = garde.join(' ').replace(/[,;:.]+$/, '');
+    if (v.length < 3) continue;
+    const k = cp + ' ' + _selNorm(v);
+    votes[k] = (votes[k] || 0) + 1 + (/^(75|77|78|91|92|93|94|95)/.test(cp) ? 1 : 0);
+    if (!formes[k]) formes[k] = { cp, v };
+  }
+  const ks = Object.keys(votes).sort((a, b) => votes[b] - votes[a]);
+  if (!ks.length) return '';
+  return _selVilleJolie(formes[ks[0]].v) + ' ' + formes[ks[0]].cp;
+}
+// Nom du programme deviné d'après les noms de fichiers (« AlterEgo_A106_fiche.pdf »)
+function _selProgrammeDepuisNoms(noms) {
+  const nettoie = (n) => String(n || '').replace(/\.[a-z0-9]{1,5}$/i, '')
+    .replace(/(^|[ _\-.(])(?:lot|appt?|logt?|appartement|logement)[ _\-.]*(?:n[°º]?[ _\-.]*)?[A-Za-z]{0,2}\d{1,4}[A-Za-z]?(?=$|[ _\-.)])/gi, ' ')
+    .replace(/(^|[ _\-.(])[A-Z]{1,2}\d{2,4}(?=$|[ _\-.)])/g, ' ')
+    .replace(/(^|[ _\-.(])\d{1,4}(?=$|[ _\-.)])/g, ' ')
+    .replace(/\b(fiche|plan|plans|masse|notice|descriptif|plaquette|brochure|photo|image|visuel|perspective|document|doc|pdf|scan|copie|vf|final|v\d+|t[1-7]|f[1-7]|studio|etage|étage|rdc)\b/gi, ' ')
+    .replace(/[_\-.()]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const bases = (noms || []).map(nettoie).filter(Boolean);
+  if (!bases.length) return '';
+  let p = bases[0];
+  for (const b of bases) {
+    let i = 0;
+    while (i < p.length && i < b.length && p[i].toLowerCase() === b[i].toLowerCase()) i++;
+    p = p.slice(0, i);
+  }
+  p = p.replace(/\s\S{0,2}$/, '').trim();   // un mot coupé en fin de préfixe
+  if (p.length < 3 || /^\d+$/.test(p)) return '';
+  return p.charAt(0).toUpperCase() + p.slice(1);
+}
+// Nature d'un document : fiche d'un lot, plan d'un lot, plan de masse, photo, ou document commun au programme
+function _selTypeDoc(f, texte) {
+  const n = _selNorm(f.name), t = _selNorm(texte).slice(0, 800);
+  if (/plan[ _\-]*(de[ _\-]*)?masse|\bmasse\b/.test(n) || /plan de masse/.test(t)) return 'masse';
+  if (_selEstImage(f)) return (/plan/.test(n) || _selNumeroDepuisNom(f.name)) ? 'plan' : 'photo';
+  if (/\b(notice|descriptif|plaquette|brochure|reglement|rcp|grille|tarif|prix|cahier|presentation|programme|residence|acte|contrat|reservation|garantie|dpe|plans?[ _\-]*(etage|niveau)|facade|perspective|perspectives)\b/.test(n)) return 'commun';
+  if (/\bplan\b/.test(n)) return 'plan';
+  if (/notice descriptive|cahier des charges|reglement de copropriete|grille de prix|grille tarifaire|liste des prix/.test(t)) return 'commun';
+  if (texte.trim().length < 80 && !/surface|prix|pi[èe]ces|typologie|habitable/.test(t)) return 'plan';   // presque pas de texte : un dessin
+  return 'fiche';
+}
+function _selChampsDepuisTexte(t) {
+  return {
+    type: _selTypologie(t), surface: _selSurface(t), etage: _selEtage(t), prix: _selPrix(t),
+    ville: _selVille(t), terrasse: _selExterieur(t), parking: _selParking(t), livraison: _selLivraison(t)
+  };
+}
+
+// Regroupe les fichiers par lot. Renvoie { lots:[{cle, docs, texte}], communs:[docs] }
+function _selRegrouperDocs(docs) {
+  const groupes = [];
+  const communs = [];
+  const trouve = (cle) => {
+    let g = groupes.find(x => x.cle === cle);
+    if (g) return g;
+    const chiffres = cle.replace(/\D/g, '');
+    if (chiffres) {
+      const c = groupes.filter(x => x.cle.replace(/\D/g, '') === chiffres);   // « 106 » ↔ « A106 »
+      if (c.length === 1) { if (cle.length > c[0].cle.length) c[0].cle = cle; return c[0]; }
+    }
+    g = { cle, docs: [], texte: '' };
+    groupes.push(g);
+    return g;
+  };
+  const sansCle = [];
+  docs.forEach(d => {
+    const nums = d.texte ? _selNumerosLot(d.texte) : [];
+    const numNom = _selNumeroDepuisNom(d.f.name);
+    let cle = '';
+    if (nums.length >= 4 && !(numNom && nums.indexOf(numNom) !== -1)) cle = '';   // une grille : beaucoup de lots
+    else if (numNom && nums.indexOf(numNom) !== -1) cle = numNom;
+    else if (nums.length && nums.length <= 3 && d.type !== 'commun' && d.type !== 'masse' && d.type !== 'photo') cle = nums[0];
+    else if (numNom && d.type !== 'commun' && d.type !== 'masse' && d.type !== 'photo') cle = numNom;
+    if (cle) trouve(cle).docs.push(d);
+    else if (d.type === 'fiche' && d.champs && d.champs.type && d.champs.surface) trouve(d.champs.type + ' ' + d.champs.surface).docs.push(d);
+    else sansCle.push(d);
+  });
+  // Fiche ou plan sans numéro : s'il n'y a qu'un lot, il en fait partie ; sinon il est commun
+  sansCle.forEach(d => {
+    if (groupes.length === 1 && (d.type === 'fiche' || d.type === 'plan')) groupes[0].docs.push(d);
+    else communs.push(d);
+  });
+  groupes.forEach(g => {
+    g.docs.sort((a, b) => (a.type === 'fiche' ? 0 : 1) - (b.type === 'fiche' ? 0 : 1));
+    g.texte = g.docs.map(d => d.texte || '').join('\n');
+    g.champs = _selChampsDepuisTexte(g.texte);
+    g.num = /^T\d |^Studio /.test(g.cle) ? '' : g.cle;
+  });
+  return { lots: groupes, communs };
+}
+
+let _selAnalyseEnCours = false;
+async function selAnalyserDocs() {
+  if (_selAnalyseEnCours || !_selCtx) return;
+  const fi = document.getElementById('sel-l-pdf');
+  const fichiers = (fi && fi.files) ? [...fi.files] : [];
+  if (!fichiers.length) return;
+  const etat = document.getElementById('sel-docs-etat');
+  const btn = document.getElementById('sel-docs-analyser');
+  const dire = (t) => { if (etat) etat.textContent = t; };
+  const val = (id) => { const el = document.getElementById('sel-l-' + id); return el ? el.value.trim() : ''; };
+  const setSiVide = (id, v) => { const el = document.getElementById('sel-l-' + id); if (el && v && !el.value.trim()) { el.value = v; return true; } return false; };
+  _selAnalyseEnCours = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Lecture…'; }
+  try {
+    // 1. Lecture du texte de chaque document
+    const docs = [];
+    for (let i = 0; i < fichiers.length; i++) {
+      dire('Lecture ' + (i + 1) + '/' + fichiers.length + ' — ' + fichiers[i].name);
+      const texte = await _selTextePdf(fichiers[i], 6);
+      const d = { f: fichiers[i], i, texte, type: '', champs: null };
+      d.type = _selTypeDoc(fichiers[i], texte);
+      if (d.type === 'fiche') d.champs = _selChampsDepuisTexte(texte);
+      docs.push(d);
+    }
+    const modeCompleter = !!(_selCtx.lotOrigine) || !!val('titre');
+    // 2. Titre déjà saisi ou lot rouvert : on ne fait que remplir les cases vides
+    if (modeCompleter) {
+      const c = _selChampsDepuisTexte(docs.map(d => d.texte || '').join('\n'));
+      let n = 0;
+      Object.keys(c).forEach(k => { if (setSiVide(k, c[k])) n++; });
+      dire('');
+      if (typeof toast === 'function') toast(n ? '✓ ' + n + ' case(s) complétée(s) depuis les documents — vérifie puis « + Ajouter ce lot »' : '⚠ Rien de lisible dans ces documents pour compléter le lot', n ? 'var(--success)' : 'var(--warning)');
+      return;
+    }
+    // 3. Regroupement par lot
+    const r = _selRegrouperDocs(docs);
+    let lots = r.lots.filter(g => g.num || g.champs.type || g.champs.surface);
+    const rejetes = r.lots.filter(g => lots.indexOf(g) === -1);
+    rejetes.forEach(g => r.communs.push(...g.docs));
+    if (!lots.length) {
+      // Aucun numéro de lot, mais on sait décrire un bien : tout est un seul lot
+      const tout = docs.map(d => d.texte || '').join('\n');
+      const c = _selChampsDepuisTexte(tout);
+      if (c.type || c.surface) lots = [{ cle: '', num: '', docs: docs.filter(d => d.type !== 'masse' && d.type !== 'photo'), texte: tout, champs: c }];
+      r.communs.length = 0;
+      docs.forEach(d => { if (!lots.length || d.type === 'masse' || d.type === 'photo') r.communs.push(d); });
+    }
+    if (!lots.length) {
+      dire('');
+      if (typeof toast === 'function') toast('⚠ Aucun lot reconnu dans ces documents (pas de numéro de lot, de typologie ni de surface lisibles) — remplis le lot à la main, les fichiers restent joints', 'var(--warning)');
+      return;
+    }
+    // 4. Envoi des fichiers (une seule fois chacun)
+    let rates = 0;
+    for (let i = 0; i < docs.length; i++) {
+      dire('Envoi ' + (i + 1) + '/' + docs.length + ' — ' + docs[i].f.name);
+      docs[i].url = await _selEnvoyerDocUneFois(docs[i].f, docs[i].i);
+      if (!docs[i].url) rates++;
+    }
+    const programme = _selProgrammeDepuisNoms(fichiers.map(f => f.name));
+    const communsOk = r.communs.filter(d => d.url);
+    const masse = communsOk.find(d => d.type === 'masse');
+    const photo = communsOk.find(d => d.type === 'photo');
+    const villeCommune = r.communs.length ? _selVille(r.communs.map(d => d.texte || '').join('\n')) : '';
+    const livraisonCommune = r.communs.length ? _selLivraison(r.communs.map(d => d.texte || '').join('\n')) : '';
+    // 5. Un lot par groupe, ajouté à la sélection
+    const nouveaux = [];
+    for (const g of lots) {
+      const c = g.champs;
+      const propres = g.docs.filter(d => d.url);
+      const plan = propres.find(d => d.type === 'plan');
+      const docsLot = propres.concat(communsOk.filter(d => d.type !== 'photo')).map(d => ({ nom: _selNomDoc(d.f.name), url: d.url }));
+      const titre = [programme, g.num ? 'Lot ' + g.num : ''].filter(Boolean).join(' — ')
+        || [c.type, c.surface, c.ville].filter(Boolean).join(' · ')
+        || _selNomDoc(g.docs[0].f.name);
+      const lot = {
+        titre,
+        ville: c.ville || villeCommune, prix: c.prix, lien: '',
+        surface: c.surface, etage: c.etage, terrasse: c.terrasse,
+        parking: c.parking, livraison: c.livraison || livraisonCommune,
+        expo: '', promoteur: '', nature: '', annexes: [], prixOptions: [], surfacePonderee: '',
+        plan: plan ? plan.url : '', masse: masse ? masse.url : '',
+        pdf: docsLot.length ? docsLot[0].url : '', docs: docsLot,
+        adresse: '', adresseBrute: '', commune: '', codePostal: '', geo: null, adresseOk: false,
+        remises: [], image: photo ? photo.url : '', images: [],
+        pitch: '', atouts: [], typologies: c.type ? [c.type] : [],
+        analyse: 'documents'
+      };
+      _selCtx.libres.push(lot);
+      nouveaux.push(lot);
+    }
+    if (fi) fi.value = '';
+    selDocsApercu();
+    selAjouterLibreRefresh();
+    const nbCommuns = communsOk.filter(d => d.type !== 'photo').length;
+    if (typeof toast === 'function') toast('✓ ' + nouveaux.length + ' lot' + (nouveaux.length > 1 ? 's' : '') + ' ajouté' + (nouveaux.length > 1 ? 's' : '') + ' depuis les documents'
+      + (nbCommuns ? ' — ' + nbCommuns + ' document' + (nbCommuns > 1 ? 's' : '') + ' commun' + (nbCommuns > 1 ? 's' : '') + ' joint' + (nbCommuns > 1 ? 's' : '') + ' à chaque lot' : '')
+      + (rates ? ' — ' + rates + ' fichier(s) non envoyé(s)' : '')
+      + ' · vérifie avec ✎', rates ? 'var(--warning)' : 'var(--success)');
+    // Vignettes de plan en tâche de fond (un plan PDF est rendu en image)
+    planPreparerLots(nouveaux).then(x => { if (x.faits) selAjouterLibreRefresh(); });
+  } finally {
+    _selAnalyseEnCours = false;
+    const b2 = document.getElementById('sel-docs-analyser');
+    if (b2) { b2.disabled = false; b2.textContent = 'Analyser les documents'; }
+  }
 }
 
 // Envoi d'un fichier vers le stockage public. Renvoie son adresse, ou null.
@@ -10390,7 +10813,7 @@ async function selAjouterLibre() {
     let rates = 0;
     for (let i = 0; i < fichiers.length; i++) {
       if (zone) zone.textContent = 'Envoi ' + (i + 1) + '/' + fichiers.length + ' — ' + fichiers[i].name;
-      const url = await _selEnvoyerDoc(fichiers[i], i);
+      const url = await _selEnvoyerDocUneFois(fichiers[i], i);
       if (url) docs.push({ nom: _selNomDoc(fichiers[i].name), url: url });
       else rates++;
     }
