@@ -6060,7 +6060,7 @@ async function renderEquipeLeads() {
     // Un lead en compétition (recu_par) apparaît chez chaque vendeur récepteur,
     // même si la paternité n'est pas (encore) à lui.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -7234,8 +7234,9 @@ function eqVilleRechercheInput(q, mode) {
   _eqVilleDerniereRecherche = q;
   clearTimeout(_eqVilleTimer);
   const residence = mode === 'residence';
-  const idBox = residence ? 'eq-commune-sugg' : 'eq-ville-sugg';
-  const fnChoix = residence ? 'eqCommuneChoisie' : 'eqVilleChoisie';
+  const nouveau = mode === 'nouveau';   // fenêtre « Nouveau lead » : mêmes suggestions, choix rangé en pastille
+  const idBox = residence ? 'eq-commune-sugg' : (nouveau ? 'cn-ville-sugg' : 'eq-ville-sugg');
+  const fnChoix = residence ? 'eqCommuneChoisie' : (nouveau ? 'cnVilleChoisie' : 'eqVilleChoisie');
   const box = document.getElementById(idBox);
   if (!box) return;
   if (q.length < 2) { box.innerHTML = ''; box.style.display = 'none'; return; }
@@ -7279,7 +7280,7 @@ function eqVilleRechercheInput(q, mode) {
     // Départements proposés en tête : recherche d'un secteur entier (« 92 », « Hauts-de-Seine »)
     const htmlDepts = (residence ? [] : _eqDeptsCorrespondants(q)).map(d => {
       const val = d.nom + ' (' + d.code + ')';
-      return `<button onclick="eqVilleChoisie(this.dataset.v)" data-v="${esc(val).replace(/"/g,'&quot;')}" style="display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:var(--surface2);border:none;border-bottom:1px solid var(--border);padding:9px 12px;color:var(--text);font-size:13px;cursor:pointer">
+      return `<button onclick="${fnChoix}(this.dataset.v)" data-v="${esc(val).replace(/"/g,'&quot;')}" style="display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:var(--surface2);border:none;border-bottom:1px solid var(--border);padding:9px 12px;color:var(--text);font-size:13px;cursor:pointer">
         <span>\u25EC <strong>${esc(d.nom)}</strong> <span style="color:var(--muted)">${esc(d.code)}</span></span>
         <span style="font-size:11px;color:var(--accent);font-weight:700">tout le département</span>
       </button>`;
@@ -7682,6 +7683,8 @@ ${(() => {
         }
         return `<button onclick="eqFicheRappelEdit()" style="background:var(--surface2);border:1px dashed var(--accent);border-radius:9px;padding:8px 13px;color:var(--accent);font-size:12.5px;font-weight:600;cursor:pointer">+ Planifier une activité</button>`;
       })()}
+      ${eqFicheActivitesExtraHtml(l)}
+      ${(l.rappel_le || eqActivitesDe(l).length) && !STATUTS_FINAUX.includes(cur) ? `<button onclick="eqFicheActiviteAjouter()" title="Une activité de plus sur cette fiche, sans toucher à celle déjà prévue — ex. « Faire la sélection » la veille d’une visio" style="background:none;border:1px dashed var(--border);border-radius:9px;padding:7px 11px;color:var(--muted);font-size:12px;cursor:pointer">+ Autre activité</button>` : ''}
       ${cur === 'Nouveau' ? `<button onclick="eqLeadAppele('${l.id}')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Appelé</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqOuvrirSelection('${l.id}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Envoyer une sélection</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqRdvFixerOuvrir('${l.id}')" title="Vous venez de convenir d'un rendez-vous au téléphone : tu le poses dans ton planning et le client reçoit la confirmation par mail" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Fixer un rendez-vous</button>` : ''}
@@ -8208,7 +8211,11 @@ async function eqRdvFixerValider() {
     //    le rendez-vous occupe déjà le planning, pas de second bloc)
     const jourRdv = jour;
     const trace = '[' + new Date().toLocaleDateString('sv-SE') + '] Rendez-vous ' + (format === 'visio' ? 'visio' : 'téléphonique') + ' fixé par ' + vendeur + ' pour le ' + debut.toLocaleDateString('fr-FR') + ' à ' + heure.replace(':', 'h') + (note ? ' — ' + note : '') + (transfert ? ' — PATERNITÉ TRANSFÉRÉE de ' + ancienVendeur + ' à ' + vendeur : '');
-    await _eqLeadPatch(contactId, { rappel_le: jourRdv, rappel_heure: null, rappel_titre: null, notes: (l.notes ? l.notes.trim() + '\n' : '') + trace });
+    //    … sauf si la fiche porte déjà une activité de préparation, avec un
+    //    intitulé et datée avant le rendez-vous (« Faire la sélection » la
+    //    veille) : elle reste en place, le rendez-vous vit dans le planning.
+    const preparation = !!(l.rappel_le && l.rappel_titre && l.rappel_le < jourRdv);
+    await _eqLeadPatch(contactId, Object.assign(preparation ? {} : { rappel_le: jourRdv, rappel_heure: null, rappel_titre: null }, { notes: (l.notes ? l.notes.trim() + '\n' : '') + trace }));
     // 6. Le client est prévenu, avec le rendez-vous pour son agenda et le lien de visio
     let mot = '';
     if (envoyer) {
@@ -8907,45 +8914,50 @@ async function eqCreneauRappelSync(l) {
     await fetch(SUPABASE_URL + '/rest/v1/creneaux?origine=eq.rappel&contact_id=eq.' + l.id, {
       method: 'DELETE', headers: entetes
     });
-    if (!l.rappel_le || !l.rappel_heure) { await _eqPlanRecharger(); return; }
-
-    const heure = String(l.rappel_heure).slice(0, 5);
-    const debut = new Date(l.rappel_le + 'T' + heure + ':00');
-    if (isNaN(debut)) return;
-    const fin = new Date(debut.getTime() + RAPPEL_DUREE_MIN * 60000);
+    // Activité principale + activités supplémentaires : chacune à son heure
+    const aPoser = [];
+    if (l.rappel_le && l.rappel_heure) aPoser.push({ le: l.rappel_le, heure: l.rappel_heure, titre: l.rappel_titre });
+    eqActivitesDe(l).forEach(a => { if (a.heure) aPoser.push({ le: a.le, heure: a.heure, titre: a.titre }); });
+    if (!aPoser.length) { await _eqPlanRecharger(); return; }
     const vendeur = l.vendeur || (MON_ROLE && MON_ROLE.prenom);
     if (!vendeur) return;
+    for (const act of aPoser) {
+      const heure = String(act.heure).slice(0, 5);
+      const debut = new Date(act.le + 'T' + heure + ':00');
+      if (isNaN(debut)) continue;
+      const fin = new Date(debut.getTime() + RAPPEL_DUREE_MIN * 60000);
 
-    // 2. Les créneaux LIBRES du vendeur qui tombent dans la plage sont retirés :
-    // la base impose un seul créneau par (vendeur, début), et les disponibilités
-    // sont découpées en blocs de 10 min — une activité à 12h00 sur une journée
-    // ouverte aux clients tombait pile sur le bloc libre de 12h00 et l'insertion
-    // était refusée en silence (cas Théophile, 07/09/2026). Un rendez-vous
-    // confirmé, lui, n'est jamais touché.
-    await fetch(SUPABASE_URL + '/rest/v1/creneaux?vendeur=eq.' + encodeURIComponent(vendeur)
-      + '&statut=eq.libre&fin=gt.' + encodeURIComponent(debut.toISOString()) + '&debut=lt.' + encodeURIComponent(fin.toISOString()), {
-      method: 'DELETE', headers: entetes
-    });
+      // 2. Les créneaux LIBRES du vendeur qui tombent dans la plage sont retirés :
+      // la base impose un seul créneau par (vendeur, début), et les disponibilités
+      // sont découpées en blocs de 10 min — une activité à 12h00 sur une journée
+      // ouverte aux clients tombait pile sur le bloc libre de 12h00 et l'insertion
+      // était refusée en silence (cas Théophile, 07/09/2026). Un rendez-vous
+      // confirmé, lui, n'est jamais touché.
+      await fetch(SUPABASE_URL + '/rest/v1/creneaux?vendeur=eq.' + encodeURIComponent(vendeur)
+        + '&statut=eq.libre&fin=gt.' + encodeURIComponent(debut.toISOString()) + '&debut=lt.' + encodeURIComponent(fin.toISOString()), {
+        method: 'DELETE', headers: entetes
+      });
 
-    const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux', {
-      method: 'POST', headers: entetes,
-      body: JSON.stringify({
-        vendeur: vendeur,
-        debut: debut.toISOString(),
-        fin: fin.toISOString(),
-        mode: 'telephone',
-        statut: 'confirme',
-        contact_id: l.id,
-        client_nom: (typeof nomComplet === 'function' ? nomComplet(l) : null) || l.nom || 'Client',
-        client_message: l.rappel_titre || null,
-        origine: 'rappel'
-      })
-    });
-    if (!res.ok) {
-      // Un rendez-vous client occupe déjà exactement cette heure : l'activité
-      // est bien enregistrée, mais le vendeur doit le savoir au lieu de croire
-      // que son planning est à jour.
-      if (typeof toast === 'function') toast('⚠ Activité enregistrée, mais pas posée dans le planning : un rendez-vous occupe déjà ' + heure.replace(':', 'h') + ' ce jour-là', 'var(--warning)');
+      const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux', {
+        method: 'POST', headers: entetes,
+        body: JSON.stringify({
+          vendeur: vendeur,
+          debut: debut.toISOString(),
+          fin: fin.toISOString(),
+          mode: 'telephone',
+          statut: 'confirme',
+          contact_id: l.id,
+          client_nom: (typeof nomComplet === 'function' ? nomComplet(l) : null) || l.nom || 'Client',
+          client_message: act.titre || null,
+          origine: 'rappel'
+        })
+      });
+      if (!res.ok) {
+        // Un rendez-vous client occupe déjà exactement cette heure : l'activité
+        // est bien enregistrée, mais le vendeur doit le savoir au lieu de croire
+        // que son planning est à jour.
+        if (typeof toast === 'function') toast('⚠ Activité enregistrée, mais pas posée dans le planning : un rendez-vous occupe déjà ' + heure.replace(':', 'h') + ' ce jour-là', 'var(--warning)');
+      }
     }
     await _eqPlanRecharger();
   } catch (e) { /* le planning n'est pas bloquant : l'activité reste dans la page Activité */ }
@@ -8961,7 +8973,85 @@ async function _eqPlanRecharger() {
 
 // Est-ce que ce corps de mise à jour touche à l'activité programmée ?
 function _toucheAuRappel(corps) {
-  return !!corps && ('rappel_le' in corps || 'rappel_heure' in corps || 'rappel_titre' in corps);
+  return !!corps && ('rappel_le' in corps || 'rappel_heure' in corps || 'rappel_titre' in corps || 'activites' in corps);
+}
+
+// ============================================================
+//  PLUSIEURS ACTIVITÉS PAR FICHE (8 septembre 2026)
+//  Cas d'Anaïs : une visio bookée avec une cliente ET « faire la sélection »
+//  la veille — impossible avec une seule activité par fiche. L'activité
+//  principale (rappel_le / rappel_titre / rappel_heure) reste ce qu'elle est :
+//  c'est elle que suivent les statuts, la paternité et les actions groupées.
+//  À côté, la fiche porte des activités supplémentaires (colonne `activites`,
+//  liste {id, le, titre, heure}) : visibles sur la fiche, dans Mes activités
+//  à leur jour, et dans le planning quand elles ont une heure.
+// ============================================================
+function eqActivitesDe(l) {
+  return (l && Array.isArray(l.activites)) ? l.activites.filter(a => a && a.le) : [];
+}
+function _eqActId() { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+async function _eqActivitesEcrire(l, liste) {
+  const propres = (liste || []).filter(a => a && a.le).map(a => ({
+    id: a.id || _eqActId(), le: a.le, titre: a.titre || null, heure: a.heure ? String(a.heure).slice(0, 5) : null,
+    cree_le: a.cree_le || new Date().toISOString(),
+    par: a.par || ((typeof MON_ROLE !== 'undefined' && MON_ROLE && MON_ROLE.prenom) || null)
+  })).sort((a, b) => (a.le + (a.heure || '')).localeCompare(b.le + (b.heure || '')));
+  await _eqLeadPatch(l.id, { activites: propres });
+}
+// « + Autre activité » sur la fiche : en plus de l'activité principale
+function eqFicheActiviteAjouter() {
+  const l = _eqLeads.find(x => x.id === _eqFicheId);
+  if (!l) return;
+  eqRappelPicker('Autre activité', (date, t, h) => {
+    if (!date) return;
+    _eqActivitesEcrire(l, eqActivitesDe(l).concat([{ le: date, titre: t, heure: h }]));
+  }, false, { entete: 'Ajouter une activité', sousTitre: 'En plus de l’activité déjà prévue — ex. « Faire la sélection » la veille du rendez-vous' });
+}
+// Modifier une activité supplémentaire (date, intitulé, heure) ; « Sans rappel » la retire
+function eqActiviteEditer(contactId, actId) {
+  const l = _eqLeads.find(x => x.id === contactId);
+  const a = l && eqActivitesDe(l).find(x => x.id === actId);
+  if (!a) return;
+  eqRappelPicker('Modifier l’activité', (date, t, h) => {
+    const reste = eqActivitesDe(l).filter(x => x.id !== actId);
+    _eqActivitesEcrire(l, date ? reste.concat([Object.assign({}, a, { le: date, titre: t, heure: h })]) : reste);
+  }, false, { titre: a.titre, heure: a.heure, entete: 'Modifier l’activité', sousTitre: 'Activité supplémentaire de cette fiche — « Sans rappel » la retire' });
+}
+// Terminée (ou retirée) : elle disparaît, la fiche et son historique ne bougent pas
+function eqActiviteFaite(contactId, actId) {
+  const l = _eqLeads.find(x => x.id === contactId);
+  if (!l) return;
+  _eqActivitesEcrire(l, eqActivitesDe(l).filter(x => x.id !== actId));
+}
+// Reporter une activité supplémentaire de n jours (en retard : repart d'aujourd'hui)
+function eqActiviteDecaler(contactId, actId, n) {
+  const l = _eqLeads.find(x => x.id === contactId);
+  const a = l && eqActivitesDe(l).find(x => x.id === actId);
+  if (!a) return;
+  const auj = new Date(); auj.setHours(12, 0, 0, 0);
+  const base = new Date(a.le + 'T12:00:00');
+  const depart = (isNaN(base) || base < auj) ? auj : base;
+  const d = new Date(depart.getTime() + n * 864e5);
+  const jour = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  _eqActivitesEcrire(l, eqActivitesDe(l).map(x => x.id === actId ? Object.assign({}, x, { le: jour }) : x));
+}
+// Pastilles des activités supplémentaires sur la fiche
+function eqFicheActivitesExtraHtml(l) {
+  const esc = _vEsc;
+  const auj = new Date().toISOString().slice(0, 10);
+  const fmt = (d) => { const dt = new Date(d + 'T12:00:00'); return isNaN(dt) ? d : dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); };
+  return eqActivitesDe(l).map(a => {
+    const retard = a.le < auj, cejour = a.le === auj;
+    const coul = retard ? 'var(--danger)' : cejour ? 'var(--accent)' : 'var(--border)';
+    return `<span style="display:inline-flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid ${coul};border-radius:9px;padding:6px 11px;font-size:12.5px">
+      <span style="color:${retard ? 'var(--danger)' : 'var(--text)'}">Aussi : <strong>${retard ? fmt(a.le) + ' — en retard' : cejour ? 'aujourd’hui' : fmt(a.le)}${a.heure ? ' à ' + esc(String(a.heure).slice(0, 5).replace(':', 'h')) : ''}</strong>${a.titre ? ' — ' + esc(a.titre) : ''}</span>
+      <span style="display:inline-flex;gap:3px;align-items:center;border-left:1px solid var(--border);padding-left:7px">
+        ${[1, 3, 7].map(n => `<button onclick="eqActiviteDecaler('${l.id}','${a.id}',${n})" title="Reporter de ${n} jour${n > 1 ? 's' : ''}" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;cursor:pointer;color:var(--text);font-family:var(--font-body);font-size:11px;font-weight:600;padding:2px 7px">+${n}j</button>`).join('')}
+      </span>
+      <button onclick="eqActiviteEditer('${l.id}','${a.id}')" title="Changer la date, l’intitulé ou l’heure" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 2px;line-height:1">✎</button>
+      <button onclick="eqActiviteFaite('${l.id}','${a.id}')" title="Terminée — elle disparaît de la liste" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px;padding:0 2px;line-height:1">✕</button>
+    </span>`;
+  }).join('');
 }
 
 // Menu « Actions ▾ » d'une seule ligne d'activité
@@ -9155,6 +9245,35 @@ function renderEqNotifs() {
           'Nouveau lead reçu le ' + fmtJ(recu) + ' — à appeler dans les 48 h', boutonsNew, 'var(--accent)', l.id) });
       }
     }
+  });
+
+  // 3 bis. Activités supplémentaires des fiches (plusieurs activités par fiche,
+  // 08/09/2026) : chacune à son jour, avec ses propres boutons — pas de case à
+  // cocher, les actions groupées ne portent que sur l'activité principale.
+  _eqLeads.forEach(l => {
+    const s = eqLeadStatut(l);
+    if (STATUTS_FINAUX.includes(s)) return;
+    eqActivitesDe(l).forEach(a => {
+      const hAct = a.heure ? String(a.heure).slice(0, 5) : '';
+      const tAct = new Date(a.le + 'T' + (hAct || '00:00') + ':00').getTime();
+      const nomCli = esc(nomComplet(l) || '—');
+      const titreAct = (a.titre ? esc(a.titre) : ('Rappeler ' + nomCli)) + eqReperesLead(l);
+      const avantH = hAct ? '<strong>' + esc(hAct.replace(':', 'h')) + '</strong> · ' : '';
+      const avantCli = a.titre ? nomCli + ' · ' : '';
+      const boutonsA = btnFiche(l.id)
+        + `<button class="btn btn-sm btn-secondary" onclick="eqActiviteEditer('${l.id}','${a.id}')" style="font-size:11px" title="Changer l'intitulé, le jour ou l'heure">Modifier</button>`
+        + `<button class="btn btn-sm btn-primary" onclick="eqActiviteFaite('${l.id}','${a.id}')" style="font-size:11px" title="Terminée : elle disparaît de la liste, la fiche ne bouge pas">Fait</button>`;
+      if (a.le < jour) {
+        retard.push({ t: tAct, g: 'rappel', e: s, d: a.le, html: item('rappel', titreAct,
+          avantH + avantCli + 'prévu le ' + fmtJ(a.le) + ' (il y a ' + joursRetard(a.le) + ' j) · étape : ' + esc(s), boutonsA, 'var(--danger)') });
+      } else if (a.le === jour) {
+        aujourdhui.push({ t: tAct, g: 'rappel', e: s, d: jour, html: item('rappel', titreAct,
+          avantH + avantCli + 'aujourd\'hui · étape : ' + esc(s), boutonsA, 'var(--accent)') });
+      } else {
+        avenir.push({ t: tAct, g: 'rappel', e: s, d: a.le, html: item('prevu', titreAct,
+          avantH + avantCli + fmtJ(a.le) + ' · étape : ' + esc(s), boutonsA, null) });
+      }
+    });
   });
 
   // 4. RDV confirmés à venir ou en cours (jusqu'à la fin du créneau, pour garder
@@ -13118,7 +13237,13 @@ function openNewContact(contexte) {
       ${champ('cn-nom-famille', 'Nom de famille', 'Ex : Leray')}
       ${champ('cn-email', 'Email', 'email@exemple.fr', 'email')}
       ${champ('cn-tel', 'Téléphone', '+33 6 12 34 56 78', 'tel')}
-      ${champ('cn-lieu', 'Ville(s) de recherche', 'Ex : Asnières 92600, Bois-Colombes')}
+      <div style="grid-column:1 / -1">
+        <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Ville(s) de recherche</div>
+        <div id="cn-lieu-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <input id="cn-lieu-input" placeholder="Rechercher une ville… (ex : Asnières) — ou un département (92)" autocomplete="off" oninput="eqVilleRechercheInput(this.value, 'nouveau')" onkeydown="if(event.key==='Enter'){event.preventDefault();cnVilleEntree(this)}" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
+        <div id="cn-ville-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:200px;overflow-y:auto"></div>
+        <input type="hidden" id="cn-lieu" value="">
+      </div>
       ${champ('cn-budget', 'Budget', 'Ex : 350 000 €')}
       ${champ('cn-typologie', 'Typologie', 'Ex : T2, T3')}
       ${champ('cn-source', 'Source', 'Ex : Recommandation, Salon…')}
@@ -13137,8 +13262,45 @@ function openNewContact(contexte) {
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) closeNewContact(); });
   document.body.appendChild(div);
+  _cnVilles = [];
   const first = document.getElementById('cn-prenom');
   if (first) first.focus();
+}
+
+// ---- Villes de recherche du nouveau lead : choisies dans les vraies communes
+// (même moteur geo.api.gouv.fr que la fiche), rangées en pastilles ; le champ
+// caché `cn-lieu` garde la liste « Ville CP, Ville CP » attendue à l'enregistrement.
+let _cnVilles = [];
+function _cnVillesRender() {
+  const chips = document.getElementById('cn-lieu-chips');
+  const cache = document.getElementById('cn-lieu');
+  if (cache) cache.value = _cnVilles.join(', ');
+  if (!chips) return;
+  const esc = (x) => String(x == null ? '' : x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  chips.style.marginBottom = _cnVilles.length ? '8px' : '0';
+  chips.innerHTML = _cnVilles.map(v => `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--accent)18;border:1px solid var(--accent);border-radius:20px;padding:5px 7px 5px 12px;font-size:12px;font-weight:600;color:var(--text)">${esc(v)}<button type="button" onclick="cnVilleRetire(this.dataset.v)" data-v="${esc(v)}" title="Retirer" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 3px">✕</button></span>`).join('');
+}
+function cnVilleChoisie(val) {
+  const ville = String(val || '').trim();
+  if (!ville) return;
+  const nomSeul = ville.replace(/\s+\d{5}\s*$/, '').toLowerCase();
+  if (!_cnVilles.some(v => v.replace(/\s+\d{5}\s*$/, '').toLowerCase() === nomSeul)) _cnVilles.push(ville);
+  _cnVillesRender();
+  const inp = document.getElementById('cn-lieu-input');
+  const box = document.getElementById('cn-ville-sugg');
+  if (inp) { inp.value = ''; inp.focus(); }
+  if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+}
+function cnVilleRetire(v) {
+  _cnVilles = _cnVilles.filter(x => x !== v);
+  _cnVillesRender();
+}
+// Entrée : la première commune proposée ; à défaut (API injoignable), le texte tel quel
+function cnVilleEntree(inp) {
+  const box = document.getElementById('cn-ville-sugg');
+  const premier = box && box.style.display !== 'none' ? box.querySelector('button[data-v]') : null;
+  if (premier) cnVilleChoisie(premier.dataset.v);
+  else if (inp && inp.value.trim()) cnVilleChoisie(inp.value);
 }
 
 function closeNewContact() {
