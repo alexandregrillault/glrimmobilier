@@ -6061,7 +6061,7 @@ async function renderEquipeLeads() {
     // Un lead en compétition (recu_par) apparaît chez chaque vendeur récepteur,
     // même si la paternité n'est pas (encore) à lui.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,conjoint,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -6816,7 +6816,7 @@ function renderEquipeLeadsTable() {
   else if (_eqLeadsFilter === 'nouveaux') leads = leads.filter(l => eqLeadStatut(l) === 'Nouveau');
   else if (_eqLeadsFilter === 'veille') leads = leads.filter(estEnVeille);
   else if (_eqLeadsFilter.startsWith('statut:')) leads = leads.filter(l => eqLeadStatut(l) === _eqLeadsFilter.slice(7));
-  if (q) { const qTel = telRequete(q); leads = leads.filter(l => ((l.nom||'')+' '+(l.email||'')+' '+(l.lieu||'')+' '+(l.typologie||'')+' '+(l.source||'')).toLowerCase().includes(q) || telContient(l.telephone, qTel)); }
+  if (q) { const qTel = telRequete(q); leads = leads.filter(l => ((l.nom||'')+' '+(l.email||'')+' '+(l.lieu||'')+' '+(l.typologie||'')+' '+(l.source||'')+' '+_conjointNom(l.conjoint)).toLowerCase().includes(q) || telContient(l.telephone, qTel) || (l.conjoint && telContient(l.conjoint.telephone, qTel))); }
   const dDem = (l) => { const d = new Date(l.date_lead || l.recu_le || 0); return isNaN(d) ? 0 : d.getTime(); };
   const nouveauChezMoi = (l) => transfertRecent(l) ? 1 : 0;
   leads = [...leads].sort((a,b) => (nouveauChezMoi(b) - nouveauChezMoi(a))
@@ -7746,7 +7746,8 @@ ${(() => {
             <span>${esc(affiche)}</span><span style="opacity:.75;font-weight:400">⧉</span>
           </button>`;
         return (l.telephone ? pastille(telFmt(l.telephone), telFmt(l.telephone), 'Téléphone', 'var(--accent)', 'var(--accent)', '#fff') : '')
-             + (l.email ? pastille(l.email, l.email, 'Email', 'var(--surface2)', 'var(--border)', 'var(--text)') : '');
+             + (l.email ? pastille(l.email, l.email, 'Email', 'var(--surface2)', 'var(--border)', 'var(--text)') : '')
+             + conjointFicheHtml(l);
       })()}
       <select onchange="eqLeadStatutChange('${l.id}', this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer">
         ${STATUTS_LEAD.map(s => `<option value="${esc(s)}" ${s===cur?'selected':''}>${esc(s)}</option>`).join('')}
@@ -13394,7 +13395,80 @@ function _findContactEverywhere(id) {
   return out;
 }
 
-function openEditContact(id) {
+// ---- Conjoint du client ---------------------------------------------------
+// Rangé dans contacts.conjoint = {prenom, nom, telephone, email}, null si aucun.
+// Même bloc dépliable dans « Nouveau lead / contact » et dans « Modifier » :
+// replié tant qu'il n'y a pas de conjoint, ouvert dès qu'il y en a un.
+function _conjointNom(cj) {
+  return cj ? [cj.prenom, cj.nom].filter(Boolean).join(' ') : '';
+}
+function conjointBlocHtml(prefixe, cj, ouvert) {
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  cj = cj || {};
+  const champ = (id2, label, valeur, placeholder, type) =>
+    `<div>
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">${label}</div>
+      <input id="${id2}" type="${type || 'text'}" value="${esc(valeur)}" placeholder="${placeholder || ''}" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
+    </div>`;
+  return `<div style="grid-column:1 / -1">
+    <button type="button" id="${prefixe}-conjoint-btn" onclick="conjointBasculer('${prefixe}')" style="display:${ouvert ? 'none' : 'inline-flex'};background:none;border:1px dashed var(--border);border-radius:9px;padding:7px 12px;color:var(--muted);font-size:12.5px;cursor:pointer">+ Ajouter un conjoint</button>
+    <div id="${prefixe}-conjoint-bloc" style="display:${ouvert ? 'block' : 'none'};border:1px solid var(--border);border-radius:11px;padding:12px 14px;background:var(--surface)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Conjoint</div>
+        <button type="button" onclick="conjointRetirer('${prefixe}')" title="Retirer le conjoint de la fiche" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer">Retirer</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        ${champ(prefixe + '-cj-prenom', 'Prénom', cj.prenom, 'Ex : Thomas')}
+        ${champ(prefixe + '-cj-nom', 'Nom de famille', cj.nom, 'Ex : Leray')}
+        ${champ(prefixe + '-cj-tel', 'Téléphone', cj.telephone, '+33 6 12 34 56 78', 'tel')}
+        ${champ(prefixe + '-cj-email', 'Email', cj.email, 'email@exemple.fr', 'email')}
+      </div>
+    </div>
+  </div>`;
+}
+function conjointBasculer(prefixe) {
+  const btn = document.getElementById(prefixe + '-conjoint-btn');
+  const bloc = document.getElementById(prefixe + '-conjoint-bloc');
+  if (btn) btn.style.display = 'none';
+  if (bloc) bloc.style.display = 'block';
+  const first = document.getElementById(prefixe + '-cj-prenom');
+  if (first) first.focus();
+}
+function conjointRetirer(prefixe) {
+  ['prenom', 'nom', 'tel', 'email'].forEach(k => { const el = document.getElementById(prefixe + '-cj-' + k); if (el) el.value = ''; });
+  const btn = document.getElementById(prefixe + '-conjoint-btn');
+  const bloc = document.getElementById(prefixe + '-conjoint-bloc');
+  if (bloc) bloc.style.display = 'none';
+  if (btn) btn.style.display = 'inline-flex';
+}
+// Ce que la fenêtre contient : null si tout est vide (bloc replié ou retiré)
+function conjointLire(prefixe) {
+  const v = (k) => { const el = document.getElementById(prefixe + '-cj-' + k); return el ? (el.value || '').trim() || null : null; };
+  const cj = { prenom: v('prenom'), nom: v('nom'), telephone: v('tel'), email: v('email') };
+  return (cj.prenom || cj.nom || cj.telephone || cj.email) ? cj : null;
+}
+// Sur la fiche client : nom du conjoint + téléphone / email copiables
+function conjointFicheHtml(l) {
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const cj = l && l.conjoint;
+  if (!cj || !(cj.prenom || cj.nom || cj.telephone || cj.email)) {
+    return `<button onclick="openEditContact('${l.id}', true)" title="Ajouter le conjoint du client (prénom, nom, téléphone, email)" style="background:none;border:1px dashed var(--border);border-radius:9px;padding:7px 11px;color:var(--muted);font-size:12px;cursor:pointer">+ Conjoint</button>`;
+  }
+  const pastille = (valeur, affiche, label) =>
+    `<button onclick="eqCopy(this.dataset.v, '${label}')" data-v="${esc(valeur).replace(/"/g,'&quot;')}" title="Copier ${label.toLowerCase()} : ${esc(affiche)}" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 10px;color:var(--text);cursor:pointer;font-family:var(--font-body);font-size:12.5px;font-weight:600">
+      <span>${esc(affiche)}</span><span style="opacity:.6;font-weight:400">⧉</span>
+    </button>`;
+  return `<span style="display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:4px 6px 4px 11px;font-size:12.5px">
+    <span style="color:var(--muted)">Conjoint</span>
+    <strong>${esc(_conjointNom(cj) || '—')}</strong>
+    ${cj.telephone ? pastille(telFmt(cj.telephone), telFmt(cj.telephone), 'Téléphone du conjoint') : ''}
+    ${cj.email ? pastille(cj.email, cj.email, 'Email du conjoint') : ''}
+    <button onclick="openEditContact('${l.id}', true)" title="Modifier le conjoint" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 3px">Modifier</button>
+  </span>`;
+}
+
+// `conjoint` = true : la fenêtre s'ouvre avec le bloc conjoint déplié (bouton « + Conjoint » de la fiche)
+function openEditContact(id, conjoint) {
   const c = _findContactEverywhere(id)[0];
   if (!c) { toast('⚠ Contact introuvable', 'var(--warning)'); return; }
   _editContactId = id;
@@ -13441,6 +13515,7 @@ function openEditContact(id) {
       ${champ('ce-ref', 'Référence annonce', c.reference_annonce, 'Ex : REF-1234')}
       ${champ('ce-source', 'Source', c.source, 'Ex : SeLoger, Site web…')}
       ${vendeurHtml}
+      ${conjointBlocHtml('ce', c.conjoint, !!(conjoint || _conjointNom(c.conjoint) || (c.conjoint && (c.conjoint.telephone || c.conjoint.email))))}
     </div>
     ${nomAConfirmer(c) ? '<div style="margin-top:12px;font-size:11.5px;color:var(--warning)">Prénom et nom sont déduits du mail du portail. Dès que tu as le client au téléphone, corrige-les et enregistre : le repère « à confirmer » disparaît et la sélection partira avec le bon nom.</div>' : ''}
     <div id="ce-erreur" style="display:none;margin-top:12px;font-size:12.5px;color:var(--danger)"></div>
@@ -13451,7 +13526,7 @@ function openEditContact(id) {
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) closeEditContact(); });
   document.body.appendChild(div);
-  const first = document.getElementById('ce-nom');
+  const first = document.getElementById(conjoint ? 'ce-cj-prenom' : 'ce-prenom');
   if (first) first.focus();
 }
 
@@ -13543,6 +13618,7 @@ function openNewContact(contexte) {
       ${champ('cn-source', 'Source', 'Ex : Recommandation, Salon…')}
       ${champ('cn-ref', 'Référence annonce', 'Ex : REF-1234')}
       ${vendeurHtml}
+      ${conjointBlocHtml('cn', null, false)}
     </div>
     <div style="margin-top:12px">
       <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Notes</div>
@@ -13649,7 +13725,7 @@ async function fusionnerDemandeDansFiche(id) {
   const btn = document.getElementById('cn-merge-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Ajout\u2026'; }
   const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
-  const champs = 'id,nom,email,telephone,lieu,budget,typologie,reference_annonce,notes,vendeur,recu_par';
+  const champs = 'id,nom,email,telephone,conjoint,lieu,budget,typologie,reference_annonce,notes,vendeur,recu_par';
   let c = null;
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=' + champs + '&id=eq.' + id, { cache:'no-store', headers: entetes });
@@ -13673,6 +13749,7 @@ async function fusionnerDemandeDansFiche(id) {
   const upd = { recu_le: nowIso };
   if (!c.email && val('cn-email')) upd.email = val('cn-email');
   if (!c.telephone && val('cn-tel')) upd.telephone = val('cn-tel');
+  { const cj = conjointLire('cn'); if (cj && !_conjointNom(c.conjoint) && !(c.conjoint && (c.conjoint.telephone || c.conjoint.email))) upd.conjoint = cj; }
   if (!c.typologie && typologie) upd.typologie = typologie;
   if (!c.reference_annonce && val('cn-ref')) upd.reference_annonce = val('cn-ref');
   if (!c.budget && val('cn-budget')) Object.assign(upd, budgetCorps(val('cn-budget'), true));
@@ -13736,6 +13813,11 @@ async function saveNewContact() {
     montrerErreur('L\u2019adresse email ne semble pas valide.');
     return;
   }
+  const conjoint = conjointLire('cn');
+  if (conjoint && conjoint.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(conjoint.email)) {
+    montrerErreur('L\u2019adresse email du conjoint ne semble pas valide.');
+    return;
+  }
 
   const estLead = _newContactContexte === 'leads';
   const libelleBtn = estLead ? 'Créer le lead' : 'Créer le contact';
@@ -13769,6 +13851,7 @@ async function saveNewContact() {
     nom: [prenom, nomFamille].filter(Boolean).join(' ') || null,
     nom_confirme: true,          // c'est un gérant qui saisit : le nom est sûr
     email, telephone: tel,
+    conjoint,
     lieu: val('cn-lieu') || null,
     typologie: val('cn-typologie') || null,
     reference_annonce: val('cn-ref') || null,
@@ -13818,8 +13901,14 @@ async function saveEditContact() {
     telephone: val('ce-tel'),
     lieu: val('ce-lieu'),
     reference_annonce: val('ce-ref'),
-    source: val('ce-source')
+    source: val('ce-source'),
+    conjoint: conjointLire('ce')
   };
+  if (body.conjoint && body.conjoint.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(body.conjoint.email)) {
+    const err = document.getElementById('ce-erreur');
+    if (err) { err.textContent = 'L’adresse email du conjoint ne semble pas valide.'; err.style.display = 'block'; }
+    return;
+  }
   // Budget : même écriture que partout ailleurs (300 → 300 000 €)
   Object.assign(body, budgetCorps(val('ce-budget'), true));
   if (!body.nom && !body.email && !body.telephone) {
@@ -14067,7 +14156,7 @@ function exportContacts() {
     const filterStatut = document.getElementById('filter-statut')?.value || '';
 
     rows = contacts.filter(c => {
-      const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel);
+      const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel) || _conjointNom(c.conjoint).toLowerCase().includes(filterNom) || (c.conjoint && telContient(c.conjoint.telephone, filterNomTel));
       let matchLieu = !filterLieu || (c.lieu||'').toLowerCase().includes(filterLieu);
       if (!matchLieu && typeof rayonNames !== 'undefined' && rayonNames) {
         const cp = extractCP(c.lieu);
@@ -14213,7 +14302,7 @@ function renderContacts() {
   const filterStatut = document.getElementById('filter-statut')?.value || '';
 
   const filtered = contacts.filter(c => {
-    const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel);
+    const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel) || _conjointNom(c.conjoint).toLowerCase().includes(filterNom) || (c.conjoint && telContient(c.conjoint.telephone, filterNomTel));
     let matchLieu = !filterLieu || (c.lieu||'').toLowerCase().includes(filterLieu);
     // Élargissement aux communes alentours si un rayon est actif
     if (!matchLieu && rayonNames) {
