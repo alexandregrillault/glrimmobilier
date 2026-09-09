@@ -6068,6 +6068,12 @@ async function renderEquipeLeads() {
     // Le filtre serveur ramène aussi les leads simplement « reçus » : on écarte
     // ici ceux dont la paternité est déjà tranchée en faveur d'un autre vendeur.
     _eqLeads = (await res.json()).filter(l => eqLeadVisiblePour(l, v.prenom));
+    // Une note tapée à l'instant et pas encore en base ne doit pas être
+    // effacée de la copie mémoire par ce rechargement (incident Amal Jaafar)
+    if (typeof _eqNotesEnAttente !== 'undefined' && _eqNotesEnAttente) {
+      const la = _eqLeads.find(x => x.id === _eqNotesEnAttente.id);
+      if (la) la.notes = _eqNotesEnAttente.val;
+    }
     _eqSelected.clear();
     // Sélections envoyées par ce vendeur (suivi ouverture + avis)
     try {
@@ -6971,6 +6977,14 @@ async function _eqHistoCharger(id) {
       else if (j.action === 'reattribution') texte = 'Réattribué : ' + (j.avant || 'sans vendeur') + ' → ' + (j.apres || 'sans vendeur');
       else if (j.action === 'activite') texte = !j.apres ? 'Activité retirée (' + j.avant + ')' : !j.avant ? 'Activité planifiée : ' + j.apres : 'Activité reportée : ' + j.avant + ' → ' + j.apres;
       else if (j.action === 'creation') texte = 'Fiche créée';
+      else if (j.action === 'modification' && j.champ === 'notes') {
+        // Version précédente des notes gardée sous la main : si un texte a
+        // disparu, il se retrouve ici (incident Amal Jaafar, 08/09/2026)
+        const av = String(j.avant || '').trim();
+        texte = 'Notes modifiées' + (av ? ' — avant : « ' + (av.length > 160 ? av.slice(0, 160) + '…' : av).replace(/\s*\n\s*/g, ' / ') + ' »' : ' (premier texte)');
+        lignes.push({ quand: j.quand, qui: j.acteur, texte: texte, type: 'notes', titre: av });
+        return;
+      }
       else texte = j.action + (j.champ ? ' (' + j.champ + ')' : '');
       lignes.push({ quand: j.quand, qui: j.acteur, texte: texte, type: j.action });
     });
@@ -7009,7 +7023,7 @@ function eqHistoriqueHtml(l) {
   const h = (_eqHisto.id === l.id) ? _eqHisto : { lignes: null, erreur: false };
   const n = h.lignes ? h.lignes.length : null;
   const compteur = h.erreur ? 'indisponible' : n === null ? 'chargement…' : n + ' événement' + (n > 1 ? 's' : '');
-  const couleur = { statut: 'var(--accent)', reattribution: 'var(--warning)', activite: 'var(--success)', appel: 'var(--muted)', rdv: 'var(--accent2)', paternite: 'var(--warning)', creation: 'var(--muted)' };
+  const couleur = { statut: 'var(--accent)', reattribution: 'var(--warning)', activite: 'var(--success)', appel: 'var(--muted)', rdv: 'var(--accent2)', paternite: 'var(--warning)', creation: 'var(--muted)', notes: 'var(--muted)' };
   let corps = '';
   if (_eqHistoOuvert) {
     if (h.erreur) corps = '<div style="font-size:12px;color:var(--danger);padding:8px 12px">Historique impossible à charger — réessaie en rouvrant la fiche</div>';
@@ -7021,7 +7035,7 @@ function eqHistoriqueHtml(l) {
       return `<div style="display:grid;grid-template-columns:118px 90px 1fr;gap:10px;align-items:baseline;padding:7px 12px;border-top:1px solid var(--border);font-size:12.5px">
         <span style="color:var(--muted);white-space:nowrap">${esc(quand)}</span>
         <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.qui || '—')}</span>
-        <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${couleur[x.type] || 'var(--muted)'};margin-right:7px;vertical-align:middle"></span>${esc(x.texte)}</span>
+        <span${x.titre ? ' title="' + esc(x.titre) + '"' : ''}><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${couleur[x.type] || 'var(--muted)'};margin-right:7px;vertical-align:middle"></span>${esc(x.texte)}</span>
       </div>`;
     }).join('') + '</div>';
   }
@@ -7047,6 +7061,9 @@ function eqFicheFermer() {
       if (el) _eqTexteEnregistre(champ, el.value, dansQualif, true);
     });
   }
+  // Les notes aussi : elles attendaient la fin du délai de frappe, et une
+  // fermeture suivie d'un rechargement de la liste pouvait les faire perdre
+  if (typeof _eqNotesEnAttente !== 'undefined' && _eqNotesEnAttente) _eqNotesEnvoyer(true);
   // Une modification refusée par le serveur bloque la fermeture : sinon elle
   // disparaît de l'écran et personne ne sait qu'elle n'a pas été gardée.
   if (typeof _eqEchecs === 'object' && _eqFicheId && _eqEchecs[_eqFicheId]) {
@@ -7197,6 +7214,7 @@ function eqOuvrirFiche(id) {
   }
   _eqFicheRender();
   _eqHistoCharger(id);
+  _eqNotesRelire(id);   // notes relues en base : jamais une copie périmée à l'ouverture
   // Charge la liste des villes et les prix d'annonces en arrière-plan puis rafraîchit
   if (!_eqVillesDispo) _eqChargerVilles().then(() => { if (_eqFicheId) _eqFicheRender(); });
   const lead = _eqLeads.find(x => x.id === id);
@@ -7554,28 +7572,96 @@ async function eqEchecReessayer(){
   }
 }
 
-// Notes : sauvegarde automatique 800 ms après la dernière frappe
+// Notes : sauvegarde automatique 800 ms après la dernière frappe.
+// Incident Amal Jaafar (08/09/2026) : une note tapée puis la fiche fermée ou
+// l'onglet quitté dans la seconde pouvait être perdue — la liste des leads se
+// rechargeait depuis la base AVANT l'envoi, la fiche se reconstruisait sur la
+// copie mémoire périmée, et la frappe suivante renvoyait l'ancien texte par-
+// dessus le nouveau. Désormais :
+//  - ce qui attend d'être envoyé est retenu dans _eqNotesEnAttente et prime
+//    sur la copie mémoire tant que l'envoi n'a pas abouti (rendu de la fiche,
+//    rechargement de la liste) ;
+//  - fermer la fiche ou quitter la page envoie tout de suite (keepalive) ;
+//  - la copie mémoire mise à jour est celle du lead retrouvé par son id au
+//    moment du succès, pas l'objet capturé avant un éventuel rechargement ;
+//  - un échec est retenu comme les autres champs (bandeau rouge, fermeture
+//    et sortie de page protégées) au lieu d'un simple témoin qui disparaissait
+//    au premier rafraîchissement.
+let _eqNotesEnAttente = null;   // { id, val } — dernière frappe pas encore en base
+function _eqNotesEtat(texte, couleur){
+  const ind = document.getElementById('eq-fiche-notes-etat');
+  if (ind) { ind.textContent = texte || ''; ind.style.color = couleur || 'var(--muted)'; }
+}
 function eqNotesInput(val) {
   const l = _eqLeads.find(x => x.id === _eqFicheId);
   if (!l) return;
-  const ind = document.getElementById('eq-fiche-notes-etat');
-  if (ind) { ind.textContent = 'Enregistrement…'; ind.style.color = 'var(--muted)'; }
+  _eqNotesEnAttente = { id: l.id, val: val };
+  _eqNotesEtat('Enregistrement…', 'var(--muted)');
   clearTimeout(_eqNotesTimer);
-  _eqNotesTimer = setTimeout(async () => {
-    try {
-      const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + l.id, {
-        method: 'PATCH',
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notes: val })
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      l.notes = val;
-      if (ind) { ind.textContent = '✓ Enregistré'; ind.style.color = 'var(--success)'; }
-    } catch(e) {
-      if (ind) { ind.textContent = '⚠ Échec — réessayez'; ind.style.color = 'var(--danger)'; }
-    }
-  }, 800);
+  _eqNotesTimer = setTimeout(function(){ _eqNotesEnvoyer(false); }, 800);
 }
+// Envoie ce qui attend. `immediat` : fermeture de fiche ou sortie de page —
+// la requête part en keepalive pour survivre à la fermeture de l'onglet.
+async function _eqNotesEnvoyer(immediat) {
+  clearTimeout(_eqNotesTimer); _eqNotesTimer = null;
+  const attente = _eqNotesEnAttente;
+  if (!attente) return;
+  const id = attente.id, val = attente.val;
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id, {
+      method: 'PATCH',
+      keepalive: !!immediat,
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ notes: val })
+    });
+    if (!res.ok) throw await _eqErreurPatch(res);
+    // La copie mémoire : le lead tel qu'il est MAINTENANT dans la liste
+    // (elle a pu être rechargée pendant l'envoi)
+    const l = (_eqLeads || []).find(x => x.id === id);
+    if (l) l.notes = val;
+    // Rien n'a été retapé entre-temps : plus rien en attente
+    if (_eqNotesEnAttente && _eqNotesEnAttente.id === id && _eqNotesEnAttente.val === val) _eqNotesEnAttente = null;
+    if (_eqEchecs[id] && _eqEchecs[id].corps && 'notes' in _eqEchecs[id].corps) {
+      delete _eqEchecs[id].corps.notes;
+      _eqEchecs[id].champs = (_eqEchecs[id].champs || []).filter(c => c !== 'notes');
+      if (!Object.keys(_eqEchecs[id].corps).length) delete _eqEchecs[id];
+      _eqEchecBanniere();
+    }
+    if (_eqFicheId === id) _eqNotesEtat('✓ Enregistré', 'var(--success)');
+  } catch(e) {
+    if (_eqFicheId === id) _eqNotesEtat('⚠ Non enregistré', 'var(--danger)');
+    _eqEchecNote(id, { notes: val }, 'notes', e);
+  }
+}
+// Le texte des notes à afficher pour un lead : ce qui attend d'être envoyé
+// prime sur la copie mémoire (qui peut dater d'avant la frappe)
+function _eqNotesAffichees(l) {
+  if (_eqNotesEnAttente && _eqNotesEnAttente.id === l.id) return _eqNotesEnAttente.val;
+  return l.notes || '';
+}
+// À l'ouverture d'une fiche : les notes sont relues en base, pour ne jamais
+// partir d'une copie périmée (fiche ouverte sur deux onglets ou deux appareils)
+async function _eqNotesRelire(id) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=notes&id=eq.' + id, {
+      cache: 'no-store',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (!r.ok) return;
+    const rows = await r.json();
+    if (!rows.length) return;
+    const notes = rows[0].notes || '';
+    const l = (_eqLeads || []).find(x => x.id === id);
+    if (!l || (l.notes || '') === notes) return;
+    l.notes = notes;
+    // On ne touche pas au champ si le vendeur a déjà commencé à écrire dedans
+    if (_eqNotesEnAttente && _eqNotesEnAttente.id === id) return;
+    const ta = document.getElementById('eq-fiche-notes');
+    if (ta && _eqFicheId === id && document.activeElement !== ta) ta.value = notes;
+  } catch(e) { /* la copie mémoire reste, comme avant */ }
+}
+// Sortie de page : ce qui attend part tout de suite (keepalive)
+window.addEventListener('pagehide', function(){ if (_eqNotesEnAttente) _eqNotesEnvoyer(true); });
 
 let _eqCriteresOuverts = false;   // les critères se replient pour laisser la place à la sélection
 function eqCriteresBasculer() { _eqCriteresOuverts = !_eqCriteresOuverts; _eqFicheRender(); }
@@ -7752,7 +7838,7 @@ ${(() => {
         <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Notes</div>
         <div id="eq-fiche-notes-etat" style="font-size:11px;color:var(--muted)"></div>
       </div>
-      <textarea id="eq-fiche-notes" oninput="eqNotesInput(this.value)" rows="4" placeholder="Notes de l'appel — situation, critères particuliers, à faire…" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;resize:vertical;line-height:1.5;box-sizing:border-box">${esc(l.notes||'')}</textarea>
+      <textarea id="eq-fiche-notes" oninput="eqNotesInput(this.value)" rows="4" placeholder="Notes de l'appel — situation, critères particuliers, à faire…" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;resize:vertical;line-height:1.5;box-sizing:border-box">${esc(_eqNotesAffichees(l))}</textarea>
     </div>
   `;
 
@@ -17401,6 +17487,11 @@ function _journalDetail(l) {
   if (l.action === 'creation') return v(ap);
   if (av == null && ap == null) return vide;
   const champ = l.champ && l.champ !== 'statut' ? `<span style="color:var(--muted);font-size:11.5px">${_esc(l.champ)}</span><br>` : '';
+  // Notes : texte long et multi-lignes, on le montre en deux blocs lisibles
+  if (l.champ === 'notes') {
+    const bloc = (x, titre) => `<div style="margin-top:4px"><span style="color:var(--muted);font-size:11px">${titre}</span><div style="white-space:pre-wrap;max-height:140px;overflow-y:auto;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 8px;margin-top:2px">${x ? _esc(x) : vide}</div></div>`;
+    return champ + bloc(av, 'Avant') + bloc(ap, 'Après');
+  }
   return champ + v(av) + ' ' + fl + ' ' + v(ap);
 }
 
