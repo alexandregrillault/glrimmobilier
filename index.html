@@ -8958,6 +8958,8 @@ let _eqActVoirRetard = false; // liste du retard dépliée via le bandeau
 function eqActNav(delta) { _eqActDecalage += delta; renderEqNotifs(); }
 function eqActAujourdhui() { _eqActDecalage = 0; _eqActVoirRetard = false; renderEqNotifs(); }
 function eqActRetardToggle() { _eqActVoirRetard = !_eqActVoirRetard; renderEqNotifs(); }
+let _eqActVoirSansSuite = true; // propositions sans suite : dépliées par défaut, peu nombreuses
+function eqActSansSuiteToggle() { _eqActVoirSansSuite = !_eqActVoirSansSuite; renderEqNotifs(); }
 
 // ---- Supprimer une ou plusieurs activités --------------------------------
 // « Supprimer une activité » veut dire retirer la date, l'intitulé et l'heure
@@ -9372,6 +9374,10 @@ function renderEqNotifs() {
   const joursRetard = (d) => Math.max(1, Math.floor((now - new Date(d + 'T12:00:00')) / 86400000));
 
   const retard = [], aujourdhui = [], avenir = [];
+  // Propositions de créneaux restées sans réponse (tous les créneaux passés) :
+  // un bloc à part, pas un « retard » — le vendeur a fait sa part, c'est le
+  // client qui n'a pas suivi. Il relance, repropose ou clôt.
+  const sansSuite = [];
   // idAct : présent uniquement sur une activité programmée, seule chose qu'on
   // puisse supprimer ici. Un rendez-vous ou un nouveau lead n'ont pas de case.
   const item = (cle, titre, detail, boutons, couleur, idAct) =>
@@ -9422,19 +9428,24 @@ function renderEqNotifs() {
     const nb = p.creneaux.length;
     const combien = nb + ' créneau' + (nb > 1 ? 'x' : '') + ' proposé' + (nb > 1 ? 's' : '')
       + (p.depuis ? ' le ' + esc(fmtJ(p.depuis)) : '');
+    const dernier = p.creneaux[p.creneaux.length - 1].debut;
     const detail = p.mort
-      ? combien + ' — tous passés, aucune réponse'
+      ? combien + ' — le dernier ' + esc(fmtJ(dernier)) + ', aucune réponse'
+        + (p.jours ? ' · sans nouvelles depuis ' + p.jours + ' j' : '')
       : combien + ' · prochain ' + esc(_rdvQuand(p.prochain))
         + (p.jours ? ' — sans réponse depuis ' + p.jours + ' j' : ' — envoyés aujourd\'hui');
     const boutons = btnFiche(p.contact_id) + (p.contact_id
       ? `<button class="btn btn-sm btn-${p.mort ? 'primary' : 'secondary'}" onclick="eqRdvLienOuvrir('${p.contact_id}')" style="font-size:11px" title="Écrire au client pour le relancer">Relancer</button>`
-      : '');
-    const couleur = p.mort ? 'var(--danger)' : (p.jours >= EQ_ATTENTE_TIEDE ? 'var(--warning)' : null);
+      : '')
+      + (p.mort && p.token
+        ? `<button class="btn btn-sm btn-secondary" onclick="eqProposerOuvrir(null,'${esc(p.token)}')" style="font-size:11px" title="Lui envoyer trois nouveaux créneaux — les anciens sont refermés">Proposer 3 autres</button>
+           <button class="btn btn-sm btn-secondary" onclick="rdvEcarterProposition('${esc(p.token)}')" style="font-size:11px" title="Refermer cette proposition sans rien envoyer au client">Clore</button>`
+        : '');
+    const couleur = p.mort ? 'var(--warning)' : (p.jours >= EQ_ATTENTE_TIEDE ? 'var(--warning)' : null);
     const html = item(p.mort ? 'expire' : 'temps',
-      'En attente de ' + esc(p.client_nom || 'Client') + rep(p.contact_id), detail, boutons, couleur);
+      (p.mort ? 'Sans suite : ' : 'En attente de ') + esc(p.client_nom || 'Client') + rep(p.contact_id), detail, boutons, couleur);
     if (p.mort) {
-      const dernier = p.creneaux[p.creneaux.length - 1].debut;
-      retard.push({ t: new Date(dernier).getTime(), g: 'attente', d: String(dernier).slice(0, 10), html });
+      sansSuite.push({ t: new Date(dernier).getTime(), d: String(dernier).slice(0, 10), html });
     } else {
       aujourdhui.push({ t: 1, g: 'attente', d: jour, calme: p.jours < EQ_ATTENTE_TIEDE, html });
     }
@@ -9545,7 +9556,8 @@ function renderEqNotifs() {
   avenir.sort((a, b) => a.t - b.t);
   // Une proposition partie il y a moins de trois jours n'est pas un retard : elle
   // s'affiche dans la journée mais ne fait pas sonner la pastille.
-  const nUrgent = retard.length + aujourdhui.filter(x => !x.calme).length;
+  sansSuite.sort((a, b) => b.t - a.t);
+  const nUrgent = retard.length + sansSuite.length + aujourdhui.filter(x => !x.calme).length;
   if (badge) { badge.style.display = nUrgent ? '' : 'none'; badge.textContent = nUrgent; }
 
   // Date longue mise en avant : « Jeudi 6 août » + écart relatif
@@ -9671,6 +9683,19 @@ function renderEqNotifs() {
     }
   }
 
+  // Bloc « Propositions sans suite » : visible depuis n'importe quel jour,
+  // dépliable comme le retard, mais en orange — ce n'est pas une activité
+  // manquée, c'est un client à relancer, à reproposer ou à clore.
+  if (sansSuite.length) {
+    const n = sansSuite.length;
+    html += `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--warning)10;border:1px solid var(--warning);border-radius:10px;padding:8px 13px;margin-bottom:10px;user-select:none">
+      <span onclick="eqActSansSuiteToggle()" style="font-size:12.5px;font-weight:700;color:var(--warning);flex:1;min-width:140px;cursor:pointer">${n} proposition${n > 1 ? 's' : ''} de créneaux sans suite</span>
+      <span style="font-size:11px;color:var(--muted)">créneaux passés, le client n'a pas répondu</span>
+      <span onclick="eqActSansSuiteToggle()" style="font-size:11px;color:var(--warning);cursor:pointer">${_eqActVoirSansSuite ? 'masquer ▾' : 'voir la liste ▸'}</span>
+    </div>`;
+    if (_eqActVoirSansSuite) html += `<div style="margin-bottom:12px">${sansSuite.map(x => x.html).join('')}</div>`;
+  }
+
   // Liste du jour affiché
   if (!duJour.length) {
     html += `<div style="font-size:12.5px;color:var(--muted);padding:10px 4px;text-align:center">${estAujourdhui ? 'Rien à faire aujourd\'hui — tout est à jour' : 'Aucune activité ce jour-là'}</div>`;
@@ -9712,15 +9737,18 @@ async function eqProposerOuvrir(creneauId, token) {
   const prenom = _creneauVendeur();
   const c = creneauId ? _eqRdv.find(x => x.id === creneauId) : null;
   const dem = token ? _eqRdvDemandes.find(x => x.token === token) : null;
+  // Reproposer après une proposition restée sans suite : on repart des anciens
+  // créneaux proposés (mode, client), ils seront refermés à l'envoi.
+  const ancien = (!c && !dem && token) ? (_eqRdv || []).find(x => x.statut === 'propose' && x.selection_token === token) : null;
   // Format demandé par le client : visio (30 min) ou appel (10 min). Le mode
   // est écrit sur le créneau réservé, ou dans la demande libre.
-  const modeDemande = (c && c.mode) || (dem && dem.avis && dem.avis.rdv && dem.avis.rdv.mode) || 'telephone';
+  const modeDemande = (c && c.mode) || (dem && dem.avis && dem.avis.rdv && dem.avis.rdv.mode) || (ancien && ancien.mode) || 'telephone';
   const modeProp = modeDemande === 'visio' ? 'visio' : 'telephone';
   _propCtx = {
     creneauRefuse: creneauId || null,
     token: (c && c.selection_token) || token || null,
-    contactId: (c && c.contact_id) || (dem && dem.contact_id) || null,
-    nom: (c && c.client_nom) || (dem && dem.client_nom) || 'ce client',
+    contactId: (c && c.contact_id) || (dem && dem.contact_id) || (ancien && ancien.contact_id) || null,
+    nom: (c && c.client_nom) || (dem && dem.client_nom) || (ancien && ancien.client_nom) || 'ce client',
     mode: modeProp,
     duree: _crenDureeVoulue(modeProp)
   };
@@ -9841,6 +9869,9 @@ async function eqProposerEnvoyer() {
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
     }
+    // Les anciens créneaux proposés à ce client et déjà passés sont refermés :
+    // la nouvelle proposition remplace l'ancienne, elle ne s'y ajoute pas.
+    if (_propCtx.token) await _propRefermerPasses(_propCtx.token);
     // Le créneau refusé retourne à l'offre générale
     if (_propCtx.creneauRefuse) {
       await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + _propCtx.creneauRefuse, {
@@ -9858,6 +9889,19 @@ async function eqProposerEnvoyer() {
   await eqRdvCharger();
   renderEqNotifs();
   eqMajVue(true);
+}
+
+// Referme les créneaux « proposés » d'un client dont l'heure est passée : ils
+// redeviennent de simples créneaux libres du passé (sans client), comme un
+// créneau refusé. Aucun mail ne part.
+async function _propRefermerPasses(token) {
+  if (!token) return;
+  const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?statut=eq.propose&selection_token=eq.' + encodeURIComponent(token) + '&debut=lt.' + encodeURIComponent(new Date().toISOString()), {
+    method: 'PATCH',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ statut: 'libre', contact_id: null, selection_token: null, client_nom: null, client_message: null, reserve_le: null })
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
 }
 
 let _selProgrammes = null;   // cache table programmes
@@ -18161,6 +18205,18 @@ function rdvEcarterCreneau(id) {
   _ecarterRender();
 }
 
+// Proposition de créneaux restée sans suite (tous passés, client muet) : on la
+// referme depuis le bloc « Propositions sans suite » de la page Activité.
+function rdvEcarterProposition(token) {
+  const cren = ((typeof _eqRdv !== 'undefined' && _eqRdv) || []).filter(x => x.statut === 'propose' && x.selection_token === token)
+    .sort((a, b) => new Date(a.debut) - new Date(b.debut));
+  const c = cren[0];
+  if (!c) { toast('Proposition introuvable — recharge la page', 'var(--warning)'); return; }
+  _ecarterCtx = { type: 'proposition', token: token, contactId: c.contact_id, nom: _ecarterNom(c), vendeur: c.vendeur || '',
+    nb: cren.length, dernier: cren[cren.length - 1].debut };
+  _ecarterRender();
+}
+
 function rdvEcarterFermer() {
   const m = document.getElementById('rdv-ecarter-modal');
   if (m) m.remove();
@@ -18171,20 +18227,25 @@ function _ecarterRender() {
   const x = _ecarterCtx;
   if (!x) return;
   const creneau = x.type === 'creneau';
+  const proposition = x.type === 'proposition';
   const quand = creneau && x.debut ? (typeof grQuand === 'function' ? grQuand(x.debut) : new Date(x.debut).toLocaleString('fr-FR')) : '';
+  const titreAction = creneau ? 'Refuser le rendez-vous' : proposition ? 'Clore la proposition' : 'Écarter la demande';
+  const explication = creneau
+    ? 'Le créneau ' + _vEsc(quand) + ' est libéré et redevient disponible pour un autre client.'
+    : proposition
+      ? 'Les ' + (x.nb || 3) + ' créneaux proposés sont passés sans réponse : la proposition sort de tes activités.'
+      : 'La demande sort des activités : plus besoin de lui proposer des créneaux.';
   const old = document.getElementById('rdv-ecarter-modal'); if (old) old.remove();
   const div = document.createElement('div');
   div.id = 'rdv-ecarter-modal';
   div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px';
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:440px;max-width:95vw">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-      <div style="font-family:var(--font-head);font-size:16px;font-weight:700">${creneau ? 'Refuser le rendez-vous' : 'Écarter la demande'} de ${_vEsc(x.nom)}</div>
+      <div style="font-family:var(--font-head);font-size:16px;font-weight:700">${titreAction} de ${_vEsc(x.nom)}</div>
       <button onclick="rdvEcarterFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
     </div>
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">
-      ${creneau
-        ? 'Le créneau ' + _vEsc(quand) + ' est libéré et redevient disponible pour un autre client.'
-        : 'La demande sort des activités : plus besoin de lui proposer des créneaux.'}
+      ${explication}
       <strong style="color:var(--text)">Le client n'est pas prévenu</strong> — aucun mail ne part.
     </div>
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Motif <span style="text-transform:none;letter-spacing:0">(facultatif, gardé dans les notes)</span></div>
@@ -18195,7 +18256,7 @@ function _ecarterRender() {
     </label>
     <div style="display:flex;justify-content:flex-end;gap:10px">
       <button class="btn btn-secondary" onclick="rdvEcarterFermer()">Annuler</button>
-      <button class="btn btn-primary" id="ecarter-ok" onclick="rdvEcarterConfirmer()">${creneau ? 'Refuser le rendez-vous' : 'Écarter la demande'}</button>
+      <button class="btn btn-primary" id="ecarter-ok" onclick="rdvEcarterConfirmer()">${titreAction}</button>
     </div>
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) rdvEcarterFermer(); });
@@ -18245,25 +18306,31 @@ async function rdvEcarterConfirmer() {
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
     }
+    // 1 bis. Une proposition sans suite : ses créneaux passés sont refermés
+    if (x.type === 'proposition' && x.token) await _propRefermerPasses(x.token);
     // 2. La demande est refermée : `traite` la sort des activités des deux côtés
     if (x.token && typeof _planMajSelection === 'function') {
-      await _planMajSelection(x.token, {
+      const champs = {
         reserve: false, confirme: false, refuse: true, traite: true,
         ecarte: true, ecarte_le: new Date().toISOString(), ecarte_par: moi, ecarte_motif: motif || null
-      });
+      };
+      if (x.type === 'proposition') { champs.propositions = []; champs.sans_suite = true; }
+      await _planMajSelection(x.token, champs);
     }
     // 3. Trace sur la fiche, et statut si la case est restée cochée
     const trace = '[' + new Date().toLocaleDateString('sv-SE') + '] '
       + (x.type === 'creneau'
         ? 'Rendez-vous du ' + new Date(x.debut).toLocaleDateString('fr-FR') + ' à '
           + new Date(x.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h') + ' refusé'
-        : 'Demande de rendez-vous écartée')
+        : x.type === 'proposition'
+          ? 'Proposition de ' + (x.nb || 3) + ' créneaux sans suite (dernier le ' + new Date(x.dernier).toLocaleDateString('fr-FR') + ') close'
+          : 'Demande de rendez-vous écartée')
       + ' par ' + moi + (motif ? ' — ' + motif : '') + (nq ? ' — passé en Non qualifié' : '') + ' (client non prévenu)';
     await _ecarterMarquerFiche(x.contactId, trace, nq);
-    toast(x.type === 'creneau' ? '✓ Rendez-vous refusé, créneau libéré' : '✓ Demande écartée', 'var(--warning)');
+    toast(x.type === 'creneau' ? '✓ Rendez-vous refusé, créneau libéré' : x.type === 'proposition' ? '✓ Proposition close' : '✓ Demande écartée', 'var(--warning)');
   } catch (e) {
     toast('⚠ Impossible d\'écarter cette demande', 'var(--danger)');
-    if (btn) { btn.disabled = false; btn.textContent = x.type === 'creneau' ? 'Refuser le rendez-vous' : 'Écarter la demande'; }
+    if (btn) { btn.disabled = false; btn.textContent = x.type === 'creneau' ? 'Refuser le rendez-vous' : x.type === 'proposition' ? 'Clore la proposition' : 'Écarter la demande'; }
     return;
   }
   rdvEcarterFermer();
