@@ -8004,6 +8004,7 @@ function eqFicheSelectionsHtml(l) {
     else if (rdv.reserve)  { etat = 'Créneau choisi, à valider'; couleur = 'var(--warning)'; }
     else if (rdv.propositions) { etat = 'Trois créneaux proposés, en attente du client'; couleur = 'var(--accent)'; }
     else if (rdv.demande)  { etat = 'Demande de rendez-vous à traiter'; couleur = 'var(--warning)'; }
+    else if (biens.some((b, i) => (avis[String(i)] || {}).option)) { const n = biens.filter((b, i) => (avis[String(i)] || {}).option).length; etat = 'Option demandée sur ' + (n > 1 ? n + ' lots' : 'un lot') + ' — à poser'; couleur = 'var(--success)'; }
     else if (!s.opened_at) { etat = 'Pas encore ouverte'; couleur = 'var(--muted)'; }
     else if (expiree)      { etat = 'Expirée'; couleur = 'var(--danger)'; }
     else                   { etat = 'Ouverte, sans demande de rendez-vous — à rappeler'; couleur = 'var(--muted)'; }
@@ -8023,6 +8024,7 @@ function eqFicheSelectionsHtml(l) {
         </div>
         ${sec ? `<div style="height:3px;border-radius:2px;background:var(--surface2);margin-top:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div>` : ''}
         ${a.commentaire ? `<div title="Commentaire laissé par le client sur sa sélection${a.commentaire_date ? ' le ' + fmtD(a.commentaire_date) : ''}" style="font-size:12px;color:var(--text);font-style:italic;margin-top:3px;padding-left:8px;border-left:2px solid var(--accent)">« ${_vEsc(a.commentaire)} »</div>` : ''}
+        ${a.option ? `<div style="font-size:11.5px;color:var(--success);margin-top:3px;font-weight:700">Souhaite qu\'on pose une option sur ce lot${a.option_date ? ' <span style="font-weight:400;color:var(--muted)">(' + fmtD(a.option_date) + ')</span>' : ''}</div>` : ''}
         ${a.infos ? `<div style="font-size:11.5px;color:var(--accent);margin-top:3px;font-weight:600">${selIc('infos', 12)} a demandé plus d\'infos</div>` : ''}
         ${a.adresse_demandee ? `<div style="font-size:11.5px;color:var(--warning);margin-top:3px;font-weight:600">A demandé l\'adresse exacte du programme</div>` : ''}
         ${eqRemisesLigne(s.token, i, b)}
@@ -10284,7 +10286,7 @@ async function selEnregistrerModifs() {
     if (!a) return;
     const j = biens.findIndex(x => _selCleLot(x) === _selCleLot(b));
     if (j >= 0) avis[String(j)] = a;
-    else if (a.choix || a.commentaire || a.infos) perdus.push(b.titre || ('Lot ' + (i + 1)));
+    else if (a.choix || a.commentaire || a.infos || a.option) perdus.push(b.titre || ('Lot ' + (i + 1)));
   });
 
   const btn = document.getElementById('sel-btn-valider');
@@ -11968,6 +11970,7 @@ function eqVoirSelection(contactId, token) {
         </div>
         ${tpsTotal && tpsParBien(i) ? `<div style="height:3px;border-radius:2px;background:var(--surface2);margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(tpsParBien(i) / tpsTotal * 100)}%;background:var(--accent)"></div></div>` : ''}
         <div style="font-size:13px;margin-top:4px">${a.choix ? selIc(a.choix === 'interesse' ? 'interesse' : (a.choix === 'a_discuter' ? 'discuter' : 'refus')) + ' ' + (SEL_AVIS_LABELS[a.choix] || _vEsc(a.choix)) : '<span style="color:var(--muted)">Pas encore d\'avis</span>'}</div>
+        ${a.option ? '<div style="font-size:12px;color:var(--success);margin-top:4px;font-weight:700">Souhaite qu\'on pose une option sur ce lot</div>' : ''}
         ${a.infos ? '<div style="font-size:12px;color:var(--accent);margin-top:4px;font-weight:600">' + selIc('infos', 12) + ' A demandé plus d\'infos sur ce lot — à rappeler</div>' : ''}
         ${a.commentaire ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;font-style:italic">« ${_vEsc(a.commentaire)} »</div>` : ''}
         ${a.date ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${fmtDT(a.date)}</div>` : ''}
