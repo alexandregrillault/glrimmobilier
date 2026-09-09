@@ -1885,6 +1885,7 @@
       <!-- Barre de sélection -->
       <div id="contacts-selection-bar" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px 24px;display:flex;gap:12px;align-items:center;z-index:50;box-shadow:0 8px 32px rgba(0,0,0,.4)">
         <span id="selection-count" style="font-size:13px;color:var(--accent);font-weight:600"></span>
+        <span id="contacts-sel-vendeur"></span>
         <button class="btn btn-primary btn-sm" onclick="lancerCampagne()">Lancer une campagne</button>
         <button class="btn btn-ghost btn-sm" onclick="exportContacts()">Exporter</button>
         <button class="btn btn-danger btn-sm" onclick="askDeleteSelection()">Supprimer</button>
@@ -14234,6 +14235,70 @@ function refreshSelectionBar() {
   const countEl = document.getElementById('selection-count');
   if (bar) bar.style.display = selectedContacts.length > 0 ? 'flex' : 'none';
   if (countEl) countEl.textContent = selectedContacts.length + ' contact(s) sélectionné(s)';
+  // Attribution à un vendeur : réservée aux gérants, même logique que « Mes leads »
+  const slot = document.getElementById('contacts-sel-vendeur');
+  if (slot) {
+    const gerant = typeof estGerant !== 'function' || estGerant();
+    const prenoms = ((typeof data !== 'undefined' && data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean);
+    slot.innerHTML = gerant && prenoms.length
+      ? `<select onchange="ctSelVendeur(this)" title="Attribuer les contacts cochés à un vendeur (la paternité change et le transfert est tracé)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-family:var(--font-body);font-size:12px;cursor:pointer">
+          <option value="">Attribuer à…</option>
+          ${prenoms.map(p => `<option value="${_vEsc(p)}">${_vEsc(p)}</option>`).join('')}
+          <option value="__aucun">— Aucun (libre) —</option>
+        </select>`
+      : '';
+  }
+}
+
+// Attribue les contacts cochés de la base commune à un vendeur (gérants uniquement).
+// Même corps de mise à jour que la réattribution groupée de « Mes leads » : le
+// nouveau vendeur reçoit la paternité à l'instant T, l'ancien part dans
+// l'historique, le journal d'audit et le transfert des activités sont gérés par
+// les triggers côté base.
+async function ctSelVendeur(sel) {
+  const choix = sel && sel.value;
+  if (sel) sel.value = '';
+  if (!choix || !selectedContacts.length) return;
+  if (typeof estGerant === 'function' && !estGerant()) {
+    toast('⚠ L\'attribution est réservée aux gérants', 'var(--warning)');
+    return;
+  }
+  const nouveau = choix === '__aucun' ? null : choix;
+  const ids = [...selectedContacts];
+  const n = ids.length;
+  if (!confirm('Attribuer ' + n + ' contact' + (n > 1 ? 's' : '') + (nouveau ? ' à ' + nouveau : ' à « aucun vendeur »') + ' ?\n\nLa paternité change et le transfert est tracé dans l\'historique de chaque fiche.')) return;
+  const nowIso = new Date().toISOString();
+  let faits = 0, rates = 0, inchanges = 0;
+  for (const id of ids) {
+    const instances = typeof _findContactEverywhere === 'function' ? _findContactEverywhere(id) : [];
+    const c = instances[0] || (window._contacts || []).find(x => x.id === id);
+    if (!c) continue;
+    const ancien = c.vendeur || null;
+    if (ancien === nouveau) { inchanges++; continue; }
+    const corps = { vendeur: nouveau, vendeur_depuis: nouveau ? nowIso : null };
+    if (ancien) {
+      const hist = Array.isArray(c.vendeur_historique) ? c.vendeur_historique.slice() : [];
+      hist.push({ vendeur: ancien, du: c.vendeur_depuis || null, au: nowIso, motif: 'attribution depuis Contacts' });
+      corps.vendeur_historique = hist;
+    }
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+        body: JSON.stringify(corps)
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      (instances.length ? instances : [c]).forEach(inst => Object.assign(inst, corps));
+      faits++;
+    } catch (e) { rates++; }
+  }
+  if (faits) toast('✓ ' + faits + ' contact' + (faits > 1 ? 's ' : ' ') + (nouveau ? 'attribué' + (faits > 1 ? 's' : '') + ' à ' + nouveau : 'remis en libre'), 'var(--success)');
+  if (inchanges && !faits && !rates) toast('Déjà ' + (nouveau ? 'chez ' + nouveau : 'sans vendeur'), 'var(--muted)');
+  if (rates) toast('⚠ ' + rates + ' contact' + (rates > 1 ? 's n\'ont' : ' n\'a') + ' pas pu être attribué' + (rates > 1 ? 's' : ''), 'var(--danger)');
+  if (!rates) clearSelection();
+  renderContacts();
+  if (typeof renderEquipeLeadsTable === 'function' && typeof _eqLeads !== 'undefined' && (_eqLeads || []).length && document.getElementById('eq-leads-tbody')) renderEquipeLeadsTable();
+  if (typeof eqMajVue === 'function') eqMajVue(true);
 }
 
 function updateSelection() {
