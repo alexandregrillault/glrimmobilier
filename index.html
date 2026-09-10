@@ -5593,7 +5593,7 @@ function eqExportCSV() {
     return [
       nomPrenomContact(l).prenom, nomPrenomContact(l).nom_famille, l.email, l.telephone, l.lieu, l.budget, l.typologie, l.intention, l.source,
       fmtD(l.date_lead), fmtD(l.recu_le), fmtD(l.rappel_le), eqLeadStatut(l),
-      ({ residence_principale: 'Résidence principale', investissement: 'Investissement' })[qf.projet] || '', qf.commune_residence || '',
+      ({ residence_principale: 'Résidence principale', residence_secondaire: 'Résidence secondaire', investissement: 'Investissement' })[qf.projet] || '', qf.commune_residence || '',
       qf.surface_min || '', LBL.etage_rdj[qf.etage_rdj] || '', LBL.ouinon[qf.parking] || '',
       LBL.ouinon[qf.terrasse] || '', qf.terrasse_m2_min || '',
       LBL.ouinon[qf.balcon] || '', qf.balcon_m2_min || '',
@@ -6939,7 +6939,7 @@ function eqCriteresChips(l) {
   const q = l.qualif || {};
   const chips = [];
   if (l.reference_annonce) chips.push('' + esc(l.reference_annonce) + (eqAnnoncePrix(l.reference_annonce) ? ' — ' + esc(eqAnnoncePrix(l.reference_annonce)) : ''));
-  if (q.projet) chips.push('' + ({ residence_principale: 'Résidence principale', investissement: 'Investissement' }[q.projet] || esc(q.projet)));
+  if (q.projet) chips.push('' + ({ residence_principale: 'Résidence principale', residence_secondaire: 'Résidence secondaire', investissement: 'Investissement' }[q.projet] || esc(q.projet)));
   if (q.commune_residence) chips.push('Habite ' + esc(q.commune_residence));
   if (l.typologie) chips.push('' + esc(l.typologie));
   String(l.lieu || '').split(/\s*,\s*/).filter(Boolean).forEach(v => chips.push('' + esc(v)));
@@ -7849,7 +7849,7 @@ ${(() => {
     </div>
 
     <div style="display:${_eqCriteresOuverts ? 'grid' : 'none'};grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;align-items:start">
-      ${carte(titreQ('Projet') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('projet', [['residence_principale','Résidence principale'],['investissement','Investissement']], q.projet)}</div>`)}
+      ${carte(titreQ('Projet') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('projet', [['residence_principale','Résidence principale'],['residence_secondaire','Résidence secondaire'],['investissement','Investissement']], q.projet)}</div>`)}
       ${carte(titreQ('Commune de résidence') + `<div style="font-size:10.5px;color:var(--muted);margin:-4px 0 7px">Où le client habite aujourd’hui — pas la ville recherchée.</div>
         <input id="eq-champ-commune_residence" value="${esc(q.commune_residence||'').replace(/"/g,'&quot;')}" placeholder="Rechercher une commune… (ex : Boulogne)" autocomplete="off" oninput="eqVilleRechercheInput(this.value, 'residence');eqTexteInput('commune_residence', this.value, true)" onchange="eqTexteFlush('commune_residence', this.value, true)" onkeydown="if(event.key==='Enter'){eqCommuneChoisie(this.value.trim());this.blur()}" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
         <div id="eq-etat-commune_residence" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>
