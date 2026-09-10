@@ -10228,7 +10228,7 @@ function _selAnnuler() {
   _selFermer();
 }
 
-function _selFermer() { const m = document.getElementById('eq-sel-modal'); if (m) m.remove(); _selCtx = null; }
+function _selFermer() { const m = document.getElementById('eq-sel-modal'); if (m) m.remove(); _selCtx = null; _selFichiersChoisis = []; }
 
 // ---- Ouverture du modal de création
 // Modifier une sélection déjà envoyée : mêmes écrans, même lien client.
@@ -10281,7 +10281,7 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Ajouter / compléter un lot à la main</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">${SEL_CHAMPS_LIBRE.map(c => `<input id="sel-l-${c[0]}" placeholder="${c[1]}" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:13px${c[2]?';grid-column:1 / -1':''}">`).join('')}
       <label style="grid-column:1 / -1;font-size:12px;color:var(--muted)">Documents du lot — fiche, plan, notice… <span style="opacity:.8">(plusieurs fichiers possibles)</span>
-        <input type="file" id="sel-l-pdf" accept="application/pdf,image/*" multiple onchange="selDocsApercu()" style="display:block;margin-top:5px;font-size:12px;color:var(--text)">
+        <input type="file" id="sel-l-pdf" accept="application/pdf,image/*" multiple onchange="selDocsAjouter(this)" style="display:block;margin-top:5px;font-size:12px;color:var(--text)">
         <div id="sel-l-docs" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
       </label>
     </div>
@@ -10806,21 +10806,36 @@ function _selNomDoc(nomFichier) {
   return n.charAt(0).toUpperCase() + n.slice(1);   // « plan du lot » → « Plan du lot »
 }
 
+// Fichiers choisis pour le lot en cours de saisie. Un sélecteur de fichiers
+// REMPLACE sa sélection à chaque ouverture : choisir le plan, puis revenir
+// chercher la plaquette, faisait disparaître le plan (cas Louis, 10/09/2026).
+// On accumule donc ici, et le sélecteur est vidé après chaque choix.
+let _selFichiersChoisis = [];
+function selDocsAjouter(input) {
+  const nouveaux = (input && input.files) ? [...input.files] : [];
+  nouveaux.forEach(f => {
+    const cle = _selDocCleFichier(f);
+    if (!_selFichiersChoisis.some(x => _selDocCleFichier(x) === cle)) _selFichiersChoisis.push(f);
+  });
+  if (input) input.value = '';
+  selDocsApercu();
+}
+function selDocsRetirer(i) { _selFichiersChoisis.splice(i, 1); selDocsApercu(); }
+function _selFichiersChoisisVider() { _selFichiersChoisis = []; const fi = document.getElementById('sel-l-pdf'); if (fi) fi.value = ''; }
 // Récapitulatif sous le sélecteur de fichiers, avant l'ajout du lot
 function selDocsApercu() {
-  const fi = document.getElementById('sel-l-pdf');
   const zone = document.getElementById('sel-l-docs');
   if (!zone) return;
   const dejaLa = (_selCtx && _selCtx.docsExistants) ? _selCtx.docsExistants.length : 0;
-  const n = fi && fi.files ? fi.files.length : 0;
+  const n = _selFichiersChoisis.length;
   if (!n && !dejaLa) { zone.textContent = ''; return; }
-  const noms = fi && fi.files ? [...fi.files].map(f => _selNomDoc(f.name)) : [];
+  const noms = _selFichiersChoisis.map((f, i) => '<span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:1px 4px 1px 9px;margin:2px 4px 2px 0">' + _vEsc(_selNomDoc(f.name)) + '<button type="button" onclick="selDocsRetirer(' + i + ')" title="Retirer ce fichier" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0 3px;line-height:1">✕</button></span>');
   const titreSaisi = !!(document.getElementById('sel-l-titre') && document.getElementById('sel-l-titre').value.trim());
   const aide = (_selCtx && _selCtx.lotOrigine) || titreSaisi
     ? 'lit les documents et complète les cases vides du formulaire'
     : (n > 1 ? 'lit les documents, les regroupe par lot et ajoute chaque lot à la sélection' : 'lit le document et ajoute le lot à la sélection');
   zone.innerHTML = (dejaLa ? '<div>' + dejaLa + ' document(s) déjà joint(s) à ce lot</div>' : '')
-    + (n ? '<div>' + n + ' fichier(s) à envoyer : ' + _vEsc(noms.join(', ')) + '</div>'
+    + (n ? '<div>' + n + ' fichier(s) à envoyer : ' + noms.join('') + '</div><div style="font-size:11px;opacity:.8">Tu peux rouvrir « Choisir les fichiers » pour en ajouter d’autres, ils s’additionnent.</div>'
       + '<div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button type="button" id="sel-docs-analyser" onclick="selAnalyserDocs()" class="btn" style="font-size:12px;padding:6px 12px">Analyser les documents</button><span style="font-size:11px;color:var(--muted)">' + aide + '</span></div>'
       + '<div id="sel-docs-etat" style="margin-top:5px"></div>' : '');
 }
@@ -11117,8 +11132,7 @@ function _selRegrouperDocs(docs) {
 let _selAnalyseEnCours = false;
 async function selAnalyserDocs() {
   if (_selAnalyseEnCours || !_selCtx) return;
-  const fi = document.getElementById('sel-l-pdf');
-  const fichiers = (fi && fi.files) ? [...fi.files] : [];
+  const fichiers = _selFichiersChoisis.slice();
   if (!fichiers.length) return;
   const etat = document.getElementById('sel-docs-etat');
   const btn = document.getElementById('sel-docs-analyser');
@@ -11205,7 +11219,7 @@ async function selAnalyserDocs() {
       _selCtx.libres.push(lot);
       nouveaux.push(lot);
     }
-    if (fi) fi.value = '';
+    _selFichiersChoisisVider();
     selDocsApercu();
     selAjouterLibreRefresh();
     const nbCommuns = communsOk.filter(d => d.type !== 'photo').length;
@@ -11272,8 +11286,7 @@ async function selAjouterLibre() {
   // Documents du lot : autant de fichiers que voulu, chacun garde son nom.
   // Les documents déjà attachés au lot (quand on le rouvre avec ✎) sont conservés.
   const docs = Array.isArray(_selCtx.docsExistants) ? _selCtx.docsExistants.slice() : [];
-  const fi = document.getElementById('sel-l-pdf');
-  const fichiers = (fi && fi.files) ? [...fi.files] : [];
+  const fichiers = _selFichiersChoisis.slice();
   if (fichiers.length) {
     const zone = document.getElementById('sel-l-docs');
     let rates = 0;
@@ -11317,7 +11330,7 @@ async function selAjouterLibre() {
   await planPreparerLot(_selCtx.libres[_selCtx.libres.length - 1]);
   _selCtx.pdfExistant = ''; _selCtx.imageExistante = ''; _selCtx.imagesExistantes = []; _selCtx.docsExistants = []; _selCtx.remisesExistantes = []; _selCtx.lotOrigine = null;
   SEL_CHAMPS_LIBRE.forEach(c => { const el = document.getElementById('sel-l-' + c[0]); if (el) el.value = ''; });
-  if (fi) fi.value = '';
+  _selFichiersChoisisVider();
   selDocsApercu();
   selAjouterLibreRefresh();
 }
@@ -11327,7 +11340,8 @@ function selAjouterLibreRefresh() {
   el.innerHTML = _selCtx.libres.length === 0
     ? '<div style="font-size:12px;color:var(--muted)">Aucun lot pour le moment</div>'
     : _selCtx.libres.map((b,i) => {
-      const badges = [b.lien ? '' : null, b.pdf ? '' : null, b.plan ? '' : null, b.masse ? '' : null].filter(Boolean).join(' ');
+      const nDocs = Array.isArray(b.docs) ? b.docs.length : (b.pdf ? 1 : 0);
+      const badges = nDocs ? '<span title="' + _vEsc((Array.isArray(b.docs) ? b.docs : [{ nom: 'Fiche du lot' }]).map(d => d.nom).join('\n')) + '" style="color:var(--muted)">' + nDocs + ' document' + (nDocs > 1 ? 's' : '') + '</span>' : '<span style="color:var(--warning)">aucun document</span>';
       return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)">
       <span><strong>${_vEsc(b.titre)}</strong>${b.ville ? ' — ' + _vEsc(b.ville) : ''}${b.prix ? ' · ' + _vEsc(b.prix) : ''}${b.typologies && b.typologies.length ? ' · ' + _vEsc(b.typologies[0]) : ''}${b.surface ? ' · ' + _vEsc(b.surface) : ''}${b.prixOptions && b.prixOptions.length > 1 ? ' · <span style="color:var(--success)">' + b.prixOptions.length + ' régimes de TVA</span>' : ''}${eqRemisesListe(b).length ? ' · <span style="color:var(--accent)">' + eqRemisesListe(b).map(_selRemiseTexte).join(' · ') + '</span>' : ''} <span style="font-size:11px;opacity:.8">${badges}</span></span>
       <span style="white-space:nowrap">
@@ -11539,7 +11553,7 @@ function selEditerLot(i) {
   // Un lot rouvert conserve ses documents ; les nouveaux fichiers s'ajoutent
   _selCtx.docsExistants = Array.isArray(b.docs) ? b.docs.slice()
     : (b.pdf ? [{ nom: 'Fiche du lot', url: b.pdf }] : []);
-  const fiDoc = document.getElementById('sel-l-pdf'); if (fiDoc) fiDoc.value = '';
+  _selFichiersChoisisVider();
   selDocsApercu();
   _selCtx.libres.splice(i, 1);
   selAjouterLibreRefresh();
