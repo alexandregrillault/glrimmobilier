@@ -7516,7 +7516,7 @@ async function _eqErreurPatch(res){
   err.motif = m;
   // Un refus de droits ne passera pas davantage au deuxième essai.
   err.definitif = res.status === 401 || res.status === 403
-    || /gérant|gerant|autoris|permission|policy|row-level|droit/i.test(m);
+    || /gérant|gerant|autoris|permission|policy|row-level|droit|suivi par|prends-le dans le pool|Profil inconnu/i.test(m);
   return err;
 }
 
@@ -8418,7 +8418,7 @@ async function eqRdvFixerValider() {
     const rp = await fetch(SUPABASE_URL + '/rest/v1/rpc/rdv_fixer_paternite', {
       method: 'POST', headers: entetes, body: JSON.stringify({ p_contact: contactId, p_vendeur: vendeur })
     });
-    if (!rp.ok) throw new Error('paternite');
+    if (!rp.ok) { let m = ''; try { const j = await rp.json(); m = j.message || j.hint || ''; } catch (e) {} const er = new Error(m || 'paternite'); er.motif = m; throw er; }
     if (l.vendeur !== vendeur) {
       const ancien = l.vendeur;
       l.vendeur = vendeur; l.vendeur_depuis = new Date().toISOString();
@@ -8477,7 +8477,7 @@ async function eqRdvFixerValider() {
     if (typeof eqMajVue === 'function') eqMajVue(true);
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Poser le rendez-vous'; }
-    toast('⚠ Le rendez-vous n\'a pas pu être enregistré — réessaie', 'var(--danger)');
+    toast('⚠ ' + (e && e.motif ? e.motif : 'Le rendez-vous n\'a pas pu être enregistré — réessaie'), 'var(--danger)');
   }
 }
 
@@ -13692,20 +13692,21 @@ function telNormBase(raw) {
   else if (d.length === 9 && !d.startsWith('0')) d = '0' + d;
   return d.length >= 9 ? d : '';
 }
+// Contrôle de doublon en base (fonction contact_doublon) : dit si le client existe,
+// chez qui il est et si on peut le travailler — sans livrer son mail ni son
+// téléphone (règle D4 du 09/09/2026 : les coordonnées d'un contact libre ne se
+// voient qu'une fois le lead récupéré).
 async function _chercherDoublonContact(email, tel) {
-  const conds = [];
-  if (email) conds.push('email.ilike.' + encodeURIComponent(email));
-  const tn = telNormBase(tel);
-  if (tn) conds.push('telephone_norm.eq.' + encodeURIComponent(tn));
-  if (!conds.length) return null;
+  if (!email && !tel) return null;
   try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,email,telephone,vendeur,statut,date_lead,source&or=(' + conds.join(',') + ')&order=created_at.asc&limit=1', {
-      cache: 'no-store',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/contact_doublon', {
+      method: 'POST', cache: 'no-store',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_email: email || null, p_tel: tel || null })
     });
     if (!res.ok) return null;
-    const rows = await res.json();
-    return rows && rows.length ? rows[0] : null;
+    const d = await res.json();
+    return d && d.id ? d : null;
   } catch (e) { return null; }
 }
 
@@ -13727,74 +13728,54 @@ async function fusionnerDemandeDansFiche(id) {
   const err = document.getElementById('cn-erreur');
   const btn = document.getElementById('cn-merge-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Ajout\u2026'; }
-  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
-  const champs = 'id,nom,email,telephone,conjoint,lieu,budget,typologie,reference_annonce,notes,vendeur,recu_par';
-  let c = null;
-  try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=' + champs + '&id=eq.' + id, { cache:'no-store', headers: entetes });
-    if (res.ok) { const rows = await res.json(); c = rows && rows[0]; }
-  } catch (e) {}
-  if (!c) {
-    if (err) { err.innerHTML = 'Impossible de relire la fiche, r\u00e9essaie dans un instant.'; err.style.display = 'block'; }
-    if (btn) { btn.disabled = false; btn.textContent = 'Ajouter cette demande \u00e0 sa fiche'; }
-    return;
-  }
-
-  const nowIso = new Date().toISOString();
-  const jour = nowIso.slice(0, 10);
   const estLead = _newContactContexte === 'leads';
-  const vendeur = val('cn-vendeur') || null;
-  const lieu = val('cn-lieu') || null;
-  const typologie = val('cn-typologie') || null;
-  const source = val('cn-source') || null;
-  const notesSaisies = val('cn-notes') || null;
-
-  const upd = { recu_le: nowIso };
-  if (!c.email && val('cn-email')) upd.email = val('cn-email');
-  if (!c.telephone && val('cn-tel')) upd.telephone = val('cn-tel');
-  { const cj = conjointLire('cn'); if (cj && !_conjointNom(c.conjoint) && !(c.conjoint && (c.conjoint.telephone || c.conjoint.email))) upd.conjoint = cj; }
-  if (!c.typologie && typologie) upd.typologie = typologie;
-  if (!c.reference_annonce && val('cn-ref')) upd.reference_annonce = val('cn-ref');
-  if (!c.budget && val('cn-budget')) Object.assign(upd, budgetCorps(val('cn-budget'), true));
-  if (lieu) {
-    const dejaLa = (c.lieu || '').split(/\s*,\s*/).some(v => v.trim().toLowerCase().replace(/\s+/g,'') === lieu.toLowerCase().replace(/\s+/g,''));
-    if (!dejaLa) upd.lieu = c.lieu ? (c.lieu + ', ' + lieu) : lieu;
-  }
-  // Le vendeur qui saisit est tracé dans recu_par, sans toucher à la paternité
-  if (vendeur) {
-    const liste = Array.isArray(c.recu_par) ? c.recu_par.slice() : [];
-    const i = liste.findIndex(e => e && e.vendeur === vendeur);
-    if (i >= 0) liste[i] = Object.assign({}, liste[i], { le: nowIso }); else liste.push({ vendeur: vendeur, le: nowIso });
-    upd.recu_par = liste;
-    if (!c.vendeur) { upd.vendeur = vendeur; upd.vendeur_depuis = nowIso; upd.paternite_geree = true; }
-  }
-  const note = '[' + jour + '] Nouvelle demande saisie \u00e0 la main'
-    + (source ? ' (' + source + ')' : '')
-    + (vendeur ? ' par ' + vendeur : '')
-    + (typologie ? ' \u2014 ' + typologie : '')
-    + (lieu ? ' \u00e0 ' + lieu : '')
-    + (notesSaisies ? ' \u2014 ' + notesSaisies : '');
-  upd.notes = c.notes ? (c.notes + '\n' + note) : note;
-
-  let ok = false;
+  // Tout passe par la base : champs vides complétés, note datée, puis la porte
+  // unique de réception (paternite_recevoir) qui décide — attribué, en
+  // compétition, conservé par son vendeur, ou repris après une veille.
+  const bud = val('cn-budget') ? (budgetCorps(val('cn-budget'), true) || {}) : {};
+  let r = null, motif = '';
   try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id, {
-      method: 'PATCH',
-      headers: Object.assign({ 'Content-Type': 'application/json', 'Prefer': 'return=minimal' }, entetes),
-      body: JSON.stringify(upd)
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/demande_manuelle', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p_contact: id,
+        p_source: val('cn-source') || null,
+        p_lieu: val('cn-lieu') || null,
+        p_typologie: val('cn-typologie') || null,
+        p_reference: val('cn-ref') || null,
+        p_budget: bud.budget || null,
+        p_budget_min: bud.budget_min == null ? null : bud.budget_min,
+        p_budget_max: bud.budget_max == null ? null : bud.budget_max,
+        p_budget_approx: !!bud.budget_approx,
+        p_notes: val('cn-notes') || null,
+        p_email: val('cn-email') || null,
+        p_tel: val('cn-tel') || null,
+        p_conjoint: (typeof conjointLire === 'function' ? conjointLire('cn') : null) || null
+      })
     });
-    ok = res.ok;
+    if (res.ok) r = await res.json();
+    else { try { const j = await res.json(); motif = j.message || j.hint || ''; } catch (e) {} }
   } catch (e) {}
-  if (!ok) {
-    if (err) { err.innerHTML = 'Supabase a refus\u00e9 la mise \u00e0 jour de la fiche.'; err.style.display = 'block'; }
+  if (!r) {
+    if (err) { err.innerHTML = 'La demande n\u2019a pas pu \u00eatre ajout\u00e9e' + (motif ? ' : ' + motif.replace(/</g, '&lt;') : '.'); err.style.display = 'block'; }
     if (btn) { btn.disabled = false; btn.textContent = 'Ajouter cette demande \u00e0 sa fiche'; }
     return;
   }
   closeNewContact();
-  toast('\u2713 Demande ajout\u00e9e \u00e0 la fiche de ' + (c.nom || 'ce contact'), 'var(--success)');
+  const nomC = r.nom || 'ce contact';
+  const messages = {
+    attribuee:   '\u2713 ' + nomC + ' est dans tes leads, 14 jours de paternit\u00e9',
+    confirmee:   '\u2713 Demande ajout\u00e9e \u00e0 la fiche de ' + nomC + ' \u2014 tes 14 jours repartent',
+    transferee:  '\u2713 ' + nomC + ' est dans tes leads (paternit\u00e9 pr\u00e9c\u00e9dente \u00e9chue)',
+    competition: '\u2713 Demande not\u00e9e \u2014 ' + nomC + ' est en comp\u00e9tition : le premier qui fait une action le garde',
+    veille:      '\u2713 Demande not\u00e9e \u2014 ' + nomC + ' \u00e9tait en veille chez ' + (r.vendeur || 'un coll\u00e8gue') + ', tu peux le reprendre depuis tes leads',
+    conservee:   'Demande not\u00e9e sur la fiche de ' + nomC + ' \u2014 client suivi par ' + (r.vendeur || 'un coll\u00e8gue') + ', il reste chez lui'
+  };
+  toast(messages[r.statut] || ('\u2713 Demande ajout\u00e9e \u00e0 la fiche de ' + nomC), r.statut === 'conservee' ? 'var(--warning)' : 'var(--success)');
   if (estLead) { if (typeof renderEquipeLeads === 'function') await renderEquipeLeads(); }
   else { await loadContacts(); }
-  if (_ficheAtteignable(id, estLead)) { if (estLead) eqOuvrirFiche(id); else openEditContact(id); }
+  if (r.peut_travailler && _ficheAtteignable(id, estLead)) { if (estLead) eqOuvrirFiche(id); else openEditContact(id); }
 }
 
 async function saveNewContact() {
@@ -13832,16 +13813,30 @@ async function saveNewContact() {
     _doublonTrouve = doublon;
     const nomD = (typeof nomComplet === 'function' ? nomComplet(doublon) : doublon.nom) || 'ce contact';
     const esc = (s) => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    montrerErreur('Déjà en base : <strong>' + esc(nomD) + '</strong>'
-      + (doublon.date_lead ? ' — premier contact le ' + esc(doublon.date_lead) : '')
+    const gerant = typeof estGerant === 'function' && estGerant();
+    let situation, bouton;
+    if (doublon.a_moi) {
+      situation = 'C\u2019est d\u00e9j\u00e0 ton client : la demande se range dans sa fiche, avec l\u2019historique des \u00e9changes.';
+      bouton = 'Ajouter cette demande \u00e0 sa fiche';
+    } else if (doublon.libre) {
+      situation = 'Ce client est libre' + (doublon.vendeur ? ' (paternit\u00e9 de ' + esc(doublon.vendeur) + ' \u00e9chue)' : '') + ' : en ajoutant ta demande, il passe dans tes leads pour 14 jours.';
+      bouton = 'Ajouter la demande et le prendre';
+    } else if (doublon.peut_travailler) {
+      situation = (doublon.statut === 'En veille' ? 'Mis en veille par ' : 'En comp\u00e9tition \u2014 re\u00e7u aussi par ') + esc(doublon.vendeur || 'un coll\u00e8gue') + ' : ta demande se note sur sa fiche, et ta premi\u00e8re action te le donne.';
+      bouton = 'Ajouter cette demande \u00e0 sa fiche';
+    } else {
+      situation = 'Suivi par <strong>' + esc(doublon.vendeur || 'un coll\u00e8gue') + '</strong> : ta demande sera not\u00e9e sur sa fiche, mais tu ne peux pas le travailler tant qu\u2019il l\u2019a.';
+      bouton = 'Noter la demande sur sa fiche';
+    }
+    montrerErreur('D\u00e9j\u00e0 en base : <strong>' + esc(nomD) + '</strong>'
+      + (doublon.date_lead ? ' \u2014 premier contact le ' + esc(doublon.date_lead) : '')
       + (doublon.source ? ' via ' + esc(doublon.source) : '')
-      + (doublon.vendeur ? ' — suivi par ' + esc(doublon.vendeur) : '')
-      + (doublon.statut ? ' · ' + esc(doublon.statut) : '')
-      + (_ficheAtteignable(doublon.id, estLead)
+      + (doublon.statut ? ' \u00b7 ' + esc(doublon.statut) : '')
+      + ((doublon.a_moi || gerant) && _ficheAtteignable(doublon.id, estLead)
           ? ' <button onclick="closeNewContact();' + (estLead ? 'eqOuvrirFiche' : 'openEditContact') + '(\'' + doublon.id + '\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:3px 9px;color:var(--text);font-size:12px;cursor:pointer;margin-left:6px">Ouvrir la fiche</button>'
-          : ' <span style="opacity:.75">\u2014 sa fiche est chez ' + esc(doublon.vendeur || 'un autre vendeur') + '</span>')
-      + '<div style="margin-top:9px;color:var(--muted);font-size:12px">Pas de seconde fiche : la demande se range dans celle-ci, avec l\'historique des \u00e9changes.</div>'
-      + '<div style="margin-top:9px"><button id="cn-merge-btn" onclick="fusionnerDemandeDansFiche(\'' + doublon.id + '\')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 15px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer">Ajouter cette demande \u00e0 sa fiche</button></div>');
+          : '')
+      + '<div style="margin-top:9px;color:var(--muted);font-size:12px">Pas de seconde fiche. ' + situation + '</div>'
+      + '<div style="margin-top:9px"><button id="cn-merge-btn" onclick="fusionnerDemandeDansFiche(\'' + doublon.id + '\')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 15px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer">' + bouton + '</button></div>');
     if (btn) { btn.disabled = false; btn.textContent = libelleBtn; }
     return;
   }
@@ -16082,7 +16077,7 @@ function poolRenderTable() {
       ? `<div style="font-size:10.5px;color:var(--muted);margin-top:2px">${_pEsc(l.statut)}</div>` : '';
     return `<tr>
       <td><div style="font-weight:600">${_pEsc(nom)}</div>${statut}</td>
-      <td style="font-size:12px;color:var(--muted)">${_pEsc(l.email || '')}${l.email && l.telephone ? '<br>' : ''}${_pEsc(l.telephone || '')}</td>
+      <td style="font-size:12px;color:var(--muted)">${(l.email || l.telephone) ? (_pEsc(l.email || '') + (l.email && l.telephone ? '<br>' : '') + _pEsc(l.telephone || '')) : '<span style="opacity:.6" title="Mail et téléphone apparaissent dans « Mes leads » une fois le lead pris">masqués jusqu’à la prise</span>'}</td>
       <td style="font-size:12.5px">${_pEsc(l.lieu || '—')}</td>
       <td style="font-size:12px;color:var(--muted)">${_pEsc(recherche || '—')}</td>
       <td style="font-size:12.5px;white-space:nowrap">${_pDate(l.cree_le)}</td>
