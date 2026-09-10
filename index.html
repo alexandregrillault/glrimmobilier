@@ -6100,6 +6100,8 @@ async function renderEquipeLeads() {
         if (typeof _eqFicheRender === 'function') _eqFicheRender();
       } else if (typeof eqFicheFermer === 'function') {
         eqFicheFermer();
+        // …et on dit pourquoi (paternité passée à un collègue, réattribution)
+        if (typeof eqExpliqueDepart === 'function') eqExpliqueDepart(_ficheAvant);
       }
     }
   } catch(e) {
@@ -6749,11 +6751,67 @@ function eqRechercheAilleurs(q) {
         return `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:3px 0">
           <span style="font-weight:600">${e(r.nom || '—')}</span>
           <span style="color:var(--muted)">${qui}${r.statut ? ' · ' + e(r.statut) : ''}${r.date_lead ? ' · premier contact le ' + e(fmt(r.date_lead)) : ''}${r.lieu ? ' · ' + e(String(r.lieu).split(',')[0]) : ''}</span>
-        </div>`;
+        </div>` + (r.ancien ? `<div style="margin:0 0 6px;padding:6px 10px;border-radius:8px;background:var(--surface);border:1px dashed var(--warning);color:var(--text)">${eqDepartTexte(r)}</div>` : '');
       }).join('')}
       <div style="color:var(--muted);font-size:11.5px;margin-top:4px">Un client suivi par un collègue reste chez lui : si ce client t’appelle, passe-lui la main.</div>
     </div>`;
   }, 350);
+}
+
+// « Pourquoi ce client n'est plus chez moi ? » (10/09/2026, cas Maelle Breton :
+// Anaïs ne comprenait pas pourquoi sa fiche ne s'ouvrait plus — la paternité
+// était passée à Jules). La base renvoie dans `ancien` le dernier passage où le
+// vendeur connecté avait le client (date et motif technique) ; on le traduit ici
+// en une phrase lisible.
+function eqDepartTexte(r) {
+  const e = _vEsc;
+  const a = r && r.ancien;
+  if (!a) return '';
+  const quand = (d) => { const dt = new Date(d || ''); return isNaN(dt) ? '' : dt.toLocaleDateString('fr-FR') + ' à ' + dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); };
+  const vers = a.vers || r.vendeur || '';
+  const m = String(a.motif || '');
+  let pourquoi;
+  let x = m.match(/^compétition — première action de (.+)$/);
+  if (x) pourquoi = 'ce lead a été reçu par plusieurs vendeurs et <strong>' + e(x[1]) + '</strong> a fait la première action commerciale (statut, note, critères, sélection ou rendez-vous)';
+  else if ((x = m.match(/^compétition — rendez-vous pris par le client via le lien de (.+)$/))) pourquoi = 'ce lead a été reçu par plusieurs vendeurs et le client a pris rendez-vous depuis le lien de <strong>' + e(x[1]) + '</strong>';
+  else if ((x = m.match(/^rendez-vous (?:pris depuis le lien de|fixé par) (.+)$/))) pourquoi = 'le client a pris rendez-vous avec <strong>' + e(x[1]) + '</strong>';
+  else if ((x = m.match(/^mis en veille par .+ — repris par (.+)$/))) pourquoi = 'tu l’avais mis en veille et <strong>' + e(x[1]) + '</strong> l’a repris';
+  else if (/sans action|délai 14 j/.test(m)) pourquoi = 'tes 14 jours de paternité étaient écoulés sans action de ta part (' + e(m) + ')' + (vers && !r.libre ? ' et <strong>' + e(vers) + '</strong> l’a repris dans le pool' : '');
+  else if (/réattribution|transfert|attribution/.test(m)) pourquoi = 'un gérant l’a réattribué à <strong>' + e(vers || '?') + '</strong>';
+  else pourquoi = (vers ? 'passé à <strong>' + e(vers) + '</strong>' : 'sorti de ta liste') + (m ? ' (' + e(m) + ')' : '');
+  const suite = r.libre
+    ? ' Aujourd’hui ce client est dans le pool : tu peux le reprendre.'
+    : (r.vendeur ? ' Aujourd’hui ce client est suivi par <strong>' + e(r.vendeur) + '</strong>' + (r.echeance ? ' jusqu’au ' + e(new Date(r.echeance).toLocaleDateString('fr-FR')) : '') + ' : s’il t’appelle, passe-lui la main.' : '');
+  return '<strong>' + e(r.nom || 'Ce client') + '</strong> n’est plus dans tes leads' + (a.au ? ' depuis le ' + e(quand(a.au)) : '') + ' : ' + pourquoi + '.' + suite;
+}
+
+// Fiche qui vient de quitter la liste (rechargement, ou clic sur une ligne
+// périmée) : au lieu de se fermer sans un mot, on explique — toast + encart
+// au-dessus du tableau, qui reste jusqu'à la prochaine recherche.
+async function eqExpliqueDepart(id) {
+  if (!id) return;
+  let r = null;
+  try {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/contact_situation', {
+      method: 'POST', cache: 'no-store',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_id: id })
+    });
+    if (res.ok) r = await res.json();
+  } catch (e) { r = null; }
+  if (!r || !r.id || r.a_moi || r.peut_travailler) return;   // toujours à moi (ou reprenable) : rien à expliquer
+  const e = _vEsc;
+  const texte = r.ancien ? eqDepartTexte(r)
+    : '<strong>' + e(r.nom || 'Ce client') + '</strong> n’est pas dans tes leads : il est suivi par <strong>' + e(r.vendeur || '?') + '</strong>' + (r.echeance ? ' jusqu’au ' + e(new Date(r.echeance).toLocaleDateString('fr-FR')) : '') + '.';
+  if (typeof toast === 'function') toast((r.nom || 'Ce client') + ' n’est plus dans tes leads — voir l’explication au-dessus du tableau', 'var(--warning)');
+  const zone = document.getElementById('eq-leads-ailleurs');
+  if (!zone) return;
+  _eqAilleursDerniere = '';
+  zone.innerHTML = `<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--warning);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:12.5px;display:flex;gap:10px;align-items:flex-start">
+    <div style="flex:1">${texte}</div>
+    <button onclick="this.parentNode.remove()" title="Fermer" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--muted);line-height:1">✕</button>
+  </div>`;
+  zone.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function renderEquipeLeadsTable() {
@@ -7252,6 +7310,13 @@ async function _eqChargerVilles() {
 }
 
 function eqOuvrirFiche(id) {
+  // Ligne périmée (le client vient de passer chez un collègue) : on explique
+  // au lieu d'ouvrir une fiche vide qui se referme aussitôt
+  if (!_eqLeads.some(x => x.id === id)) {
+    if (typeof eqExpliqueDepart === 'function') eqExpliqueDepart(id);
+    if (typeof renderEquipeLeads === 'function') renderEquipeLeads();
+    return;
+  }
   _eqFicheId = id;
   let panel = document.getElementById('eq-fiche-panel');
   if (!panel) {
