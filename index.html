@@ -1573,6 +1573,7 @@
           <button class="btn btn-secondary" onclick="renderEquipeLeads()" title="Rafraîchir">↻</button>
         </div>
       </div>
+      <div id="eq-leads-ailleurs"></div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px">
         <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Leads reçus</div><div id="eq-leads-kpi-total" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px">—</div></div>
         <div class="card" style="padding:16px 20px"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">À traiter (&gt;48h)</div><div id="eq-leads-kpi-alerte" style="font-family:var(--font-head);font-size:26px;font-weight:800;margin-top:4px;color:var(--danger)">—</div></div>
@@ -6708,10 +6709,58 @@ function transfertRecent(l) {
   return { de: dernier.vendeur || null, le: l.vendeur_depuis };
 }
 
+// Recherche « chez les collègues » (10/09/2026) : quand un client appelle Jules
+// alors que Louis le suit déjà, Jules doit le voir en tapant son numéro ou son
+// nom — sans ses coordonnées, et sans pouvoir le prendre. La base répond via
+// contact_recherche (nom, vendeur, statut, échéance) ; les leads déjà dans la
+// liste ne sont pas répétés.
+let _eqAilleursTimer = null, _eqAilleursDerniere = '';
+function eqRechercheAilleurs(q) {
+  const zone = document.getElementById('eq-leads-ailleurs');
+  if (!zone) return;
+  const requete = String(q || '').trim();
+  if (requete.length < 3) { zone.innerHTML = ''; _eqAilleursDerniere = ''; return; }
+  if (requete === _eqAilleursDerniere) return;
+  clearTimeout(_eqAilleursTimer);
+  _eqAilleursTimer = setTimeout(async () => {
+    _eqAilleursDerniere = requete;
+    let rows = [];
+    try {
+      const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/contact_recherche', {
+        method: 'POST', cache: 'no-store',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_q: requete })
+      });
+      if (res.ok) rows = await res.json();
+    } catch (e) { rows = []; }
+    if (requete !== _eqAilleursDerniere) return;   // une frappe plus récente a pris le relais
+    const dejaLa = new Set((_eqLeads || []).map(l => l.id));
+    const ailleurs = (Array.isArray(rows) ? rows : []).filter(r => r && r.id && !dejaLa.has(r.id));
+    if (!ailleurs.length) { zone.innerHTML = ''; return; }
+    const e = _vEsc;
+    const fmt = (d) => { if (!d) return ''; const dt = new Date(d); return isNaN(dt) ? '' : dt.toLocaleDateString('fr-FR'); };
+    zone.innerHTML = `<div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--warning);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:12.5px">
+      <div style="font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;font-weight:700;color:var(--muted);margin-bottom:5px">Déjà en base, hors de ta liste</div>
+      ${ailleurs.map(r => {
+        const qui = r.libre
+          ? (r.vendeur ? 'paternité de ' + e(r.vendeur) + ' échue — dans le pool' : 'libre — dans le pool')
+          : (r.peut_travailler ? (r.statut === 'En veille' ? 'en veille chez ' : 'en compétition avec ') + e(r.vendeur || '?') + ' — visible dans tes leads après rafraîchissement'
+                               : '<strong>suivi par ' + e(r.vendeur || '?') + '</strong>' + (r.echeance ? ' jusqu’au ' + e(fmt(r.echeance)) : ''));
+        return `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:3px 0">
+          <span style="font-weight:600">${e(r.nom || '—')}</span>
+          <span style="color:var(--muted)">${qui}${r.statut ? ' · ' + e(r.statut) : ''}${r.date_lead ? ' · premier contact le ' + e(fmt(r.date_lead)) : ''}${r.lieu ? ' · ' + e(String(r.lieu).split(',')[0]) : ''}</span>
+        </div>`;
+      }).join('')}
+      <div style="color:var(--muted);font-size:11.5px;margin-top:4px">Un client suivi par un collègue reste chez lui : si ce client t’appelle, passe-lui la main.</div>
+    </div>`;
+  }, 350);
+}
+
 function renderEquipeLeadsTable() {
   const tbody = document.getElementById('eq-leads-tbody');
   const countEl = document.getElementById('eq-leads-count');
   const q = (document.getElementById('eq-leads-search')?.value || '').toLowerCase().trim();
+  if (typeof eqRechercheAilleurs === 'function') eqRechercheAilleurs(q);
   const now = new Date();
   const weekAgo = new Date(now.getTime() - 7*24*3600*1000);
   const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
