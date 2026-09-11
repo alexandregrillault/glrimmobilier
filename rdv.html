@@ -90,6 +90,21 @@
   .confirme .etat { font-size:13px; color:var(--muted); }
   .coche { width:46px; height:46px; border-radius:50%; background:var(--gold); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 12px; }
 
+  /* Entrer dans la visio : la salle Google Meet du conseiller n'existe que
+     quand il y est. Un client qui arrive avant lui voit un refus sec de Google
+     (« Vous ne pouvez pas participer à cet appel vidéo ») et croit le lien
+     cassé. Ce bloc le lui explique avant qu'il clique, et lui dit quoi faire. */
+  .visio { margin-top:18px; padding-top:18px; border-top:1px solid var(--bordure); text-align:left; }
+  .visio-etape { font-size:11px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:var(--gold-fonce); margin-bottom:8px; text-align:center; }
+  .visio-btn { display:block; width:100%; background:var(--gold); color:#fff; text-decoration:none; text-align:center; border-radius:12px; padding:15px; font-size:16px; font-weight:700; }
+  .visio-btn:hover { background:var(--gold-fonce); }
+  .visio-btn.attente { background:#fff; color:var(--gold-fonce); border:2px solid var(--gold); padding:13px; }
+  .visio-note { font-size:13.5px; color:var(--encre); margin-top:12px; line-height:1.5; }
+  .visio-note b { color:var(--dark); }
+  .visio-note .google { display:block; margin-top:8px; padding:9px 12px; background:#f7f5f1; border-radius:9px; font-size:13px; }
+  .visio-lien { font-size:12px; color:var(--muted); margin-top:10px; word-break:break-all; text-align:center; }
+  .visio-lien a { color:var(--gold-fonce); }
+
   footer { text-align:center; color:var(--muted); font-size:12.5px; margin-top:22px; }
   footer a { color:var(--gold-fonce); text-decoration:none; }
   .etat-vide { text-align:center; color:var(--muted); padding:60px 0; }
@@ -318,6 +333,56 @@
     return h + "</div>";
   }
 
+  // ---------- Entrer dans la visio ----------
+  // La salle Google Meet du conseiller n'accepte personne tant qu'il n'y est
+  // pas : un client en avance tombe sur « Vous ne pouvez pas participer à cet
+  // appel vidéo » et croit le lien cassé (constat du 11/09/2026). Le bouton du
+  // mail mène donc ici, et cette page explique quoi faire selon l'heure :
+  // avant l'heure, on prévient que la salle n'est pas encore ouverte ; à
+  // l'heure, on dit de cliquer « Demander à participer » et de réessayer si
+  // Google refuse. Le texte se remet à jour tout seul quand l'heure arrive.
+  var VISIO_AVANCE_MIN = 10;      // le bouton « s'ouvre » 10 min avant le rendez-vous
+  var VISIO_GRACE_MIN = 60;       // et reste affiché une heure après la fin
+  var _visioPhase = "";
+  function phaseVisio(){
+    if (!etat.debut) return "";
+    var now = Date.now();
+    var debut = new Date(etat.debut).getTime();
+    var fin = etat.fin ? new Date(etat.fin).getTime() : debut + 30 * 60000;
+    if (now > fin + VISIO_GRACE_MIN * 60000) return "passe";
+    return now < debut - VISIO_AVANCE_MIN * 60000 ? "avant" : "pendant";
+  }
+  function htmlVisio(d, qui){
+    var lien = (d && typeof d.visio === "string" && /^https?:\/\//.test(d.visio)) ? d.visio : "";
+    if (!lien || etat.mode !== "visio") return "";
+    var phase = phaseVisio();
+    _visioPhase = phase;
+    if (phase === "passe" || !phase) return "";
+    var debut = new Date(etat.debut).getTime();
+    var ouverture = new Date(debut - VISIO_AVANCE_MIN * 60000);
+    var aujourdhui = new Date(etat.debut).toDateString() === new Date().toDateString();
+    var quand = aujourdhui ? "à " + fmtHeure(etat.debut) : fmtJourLong(etat.debut).toLowerCase() + " à " + fmtHeure(etat.debut);
+    var h = "<div class='visio' id='bloc-visio'>";
+    h += "<div class='visio-etape'>Entrer dans la visio</div>";
+    if (phase === "avant"){
+      h += "<a class='visio-btn attente' href='" + esc(lien) + "' target='_blank' rel='noopener'>Rejoindre la visio <span style='font-weight:400'>· à partir de " + esc(fmtHeure(ouverture)) + "</span></a>";
+      h += "<div class='visio-note'><b>" + qui + " ouvre la salle " + esc(quand) + ".</b> Revenez sur cette page à ce moment-là : le bouton vous y conduit directement, depuis un ordinateur ou un téléphone."
+         + "<span class='google'>Si vous cliquez avant, Google affiche « Vous ne pouvez pas participer à cet appel vidéo » : la salle n'est simplement pas encore ouverte, le lien est bon.</span></div>";
+    } else {
+      h += "<a class='visio-btn' href='" + esc(lien) + "' target='_blank' rel='noopener'>Rejoindre la visio</a>";
+      h += "<div class='visio-note'>Cliquez sur le bouton, puis sur <b>« Demander à participer »</b> : " + qui + " vous ouvre la salle dans la foulée."
+         + "<span class='google'>Si Google affiche « Vous ne pouvez pas participer à cet appel vidéo », c'est que " + qui + " n'est pas encore en ligne : revenez ici et réessayez dans une minute, le lien est bon.</span></div>";
+    }
+    h += "<div class='visio-lien'>Lien de la salle : <a href='" + esc(lien) + "' target='_blank' rel='noopener'>" + esc(lien) + "</a></div>";
+    return h + "</div>";
+  }
+  // Quand l'heure arrive pendant que la page est ouverte, le bloc bascule tout seul
+  setInterval(function(){
+    if (!donnees || !document.getElementById("bloc-visio")) return;
+    var p = phaseVisio();
+    if (p && p !== _visioPhase) redessiner(donnees);
+  }, 30000);
+
   function htmlRdv(d){
     var qui = d.vendeur ? esc(d.vendeur) : "votre conseiller";
     if (estPublic) return htmlRdvPublic(d, qui);
@@ -332,6 +397,8 @@
       h += "<div class='quand'>" + esc(fmtJourLong(etat.debut)) + " à " + esc(fmtHeure(etat.debut)) + "</div>";
       h += "<div class='etat'>" + (ok ? "✓ Confirmé · " : "En attente de confirmation · ") + esc(libelleRdv(etat)) + "</div>";
       h += "<p style='margin-top:12px;font-size:14px'>" + (ok ? "À très vite avec " + qui + "." : qui + " vous confirme le rendez-vous très vite.") + "</p>";
+      if (ok) h += htmlVisio(d, qui);
+      else if (etat.mode === "visio") h += "<p class='sig'>Le lien de la visio apparaîtra ici une fois le rendez-vous confirmé.</p>";
       return h + "</div>";
     }
 
