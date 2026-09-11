@@ -1736,7 +1736,7 @@
           <select id="eq-plan-vendeur" onchange="renderEquipePlanning()" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 14px;color:var(--text);font-family:var(--font-body);font-size:13px"><option value="">— Choisir un vendeur —</option></select>
           <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="eq-plan-libres" checked onchange="renderEquipePlanningListe()" style="accent-color:var(--accent);cursor:pointer">Voir les créneaux libres</label>
           <button class="btn btn-primary" onclick="eqPlanBlocOuvrir()" title="Poser une activité dans mon planning — le créneau devient indisponible pour les clients">+ Bloquer du temps</button>
-          <button class="btn btn-secondary" onclick="eqCreneauxOuvrir('eq-plan-vendeur')">Ouvrir des créneaux</button>
+          <button class="btn btn-secondary" onclick="eqCreneauxOuvrir('eq-plan-vendeur')">Mes disponibilités</button>
           <button class="btn btn-secondary" onclick="rdvLienPublicOuvrir()" title="Un lien fixe à partager à qui tu veux : il voit tes disponibilités et réserve son créneau">Mon lien public</button>
           <button class="btn btn-secondary" onclick="renderEquipePlanning()" title="Rafraîchir">↻</button>
         </div>
@@ -8697,7 +8697,7 @@ function rdvLienRender(libres) {
       <button class="btn btn-sm btn-secondary" id="rdv-lien-btn" onclick="rdvLienBasculer()" style="font-size:12px">+ Ajouter mes boutons de rendez-vous</button>
       <span style="font-size:12px;color:var(--muted)">Dans le mail, le lien devient deux boutons sous ton texte : « Prendre une visio » (30 min) et « Prendre un appel » (10 min), chacun ouvrant tes disponibilités. Ta formule de politesse passe dans la signature, sous les boutons.</span>
     </div>
-    ${libres === 0 ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-top:10px">Tu n'as aucune disponibilité ouverte : avec le lien, le client ne pourra qu'écrire quand il est libre. <button class="btn btn-sm btn-secondary" onclick="rdvLienFermer(); eqCreneauxOuvrir()" style="font-size:11px;margin-left:6px">Ouvrir des créneaux</button></div>` : ''}
+    ${libres === 0 ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-top:10px">Tu n'as aucune disponibilité ouverte : avec le lien, le client ne pourra qu'écrire quand il est libre. <button class="btn btn-sm btn-secondary" onclick="rdvLienFermer(); eqCreneauxOuvrir()" style="font-size:11px;margin-left:6px">Mes disponibilités</button></div>` : ''}
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
       <input id="rdv-lien-url" readonly value="${_vEsc(url)}" onclick="this.select()" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--muted);font-family:var(--font-body);font-size:12px">
       <button class="btn btn-sm btn-secondary" onclick="eqCopy(document.getElementById('rdv-lien-url').value, 'Lien de rendez-vous')" style="font-size:11.5px" title="Pour un SMS ou un autre canal">Copier le lien</button>
@@ -8890,7 +8890,7 @@ async function rdvLienPublicOuvrir() {
   const libres = (_planCreneaux || []).filter(c => c.statut === 'libre' && new Date(c.debut) > new Date()).length;
   box.innerHTML = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Le même lien toute l'année, à ton prénom et sur le site GLR : signature de mail, SMS, message LinkedIn, carte de visite. Celui qui l'ouvre voit tes disponibilités, choisit son créneau et se présente — sa fiche est créée dans ton portefeuille, et le rendez-vous arrive dans ta page Activité à valider.</div>
-    ${libres === 0 ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:12px">Tu n'as aucune disponibilité ouverte : la page proposera seulement de te laisser ses coordonnées. <button class="btn btn-sm btn-secondary" onclick="rdvLienPublicFermer(); eqCreneauxOuvrir('eq-plan-vendeur')" style="font-size:11px;margin-left:6px">Ouvrir des créneaux</button></div>` : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${libres} créneau${libres > 1 ? 'x' : ''} libre${libres > 1 ? 's' : ''} à venir — c'est ce qu'il verra.</div>`}
+    ${libres === 0 ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:12px">Tu n'as aucune disponibilité ouverte : la page proposera seulement de te laisser ses coordonnées. <button class="btn btn-sm btn-secondary" onclick="rdvLienPublicFermer(); eqCreneauxOuvrir('eq-plan-vendeur')" style="font-size:11px;margin-left:6px">Mes disponibilités</button></div>` : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">${libres} créneau${libres > 1 ? 'x' : ''} libre${libres > 1 ? 's' : ''} à venir — c'est ce qu'il verra.</div>`}
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
       <input id="rdv-public-url" readonly value="${_vEsc(url)}" onclick="this.select()" style="flex:1;min-width:0;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:12.5px">
       <button class="btn btn-sm btn-primary" onclick="eqCopy(document.getElementById('rdv-public-url').value, 'Lien de rendez-vous')" style="font-size:11.5px">Copier</button>
@@ -12235,13 +12235,14 @@ async function eqCreneauxOuvrir(source) {
   const champ = 'background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 11px;color:var(--text);font-family:var(--font-body);font-size:13px';
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:620px;max-width:95vw;max-height:90vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-      <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Mes créneaux de rendez-vous — ${_vEsc(prenom)}</div>
+      <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Mes disponibilités — ${_vEsc(prenom)}</div>
       <button onclick="eqCreneauxFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Tes disponibilités sont découpées en créneaux de <strong style="color:var(--text)">10 min</strong> et proposées au client dans ses sélections et dans le mail de prise de rendez-vous (il ne voit que les horaires ronds, toutes les 30 min). Il réserve lui-même : une <strong style="color:var(--text)">visio bloque 30 min</strong>, un <strong style="color:var(--text)">appel 10 min</strong> — le reste de la plage reste ouvert aux autres clients.</div>
 
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:16px">
-      <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:9px">Ouvrir des disponibilités</div>
+      <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">Définir mes disponibilités</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Sur les jours concernés, ces horaires <strong style="color:var(--text)">remplacent</strong> les disponibilités déjà ouvertes. Tes rendez-vous et tes activités ne bougent pas.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:9px">
         <span style="font-size:12px;color:var(--muted)">Du</span>
         <input type="date" id="cren-date1" value="${auj}" min="${auj}" style="${champ}" onchange="var d2=document.getElementById('cren-date2'); d2.min=this.value; if(d2.value<this.value) d2.value=this.value;">
@@ -12274,7 +12275,7 @@ async function eqCreneauxOuvrir(source) {
       <div id="cren-perso-box" style="display:none;margin:6px 0 4px"></div>
       <div style="display:flex;gap:8px;margin-top:9px">
         <input type="text" id="cren-lieu" placeholder="Lieu ou lien de visio (optionnel)" style="${champ};flex:1">
-        <button class="btn btn-primary" onclick="eqCreneauxGenerer()">Ouvrir ces créneaux</button>
+        <button class="btn btn-primary" onclick="eqCreneauxGenerer()">Enregistrer mes disponibilités</button>
       </div>
       <div id="cren-apercu" style="font-size:11.5px;color:var(--muted);margin-top:8px"></div>
     </div>
@@ -12396,6 +12397,7 @@ function _eqCreneauxLignes() {
   const lignes = [];
   let ecartes = 0;         // créneaux non ouverts car une activité bloquante occupe la plage
   const vus = new Set();   // deux plages qui se chevauchent ne doivent pas doubler un créneau
+  const dates = new Set(); // jours réellement concernés (dans la plage ET cochés)
   const cur = new Date(d1 + 'T00:00');
   const fin = new Date(d2 + 'T00:00');
   let garde = 0;
@@ -12403,6 +12405,7 @@ function _eqCreneauxLignes() {
     const jsDay = cur.getDay();
     if (jours.includes(jsDay)) {
       const jourStr = new Date(cur.getTime() - cur.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+      dates.add(jourStr);
       for (const [a, b] of _crenPlagesJour(jsDay)) {
         if (!a || !b) return { lignes: [], erreur: 'Renseigne les horaires de ' + (CREN_JOURS_LBL[jsDay] || 'chaque jour') };
         const debutJour = new Date(jourStr + 'T' + a);
@@ -12425,7 +12428,23 @@ function _eqCreneauxLignes() {
     cur.setDate(cur.getDate() + 1);
   }
   lignes.sort((x, y) => x.debut < y.debut ? -1 : 1);
-  return { lignes, erreur: null, ecartes };
+  return { lignes, erreur: null, ecartes, aRemplacer: _crenLibresARemplacer(dates, lignes) };
+}
+
+// Enregistrer des disponibilités REMPLACE celles déjà ouvertes sur les jours
+// concernés (cas Jules, 11/09/2026 : il avait changé ses horaires et les
+// anciennes plages restaient, empilées sous les nouvelles). Ne sont retirés
+// que les créneaux libres à venir de ces jours qui ne font pas partie des
+// nouveaux horaires ; rendez-vous, propositions et activités restent.
+function _crenLibresARemplacer(dates, lignes) {
+  const liste = (typeof _creneaux !== 'undefined' && Array.isArray(_creneaux)) ? _creneaux : [];
+  const garde = new Set(lignes.map(l => l.debut));
+  const maintenant = Date.now();
+  return liste.filter(c => c.statut === 'libre'
+    && c.origine !== 'perso' && c.origine !== 'rappel'
+    && dates.has(String(c.debut).slice(0, 10))
+    && new Date(c.debut).getTime() > maintenant
+    && !garde.has(new Date(c.debut).toISOString()));
 }
 
 // Une activité du planning marquée « bloquée » interdit d'ouvrir une
@@ -12447,10 +12466,11 @@ function _crenSurActiviteBloquante(deb, fin) {
 function eqCreneauxApercu() {
   const box = document.getElementById('cren-apercu');
   if (!box) return;
-  const { lignes, erreur, ecartes } = _eqCreneauxLignes();
+  const { lignes, erreur, ecartes, aRemplacer } = _eqCreneauxLignes();
   if (erreur) { box.textContent = '⚠ ' + erreur; return; }
   const nbJours = new Set(lignes.map(l => l.debut.slice(0, 10))).size;
-  const note = ecartes ? ' — ' + ecartes + ' créneau(x) écarté(s) : une activité bloquée occupe déjà la plage' : '';
+  let note = ecartes ? ' — ' + ecartes + ' créneau(x) écarté(s) : une activité bloquée occupe déjà la plage' : '';
+  if (aRemplacer && aRemplacer.length) note += ' — remplace ' + aRemplacer.length + ' créneau(x) déjà ouvert(s) sur ces jours';
   const heures = lignes.length * CRENEAU_PAS_MIN / 60;
   const hTxt = Number.isInteger(heures) ? heures + ' h' : heures.toFixed(2).replace('.', ',').replace(/,?0+$/, '') + ' h';
   box.textContent = lignes.length
@@ -12524,22 +12544,35 @@ function eqCreneauxRender() {
 }
 
 async function eqCreneauxGenerer() {
-  const { lignes, erreur, ecartes } = _eqCreneauxLignes();
+  const { lignes, erreur, ecartes, aRemplacer } = _eqCreneauxLignes();
   if (erreur) { toast('⚠ ' + erreur, 'var(--warning)'); return; }
   if (!lignes.length) {
     toast(ecartes ? 'Aucun créneau ouvert : tes activités bloquées couvrent la plage' : 'Aucun créneau à ouvrir sur cette plage', 'var(--warning)');
     return;
   }
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  let retires = 0;
   try {
+    // D'abord retirer les anciennes disponibilités des jours concernés (par
+    // paquets : une journée entière fait des dizaines d'identifiants)
+    const ids = (aRemplacer || []).map(c => c.id);
+    for (let i = 0; i < ids.length; i += 80) {
+      const lot = ids.slice(i, i + 80);
+      const rd = await fetch(SUPABASE_URL + '/rest/v1/creneaux?statut=eq.libre&id=in.(' + lot.join(',') + ')', { method: 'DELETE', headers: entetes });
+      if (!rd.ok) throw new Error('HTTP ' + rd.status);
+      retires += lot.length;
+    }
     const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux?on_conflict=vendeur,debut', {
       method: 'POST',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+      headers: { ...entetes, 'Content-Type': 'application/json', 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
       body: JSON.stringify(lignes)
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    toast('✓ ' + lignes.length + ' créneau(x) ouvert(s)' + (ecartes ? ' — ' + ecartes + ' écarté(s), activité ou rendez-vous déjà posé' : ''), 'var(--success)');
+    toast('✓ ' + lignes.length + ' créneau(x) ouvert(s)'
+      + (retires ? ' — ' + retires + ' ancien(s) retiré(s)' : '')
+      + (ecartes ? ' — ' + ecartes + ' écarté(s), activité ou rendez-vous déjà posé' : ''), 'var(--success)');
   } catch (e) {
-    toast('⚠ Impossible d\'ouvrir ces créneaux', 'var(--danger)');
+    toast('⚠ Impossible d\'enregistrer ces disponibilités', 'var(--danger)');
   }
   await eqCreneauxCharger();
   eqMajVue(true);   // le planning derrière se met à jour tout seul
