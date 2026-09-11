@@ -1983,6 +1983,7 @@
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px">
         <select id="pil-periode" onchange="pilPeriodeChange('pil')" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;max-width:100%">
           <option value="7">7 derniers jours</option>
+          <option value="14">14 derniers jours</option>
           <option value="30" selected>30 derniers jours</option>
           <option value="mois">Mois en cours</option>
           <option value="mois-1">Mois dernier</option>
@@ -9921,10 +9922,8 @@ async function eqProposerOuvrir(creneauId, token) {
   document.body.appendChild(div);
 
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&statut=eq.libre&debut=gte.' + encodeURIComponent(new Date().toISOString()) + '&order=debut.asc&limit=3000', {
-      cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
-    });
-    _propCtx.tousLibres = r.ok ? await r.json() : [];
+    _propCtx.tousLibres = await _sbTout(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&statut=eq.libre&debut=gte.' + encodeURIComponent(new Date().toISOString()) + '&order=debut.asc',
+      { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER });
   } catch (e) { _propCtx.tousLibres = []; }
   // Débuts possibles : chaque créneau libre à partir duquel la durée
   // voulue tient d'un seul tenant (créneaux contigus enchaînés).
@@ -12479,15 +12478,29 @@ function eqCreneauxApercu() {
                : 'Aucun créneau sur cette plage — vérifie les dates, horaires et jours cochés');
 }
 
+// Supabase plafonne chaque réponse à 1 000 lignes, quel que soit le `limit`
+// demandé. Un vendeur qui ouvre 9 h par jour sur deux mois dépasse ce plafond
+// (créneaux de 10 min) : son planning et sa fenêtre de disponibilités
+// s'arrêtaient au bout de deux semaines (cas Jules, 11/09/2026). On lit donc
+// par pages de 1 000 jusqu'à la fin.
+async function _sbTout(url, entetes) {
+  const PAGE = 1000, tout = [];
+  for (let de = 0; de < 30000; de += PAGE) {
+    const r = await fetch(url, { cache: 'no-store', headers: { ...entetes, 'Range-Unit': 'items', 'Range': de + '-' + (de + PAGE - 1) } });
+    if (!r.ok) { if (de === 0) throw new Error('HTTP ' + r.status); break; }
+    const page = await r.json();
+    tout.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return tout;
+}
+
 async function eqCreneauxCharger() {
   const prenom = _creneauVendeur();
   const depuis = new Date(Date.now() - 864e5).toISOString();
   try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&debut=gte.' + encodeURIComponent(depuis) + '&order=debut.asc&limit=3000', {
-      cache: 'no-store',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
-    });
-    _creneaux = res.ok ? await res.json() : [];
+    _creneaux = await _sbTout(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(prenom) + '&debut=gte.' + encodeURIComponent(depuis) + '&order=debut.asc',
+      { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER });
   } catch (e) { _creneaux = []; }
   eqCreneauxRender();
 }
@@ -12713,8 +12726,7 @@ async function renderEquipePlanning() {
   const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
   const depuis = new Date(Date.now() - 60 * 864e5).toISOString(); // 2 mois d'historique pour la navigation
   try {
-    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(v.prenom) + '&debut=gte.' + encodeURIComponent(depuis) + '&order=debut.asc&limit=4000', { cache: 'no-store', headers: entetes });
-    _planCreneaux = r.ok ? await r.json() : [];
+    _planCreneaux = await _sbTout(SUPABASE_URL + '/rest/v1/creneaux?select=*&vendeur=eq.' + encodeURIComponent(v.prenom) + '&debut=gte.' + encodeURIComponent(depuis) + '&order=debut.asc', entetes);
   } catch (e) { _planCreneaux = []; }
   try {
     const r = await fetch(SUPABASE_URL + '/rest/v1/selections?select=token,contact_id,client_nom,avis,created_at&vendeur=eq.' + encodeURIComponent(v.prenom) + '&order=created_at.desc&limit=200', { cache: 'no-store', headers: entetes });
