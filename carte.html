@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carte des programmes pigés — GLR Immobilier</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{--navy:#14213d;--teal:#0f7c8c;--teal2:#0aa3b5;--bg:#f5f6f8;--line:#e3e6eb;--txt:#1f2937;--muted:#6b7280;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--approx:#9333ea}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--txt);background:var(--bg);font-size:13px}
+#app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:56px 1fr;height:100%}
+header{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0;color:var(--navy);white-space:nowrap}
+header h1 small{font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
+#search{flex:1;max-width:520px;position:relative}
+#search input{width:100%;padding:8px 12px 8px 34px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") 10px center no-repeat}
+#sugg{position:absolute;top:38px;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:2000;max-height:360px;overflow:auto;display:none}
+#sugg div{padding:7px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+#sugg div:hover,#sugg div.sel{background:#eef7f8}
+#sugg span{color:var(--muted);font-size:11px;white-space:nowrap}
+#sugg b{font-weight:600}
+.kpis{display:flex;gap:14px;margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+.kpis b{color:var(--navy);font-size:14px}
+aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.filters{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px}
+.filters select,.filters input{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;max-width:100%}
+.filters .row{display:flex;gap:6px;width:100%}
+.filters .row>*{flex:1;min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:4px;width:100%}
+.chip{border:1px solid var(--line);border-radius:14px;padding:3px 9px;font-size:11px;cursor:pointer;background:#fff;user-select:none}
+.chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+.chip.dim{opacity:.45}
+#back{position:absolute;z-index:900;top:82px;left:10px;padding:6px 11px;border:2px solid rgba(0,0,0,.2);background:#fff;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--navy);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+#back:hover{background:#f4f4f4}
+.livrow{display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;width:100%}
+.livrow .lbl{font-size:11px;color:#777;margin-right:2px}
+.livrow .chips{width:auto}
+.dd{position:relative}
+.dd button{width:100%;padding:5px 22px 5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23555'/%3E%3C/svg%3E") no-repeat right 7px center;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:inherit;font-family:inherit}
+.dd button.on{border-color:var(--teal);color:var(--teal);font-weight:600}
+.dd-pop{position:absolute;z-index:1200;top:calc(100% + 4px);left:0;min-width:210px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);padding:6px 4px;max-height:280px;overflow:auto}
+.dd-pop label{display:flex;align-items:center;gap:7px;padding:4px 8px;font-size:12px;cursor:pointer;border-radius:5px;white-space:nowrap}
+.dd-pop label:hover{background:#f3f6f7}
+.dd-pop .cnt{margin-left:auto;color:#999;font-size:11px}
+.dd-pop .all{border-top:1px solid var(--line);margin-top:4px;padding-top:6px;color:var(--teal)}
+.tools{display:flex;gap:8px;align-items:center;width:100%;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.tools label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.tools a{color:var(--teal);cursor:pointer;text-decoration:none}
+#crumbs{padding:6px 12px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+#crumbs a{color:var(--teal);cursor:pointer;text-decoration:none}
+#crumbs a:hover{text-decoration:underline}
+#list{overflow:auto;flex:1;min-height:0}
+.grp{padding:6px 12px;background:#f9fafb;border-bottom:1px solid var(--line);font-weight:600;font-size:12px;color:var(--navy);position:sticky;top:0;cursor:pointer;display:flex;justify-content:space-between}
+.grp span{color:var(--muted);font-weight:400}
+.it{padding:8px 12px;border-bottom:1px solid #f0f1f3;cursor:pointer}
+.it:hover{background:#f3fafb}
+.it.sel{background:#e6f4f6;border-left:3px solid var(--teal)}
+.it .n{font-weight:600;color:var(--navy);display:flex;justify-content:space-between;gap:6px}
+.it .n small{font-weight:400;color:var(--muted);white-space:nowrap}
+.it .m{color:var(--muted);font-size:11.5px;margin-top:2px}
+.it .p{font-size:12px;margin-top:2px}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px;background:#eef2ff;color:#3730a3;margin-right:3px;margin-top:2px}
+.tag.ap{background:#f3e8ff;color:var(--approx)}
+.tag.ok{background:#dcfce7;color:#166534}
+.tag.wn{background:#fef3c7;color:#92400e}
+#mapwrap{position:relative;min-height:0}
+#map{position:absolute;inset:0}
+.leaflet-container{background:#f4f1ea;font:inherit}
+.bub{background:var(--navy);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25);border:2px solid #fff;cursor:pointer;flex-direction:column;line-height:1}
+.bub small{font-weight:500;font-size:9px;opacity:.9;margin-top:1px;max-width:96%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bub.v{background:var(--teal)}
+.vb{display:flex;flex-direction:column;align-items:center}
+.cap{font-size:10px;font-weight:600;color:#14213d;white-space:nowrap;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;margin-top:1px}
+.pin{width:16px;height:16px;border-radius:50%;background:var(--teal);border:2.5px solid #fff;box-shadow:0 0 0 2px var(--teal),0 2px 6px rgba(0,0,0,.45);cursor:pointer;margin:-1px}
+.z14 .pin{width:20px;height:20px;margin:-3px}
+.pin.ap{background:#fff;border:2.5px dashed var(--approx);box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.pin.hl{background:#f59e0b;transform:scale(1.35)}
+.pin.sold{background:#9ca3af;box-shadow:0 0 0 2px #9ca3af,0 2px 6px rgba(0,0,0,.35)}
+.leaflet-marker-icon.pinw{background:none;border:0}
+.leaflet-tooltip.tt{font-size:12px;padding:4px 8px;border-radius:6px}
+.stn{width:10px;height:10px;border-radius:50%;background:#fff;border:2.5px solid #444;box-shadow:0 1px 3px rgba(0,0,0,.45);margin:2px}
+.stn.big{width:13px;height:13px;border-width:3px;margin:0}
+.z14 .stn{width:14px;height:14px;border-width:3px;margin:0}.z14 .stn.big{width:17px;height:17px;border-width:3.5px;margin:-2px}
+.stnl{display:none;position:absolute;left:16px;top:-2px;font-size:10.5px;font-weight:600;color:#1f2937;white-space:nowrap;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 4px #fff,0 0 4px #fff}
+.z15 .stnl{display:block}
+.dlab{font-family:Georgia,'Times New Roman',serif;font-size:13px;letter-spacing:1.5px;color:#4b5563;text-align:center;line-height:1.15;text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 6px #fff;opacity:.9}
+.dlab b{font-size:15px;color:#1f2937}
+#panel{position:absolute;top:10px;right:10px;bottom:10px;width:520px;max-width:calc(100% - 20px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.2);z-index:1000;display:none;flex-direction:column;overflow:hidden}
+#panel.open{display:flex}
+#panel .hd{padding:14px 16px 10px;border-bottom:1px solid var(--line);position:relative}
+#panel .hd h2{margin:0 26px 2px 0;font-size:17px;color:var(--navy)}
+#panel .hd .sub{color:var(--muted);font-size:12px}
+#panel .x{position:absolute;top:10px;right:10px;border:0;background:#f3f4f6;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px}
+#panel .bd{overflow:auto;flex:1;padding:10px 16px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.5px;margin:6px 0}
+.kv div:nth-child(odd){color:var(--muted)}
+.desc{font-size:12px;color:#374151;line-height:1.45;margin:8px 0;max-height:120px;overflow:auto;background:#f9fafb;padding:8px;border-radius:6px}
+.links a{display:inline-block;margin:2px 8px 2px 0;color:var(--teal);font-size:12px}
+.lotsbar{display:flex;gap:6px;align-items:center;margin:10px 0 6px;flex-wrap:wrap;font-size:12px}
+.lotsbar select{padding:3px 6px;border:1px solid var(--line);border-radius:5px;font-size:12px}
+table.lots{width:100%;border-collapse:collapse;font-size:12px}
+table.lots th{position:sticky;top:0;background:#f9fafb;text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;font-weight:600;color:var(--navy)}
+table.lots td{padding:4px 6px;border-bottom:1px solid #f0f1f3;white-space:nowrap}
+table.lots tr.opt td{color:var(--muted)}
+table.lots td.r{text-align:right}
+.st{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px}
+.st.libre{background:#dcfce7;color:#166534}.st.option{background:#fef3c7;color:#92400e}.st.reserve,.st.bloque{background:#fee2e2;color:#991b1b}
+.legend{position:absolute;left:10px;bottom:10px;z-index:1000;background:#fff;border-radius:8px;padding:8px 10px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.15);color:var(--muted);line-height:1.6}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin-right:5px}
+.leaflet-control-zoom{border:0!important;box-shadow:0 2px 8px rgba(0,0,0,.15)!important}
+.empty{padding:30px 14px;color:var(--muted);text-align:center}
+.tag.nw{background:#dcfce7;color:#166534;font-weight:600}
+.tag.dn{background:#fee2e2;color:#991b1b;font-weight:600}
+.tag.cm{background:#fff7ed;color:#9a3412}
+#tabs{display:flex;border-bottom:1px solid var(--line);font-size:12px}
+#tabs span{flex:1;text-align:center;padding:7px 0;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}
+#tabs span.on{color:var(--teal);border-color:var(--teal);font-weight:600}
+#lotsview{overflow:auto;flex:1;min-height:0;display:none}
+#app.lots{grid-template-columns:780px 1fr}
+#lotsview table{width:100%;border-collapse:collapse;font-size:11.5px}
+#lotsview th{position:sticky;top:0;background:#f9fafb;text-align:left;padding:5px 5px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;font-weight:600;color:var(--navy);font-size:11px}
+#lotsview td{padding:4px 5px;border-bottom:1px solid #f0f1f3;white-space:nowrap;cursor:pointer}
+#lotsview tr:hover td{background:#f3fafb}
+#lotsview td.r{text-align:right}
+#lotsview .more{padding:10px;text-align:center;color:var(--teal);cursor:pointer}
+#cartBtn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;color:var(--navy);white-space:nowrap}
+#cartBtn b{color:var(--teal)}
+#cartBtn.has{border-color:var(--teal)}
+#cart{position:absolute;top:10px;right:10px;bottom:10px;width:560px;max-width:calc(100% - 20px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.2);z-index:1100;display:none;flex-direction:column;overflow:hidden}
+#cart.open{display:flex}
+#cart .hd{padding:14px 16px 10px;border-bottom:1px solid var(--line);position:relative;display:flex;align-items:center;gap:10px}
+#cart .hd h2{margin:0;font-size:16px;color:var(--navy);flex:1}
+#cart .hd .x{position:static;border:0;background:#f3f4f6;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px}
+#cart .bd{overflow:auto;flex:1;padding:8px 16px}
+#cart .ft{padding:10px 16px;border-top:1px solid var(--line);display:flex;gap:8px;flex-wrap:wrap;font-size:12px}
+#cart .ft a{color:var(--teal);cursor:pointer}
+.btn{border:1px solid var(--teal);background:var(--teal);color:#fff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}
+.btn.o{background:#fff;color:var(--teal)}
+.ck{width:14px;height:14px;cursor:pointer;accent-color:var(--teal)}
+.lotsbar .btn{margin-left:auto}
+.pige{font-size:11px;color:var(--muted);white-space:nowrap}
+.filters .row.tri>*{flex:1}
+@media (max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:56px 1fr}aside{display:none}header .kpis{display:none}#panel{width:auto;left:10px}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <h1>Programmes pigés<small>Île-de-France</small></h1><span class="pige" id="pige"></span>
+  <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
+  <button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes</span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
+</header>
+<aside>
+  <div class="filters">
+    <div class="row">
+      <select id="fPromo"><option value="">Tous les promoteurs</option></select>
+      <select id="fDept"><option value="">Tous les départements</option></select>
+    </div>
+    <div class="row">
+      <select id="fSource"><option value="">Toutes les sources</option></select>
+      <select id="fCom"><option value="">Commission min</option></select>
+    </div>
+    <div class="chips" id="fTypo"></div>
+    <div class="row tri">
+      <select id="fBudget"><option value="">Budget max</option></select>
+      <select id="fPm2"><option value="">€/m² max</option></select>
+      <select id="fRenta"><option value="">Renta min</option></select>
+    </div>
+    <div class="row">
+      <select id="fGare"><option value="">Distance gare</option></select>
+      <div class="dd" id="fFiscDD"><button type="button" id="fFiscBtn">Fiscalité</button><div class="dd-pop" id="fFiscPop" hidden></div></div>
+    </div>
+    <div class="livrow"><span class="lbl">Livré au plus tard</span><div class="chips" id="fLivY"></div><div class="chips" id="fLivS" hidden></div></div>
+    <div class="chips" id="fFlags"></div>
+    <div class="tools">
+      <select id="fSt" style="padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:11px;background:#fff"><option value="libre">Lots libres seulement</option><option value="libre,option">Libres + optionnés</option><option value="">Tous les statuts</option></select>
+      <label><input type="checkbox" id="fMaison"> Maisons</label>
+      <label><input type="checkbox" id="tTransports"> Transports</label>
+      <a id="reset">Réinitialiser</a><a id="csv" title="Exporter les lots correspondant aux filtres">Export CSV</a>
+    </div>
+  </div>
+  <div id="tabs"><span class="on" data-t="p">Programmes</span><span data-t="l">Lots <small id="tabLN"></small></span></div>
+  <div id="crumbs"></div>
+  <div id="list"></div>
+  <div id="lotsview"></div>
+</aside>
+<div id="mapwrap">
+  <div id="map"></div>
+  <button id="back" hidden>↩ Retour</button>
+  <div id="panel"><div class="hd"><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
+  <div id="cart"><div class="hd"><h2>Ma sélection</h2><button class="x" title="Fermer">✕</button></div><div class="bd"></div><div class="ft"><button class="btn" id="cartCsv">Exporter en CSV</button><button class="btn o" id="cartCopy">Copier le tableau</button><button class="btn" id="cartZip" title="Fiches PDF par lot + tableau + liens vers les plans">Dossier commercial (ZIP)</button><a id="cartClear">Vider</a></div></div>
+  <div class="legend"><i style="background:#0f7c8c"></i>Programme (adresse précise)<br><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative (commune)<br><i style="background:#9ca3af"></i>Plus de lot disponible<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
+</div>
+</div>
+<script type="module">
+// ---- chargement des données depuis le CRM (Supabase) ----
+const SB_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co', SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
+const __ov = document.createElement('div'); __ov.id = 'chargement'; __ov.innerHTML = '<div><b>Carte des programmes</b><br>Chargement du stock promoteurs…</div>';
+__ov.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#f5f6f8;font:15px/1.5 system-ui,sans-serif;color:#1f2937;text-align:center';
+document.body.appendChild(__ov);
+async function __loadData() {
+  let bearer = SB_KEY;
+  try { const s = JSON.parse(localStorage.getItem('glr_session') || 'null'); if (s && s.access_token) bearer = s.access_token; } catch (e) {}
+  const r = await fetch(SB_URL + '/rest/v1/rpc/pige_carte', { method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + bearer, 'Content-Type': 'application/json' }, body: '{}' });
+  if (!r.ok) throw new Error('Supabase ' + r.status);
+  const d = await r.json(); d.meta = d.meta || {}; return d;
+}
+async function __loadGeo() {
+  const g = {};
+  for (const k of ['contours', 'transports']) { try { const r = await fetch('carte/geo_' + k + '.json', { cache: 'force-cache' }); if (r.ok) g[k] = await r.json(); } catch (e) {} }
+  return g;
+}
+let DATA, GEO;
+try { [DATA, GEO] = await Promise.all([__loadData(), __loadGeo()]); __ov.remove(); }
+catch (e) { __ov.innerHTML = '<div><b>Impossible de charger la carte</b><br>' + String(e).replace(/</g, '&lt;') + '<br><br><button onclick="location.reload()">Réessayer</button></div>'; throw e; }
+const P = DATA.programmes, L0 = DATA.lots;
+const DEPTS = {'75':'Paris','77':'Seine-et-Marne','78':'Yvelines','91':'Essonne','92':'Hauts-de-Seine','93':'Seine-Saint-Denis','94':'Val-de-Marne','95':"Val-d'Oise"};
+const TYPOS = ['T1','T2','T3','T4','T5+'];
+const byP = {}; L0.forEach(l => (byP[l.programme_id] = byP[l.programme_id] || []).push(l));
+P.forEach(p => { p.lots = byP[p.id] || []; p.logs = p.lots.filter(l => l.type === 'Appartement' || l.type === 'Maison'); });
+const fmt = n => n == null ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €';
+const fmtk = n => n == null ? '—' : (n >= 1e6 ? (n / 1e6).toFixed(2).replace('.', ',') + ' M€' : Math.round(n / 1000) + ' k€');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// ---------- filtres ----------
+const F = { promo: '', dept: '', typos: new Set(), budget: '', liv: '', livS: 2, fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set() };
+const META = DATA.meta || {};
+function lotOK(l) {
+  if (F.st.size && !F.st.has(l.st)) return false;
+  if (F.maison && l.type !== 'Maison') return false;
+  if (!F.maison && l.type !== 'Appartement' && l.type !== 'Maison') return false;
+  if (F.typos.size && !F.typos.has(l.typo)) return false;
+  if (F.budget && (!l.prix || l.prix > +F.budget)) return false;
+  if (F.pm2 && (!l.prix_m2 || l.prix_m2 > +F.pm2)) return false;
+  if (F.renta && (!l.renta || l.renta < +F.renta)) return false;
+  if (F.flags.has('top') && !l.top) return false;
+  if (F.flags.has('ext') && !l.ext) return false;
+  if (F.flags.has('pk') && !l.pk) return false;
+  if (F.flags.has('new') && !(l.nouveau || l.prix_prev)) return false;
+  return true;
+}
+function progOK(p) {
+  if (F.promo && p.promoteur !== F.promo) return false;
+  if (F.dept && p.dept !== F.dept) return false;
+  if (F.ville && p.ville !== F.ville) return false;
+  if (F.liv && !(p.livraison_key && p.livraison_key <= +F.liv + (F.livS === 1 ? 0.25 : 0.45))) return false;
+  if (F.fisc.size && !(p.fisc || []).some(f => F.fisc.has(f))) return false;
+  if (F.source && p.extranet !== F.source && !(p.sources || []).some(s => s.extranet === F.source)) return false;
+  if (F.com && !(p.commission_pct >= +F.com)) return false;
+  if (F.gare && !(p.gare_dist && p.gare_dist <= +F.gare)) return false;
+  if (F.flags.has('new') && !(p.nouveau || p.nb_nouveaux_lots || p.nb_baisses)) return false;
+  if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.flags.size);
+  return p.logs.some(lotOK);
+}
+let VIS = [];
+function apply() {
+  VIS = P.filter(progOK);
+  const nl = VIS.reduce((a, p) => a + p.logs.filter(l => F.maison ? l.type === 'Maison' : true).length, 0);
+  const nd = VIS.reduce((a, p) => a + p.logs.filter(l => l.st === 'libre' && lotOKnoDispo(l)).length, 0);
+  document.getElementById('kp').textContent = VIS.length;
+  document.getElementById('kl').textContent = nl.toLocaleString('fr-FR');
+  document.getElementById('kd').textContent = nd.toLocaleString('fr-FR');
+  document.getElementById('kpr').textContent = new Set(VIS.map(p => p.promoteur)).size;
+  renderList(); renderMap(); renderCrumbs(); renderBack(); renderLotsView(); renderCartBtn();
+}
+function lotOKnoDispo(l) { const d = F.st; F.st = new Set(); const r = lotOK(l); F.st = d; return r; }
+
+// ---------- init filtres ----------
+const sel = (id, opts) => { const s = document.getElementById(id); opts.forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; s.appendChild(o); }); return s; };
+const promos = [...new Set(P.map(p => p.promoteur))].sort((a, b) => a.localeCompare(b, 'fr'));
+sel('fPromo', promos.map(x => [x, x + ' (' + P.filter(p => p.promoteur === x).length + ')']));
+sel('fDept', Object.keys(DEPTS).map(d => [d, d + ' — ' + DEPTS[d]]));
+sel('fBudget', [150, 200, 250, 300, 350, 400, 500, 600, 800, 1000].map(k => [k * 1000, '≤ ' + k + ' k€']));
+const sources = [...new Set(P.flatMap(p => [p.extranet, ...(p.sources || []).map(s => s.extranet)]))].sort((a, b) => a.localeCompare(b, 'fr'));
+sel('fSource', sources.map(x => [x, x + ' (' + P.filter(p => p.extranet === x || (p.sources || []).some(s => s.extranet === x)).length + ')']));
+sel('fCom', [3, 4, 5, 6, 7].map(k => [k, '≥ ' + k + ' % (' + P.filter(p => p.commission_pct >= k).length + ')']));
+sel('fPm2', [4000, 4500, 5000, 5500, 6000, 7000, 8000, 10000].map(k => [k, '≤ ' + k.toLocaleString('fr-FR') + ' €/m²']));
+sel('fRenta', [3, 3.5, 4, 4.5, 5, 6].map(k => [k, '≥ ' + String(k).replace('.', ',') + ' %']));
+sel('fGare', [[300, '≤ 300 m d’une gare'], [500, '≤ 500 m (6 min à pied)'], [800, '≤ 800 m (10 min à pied)'], [1200, '≤ 1,2 km (15 min à pied)'], [2000, '≤ 2 km']]);
+const FLAGS = [['top', 'Dernier étage'], ['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')]];
+const fFl = document.getElementById('fFlags');
+FLAGS.forEach(([k, t]) => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.f = k; c.textContent = t; c.onclick = () => { F.flags.has(k) ? F.flags.delete(k) : F.flags.add(k); c.classList.toggle('on'); apply(); }; fFl.appendChild(c); });
+document.getElementById('pige').textContent = META.pige_date ? 'pigé le ' + new Date(META.pige_date).toLocaleDateString('fr-FR') + (META.prev_date ? ' · ' + META.nouveaux_programmes + ' nouveaux programmes, ' + META.nouveaux_lots + ' nouveaux lots, ' + META.baisses + ' baisses depuis le ' + new Date(META.prev_date).toLocaleDateString('fr-FR') : '') : '';
+const curY = new Date().getFullYear();
+const years = [...new Set(P.map(p => p.livraison_key && Math.floor(p.livraison_key)).filter(y => y && y >= curY && y <= curY + 6))].sort();
+const fLY = document.getElementById('fLivY'), fLS = document.getElementById('fLivS');
+function renderLiv() { [...fLY.children].forEach(c => c.classList.toggle('on', +c.dataset.y === +F.liv)); fLS.hidden = !F.liv; [...fLS.children].forEach(c => c.classList.toggle('on', +c.dataset.s === F.livS)); }
+years.forEach(y => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.y = y; c.textContent = y; c.onclick = () => { F.liv = (+F.liv === y) ? '' : y; F.livS = 2; renderLiv(); apply(); }; fLY.appendChild(c); });
+[[1, 'S1 (≤ juin)'], [2, 'S2 (≤ déc.)']].forEach(([n, t]) => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.s = n; c.textContent = t; c.onclick = () => { F.livS = n; renderLiv(); apply(); }; fLS.appendChild(c); });
+const fiscs = [...new Set(P.flatMap(p => p.fisc || []))].sort((a, b) => a.localeCompare(b, 'fr'));
+const fPop = document.getElementById('fFiscPop'), fBtn = document.getElementById('fFiscBtn');
+function fiscLabel() { const n = F.fisc.size; fBtn.textContent = n ? (n === 1 ? [...F.fisc][0] : n + ' fiscalités') : 'Fiscalité'; fBtn.classList.toggle('on', n > 0); }
+fiscs.forEach(f => { const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = f; c.onchange = () => { c.checked ? F.fisc.add(f) : F.fisc.delete(f); fiscLabel(); apply(); }; l.appendChild(c); l.appendChild(document.createTextNode(f)); const n = document.createElement('span'); n.className = 'cnt'; n.textContent = P.filter(p => (p.fisc || []).includes(f)).length; l.appendChild(n); fPop.appendChild(l); });
+const fAll = document.createElement('label'); fAll.className = 'all'; fAll.textContent = 'Tout décocher'; fAll.onclick = () => { F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); apply(); }; fPop.appendChild(fAll);
+fBtn.onclick = e => { e.stopPropagation(); fPop.hidden = !fPop.hidden; };
+fPop.onclick = e => e.stopPropagation();
+document.addEventListener('click', () => { fPop.hidden = true; });
+const fT = document.getElementById('fTypo');
+TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = t; c.onclick = () => { F.typos.has(t) ? F.typos.delete(t) : F.typos.add(t); c.classList.toggle('on'); apply(); }; fT.appendChild(c); });
+['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
+document.getElementById('fSt').onchange = e => { F.st = new Set(e.target.value ? e.target.value.split(',') : []); apply(); };
+document.getElementById('fMaison').onchange = e => { F.maison = e.target.checked; apply(); };
+document.getElementById('reset').onclick = () => { Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '' }); F.st = new Set(['libre']); document.getElementById('fSt').value = 'libre'; F.typos.clear(); F.flags.clear(); [...fFl.children].forEach(c => c.classList.remove('on')); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); map.fitBounds(IDF); apply(); };
+
+// ---------- carte ----------
+const IDF = [[48.12, 1.45], [49.24, 3.56]];
+const map = L.map('map', { zoomControl: true, minZoom: 8, maxZoom: 19 }).fitBounds(IDF);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
+const labelsPane = map.createPane('labels'); labelsPane.style.zIndex = 450; labelsPane.style.pointerEvents = 'none';
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, pane: 'labels' }).addTo(map);
+// --- communes (contours) : aplats pastel par département, style carte administrative ---
+const villesAvecProg = new Set(P.map(p => p.ville));
+const DCOL = { '75': '#e8c9c2', '77': '#f2cdb3', '78': '#c7d3a8', '91': '#f3d98f', '92': '#d9c3cf', '93': '#d2dea5', '94': '#f1e6a6', '95': '#ecdc9c' };
+let communesLayer = null, deptLayer = null;
+const commStyle = f => { const z = map.getZoom(); return { color: '#ffffff', weight: z >= 13 ? 1.6 : (z >= 11 ? 1.1 : 0.6), opacity: .95, fillColor: DCOL[f.properties.d] || '#ddd', fillOpacity: z >= 14 ? .18 : (z >= 12 ? .32 : .6) }; };
+if (GEO.contours) {
+  const communesPane = map.createPane('communes'); communesPane.style.zIndex = 300;
+  communesLayer = L.geoJSON(GEO.contours, { style: commStyle, pane: 'communes', interactive: true,
+    onEachFeature: (f, l) => { l.bindTooltip(f.properties.n + (villesAvecProg.has(f.properties.n) ? ' · ' + P.filter(p => p.ville === f.properties.n).length + ' programme(s)' : ''), { className: 'tt', sticky: true }); l.on('mouseover', () => l.setStyle({ weight: 2.5, color: '#14213d' })); l.on('mouseout', () => l.setStyle(commStyle(f))); l.on('click', () => { if (F.ville === f.properties.n) { goUp(); return; } if (villesAvecProg.has(f.properties.n)) zoomVille(f.properties.n); else map.flyTo(l.getBounds().getCenter(), Math.max(map.getZoom(), 13)); }); } });
+  // contours des départements = arêtes des communes non partagées avec une commune du même département (approximation par tracé épais des communes en bordure)
+  const deptPane = map.createPane('depts'); deptPane.style.zIndex = 310; deptPane.style.pointerEvents = 'none';
+  deptLayer = L.geoJSON(GEO.contours, { pane: 'depts', interactive: false, style: f => ({ color: '#6b7280', weight: 0.4, opacity: .5, fill: false }) });
+}
+// étiquettes des départements (vue globale)
+const DEPT_CENTER = { '75': [48.8566, 2.3522], '77': [48.62, 2.95], '78': [48.8, 1.85], '91': [48.52, 2.25], '92': [48.83, 2.19], '93': [48.92, 2.48], '94': [48.78, 2.47], '95': [49.08, 2.15] };
+const deptLabels = L.layerGroup();
+Object.entries(DEPT_CENTER).forEach(([d, c]) => L.marker(c, { icon: L.divIcon({ className: 'pinw', html: '<div class="dlab">' + DEPTS[d].toUpperCase() + '<br><b>' + d + '</b></div>', iconSize: [120, 30], iconAnchor: [60, 15] }), interactive: false, pane: 'labels' }).addTo(deptLabels));
+// --- transports IDFM (rail only) ---
+const transports = L.layerGroup();
+const garesLayer = L.layerGroup();
+const MODE_W = { METRO: 1.6, RER: 2, TRAIN: 1.4, TER: 1, TRAMWAY: 1.4, TRAM: 1.4, VAL: 1.2, CABLE: 1.2, NAVETTE: 1 };
+let lineObjs = [], gareObjs = [];
+if (GEO.transports) {
+  const pane = map.createPane('transports'); pane.style.zIndex = 380;
+  GEO.transports.lines.forEach(l => { const col = '#' + (l.col || '555'); l.c.forEach(seg => { const pl = L.polyline(seg.map(c => [c[1], c[0]]), { color: col, weight: MODE_W[l.mode] || 1.5, opacity: .85, pane: 'transports', interactive: false }); pl._mode = l.mode; pl.addTo(transports); lineObjs.push(pl); }); });
+  const gk = {}; GEO.transports.gares.forEach(g => { const k = g.nom + '|' + g.lat + '|' + g.lng; (gk[k] = gk[k] || { nom: g.nom, lat: g.lat, lng: g.lng, lignes: [], cols: [], mode: g.mode }).lignes.push(g.ligne || g.mode); gk[k].cols.push(g.col); });
+  Object.values(gk).forEach(g => { const col = '#' + (g.cols.find(Boolean) || '444'); const big = /RER|TRAIN|TER/.test(g.mode);
+    const m = L.marker([g.lat, g.lng], { icon: L.divIcon({ className: 'pinw', html: '<div class="stn' + (big ? ' big' : '') + '" style="border-color:' + col + '"></div><div class="stnl">' + esc(g.nom) + '</div>', iconSize: [14, 14], iconAnchor: [7, 7] }), pane: 'transports' });
+    m.bindTooltip('<b>' + esc(g.nom) + '</b><br>' + g.lignes.map(esc).join(' · '), { className: 'tt', direction: 'top', offset: [0, -8] }); m.addTo(garesLayer); gareObjs.push(m); });
+  GEO.gares = GEO.transports.gares;
+}
+document.getElementById('tTransports').checked = true;
+function syncTransports() { const on = document.getElementById('tTransports').checked, z = map.getZoom();
+  if (on && z >= 9) { if (!map.hasLayer(transports)) transports.addTo(map); const f = z >= 15 ? 1.5 : (z >= 13 ? 1.25 : 1); lineObjs.forEach(pl => pl.setStyle({ weight: (MODE_W[pl._mode] || 1.5) * f, opacity: z >= 12 ? .9 : .75 })); } else if (map.hasLayer(transports)) map.removeLayer(transports);
+  if (on && z >= 12) { if (!map.hasLayer(garesLayer)) garesLayer.addTo(map); document.body.classList.toggle('z14', z >= 14); document.body.classList.toggle('z15', z >= 15); } else if (map.hasLayer(garesLayer)) map.removeLayer(garesLayer);
+  if (communesLayer) { if (!map.hasLayer(communesLayer)) communesLayer.addTo(map); communesLayer.setStyle(commStyle); }
+  if (z < 11) { if (!map.hasLayer(deptLabels)) deptLabels.addTo(map); } else if (map.hasLayer(deptLabels)) map.removeLayer(deptLabels); }
+document.getElementById('tTransports').onchange = syncTransports;
+map.on('zoomend', syncTransports); syncTransports();
+const layer = L.layerGroup().addTo(map);
+const gares = L.layerGroup();
+let deptBounds = {};
+function computeDeptBounds() { Object.keys(DEPTS).forEach(d => { let b = null; if (communesLayer) communesLayer.eachLayer(l => { if (l.feature.properties.d === d) b = b ? b.extend(l.getBounds()) : l.getBounds(); }); if (!b) { const pts = P.filter(p => p.dept === d && p.lat).map(p => [p.lat, p.lng]); if (pts.length) b = L.latLngBounds(pts).pad(.08); } if (b) deptBounds[d] = b; }); }
+computeDeptBounds();
+function goUp() { if (F.ville) { F.ville = ''; if (F.dept) zoomDept(F.dept); else { map.fitBounds(IDF); apply(); } } else if (F.dept) { F.dept = ''; document.getElementById('fDept').value = ''; map.fitBounds(IDF); apply(); } }
+function renderBack() { const b = document.getElementById('back'); b.hidden = !(F.ville || F.dept); b.textContent = F.ville ? '↩ Quitter ' + F.ville : '↩ Toute l’Île-de-France'; }
+document.getElementById('back').onclick = goUp;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const pn = document.getElementById('panel'); if (pn.classList.contains('open')) pn.querySelector('.x').click(); else goUp(); } });
+function zoomDept(d) { F.dept = d; F.ville = ''; document.getElementById('fDept').value = d; const b = deptBounds[d]; if (b) map.fitBounds(b, { padding: [20, 20] }); apply(); }
+function zoomVille(v) { F.ville = v; let pts = VIS.filter(p => p.ville === v && p.lat).map(p => [p.lat, p.lng]); if (!pts.length) pts = P.filter(p => p.ville === v && p.lat).map(p => [p.lat, p.lng]); if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(.3), { maxZoom: 15 }); apply(); }
+let markers = {};
+function bubble(lat, lng, n, label, cls, onclick) {
+  const big = cls !== 'v';
+  const size = big ? Math.min(52, 34 + Math.sqrt(n) * 1.5) : Math.min(44, 22 + Math.sqrt(n) * 3);
+  const html = big ? '<div class="vb"><div class="bub" style="width:' + size + 'px;height:' + size + 'px;font-size:15px">' + n + '</div></div>'
+    : '<div class="vb"><div class="bub v" style="width:' + size + 'px;height:' + size + 'px;font-size:' + (size > 34 ? 13 : 11) + 'px">' + n + '</div><div class="cap">' + esc(label) + '</div></div>';
+  const m = L.marker([lat, lng], { icon: L.divIcon({ className: 'pinw', html, iconSize: [size, size], iconAnchor: [size / 2, size / 2] }) });
+  m.on('click', onclick); return m;
+}
+function renderMap() {
+  layer.clearLayers(); markers = {};
+  const z = map.getZoom();
+  const pts = VIS.filter(p => p.lat);
+  if (z < 10 && !F.dept) {
+    const g = {}; pts.forEach(p => (g[p.dept] = g[p.dept] || []).push(p));
+    Object.entries(g).forEach(([d, ps]) => { const la = ps.reduce((a, p) => a + p.lat, 0) / ps.length, ln = ps.reduce((a, p) => a + p.lng, 0) / ps.length; bubble(la, ln, ps.length, DEPTS[d], '', () => zoomDept(d)).addTo(layer); });
+  } else if (z < 12 && !F.ville) {
+    const g = {}; pts.forEach(p => (g[p.ville] = g[p.ville] || []).push(p));
+    Object.entries(g).forEach(([v, ps]) => { if (ps.length === 1) { pin(ps[0]).addTo(layer); return; } const la = ps.reduce((a, p) => a + p.lat, 0) / ps.length, ln = ps.reduce((a, p) => a + p.lng, 0) / ps.length; bubble(la, ln, ps.length, v, 'v', () => zoomVille(v)).addTo(layer); });
+  } else {
+    pts.forEach(p => pin(p).addTo(layer));
+  }
+}
+function pin(p) {
+  const nd = p.logs.filter(l => l.st === 'libre').length;
+  const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pinw', html: '<div class="pin' + (p.geo_approx ? ' ap' : '') + (nd ? '' : ' sold') + (SEL === p ? ' hl' : '') + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) });
+  m.bindTooltip('<b>' + esc(p.nom) + '</b><br>' + esc(p.promoteur) + ' — ' + esc(p.ville) + '<br>' + nd + ' dispo · dès ' + fmtk(p.prix_min) + (p.geo_approx ? '<br><i>position approximative</i>' : ''), { className: 'tt', direction: 'top', offset: [0, -6] });
+  m.on('click', () => select(p, false)); markers[p.id] = m; return m;
+}
+map.on('zoomend', renderMap);
+map.on('moveend', () => { if (map.getZoom() >= 12) renderList(); });
+
+// ---------- liste ----------
+function renderCrumbs() {
+  const c = document.getElementById('crumbs');
+  let h = '<a data-l="idf">Île-de-France</a>';
+  if (F.dept) h += ' › <a data-l="dept">' + F.dept + ' ' + DEPTS[F.dept] + '</a>';
+  if (F.ville) h += ' › <b>' + esc(F.ville) + '</b>';
+  c.innerHTML = h;
+  c.querySelectorAll('a').forEach(a => a.onclick = () => { if (a.dataset.l === 'idf') { F.dept = ''; F.ville = ''; document.getElementById('fDept').value = ''; map.fitBounds(IDF); } else { F.ville = ''; zoomDept(F.dept); } apply(); });
+}
+function renderList() {
+  const el = document.getElementById('list');
+  let items = VIS;
+  const z = map.getZoom();
+  if (z >= 12 && !F.ville) { const b = map.getBounds(); const inb = items.filter(p => p.lat && b.contains([p.lat, p.lng])); if (inb.length) items = inb; }
+  if (!items.length) { el.innerHTML = '<div class="empty">Aucun programme ne correspond aux filtres.</div>'; return; }
+  const g = {}; items.forEach(p => (g[p.ville || '—'] = g[p.ville || '—'] || []).push(p));
+  const keys = Object.keys(g).sort((a, b) => a.localeCompare(b, 'fr'));
+  let h = '';
+  keys.forEach(v => {
+    const ps = g[v].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    h += '<div class="grp" data-v="' + esc(v) + '">' + esc(v) + ' <span>' + ps[0].dept + ' · ' + ps.length + '</span></div>';
+    ps.forEach(p => {
+      const nd = p.logs.filter(lotOK).length, nt = p.logs.length;
+      const ty = (p.typos || []).join(' · ');
+      h += '<div class="it' + (SEL === p ? ' sel' : '') + '" data-id="' + esc(p.id) + '"><div class="n"><span>' + esc(p.nom) + '</span><small>' + esc(p.livraison || '') + '</small></div>' +
+        '<div class="m">' + esc(p.promoteur) + (p.adresse ? ' · ' + esc(p.adresse) : '') + '</div>' +
+        '<div class="p">' + (nt ? '<b>' + nd + '</b>/' + nt + ' logements' : (p.lots.length ? p.lots.length + ' lots (annexes seulement)' : 'lots non détaillés')) + (ty ? ' · ' + ty : '') + (p.prix_min ? ' · dès <b>' + fmtk(p.prix_min) + '</b>' : '') + (p.prix_m2_moy ? ' · ' + Math.round(p.prix_m2_moy / 100) / 10 + ' k€/m²' : '') + '</div>' +
+        '<div>' + (p.nouveau ? '<span class="tag nw">Nouveau</span>' : '') + (p.nb_nouveaux_lots ? '<span class="tag nw">+' + p.nb_nouveaux_lots + ' lots</span>' : '') + (p.nb_baisses ? '<span class="tag dn">' + p.nb_baisses + ' baisse' + (p.nb_baisses > 1 ? 's' : '') + '</span>' : '') + (p.commission_pct ? '<span class="tag cm">' + String(p.commission_pct).replace('.', ',') + ' %</span>' : '') + (p.fisc || []).slice(0, 4).map(f => '<span class="tag">' + esc(f) + '</span>').join('') + (p.sources ? '<span class="tag" title="' + esc(p.sources.map(s => s.extranet).join(' / ')) + '">' + p.sources.length + ' sources</span>' : '') + (p.geo_approx ? '<span class="tag ap">position approx.</span>' : '') + (p.lat ? '' : '<span class="tag wn">non géolocalisé</span>') + '</div></div>';
+    });
+  });
+  el.innerHTML = h;
+  el.querySelectorAll('.it').forEach(d => d.onclick = () => select(P.find(p => p.id === d.dataset.id), true));
+  el.querySelectorAll('.grp').forEach(d => d.onclick = () => zoomVille(d.dataset.v));
+}
+
+function dist(a, b, c, d) { const R = 6371e3, x = (c - a) * Math.PI / 180, y = (d - b) * Math.PI / 180 * Math.cos((a + c) / 2 * Math.PI / 180); return Math.sqrt(x * x + y * y) * R; }
+function nearGares(p) {
+  if (!GEO.gares || !p.lat) return null;
+  const seen = new Set();
+  return GEO.gares.map(g => ({ g, d: dist(p.lat, p.lng, g.lat, g.lng) })).filter(x => x.d < 2000).sort((a, b) => a.d - b.d)
+    .filter(x => { const k = x.g.nom + '|' + x.g.ligne; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4)
+    .map(x => '<span class="tag ok">' + esc(x.g.ligne || x.g.mode) + '</span> ' + esc(x.g.nom) + ' <span style="color:#6b7280">(' + (x.d < 1000 ? Math.round(x.d / 10) * 10 + ' m' : (x.d / 1000).toFixed(1) + ' km') + ')</span>').join('<br>') || null;
+}
+// ---------- fiche programme ----------
+let SEL = null;
+const panel = document.getElementById('panel');
+panel.querySelector('.x').onclick = () => { SEL = null; panel.classList.remove('open'); renderMap(); renderList(); };
+function select(p, fly) {
+  SEL = p;
+  if (fly && p.lat) { const z = Math.max(map.getZoom(), 15); const off = window.innerWidth > 900 ? 270 : 0; const pt = map.project([p.lat, p.lng], z).add([off, 0]); map.flyTo(map.unproject(pt, z), z, { duration: .6 }); }
+  panel.classList.add('open');
+  panel.querySelector('h2').textContent = p.nom;
+  panel.querySelector('.sub').textContent = [p.promoteur, p.adresse, (p.cp || '') + ' ' + (p.ville || '')].filter(Boolean).join(' · ');
+  const nd = p.logs.filter(l => l.st === 'libre').length;
+  const kv = [['Promoteur', p.promoteur + (p.extranet && !p.extranet.startsWith(p.promoteur.split(' ')[0]) ? ' <span style="color:#6b7280">(via ' + esc(p.extranet) + ')</span>' : '')],
+    ['Adresse', (p.adresse ? esc(p.adresse) + ', ' : '') + esc(p.cp || '') + ' ' + esc(p.ville || '') + (p.geo_approx ? ' <span class="tag ap">position approximative</span>' : '')],
+    ['Livraison', esc(p.livraison || '—') + (p.livraison_raw && p.livraison_raw !== p.livraison ? ' <span style="color:#6b7280">(' + esc(p.livraison_raw) + ')</span>' : '')],
+    ['Actabilité', p.actable === true ? 'Actable' : (p.actable ? esc(p.actable) : '—')],
+    ['Avancement', esc(p.avancement || '—')],
+    ['Fiscalité', (p.fisc || []).map(f => '<span class="tag">' + esc(f) + '</span>').join('') || '—'],
+    ['Zone', esc(p.zone || '—')],
+    ['Lots', (p.nb_lots ? p.nb_lots + ' au total · ' : '') + p.logs.length + ' pigés · <b>' + nd + ' disponibles</b>'],
+    ['Prix', (p.prix_min ? 'de ' + fmt(p.prix_min) : '') + (p.prix_max ? ' à ' + fmt(p.prix_max) : '') + (p.prix_m2_moy ? ' · moy. ' + fmt(p.prix_m2_moy) + '/m²' : '')],
+    ['Commission', p.commission_pct != null ? '<b>' + String(p.commission_pct).replace('.', ',') + ' %</b>' + (p.commission && !/^[\d.,]+\s*%?$/.test(String(p.commission)) ? ' <span style="color:#6b7280">' + esc(String(p.commission).slice(0, 120)) + '</span>' : '') : (p.commission ? esc(String(p.commission).slice(0, 120)) : '—')],
+    ['Sources', p.sources ? p.sources.map(s => (s.url ? '<a href="' + esc(s.url) + '" target="_blank">' + esc(s.extranet) + '</a>' : esc(s.extranet)) + ' <span style="color:#6b7280">(' + s.nb_lots + ' lots' + (s.commission ? ', ' + esc(String(s.commission).slice(0, 40)) : '') + ')</span>').join('<br>') : null],
+    ['Gare la plus proche', p.gare ? esc(p.gare) + ' <span style="color:#6b7280">(' + (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') + ')</span>' : null],
+    ['Offre', esc(p.offre || p.banniere || '') || null],
+    ['Infos', (p.infos || []).map(esc).join(' · ') || null],
+    ['Labels', (p.labels || []).map(esc).join(', ') || null],
+    ['Résidence', esc(p.residence || p.nature || '') || null],
+    ['Gestion', esc(p.gestion || p.gestionnaire || '') || null],
+    ['Transports', nearGares(p)]].filter(x => x[1]);
+  let h = '<div class="kv">' + kv.map(([k, v]) => '<div>' + k + '</div><div>' + v + '</div>').join('') + '</div>';
+  if (p.desc) h += '<div class="desc">' + esc(p.desc) + '</div>';
+  const links = [];
+  if (p.url) links.push('<a href="' + esc(p.url) + '" target="_blank">Ouvrir sur l’extranet ↗</a>');
+  if (p.plaquette) links.push('<a href="' + esc(p.plaquette) + '" target="_blank">Plaquette</a>');
+  if (p.maquette && typeof p.maquette === 'string') links.push('<a href="' + esc(p.maquette) + '" target="_blank">Maquette 3D</a>');
+  (p.docs || []).forEach(d => { const [t, u] = String(d).split('→'); if (u) links.push('<a href="' + esc(u) + '" target="_blank">' + esc(t || 'Document') + '</a>'); });
+  if (p.img) links.push('<a href="' + esc(p.img) + '" target="_blank">Visuel</a>');
+  if (links.length) h += '<div class="links">' + links.join('') + '</div>';
+  h += '<div class="lotsbar"><b>Lots</b><select id="lTypo"><option value="">Toutes typos</option>' + TYPOS.map(t => '<option>' + t + '</option>').join('') + '</select><select id="lSt"><option value="">Tous statuts</option><option value="libre">Libres</option><option value="libre,option">Libres + optionnés</option></select><span id="lCount" style="color:#6b7280"></span><button class="btn o" id="lAll">Tout sélectionner</button></div><div id="lotsTbl" style="overflow-x:auto"></div>';
+  panel.querySelector('.bd').innerHTML = h;
+  panel.querySelector('#lTypo').onchange = panel.querySelector('#lSt').onchange = () => renderLots(p);
+  panel.querySelector('#lSt').value = [...F.st].join(',');
+  panel.querySelector('#lAll').onclick = () => { const ty = panel.querySelector('#lTypo').value, st = panel.querySelector('#lSt').value; p.lots.filter(l => (!ty || l.typo === ty) && (!st || st.split(',').includes(l.st))).forEach(l => CART.add(l.id)); saveCart(); renderLots(p); renderCartBtn(); };
+  renderLots(p); renderMap(); renderList();
+  const it = document.querySelector('.it.sel'); if (it) it.scrollIntoView({ block: 'nearest' });
+}
+let sortK = 'n', sortD = 1;
+function renderLots(p) {
+  const ty = panel.querySelector('#lTypo').value, st = panel.querySelector('#lSt').value;
+  let ls = p.lots.filter(l => (!ty || l.typo === ty) && (!st || st.split(',').includes(l.st)));
+  const cols = [['ck', ''], ['n', 'N°'], ['type', 'Type'], ['typo', 'Typo'], ['surf', 'Surface'], ['etage', 'Étage'], ['expo', 'Expo'], ['annexes', 'Extérieur / annexes'], ['prix', 'Prix TTC'], ['prix_m2', '€/m²'], ['tva', 'TVA'], ['st', 'Statut'], ['plan', 'Plan']];
+  ls.sort((a, b) => { let x = a[sortK], y = b[sortK]; if (x == null) return 1; if (y == null) return -1; if (typeof x === 'number' && typeof y === 'number') return (x - y) * sortD; return String(x).localeCompare(String(y), 'fr', { numeric: true }) * sortD; });
+  panel.querySelector('#lCount').textContent = ls.length + ' lot' + (ls.length > 1 ? 's' : '') + (p.lots.length !== ls.length ? ' / ' + p.lots.length : '');
+  let h = '<table class="lots"><thead><tr>' + cols.map(([k, t]) => '<th data-k="' + k + '">' + t + (sortK === k && k !== 'ck' ? (sortD > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
+  ls.forEach(l => {
+    const extra = [l.annexes, l.parkings, l.loyer ? 'loyer ' + fmt(l.loyer) : null, l.renta ? 'renta ' + l.renta + ' %' : null, l.dpe ? 'DPE ' + l.dpe : null, l.livraison ? 'livr. ' + l.livraison : null, l.option_fin ? 'option jusqu’au ' + String(l.option_fin).slice(0, 10) : null, (l.fisc || []).join(', ')].filter(Boolean).join(' · ');
+    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + '</td><td>' + esc(l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td>' + (l.tva != null ? (+l.tva).toLocaleString('fr-FR') + ' %' : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (l.plan ? '<a href="' + esc(l.plan) + '" target="_blank">PDF</a>' : '') + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  const t = panel.querySelector('#lotsTbl'); t.innerHTML = h;
+  t.querySelectorAll('th').forEach(th => th.onclick = () => { if (th.dataset.k === 'ck') return; if (sortK === th.dataset.k) sortD = -sortD; else { sortK = th.dataset.k; sortD = 1; } renderLots(p); });
+  t.querySelectorAll('input.ck').forEach(c => c.onchange = () => { toggleCart(c.dataset.l, c.checked); });
+}
+
+// ---------- recherche ----------
+const q = document.getElementById('q'), sg = document.getElementById('sugg');
+const villes = [...new Set(P.map(p => p.ville).filter(Boolean))].map(v => ({ t: 'ville', v, n: P.filter(p => p.ville === v).length, cp: P.find(p => p.ville === v).cp }));
+let sugIdx = -1;
+q.oninput = () => {
+  const s = norm(q.value.trim()); sugIdx = -1;
+  if (s.length < 2) { sg.style.display = 'none'; return; }
+  const out = [];
+  villes.filter(v => norm(v.v).includes(s) || (v.cp || '').startsWith(s)).slice(0, 6).forEach(v => out.push({ h: '<b>' + esc(v.v) + '</b><span>ville · ' + v.n + ' programme' + (v.n > 1 ? 's' : '') + '</span>', f: () => { F.dept = ''; document.getElementById('fDept').value = ''; zoomVille(v.v); } }));
+  promos.filter(x => norm(x).includes(s)).slice(0, 4).forEach(x => out.push({ h: '<b>' + esc(x) + '</b><span>promoteur</span>', f: () => { F.promo = x; document.getElementById('fPromo').value = x; F.dept = ''; F.ville = ''; map.fitBounds(IDF); apply(); } }));
+  P.filter(p => norm(p.nom).includes(s) || (p.adresse && norm(p.adresse).includes(s)) || (p.cp || '').startsWith(s)).slice(0, 10).forEach(p => out.push({ h: '<b>' + esc(p.nom) + '</b><span>' + esc(p.promoteur) + ' · ' + esc(p.ville) + '</span>', f: () => { F.dept = ''; F.ville = ''; document.getElementById('fDept').value = ''; apply(); select(p, true); } }));
+  if (!out.length) { sg.style.display = 'none'; return; }
+  sg.innerHTML = out.map((o, i) => '<div data-i="' + i + '">' + o.h + '</div>').join('');
+  sg.style.display = 'block';
+  sg.querySelectorAll('div').forEach(d => d.onmousedown = () => { out[+d.dataset.i].f(); sg.style.display = 'none'; q.value = ''; });
+  sg._out = out;
+};
+q.onkeydown = e => { const ds = sg.querySelectorAll('div'); if (!ds.length) return; if (e.key === 'ArrowDown') { sugIdx = Math.min(ds.length - 1, sugIdx + 1); } else if (e.key === 'ArrowUp') { sugIdx = Math.max(0, sugIdx - 1); } else if (e.key === 'Enter') { (sg._out[Math.max(0, sugIdx)]).f(); sg.style.display = 'none'; q.value = ''; return; } else if (e.key === 'Escape') { sg.style.display = 'none'; return; } else return; ds.forEach((d, i) => d.classList.toggle('sel', i === sugIdx)); };
+q.onblur = () => setTimeout(() => sg.style.display = 'none', 150);
+// ---------- panier (sélection de lots) ----------
+const LI = {}; L0.forEach(l => LI[l.id] = l);
+const PI = {}; P.forEach(p => PI[p.id] = p);
+let CART = new Set();
+try { CART = new Set(JSON.parse(localStorage.getItem('glr_cart') || '[]').filter(id => LI[id])); } catch (e) {}
+function saveCart() { try { localStorage.setItem('glr_cart', JSON.stringify([...CART])); } catch (e) {} }
+function toggleCart(id, on) { on ? CART.add(id) : CART.delete(id); saveCart(); renderCartBtn(); if (cart.classList.contains('open')) renderCart(); }
+function renderCartBtn() { const b = document.getElementById('cartBtn'); document.getElementById('cartN').textContent = CART.size; b.classList.toggle('has', CART.size > 0); }
+const cart = document.getElementById('cart');
+document.getElementById('cartBtn').onclick = () => { cart.classList.toggle('open'); if (cart.classList.contains('open')) renderCart(); };
+cart.querySelector('.x').onclick = () => cart.classList.remove('open');
+function cartRows() { return [...CART].map(id => LI[id]).filter(Boolean).map(l => ({ l, p: PI[l.programme_id] })).filter(x => x.p).sort((a, b) => a.p.ville.localeCompare(b.p.ville, 'fr') || a.p.nom.localeCompare(b.p.nom, 'fr') || String(a.l.n).localeCompare(String(b.l.n), 'fr', { numeric: true })); }
+function renderCart() {
+  const rows = cartRows(); const bd = cart.querySelector('.bd');
+  if (!rows.length) { bd.innerHTML = '<div class="empty">Aucun lot mis de côté.<br><small>Cochez des lots dans la fiche d’un programme ou dans l’onglet « Lots ».</small></div>'; return; }
+  let h = '', last = '';
+  rows.forEach(({ l, p }) => {
+    if (p.id !== last) { last = p.id; h += '<div class="grp" data-p="' + esc(p.id) + '">' + esc(p.nom) + ' — ' + esc(p.ville) + '<span>' + esc(p.promoteur) + (p.commission_pct ? ' · ' + String(p.commission_pct).replace('.', ',') + ' %' : '') + '</span></div>'; }
+    h += '<div class="it" style="display:flex;gap:8px;align-items:center"><div style="flex:1"><b>' + esc(l.n) + '</b> · ' + esc(l.typo || l.type) + (l.surf ? ' · ' + l.surf + ' m²' : '') + (l.etage != null ? ' · ' + (l.etage === 0 ? 'RDC' : 'ét. ' + l.etage) : '') + (l.expo ? ' · ' + esc(l.expo) : '') + '<div class="m">' + esc([l.annexes, l.parkings, l.tva != null ? 'TVA ' + l.tva + ' %' : null, l.loyer ? 'loyer ' + fmt(l.loyer) : null, l.renta ? 'renta ' + l.renta + ' %' : null].filter(Boolean).join(' · ')) + '</div></div><div style="text-align:right"><b>' + fmt(l.prix) + '</b><div class="m">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') + ' €/m²' : '') + ' <span class="st ' + l.st + '">' + l.st + '</span></div></div><a style="color:#dc2626;cursor:pointer;padding:4px" data-rm="' + esc(l.id) + '" title="Retirer">✕</a></div>';
+  });
+  bd.innerHTML = h;
+  bd.querySelectorAll('[data-rm]').forEach(a => a.onclick = () => { toggleCart(a.dataset.rm, false); renderCart(); if (SEL) renderLots(SEL); });
+  bd.querySelectorAll('.grp').forEach(g => g.onclick = () => { cart.classList.remove('open'); select(PI[g.dataset.p], true); });
+}
+function lotRow(p, l) { return [p.promoteur, p.nom, p.adresse || '', p.cp || '', p.ville || '', p.livraison || '', (p.fisc || []).join(' / '), p.commission_pct != null ? p.commission_pct : '', l.n, l.type, l.typo || '', l.surf || '', l.etage == null ? (l.etage_raw || '') : l.etage, l.expo || '', l.annexes || '', l.parkings || '', l.prix || '', l.prix_m2 || '', l.tva == null ? '' : l.tva, l.st, l.loyer || '', l.renta || '', p.gare || '', p.gare_dist || '', l.plan || '', p.url || '']; }
+const CSVH = ['Promoteur','Programme','Adresse','CP','Ville','Livraison','Fiscalité','Commission %','Lot','Type','Typo','Surface','Étage','Expo','Annexes','Parkings','Prix TTC','€/m²','TVA','Statut','Loyer','Renta','Gare','Distance gare (m)','Plan','Extranet'];
+function dlCsv(rows, name) { const csv = '﻿' + rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = name + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); }
+document.getElementById('cartCsv').onclick = () => dlCsv([CSVH, ...cartRows().map(({ l, p }) => lotRow(p, l))], 'selection-lots');
+document.getElementById('cartCopy').onclick = () => { const rows = [CSVH, ...cartRows().map(({ l, p }) => lotRow(p, l))]; navigator.clipboard.writeText(rows.map(r => r.join('\t')).join('\n')).then(() => { const b = document.getElementById('cartCopy'); b.textContent = 'Copié ✓'; setTimeout(() => b.textContent = 'Copier le tableau', 1500); }); };
+const walk = d => d ? Math.max(1, Math.round(d * 1.3 / 80)) + ' min à pied' : '';
+const pdfTxt = t => String(t == null ? '' : t).replace(/[\u202f\u00a0\u2009]/g, ' ').replace(/[\u2013\u2014]/g, '-').replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d«»]/g, '"').replace(/\u2026/g, '...').replace(/[^\x00-\xff\u20ac]/g, '?');
+function fichePdf(doc, p, l) {
+  const T = doc.text.bind(doc); doc.text = (t, x, y, o) => T(Array.isArray(t) ? t.map(pdfTxt) : pdfTxt(t), x, y, o); const S = doc.splitTextToSize.bind(doc); doc.splitTextToSize = (t, w) => S(pdfTxt(t), w); const L = doc.textWithLink.bind(doc); doc.textWithLink = (t, x, y, o) => L(pdfTxt(t), x, y, o);
+  const W = 210, M = 16; let y = 18;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.setTextColor(20, 33, 61); doc.text(p.nom, M, y); y += 7;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(90);
+  doc.text([p.promoteur, p.adresse, (p.cp || '') + ' ' + (p.ville || '')].filter(Boolean).join(' · '), M, y); y += 9;
+  doc.setDrawColor(15, 124, 140); doc.setLineWidth(.6); doc.line(M, y, W - M, y); y += 9;
+  doc.setFontSize(22); doc.setTextColor(15, 124, 140); doc.setFont('helvetica', 'bold'); doc.text('Lot n° ' + l.n + (l.bat ? '  (bât. ' + l.bat + ')' : ''), M, y);
+  doc.setFontSize(20); doc.text(fmt(l.prix) + (l.tva != null ? '  TVA ' + String(l.tva).replace('.', ',') + ' %' : ''), W - M, y, { align: 'right' }); y += 10;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30);
+  const rows = [['Typologie', (l.typo || '') + (l.type === 'Maison' ? ' · Maison' : '') + (l.pieces ? ' · ' + l.pieces + ' pièces' : '')], ['Surface', l.surf ? String(l.surf).replace('.', ',') + ' m²' : ''], ['Étage', l.etage == null ? (l.etage_raw || '') : (l.etage === 0 ? 'Rez-de-chaussée' : l.etage + (l.top ? ' (dernier étage)' : ''))], ['Exposition', l.expo || ''],
+    ['Extérieur', l.annexes || ''], ['Parking', l.parkings || ''], ['Prix au m²', l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') + ' €/m²' : ''], ['Autres régimes', l.prix_regimes || ''], ['Loyer estimé', l.loyer ? fmt(l.loyer) + ' /mois' : ''], ['Rentabilité', l.renta ? String(l.renta).replace('.', ',') + ' %' : ''],
+    ['Statut', { libre: 'Libre', option: 'Optionné', reserve: 'Réservé' }[l.st] || l.st], ['Livraison', l.livraison || p.livraison || ''], ['Actabilité', p.actable === true ? 'Actable' : (p.actable || '')], ['Fiscalité', (p.fisc || []).join(', ')], ['Zone', p.zone || ''],
+    ['Transports', p.gare ? p.gare + ' à ' + (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') + ' (' + walk(p.gare_dist) + ')' : ''], ['Commission', p.commission_pct ? String(p.commission_pct).replace('.', ',') + ' %' : ''], ['Source', p.extranet + (p.sources ? ' + ' + p.sources.slice(1).map(s => s.extranet).join(', ') : '')]].filter(r => r[1]);
+  rows.forEach(([k, v]) => { doc.setTextColor(110); doc.text(k, M, y); doc.setTextColor(30); const lines = doc.splitTextToSize(String(v), W - M * 2 - 42); doc.text(lines, M + 42, y); y += 6 * lines.length; });
+  y += 4; doc.setTextColor(15, 124, 140);
+  if (l.plan) { doc.textWithLink('Plan du lot (PDF)', M, y, { url: l.plan }); y += 6; }
+  if (p.url) { doc.textWithLink('Fiche programme sur l’extranet', M, y, { url: p.url }); y += 6; }
+  (p.docs || []).slice(0, 5).forEach(d => { const [t, u] = String(d).split('→'); if (u) { doc.textWithLink(t || 'Document', M, y, { url: u }); y += 6; } });
+  if (p.desc) { y += 4; doc.setTextColor(80); doc.setFontSize(9.5); doc.text(doc.splitTextToSize(p.desc.slice(0, 900), W - M * 2), M, y); }
+  doc.setFontSize(8); doc.setTextColor(150); doc.text('GLR Immobilier — pigé le ' + (META.pige_date ? new Date(META.pige_date).toLocaleDateString('fr-FR') : '') + ' — prix et disponibilités à confirmer auprès du promoteur', M, 287);
+}
+const safe = t => String(t).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+document.getElementById('cartZip').onclick = async () => {
+  const rows = cartRows(); if (!rows.length) return;
+  const b = document.getElementById('cartZip'); b.textContent = 'Préparation…'; b.disabled = true;
+  try {
+    const zip = new JSZip(); const { jsPDF } = window.jspdf;
+    let links = '<!DOCTYPE html><html lang="fr"><meta charset="utf-8"><title>Plans et documents — sélection</title><style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:900px;margin:30px auto;color:#1f2937}h2{color:#14213d;margin:22px 0 6px}a.b{display:inline-block;margin:3px 6px 3px 0;padding:6px 10px;border:1px solid #0f7c8c;border-radius:6px;color:#0f7c8c;text-decoration:none;font-size:13px}p{color:#6b7280;font-size:13px}</style><h1>Plans et documents à récupérer</h1><p>Les plans sont hébergés sur les extranets des promoteurs : ouvrez chaque lien (connexion à l’extranet nécessaire) et enregistrez le PDF dans ce dossier, puis déposez tout le dossier dans le dashboard (« Analyser les documents »).</p>';
+    let last = '';
+    for (const { l, p } of rows) {
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' }); fichePdf(doc, p, l);
+      zip.file('fiche-' + safe(p.ville) + '-' + safe(p.nom) + '-lot-' + safe(l.n) + '.pdf', doc.output('arraybuffer'));
+      if (p.id !== last) { last = p.id; links += '<h2>' + esc(p.nom) + ' — ' + esc(p.ville) + '</h2><p>' + esc(p.promoteur) + (p.url ? ' · <a href="' + esc(p.url) + '" target="_blank">extranet</a>' : '') + '</p>' + (p.plaquette ? '<a class="b" href="' + esc(p.plaquette) + '" target="_blank">Plaquette</a>' : '') + (p.docs || []).map(d => { const [t, u] = String(d).split('→'); return u ? '<a class="b" href="' + esc(u) + '" target="_blank">' + esc(t || 'Document') + '</a>' : ''; }).join(''); }
+      links += '<div>Lot <b>' + esc(l.n) + '</b> ' + esc(l.typo || '') + ' — ' + (l.plan ? '<a class="b" href="' + esc(l.plan) + '" target="_blank">Plan du lot</a>' : '<span style="color:#9ca3af">plan non fourni par l’extranet</span>') + '</div>';
+    }
+    zip.file('plans-et-documents.html', links + '</html>');
+    zip.file('selection.csv', '﻿' + [CSVH, ...rows.map(({ l, p }) => lotRow(p, l))].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dossier-selection-' + new Date().toISOString().slice(0, 10) + '.zip'; a.click();
+  } finally { b.textContent = 'Dossier commercial (ZIP)'; b.disabled = false; }
+};
+document.getElementById('cartClear').onclick = () => { CART.clear(); saveCart(); renderCart(); renderCartBtn(); if (SEL) renderLots(SEL); };
+renderCartBtn();
+
+// ---------- vue « Lots » (tableau global des lots filtrés) ----------
+let VIEW = 'p', lvK = 'prix_m2', lvD = 1, lvMax = 300;
+document.querySelectorAll('#tabs span').forEach(t => t.onclick = () => { VIEW = t.dataset.t; document.querySelectorAll('#tabs span').forEach(x => x.classList.toggle('on', x === t)); document.getElementById('list').style.display = VIEW === 'p' ? '' : 'none'; document.getElementById('crumbs').style.display = VIEW === 'p' ? '' : 'none'; document.getElementById('lotsview').style.display = VIEW === 'l' ? 'block' : 'none'; document.getElementById('app').classList.toggle('lots', VIEW === 'l'); setTimeout(() => map.invalidateSize(), 50); renderLotsView(); });
+function visibleLots() { const out = []; VIS.forEach(p => p.logs.forEach(l => { if (lotOK(l)) out.push({ l, p }); })); return out; }
+function renderLotsView() {
+  const all = visibleLots(); document.getElementById('tabLN').textContent = '(' + all.length.toLocaleString('fr-FR') + ')';
+  if (VIEW !== 'l') return;
+  const el = document.getElementById('lotsview');
+  const key = { ville: x => x.p.ville, prog: x => x.p.nom, n: x => x.l.n, typo: x => x.l.typo, surf: x => x.l.surf, etage: x => x.l.etage, prix: x => x.l.prix, prix_m2: x => x.l.prix_m2, renta: x => x.l.renta, com: x => x.p.commission_pct, liv: x => x.p.livraison_key, gare: x => x.p.gare_dist };
+  const g = key[lvK] || key.prix_m2;
+  all.sort((a, b) => { const x = g(a), y = g(b); if (x == null) return 1; if (y == null) return -1; return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { numeric: true })) * lvD; });
+  const cols = [['ville', 'Ville'], ['prog', 'Programme'], ['n', 'Lot'], ['typo', 'Typo'], ['surf', 'm²'], ['etage', 'Ét.'], ['prix', 'Prix'], ['prix_m2', '€/m²'], ['renta', 'Renta'], ['com', 'Com.'], ['liv', 'Livr.'], ['gare', 'Gare']];
+  let h = '<table><thead><tr><th></th>' + cols.map(([k, t]) => '<th data-k="' + k + '">' + t + (lvK === k ? (lvD > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
+  all.slice(0, lvMax).forEach(({ l, p }) => { h += '<tr data-p="' + esc(p.id) + '" data-l="' + esc(l.id) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(p.ville) + '</td><td title="' + esc(p.promoteur) + '">' + esc(p.nom).slice(0, 22) + '</td><td>' + esc(l.n) + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf || '') + '</td><td>' + (l.etage == null ? '' : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td class="r"><b>' + fmtk(l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn">↓</span>' : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td class="r">' + (l.renta ? l.renta + ' %' : '') + '</td><td class="r">' + (p.commission_pct ? String(p.commission_pct).replace('.', ',') + ' %' : '') + '</td><td>' + esc(p.livraison || '') + '</td><td class="r">' + (p.gare_dist ? (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') : '') + '</td></tr>'; });
+  h += '</tbody></table>' + (all.length > lvMax ? '<div class="more" id="lvMore">Afficher ' + Math.min(300, all.length - lvMax) + ' lots de plus (' + all.length + ' au total)</div>' : '');
+  el.innerHTML = h;
+  el.querySelectorAll('th[data-k]').forEach(th => th.onclick = () => { if (lvK === th.dataset.k) lvD = -lvD; else { lvK = th.dataset.k; lvD = 1; } renderLotsView(); });
+  el.querySelectorAll('td:not(:first-child)').forEach(td => td.onclick = () => { const tr = td.parentElement; const p = PI[tr.dataset.p]; select(p, true); const lid = tr.dataset.l; setTimeout(() => { const row = [...panel.querySelectorAll('input.ck')].find(c => c.dataset.l === lid); if (row) { row.closest('tr').style.background = '#fef3c7'; row.closest('tr').scrollIntoView({ block: 'center' }); } }, 50); });
+  el.querySelectorAll('input.ck').forEach(c => c.onchange = () => toggleCart(c.dataset.l, c.checked));
+  const m = document.getElementById('lvMore'); if (m) m.onclick = () => { lvMax += 300; renderLotsView(); };
+}
+
+document.getElementById('csv').onclick = () => {
+  dlCsv([CSVH, ...visibleLots().map(({ l, p }) => lotRow(p, l))], 'lots-piges');
+};
+apply();
+</script>
+</body>
+</html>
