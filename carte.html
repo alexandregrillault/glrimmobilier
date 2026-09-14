@@ -13,6 +13,20 @@
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--txt);background:var(--bg);font-size:13px}
 #app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:56px 1fr;height:100%}
+#app.nof{grid-template-columns:0 1fr}#app.nof aside{display:none}
+#sideBtn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer;white-space:nowrap}
+#sideBtn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.tt-box{width:100%;background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:7px 8px;display:flex;flex-direction:column;gap:5px}
+.tt-box .t{font-size:11px;color:var(--muted)}
+.tt-box .rowi{display:flex;gap:5px}
+.tt-box .rowi>*{flex:1;min-width:0}
+.tt-box .rowi .btn{flex:0 0 auto}
+#ttSugg{position:relative}#ttSugg div{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:6px;z-index:20;box-shadow:0 6px 18px rgba(0,0,0,.12);max-height:180px;overflow:auto}
+#ttSugg div a{display:block;padding:5px 8px;font-size:11.5px;cursor:pointer;border-bottom:1px solid #f0f1f3}#ttSugg div a:hover{background:#f3f4f6}
+.tt-box .msg{font-size:11px;color:#9a3412}
+.tag.tt{background:#e0f2fe;color:#075985;font-weight:600}
+.walk-lbl{background:#fff;border:1.5px solid #0f7c8c;color:#0f7c8c;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.home-pin{width:26px;height:26px;border-radius:50% 50% 50% 0;background:#1d4ed8;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.4)}
 header{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 14px;background:#fff;border-bottom:1px solid var(--line)}
 header h1{font-size:16px;margin:0;color:var(--navy);white-space:nowrap}
 header h1 small{font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
@@ -92,25 +106,29 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .z15 .stnl{display:block}
 .dlab{font-family:Georgia,'Times New Roman',serif;font-size:13px;letter-spacing:1.5px;color:#4b5563;text-align:center;line-height:1.15;text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 6px #fff;opacity:.9}
 .dlab b{font-size:15px;color:#1f2937}
-#panel{position:absolute;top:10px;right:10px;bottom:10px;width:520px;max-width:calc(100% - 20px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.2);z-index:1000;display:none;flex-direction:column;overflow:hidden}
+#panel{position:absolute;top:10px;right:10px;bottom:10px;width:min(66%,980px);min-width:600px;max-width:calc(100% - 20px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.2);z-index:1000;display:none;flex-direction:column;overflow:hidden}
 #panel.open{display:flex}
+#panel.max{width:calc(100% - 20px);min-width:0}
+#panel .mx{position:absolute;top:10px;right:44px;border:0;background:#f3f4f6;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:13px}
 #panel .hd{padding:14px 16px 10px;border-bottom:1px solid var(--line);position:relative}
-#panel .hd h2{margin:0 26px 2px 0;font-size:17px;color:var(--navy)}
-#panel .hd .sub{color:var(--muted);font-size:12px}
+#panel .hd h2{margin:0 70px 2px 0;font-size:19px;color:var(--navy)}
+#panel .hd .sub{color:var(--muted);font-size:13px}
 #panel .x{position:absolute;top:10px;right:10px;border:0;background:#f3f4f6;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px}
-#panel .bd{overflow:auto;flex:1;padding:10px 16px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12.5px;margin:6px 0}
-.kv div:nth-child(odd){color:var(--muted)}
-.desc{font-size:12px;color:#374151;line-height:1.45;margin:8px 0;max-height:120px;overflow:auto;background:#f9fafb;padding:8px;border-radius:6px}
-.links a{display:inline-block;margin:2px 8px 2px 0;color:var(--teal);font-size:12px}
-.lotsbar{display:flex;gap:6px;align-items:center;margin:10px 0 6px;flex-wrap:wrap;font-size:12px}
+#panel .bd{overflow:auto;flex:1;padding:12px 18px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:13.5px;margin:6px 0;align-items:baseline}
+.kv .w{grid-column:2 / -1}
+.kv .k{color:var(--muted);white-space:nowrap}
+.kv .kw{grid-column:1}
+.desc{font-size:13px;color:#374151;line-height:1.5;margin:10px 0;max-height:160px;overflow:auto;background:#f9fafb;padding:8px;border-radius:6px}
+.links a{display:inline-block;margin:2px 10px 2px 0;color:var(--teal);font-size:13px}
+.lotsbar{display:flex;gap:8px;align-items:center;margin:12px 0 6px;flex-wrap:wrap;font-size:13px}
 .lotsbar select{padding:3px 6px;border:1px solid var(--line);border-radius:5px;font-size:12px}
-table.lots{width:100%;border-collapse:collapse;font-size:12px}
-table.lots th{position:sticky;top:0;background:#f9fafb;text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;font-weight:600;color:var(--navy)}
-table.lots td{padding:4px 6px;border-bottom:1px solid #f0f1f3;white-space:nowrap}
+table.lots{width:100%;border-collapse:collapse;font-size:13px}
+table.lots th{position:sticky;top:0;background:#f9fafb;text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;font-weight:600;color:var(--navy)}
+table.lots td{padding:6px 8px;border-bottom:1px solid #f0f1f3;white-space:nowrap}
 table.lots tr.opt td{color:var(--muted)}
 table.lots td.r{text-align:right}
-.st{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10.5px}
+.st{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11.5px}
 .st.libre{background:#dcfce7;color:#166534}.st.option{background:#fef3c7;color:#92400e}.st.reserve,.st.bloque{background:#fee2e2;color:#991b1b}
 .legend{position:absolute;left:10px;bottom:10px;z-index:1000;background:#fff;border-radius:8px;padding:8px 10px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.15);color:var(--muted);line-height:1.6}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin-right:5px}
@@ -147,7 +165,7 @@ table.lots td.r{text-align:right}
 .lotsbar .btn{margin-left:auto}
 .pige{font-size:11px;color:var(--muted);white-space:nowrap}
 .filters .row.tri>*{flex:1}
-@media (max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:56px 1fr}aside{display:none}header .kpis{display:none}#panel{width:auto;left:10px}}
+@media (max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:56px 1fr}aside{display:none}header .kpis{display:none}#panel{width:auto;left:10px;min-width:0}}
 </style>
 </head>
 <body>
@@ -155,7 +173,7 @@ table.lots td.r{text-align:right}
 <header>
   <h1>Programmes pigés<small>Île-de-France</small></h1><span class="pige" id="pige"></span>
   <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
-  <button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes</span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
+  <button id="sideBtn" title="Afficher / masquer les critères">◧ Critères</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes</span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
 </header>
 <aside>
   <div class="filters">
@@ -177,6 +195,16 @@ table.lots td.r{text-align:right}
       <select id="fGare"><option value="">Distance gare</option></select>
       <div class="dd" id="fFiscDD"><button type="button" id="fFiscBtn">Fiscalité</button><div class="dd-pop" id="fFiscPop" hidden></div></div>
     </div>
+    <div class="tt-box" id="ttBox">
+      <span class="t">Temps de trajet depuis une adresse (lieu de travail, école, famille…)</span>
+      <div id="ttSugg"><input id="ttAddr" placeholder="Adresse de départ…" autocomplete="off"><div id="ttList" hidden></div></div>
+      <div class="rowi">
+        <select id="ttMode"><option value="car">🚗 Voiture</option><option value="transit">🚇 Transports en commun</option></select>
+        <select id="ttMax"><option value="15">≤ 15 min</option><option value="20">≤ 20 min</option><option value="30" selected>≤ 30 min</option><option value="45">≤ 45 min</option><option value="60">≤ 60 min</option><option value="90">≤ 1 h 30</option></select>
+        <button class="btn" id="ttGo">OK</button><button class="btn o" id="ttOff" title="Retirer ce filtre" hidden>✕</button>
+      </div>
+      <span class="msg" id="ttMsg"></span>
+    </div>
     <div class="livrow"><span class="lbl">Livré au plus tard</span><div class="chips" id="fLivY"></div><div class="chips" id="fLivS" hidden></div></div>
     <div class="chips" id="fFlags"></div>
     <div class="tools">
@@ -194,7 +222,7 @@ table.lots td.r{text-align:right}
 <div id="mapwrap">
   <div id="map"></div>
   <button id="back" hidden>↩ Retour</button>
-  <div id="panel"><div class="hd"><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
+  <div id="panel"><div class="hd"><button class="mx" title="Agrandir / réduire">⛶</button><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
   <div id="cart"><div class="hd"><h2>Ma sélection</h2><button class="x" title="Fermer">✕</button></div><div class="bd"></div><div class="ft"><button class="btn" id="cartCsv">Exporter en CSV</button><button class="btn o" id="cartCopy">Copier le tableau</button><button class="btn" id="cartZip" title="Fiches PDF par lot + tableau + liens vers les plans">Dossier commercial (ZIP)</button><a id="cartClear">Vider</a></div></div>
   <div class="legend"><i style="background:#0f7c8c"></i>Programme (adresse précise)<br><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative (commune)<br><i style="border:2px dashed #ea580c;background:#fff7ed;box-sizing:border-box"></i>Picking à demander (pas dans l’extranet)<br><i style="background:#9ca3af"></i>Plus de lot disponible<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
 </div>
@@ -231,7 +259,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---------- filtres ----------
-const F = { promo: '', dept: '', typos: new Set(), budget: '', liv: '', livS: 2, fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set() };
+const F = { promo: '', dept: '', typos: new Set(), budget: '', liv: '', livS: 2, fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null };
 const META = DATA.meta || {};
 function lotOK(l) {
   if (F.st.size && !F.st.has(l.st)) return false;
@@ -256,6 +284,7 @@ function progOK(p) {
   if (F.source && p.extranet !== F.source && !(p.sources || []).some(s => s.extranet === F.source)) return false;
   if (F.com && !(p.commission_pct >= +F.com)) return false;
   if (F.gare && !(p.gare_dist && p.gare_dist <= +F.gare)) return false;
+  if (F.tt && !(F.tt.times[p.id] != null && F.tt.times[p.id] <= F.tt.max * 60)) return false;
   if (F.flags.has('new') && !(p.nouveau || p.nb_nouveaux_lots || p.nb_baisses)) return false;
   if (F.flags.has('pick') && !p.picking) return false;
   if (F.flags.has('nopick') && p.picking) return false;
@@ -311,7 +340,7 @@ TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'ch
 ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
 document.getElementById('fSt').onchange = e => { F.st = new Set(e.target.value ? e.target.value.split(',') : []); apply(); };
 document.getElementById('fMaison').onchange = e => { F.maison = e.target.checked; apply(); };
-document.getElementById('reset').onclick = () => { Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '' }); F.st = new Set(['libre']); document.getElementById('fSt').value = 'libre'; F.typos.clear(); F.flags.clear(); [...fFl.children].forEach(c => c.classList.remove('on')); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); map.fitBounds(IDF); apply(); };
+document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '' }); F.st = new Set(['libre']); document.getElementById('fSt').value = 'libre'; F.typos.clear(); F.flags.clear(); [...fFl.children].forEach(c => c.classList.remove('on')); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); map.fitBounds(IDF); apply(); };
 
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
@@ -398,6 +427,82 @@ function pin(p) {
   m.bindTooltip('<b>' + esc(p.nom) + '</b><br>' + esc(p.promoteur) + ' — ' + esc(p.ville) + '<br>' + (p.picking ? '<b style="color:#ea580c">Picking à demander</b> — pas dans l’extranet' : nd + ' dispo · dès ' + fmtk(p.prix_min)) + (p.geo_approx ? '<br><i>position approximative</i>' : ''), { className: 'tt', direction: 'top', offset: [0, -6] });
   m.on('click', () => select(p, false)); markers[p.id] = m; return m;
 }
+
+// ---------- critères masquables ----------
+const sideBtn = document.getElementById('sideBtn');
+function setSide(on) { document.getElementById('app').classList.toggle('nof', !on); sideBtn.classList.toggle('on', !on); sideBtn.textContent = on ? '◧ Critères' : '◨ Critères'; try { localStorage.setItem('sideOff', on ? '' : '1') } catch (e) {} setTimeout(() => map.invalidateSize(), 60); }
+sideBtn.onclick = () => setSide(document.getElementById('app').classList.contains('nof'));
+try { if (localStorage.getItem('sideOff')) setSide(false) } catch (e) {}
+
+// ---------- temps de trajet depuis une adresse ----------
+const OSRM = 'https://routing.openstreetmap.de';
+const ISO_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co/functions/v1/isochrone';
+const ttAddr = document.getElementById('ttAddr'), ttList = document.getElementById('ttList'), ttMsg = document.getElementById('ttMsg'), ttGo = document.getElementById('ttGo'), ttOff = document.getElementById('ttOff');
+let ttPick = null, ttTimer = null, HOME = null;
+const WALK = L.layerGroup().addTo(map);
+ttAddr.oninput = () => { ttPick = null; clearTimeout(ttTimer); const q = ttAddr.value.trim(); if (q.length < 4) { ttList.hidden = true; return; } ttTimer = setTimeout(async () => { try { const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=6&q=' + encodeURIComponent(q)); const j = await r.json(); ttList.innerHTML = (j.features || []).map((f, i) => '<a data-i="' + i + '">' + esc(f.properties.label) + '</a>').join(''); ttList.hidden = !j.features.length; ttList.querySelectorAll('a').forEach(a => a.onclick = () => { const f = j.features[+a.dataset.i]; ttPick = { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: f.properties.label }; ttAddr.value = f.properties.label; ttList.hidden = true; }); } catch (e) { ttList.hidden = true; } }, 250); };
+ttAddr.onkeydown = e => { if (e.key === 'Enter') { const a = ttList.querySelector('a'); if (a && !ttPick) a.click(); setTimeout(ttRun, 50); } };
+document.addEventListener('click', e => { if (!e.target.closest('#ttSugg')) ttList.hidden = true; });
+function ttClear(re) { F.tt = null; ttOff.hidden = true; ttMsg.textContent = ''; if (HOME) { map.removeLayer(HOME); HOME = null; } if (re !== false) apply(); }
+ttOff.onclick = () => ttClear();
+async function geocode(q) { const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=1&q=' + encodeURIComponent(q)); const j = await r.json(); const f = (j.features || [])[0]; return f ? { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: f.properties.label } : null; }
+async function ttRun() {
+  const mode = document.getElementById('ttMode').value, max = +document.getElementById('ttMax').value;
+  if (!ttPick) { const q = ttAddr.value.trim(); if (!q) { ttMsg.textContent = 'Saisissez une adresse.'; return; } try { ttPick = await geocode(q); } catch (e) { ttPick = null; } if (!ttPick) { ttMsg.textContent = 'Adresse introuvable (ou service d’adresses indisponible).'; return; } ttAddr.value = ttPick.label; }
+  ttGo.disabled = true; ttMsg.textContent = 'Calcul en cours…';
+  const times = {};
+  try {
+    if (mode === 'car') {
+      const cand = P.filter(p => p.lat && dist(ttPick.lat, ttPick.lng, p.lat, p.lng) <= max * 1300);  // ≤ 78 km/h à vol d'oiseau
+      for (let i = 0; i < cand.length; i += 90) {
+        const chunk = cand.slice(i, i + 90);
+        const coords = [ttPick.lng + ',' + ttPick.lat].concat(chunk.map(p => p.lng + ',' + p.lat)).join(';');
+        const r = await fetch(OSRM + '/routed-car/table/v1/driving/' + coords + '?sources=0&annotations=duration');
+        const j = await r.json(); if (!j.durations) throw new Error('OSRM ' + (j.message || j.code));
+        j.durations[0].slice(1).forEach((d, k) => { if (d != null) times[chunk[k].id] = d; });
+        ttMsg.textContent = 'Calcul en cours… ' + Math.min(i + 90, cand.length) + '/' + cand.length;
+      }
+    } else {
+      const r = await fetch(ISO_URL + '?from=' + ttPick.lng + ';' + ttPick.lat + '&max=' + (max * 60));
+      if (!r.ok) throw new Error('transit ' + r.status);
+      const j = await r.json();  // { isochrones: [{max_duration, geojson}] } (Navitia) ou GeoJSON direct
+      const polys = []; const push = g => { if (!g) return; if (g.type === 'Polygon') polys.push([g.coordinates, null]); else if (g.type === 'MultiPolygon') g.coordinates.forEach(c => polys.push([c, null])); };
+      (j.isochrones || []).forEach(x => push(x.geojson)); if (j.type) push(j.geometry || j);
+      P.forEach(p => { if (p.lat && polys.some(([c]) => inPoly(p.lng, p.lat, c))) times[p.id] = max * 60 - 1; });
+    }
+    F.tt = { lat: ttPick.lat, lng: ttPick.lng, label: ttPick.label, mode, max, times };
+    if (HOME) map.removeLayer(HOME);
+    HOME = L.marker([ttPick.lat, ttPick.lng], { icon: L.divIcon({ className: 'pinw', html: '<div class="home-pin"></div>', iconSize: [26, 26], iconAnchor: [13, 26] }), zIndexOffset: 1000 }).bindTooltip('Départ : ' + esc(ttPick.label), { className: 'tt', direction: 'top', offset: [0, -24] }).addTo(map);
+    ttOff.hidden = false; const n = P.filter(p => times[p.id] != null && times[p.id] <= max * 60).length;
+    ttMsg.textContent = n + ' programme(s) à moins de ' + max + ' min ' + (mode === 'car' ? 'en voiture' : 'en transports en commun') + (mode === 'car' ? ' (trafic fluide)' : '');
+    F.dept = ''; F.ville = ''; document.getElementById('fDept').value = ''; apply();
+    const pts = P.filter(p => times[p.id] != null && times[p.id] <= max * 60 && p.lat).map(p => [p.lat, p.lng]); pts.push([ttPick.lat, ttPick.lng]); map.fitBounds(L.latLngBounds(pts).pad(.1));
+  } catch (e) {
+    ttMsg.textContent = mode === 'transit' ? 'Transports en commun : service de calcul pas encore branché (clé Île-de-France Mobilités à ajouter).' : 'Calcul impossible pour le moment (' + String(e.message || e).slice(0, 60) + ').';
+  }
+  ttGo.disabled = false;
+}
+ttGo.onclick = ttRun;
+function inPoly(x, y, rings) { let inside = false; rings.forEach((ring, ri) => { let c = false; for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) { const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1]; if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) c = !c; } if (ri === 0) inside = c; else if (c) inside = false; }); return inside; }
+
+// ---------- temps à pied vers les stations les plus proches ----------
+async function drawWalks(p) {
+  WALK.clearLayers(); if (!GEO.gares || !p.lat) return;
+  const seen = new Set();
+  const near = GEO.gares.map(g => ({ g, d: dist(p.lat, p.lng, g.lat, g.lng) })).filter(x => x.d < 2000).sort((a, b) => a.d - b.d).filter(x => { const k = x.g.nom; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 3);
+  const info = document.getElementById('walkInfo'); if (!near.length) { if (info) info.textContent = ''; return; }
+  const res = [];
+  for (const x of near) {
+    let min = Math.max(1, Math.round(x.d * 1.3 / 80)), line = null;
+    try { const r = await fetch(OSRM + '/routed-foot/route/v1/foot/' + p.lng + ',' + p.lat + ';' + x.g.lng + ',' + x.g.lat + '?overview=full&geometries=geojson'); const j = await r.json(); if (j.routes && j.routes[0]) { min = Math.max(1, Math.round(j.routes[0].duration / 60)); line = j.routes[0].geometry.coordinates.map(c => [c[1], c[0]]); } } catch (e) {}
+    if (SEL !== p) return;
+    if (!line) line = [[p.lat, p.lng], [x.g.lat, x.g.lng]];
+    L.polyline(line, { color: '#0f7c8c', weight: 3, opacity: .85, dashArray: '6 5' }).addTo(WALK);
+    L.marker([x.g.lat, x.g.lng], { icon: L.divIcon({ className: 'pinw', html: '<span class="walk-lbl">🚶 ' + min + ' min</span>', iconSize: [70, 18], iconAnchor: [35, 28] }), interactive: false }).addTo(WALK);
+    res.push('<b>' + min + ' min</b> à pied → ' + esc(x.g.nom) + (x.g.ligne ? ' (' + esc(x.g.ligne) + ')' : ''));
+    if (info) info.innerHTML = 'Temps à pied : ' + res.join(' · ');
+  }
+}
 map.on('zoomend', renderMap);
 map.on('moveend', () => { if (map.getZoom() >= 12) renderList(); });
 
@@ -428,7 +533,7 @@ function renderList() {
       h += '<div class="it' + (SEL === p ? ' sel' : '') + '" data-id="' + esc(p.id) + '"><div class="n"><span>' + esc(p.nom) + '</span><small>' + esc(p.livraison || '') + '</small></div>' +
         '<div class="m">' + esc(p.promoteur) + (p.adresse ? ' · ' + esc(p.adresse) : '') + '</div>' +
         '<div class="p">' + (nt ? '<b>' + nd + '</b>/' + nt + ' logements' : (p.lots.length ? p.lots.length + ' lots (annexes seulement)' : (p.picking ? 'stock non ouvert' : 'lots non détaillés'))) + (ty ? ' · ' + ty : '') + (p.prix_min ? ' · dès <b>' + fmtk(p.prix_min) + '</b>' : '') + (p.prix_m2_moy ? ' · ' + Math.round(p.prix_m2_moy / 100) / 10 + ' k€/m²' : '') + '</div>' +
-        '<div>' + (p.picking ? '<span class="tag pk">Picking à demander</span>' : '') + (p.nouveau && !p.picking ? '<span class="tag nw">Nouveau</span>' : '') + (p.nb_nouveaux_lots ? '<span class="tag nw">+' + p.nb_nouveaux_lots + ' lots</span>' : '') + (p.nb_baisses ? '<span class="tag dn">' + p.nb_baisses + ' baisse' + (p.nb_baisses > 1 ? 's' : '') + '</span>' : '') + (p.commission_pct ? '<span class="tag cm">' + String(p.commission_pct).replace('.', ',') + ' %</span>' : '') + (p.fisc || []).slice(0, 4).map(f => '<span class="tag">' + esc(f) + '</span>').join('') + (p.sources ? '<span class="tag" title="' + esc(p.sources.map(s => s.extranet).join(' / ')) + '">' + p.sources.length + ' sources</span>' : '') + (p.geo_approx ? '<span class="tag ap">position approx.</span>' : '') + (p.lat ? '' : '<span class="tag wn">non géolocalisé</span>') + '</div></div>';
+        '<div>' + (F.tt && F.tt.times[p.id] != null ? '<span class="tag tt">' + (F.tt.mode === 'car' ? '🚗 ' : '🚇 ') + Math.round(F.tt.times[p.id] / 60) + ' min</span>' : '') + (p.picking ? '<span class="tag pk">Picking à demander</span>' : '') + (p.nouveau && !p.picking ? '<span class="tag nw">Nouveau</span>' : '') + (p.nb_nouveaux_lots ? '<span class="tag nw">+' + p.nb_nouveaux_lots + ' lots</span>' : '') + (p.nb_baisses ? '<span class="tag dn">' + p.nb_baisses + ' baisse' + (p.nb_baisses > 1 ? 's' : '') + '</span>' : '') + (p.commission_pct ? '<span class="tag cm">' + String(p.commission_pct).replace('.', ',') + ' %</span>' : '') + (p.fisc || []).slice(0, 4).map(f => '<span class="tag">' + esc(f) + '</span>').join('') + (p.sources ? '<span class="tag" title="' + esc(p.sources.map(s => s.extranet).join(' / ')) + '">' + p.sources.length + ' sources</span>' : '') + (p.geo_approx ? '<span class="tag ap">position approx.</span>' : '') + (p.lat ? '' : '<span class="tag wn">non géolocalisé</span>') + '</div></div>';
     });
   });
   el.innerHTML = h;
@@ -447,10 +552,12 @@ function nearGares(p) {
 // ---------- fiche programme ----------
 let SEL = null;
 const panel = document.getElementById('panel');
-panel.querySelector('.x').onclick = () => { SEL = null; panel.classList.remove('open'); renderMap(); renderList(); };
+panel.querySelector('.mx').onclick = () => { panel.classList.toggle('max'); try { localStorage.setItem('panelMax', panel.classList.contains('max') ? '1' : '') } catch (e) {} };
+try { if (localStorage.getItem('panelMax')) panel.classList.add('max') } catch (e) {}
+panel.querySelector('.x').onclick = () => { SEL = null; WALK.clearLayers(); panel.classList.remove('open'); renderMap(); renderList(); };
 function select(p, fly) {
   SEL = p;
-  if (fly && p.lat) { const z = Math.max(map.getZoom(), 15); const off = window.innerWidth > 900 ? 270 : 0; const pt = map.project([p.lat, p.lng], z).add([off, 0]); map.flyTo(map.unproject(pt, z), z, { duration: .6 }); }
+  if (fly && p.lat) { const z = Math.max(map.getZoom(), 15); const off = window.innerWidth > 900 ? Math.round(panel.getBoundingClientRect().width / 2) : 0; const pt = map.project([p.lat, p.lng], z).add([off, 0]); map.flyTo(map.unproject(pt, z), z, { duration: .6 }); }
   panel.classList.add('open');
   panel.querySelector('h2').textContent = p.nom;
   panel.querySelector('.sub').textContent = [p.promoteur, p.adresse, (p.cp || '') + ' ' + (p.ville || '')].filter(Boolean).join(' · ');
@@ -472,8 +579,10 @@ function select(p, fly) {
     ['Labels', (p.labels || []).map(esc).join(', ') || null],
     ['Résidence', esc(p.residence || p.nature || '') || null],
     ['Gestion', esc(p.gestion || p.gestionnaire || '') || null],
-    ['Transports', nearGares(p)]].filter(x => x[1]);
-  let h = (p.picking ? '<div class="pkbox"><b>Picking à demander</b> — ce programme est diffusé par ' + esc(p.promoteur) + ' sur SeLoger Neuf mais n’est pas dans l’extranet dont nous disposons. Demander au responsable prescription l’ouverture du programme (grille, disponibilités, documentation). Position approximative : centre de la commune.</div>' : '') + '<div class="kv">' + kv.map(([k, v]) => '<div>' + k + '</div><div>' + v + '</div>').join('') + '</div>';
+    ['Trajet', F.tt && F.tt.times[p.id] != null ? '<b>' + Math.round(F.tt.times[p.id] / 60) + ' min</b> ' + (F.tt.mode === 'car' ? 'en voiture' : 'en transports') + ' depuis ' + esc(F.tt.label) : null],
+    ['Transports', nearGares(p) ? nearGares(p) + '<div id="walkInfo" style="color:#6b7280;margin-top:3px">Temps à pied : calcul…</div>' : null]].filter(x => x[1]);
+  const WIDE = new Set(['Adresse', 'Sources', 'Transports', 'Fiscalité', 'Prix', 'Commission', 'Offre', 'Infos', 'Labels', 'Lots']);
+  let h = (p.picking ? '<div class="pkbox"><b>Picking à demander</b> — ce programme est diffusé par ' + esc(p.promoteur) + ' sur SeLoger Neuf mais n’est pas dans l’extranet dont nous disposons. Demander au responsable prescription l’ouverture du programme (grille, disponibilités, documentation). Position approximative : centre de la commune.</div>' : '') + '<div class="kv">' + kv.map(([k, v]) => '<div class="k' + (WIDE.has(k) ? ' kw' : '') + '">' + k + '</div><div' + (WIDE.has(k) ? ' class="w"' : '') + '>' + v + '</div>').join('') + '</div>';
   if (p.desc) h += '<div class="desc">' + esc(p.desc) + '</div>';
   const links = [];
   if (p.url) links.push('<a href="' + esc(p.url) + '" target="_blank">' + (p.picking ? 'Voir l’annonce SeLoger ↗' : 'Ouvrir sur l’extranet ↗') + '</a>');
@@ -487,7 +596,7 @@ function select(p, fly) {
   panel.querySelector('#lTypo').onchange = panel.querySelector('#lSt').onchange = () => renderLots(p);
   panel.querySelector('#lSt').value = [...F.st].join(',');
   panel.querySelector('#lAll').onclick = () => { const ty = panel.querySelector('#lTypo').value, st = panel.querySelector('#lSt').value; p.lots.filter(l => (!ty || l.typo === ty) && (!st || st.split(',').includes(l.st))).forEach(l => CART.add(l.id)); saveCart(); renderLots(p); renderCartBtn(); };
-  renderLots(p); renderMap(); renderList();
+  renderLots(p); renderMap(); renderList(); drawWalks(p);
   const it = document.querySelector('.it.sel'); if (it) it.scrollIntoView({ block: 'nearest' });
 }
 let sortK = 'n', sortD = 1;
@@ -500,7 +609,7 @@ function renderLots(p) {
   let h = '<table class="lots"><thead><tr>' + cols.map(([k, t]) => '<th data-k="' + k + '">' + t + (sortK === k && k !== 'ck' ? (sortD > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
   ls.forEach(l => {
     const extra = [l.annexes, l.parkings, l.loyer ? 'loyer ' + fmt(l.loyer) : null, l.renta ? 'renta ' + l.renta + ' %' : null, l.dpe ? 'DPE ' + l.dpe : null, l.livraison ? 'livr. ' + l.livraison : null, l.option_fin ? 'option jusqu’au ' + String(l.option_fin).slice(0, 10) : null, (l.fisc || []).join(', ')].filter(Boolean).join(' · ');
-    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + '</td><td>' + esc(l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td>' + (l.tva != null ? (+l.tva).toLocaleString('fr-FR') + ' %' : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (l.plan ? '<a href="' + esc(l.plan) + '" target="_blank">PDF</a>' : '') + '</td></tr>';
+    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td>' + (l.tva != null ? (+l.tva).toLocaleString('fr-FR') + ' %' : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (l.plan ? '<a href="' + esc(l.plan) + '" target="_blank">PDF</a>' : '') + '</td></tr>';
   });
   h += '</tbody></table>';
   const t = panel.querySelector('#lotsTbl'); t.innerHTML = h;
