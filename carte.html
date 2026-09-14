@@ -79,6 +79,9 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .z14 .pin{width:20px;height:20px;margin:-3px}
 .pin.ap{background:#fff;border:2.5px dashed var(--approx);box-shadow:0 2px 6px rgba(0,0,0,.35)}
 .pin.hl{background:#f59e0b;transform:scale(1.35)}
+.pin.pk{background:#fff7ed;border:2.5px dashed #ea580c;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.tag.pk{background:#ffedd5;color:#9a3412;font-weight:600}
+.pkbox{background:#fff7ed;border:1px solid #fdba74;color:#7c2d12;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:12.5px;line-height:1.4}
 .pin.sold{background:#9ca3af;box-shadow:0 0 0 2px #9ca3af,0 2px 6px rgba(0,0,0,.35)}
 .leaflet-marker-icon.pinw{background:none;border:0}
 .leaflet-tooltip.tt{font-size:12px;padding:4px 8px;border-radius:6px}
@@ -193,7 +196,7 @@ table.lots td.r{text-align:right}
   <button id="back" hidden>↩ Retour</button>
   <div id="panel"><div class="hd"><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
   <div id="cart"><div class="hd"><h2>Ma sélection</h2><button class="x" title="Fermer">✕</button></div><div class="bd"></div><div class="ft"><button class="btn" id="cartCsv">Exporter en CSV</button><button class="btn o" id="cartCopy">Copier le tableau</button><button class="btn" id="cartZip" title="Fiches PDF par lot + tableau + liens vers les plans">Dossier commercial (ZIP)</button><a id="cartClear">Vider</a></div></div>
-  <div class="legend"><i style="background:#0f7c8c"></i>Programme (adresse précise)<br><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative (commune)<br><i style="background:#9ca3af"></i>Plus de lot disponible<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
+  <div class="legend"><i style="background:#0f7c8c"></i>Programme (adresse précise)<br><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative (commune)<br><i style="border:2px dashed #ea580c;background:#fff7ed;box-sizing:border-box"></i>Picking à demander (pas dans l’extranet)<br><i style="background:#9ca3af"></i>Plus de lot disponible<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
 </div>
 </div>
 <script type="module">
@@ -254,6 +257,9 @@ function progOK(p) {
   if (F.com && !(p.commission_pct >= +F.com)) return false;
   if (F.gare && !(p.gare_dist && p.gare_dist <= +F.gare)) return false;
   if (F.flags.has('new') && !(p.nouveau || p.nb_nouveaux_lots || p.nb_baisses)) return false;
+  if (F.flags.has('pick') && !p.picking) return false;
+  if (F.flags.has('nopick') && p.picking) return false;
+  if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.flags.has('top') || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
   if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.flags.size);
   return p.logs.some(lotOK);
 }
@@ -282,7 +288,7 @@ sel('fCom', [3, 4, 5, 6, 7].map(k => [k, '≥ ' + k + ' % (' + P.filter(p => p.c
 sel('fPm2', [4000, 4500, 5000, 5500, 6000, 7000, 8000, 10000].map(k => [k, '≤ ' + k.toLocaleString('fr-FR') + ' €/m²']));
 sel('fRenta', [3, 3.5, 4, 4.5, 5, 6].map(k => [k, '≥ ' + String(k).replace('.', ',') + ' %']));
 sel('fGare', [[300, '≤ 300 m d’une gare'], [500, '≤ 500 m (6 min à pied)'], [800, '≤ 800 m (10 min à pied)'], [1200, '≤ 1,2 km (15 min à pied)'], [2000, '≤ 2 km']]);
-const FLAGS = [['top', 'Dernier étage'], ['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')]];
+const FLAGS = [['top', 'Dernier étage'], ['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')], ['pick', 'Picking à demander'], ['nopick', 'Sans picking']];
 const fFl = document.getElementById('fFlags');
 FLAGS.forEach(([k, t]) => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.f = k; c.textContent = t; c.onclick = () => { F.flags.has(k) ? F.flags.delete(k) : F.flags.add(k); c.classList.toggle('on'); apply(); }; fFl.appendChild(c); });
 document.getElementById('pige').textContent = META.pige_date ? 'pigé le ' + new Date(META.pige_date).toLocaleDateString('fr-FR') + (META.prev_date ? ' · ' + META.nouveaux_programmes + ' nouveaux programmes, ' + META.nouveaux_lots + ' nouveaux lots, ' + META.baisses + ' baisses depuis le ' + new Date(META.prev_date).toLocaleDateString('fr-FR') : '') : '';
@@ -388,8 +394,8 @@ function renderMap() {
 }
 function pin(p) {
   const nd = p.logs.filter(l => l.st === 'libre').length;
-  const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pinw', html: '<div class="pin' + (p.geo_approx ? ' ap' : '') + (nd ? '' : ' sold') + (SEL === p ? ' hl' : '') + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) });
-  m.bindTooltip('<b>' + esc(p.nom) + '</b><br>' + esc(p.promoteur) + ' — ' + esc(p.ville) + '<br>' + nd + ' dispo · dès ' + fmtk(p.prix_min) + (p.geo_approx ? '<br><i>position approximative</i>' : ''), { className: 'tt', direction: 'top', offset: [0, -6] });
+  const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pinw', html: '<div class="pin' + (p.picking ? ' pk' : (p.geo_approx ? ' ap' : '')) + (nd || p.picking ? '' : ' sold') + (SEL === p ? ' hl' : '') + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) });
+  m.bindTooltip('<b>' + esc(p.nom) + '</b><br>' + esc(p.promoteur) + ' — ' + esc(p.ville) + '<br>' + (p.picking ? '<b style="color:#ea580c">Picking à demander</b> — pas dans l’extranet' : nd + ' dispo · dès ' + fmtk(p.prix_min)) + (p.geo_approx ? '<br><i>position approximative</i>' : ''), { className: 'tt', direction: 'top', offset: [0, -6] });
   m.on('click', () => select(p, false)); markers[p.id] = m; return m;
 }
 map.on('zoomend', renderMap);
@@ -421,8 +427,8 @@ function renderList() {
       const ty = (p.typos || []).join(' · ');
       h += '<div class="it' + (SEL === p ? ' sel' : '') + '" data-id="' + esc(p.id) + '"><div class="n"><span>' + esc(p.nom) + '</span><small>' + esc(p.livraison || '') + '</small></div>' +
         '<div class="m">' + esc(p.promoteur) + (p.adresse ? ' · ' + esc(p.adresse) : '') + '</div>' +
-        '<div class="p">' + (nt ? '<b>' + nd + '</b>/' + nt + ' logements' : (p.lots.length ? p.lots.length + ' lots (annexes seulement)' : 'lots non détaillés')) + (ty ? ' · ' + ty : '') + (p.prix_min ? ' · dès <b>' + fmtk(p.prix_min) + '</b>' : '') + (p.prix_m2_moy ? ' · ' + Math.round(p.prix_m2_moy / 100) / 10 + ' k€/m²' : '') + '</div>' +
-        '<div>' + (p.nouveau ? '<span class="tag nw">Nouveau</span>' : '') + (p.nb_nouveaux_lots ? '<span class="tag nw">+' + p.nb_nouveaux_lots + ' lots</span>' : '') + (p.nb_baisses ? '<span class="tag dn">' + p.nb_baisses + ' baisse' + (p.nb_baisses > 1 ? 's' : '') + '</span>' : '') + (p.commission_pct ? '<span class="tag cm">' + String(p.commission_pct).replace('.', ',') + ' %</span>' : '') + (p.fisc || []).slice(0, 4).map(f => '<span class="tag">' + esc(f) + '</span>').join('') + (p.sources ? '<span class="tag" title="' + esc(p.sources.map(s => s.extranet).join(' / ')) + '">' + p.sources.length + ' sources</span>' : '') + (p.geo_approx ? '<span class="tag ap">position approx.</span>' : '') + (p.lat ? '' : '<span class="tag wn">non géolocalisé</span>') + '</div></div>';
+        '<div class="p">' + (nt ? '<b>' + nd + '</b>/' + nt + ' logements' : (p.lots.length ? p.lots.length + ' lots (annexes seulement)' : (p.picking ? 'stock non ouvert' : 'lots non détaillés'))) + (ty ? ' · ' + ty : '') + (p.prix_min ? ' · dès <b>' + fmtk(p.prix_min) + '</b>' : '') + (p.prix_m2_moy ? ' · ' + Math.round(p.prix_m2_moy / 100) / 10 + ' k€/m²' : '') + '</div>' +
+        '<div>' + (p.picking ? '<span class="tag pk">Picking à demander</span>' : '') + (p.nouveau && !p.picking ? '<span class="tag nw">Nouveau</span>' : '') + (p.nb_nouveaux_lots ? '<span class="tag nw">+' + p.nb_nouveaux_lots + ' lots</span>' : '') + (p.nb_baisses ? '<span class="tag dn">' + p.nb_baisses + ' baisse' + (p.nb_baisses > 1 ? 's' : '') + '</span>' : '') + (p.commission_pct ? '<span class="tag cm">' + String(p.commission_pct).replace('.', ',') + ' %</span>' : '') + (p.fisc || []).slice(0, 4).map(f => '<span class="tag">' + esc(f) + '</span>').join('') + (p.sources ? '<span class="tag" title="' + esc(p.sources.map(s => s.extranet).join(' / ')) + '">' + p.sources.length + ' sources</span>' : '') + (p.geo_approx ? '<span class="tag ap">position approx.</span>' : '') + (p.lat ? '' : '<span class="tag wn">non géolocalisé</span>') + '</div></div>';
     });
   });
   el.innerHTML = h;
@@ -467,10 +473,10 @@ function select(p, fly) {
     ['Résidence', esc(p.residence || p.nature || '') || null],
     ['Gestion', esc(p.gestion || p.gestionnaire || '') || null],
     ['Transports', nearGares(p)]].filter(x => x[1]);
-  let h = '<div class="kv">' + kv.map(([k, v]) => '<div>' + k + '</div><div>' + v + '</div>').join('') + '</div>';
+  let h = (p.picking ? '<div class="pkbox"><b>Picking à demander</b> — ce programme est diffusé par ' + esc(p.promoteur) + ' sur SeLoger Neuf mais n’est pas dans l’extranet dont nous disposons. Demander au responsable prescription l’ouverture du programme (grille, disponibilités, documentation). Position approximative : centre de la commune.</div>' : '') + '<div class="kv">' + kv.map(([k, v]) => '<div>' + k + '</div><div>' + v + '</div>').join('') + '</div>';
   if (p.desc) h += '<div class="desc">' + esc(p.desc) + '</div>';
   const links = [];
-  if (p.url) links.push('<a href="' + esc(p.url) + '" target="_blank">Ouvrir sur l’extranet ↗</a>');
+  if (p.url) links.push('<a href="' + esc(p.url) + '" target="_blank">' + (p.picking ? 'Voir l’annonce SeLoger ↗' : 'Ouvrir sur l’extranet ↗') + '</a>');
   if (p.plaquette) links.push('<a href="' + esc(p.plaquette) + '" target="_blank">Plaquette</a>');
   if (p.maquette && typeof p.maquette === 'string') links.push('<a href="' + esc(p.maquette) + '" target="_blank">Maquette 3D</a>');
   (p.docs || []).forEach(d => { const [t, u] = String(d).split('→'); if (u) links.push('<a href="' + esc(u) + '" target="_blank">' + esc(t || 'Document') + '</a>'); });
