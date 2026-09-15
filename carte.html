@@ -12,8 +12,13 @@
 :root{--navy:#14213d;--teal:#0f7c8c;--teal2:#0aa3b5;--bg:#f5f6f8;--line:#e3e6eb;--txt:#1f2937;--muted:#6b7280;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--approx:#9333ea}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--txt);background:var(--bg);font-size:13px}
-#app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:56px 1fr;height:100%}
+#app{--sideW:340px;--sideWL:780px;display:grid;grid-template-columns:var(--sideW) 1fr;grid-template-rows:56px 1fr;height:100%}
 #app.nof{grid-template-columns:0 1fr}#app.nof aside{display:none}
+/* poignée de redimensionnement du volet des critères (bord droit) */
+aside{position:relative}
+#sideGrip{position:absolute;top:0;bottom:0;right:0;width:7px;cursor:col-resize;z-index:30}
+#sideGrip:hover,#sideGrip.on{background:rgba(15,124,140,.25)}
+body.resizing{cursor:col-resize;user-select:none}body.resizing iframe,body.resizing #map{pointer-events:none}
 #sideBtn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 9px;font-size:12px;cursor:pointer;white-space:nowrap}
 #sideBtn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .tt-box{width:100%;background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:7px 8px;display:flex;flex-direction:column;gap:5px}
@@ -119,9 +124,13 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .z15 .stnl{display:block}
 .dlab{font-family:Georgia,'Times New Roman',serif;font-size:13px;letter-spacing:1.5px;color:#4b5563;text-align:center;line-height:1.15;text-shadow:0 0 4px #fff,0 0 4px #fff,0 0 6px #fff;opacity:.9}
 .dlab b{font-size:15px;color:#1f2937}
-#panel{position:absolute;top:10px;right:10px;bottom:10px;width:min(66%,980px);min-width:600px;max-width:calc(100% - 20px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.2);z-index:1000;display:none;flex-direction:column;overflow:hidden}
+#panel{--panelW:min(66%,980px);position:absolute;top:10px;right:10px;bottom:10px;width:var(--panelW);min-width:420px;max-width:calc(100% - 20px);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.2);z-index:1000;display:none;flex-direction:column;overflow:hidden}
 #panel.open{display:flex}
 #panel.max{width:calc(100% - 20px);min-width:0}
+/* poignée de redimensionnement de la fenêtre programme (bord gauche) */
+#panelGrip{position:absolute;top:0;bottom:0;left:0;width:8px;cursor:col-resize;z-index:5}
+#panelGrip:hover,#panelGrip.on{background:rgba(15,124,140,.25)}
+#panel.max #panelGrip{display:none}
 #panel .mx{position:absolute;top:10px;right:44px;border:0;background:#f3f4f6;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:13px}
 #panel .hd{padding:14px 16px 10px;border-bottom:1px solid var(--line);position:relative}
 #panel .hd h2{margin:0 70px 2px 0;font-size:19px;color:var(--navy)}
@@ -154,7 +163,7 @@ table.lots td.r{text-align:right}
 #tabs span{flex:1;text-align:center;padding:7px 0;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}
 #tabs span.on{color:var(--teal);border-color:var(--teal);font-weight:600}
 #lotsview{overflow:auto;flex:1;min-height:0;display:none}
-#app.lots{grid-template-columns:780px 1fr}
+#app.lots{grid-template-columns:var(--sideWL) 1fr}
 #lotsview table{width:100%;border-collapse:collapse;font-size:11.5px}
 #lotsview th{position:sticky;top:0;background:#f9fafb;text-align:left;padding:5px 5px;border-bottom:1px solid var(--line);cursor:pointer;white-space:nowrap;font-weight:600;color:var(--navy);font-size:11px}
 #lotsview td{padding:4px 5px;border-bottom:1px solid #f0f1f3;white-space:nowrap;cursor:pointer}
@@ -233,11 +242,12 @@ table.lots td.r{text-align:right}
   <div id="crumbs"></div>
   <div id="list"></div>
   <div id="lotsview"></div>
+  <div id="sideGrip" title="Glisser pour élargir ou réduire — double-clic : largeur d’origine"></div>
 </aside>
 <div id="mapwrap">
   <div id="map"></div>
   <button id="back" hidden>↩ Retour</button>
-  <div id="panel"><div class="hd"><button class="mx" title="Agrandir / réduire">⛶</button><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
+  <div id="panel"><div id="panelGrip" title="Glisser pour élargir ou réduire la fenêtre"></div><div class="hd"><button class="mx" title="Agrandir / réduire">⛶</button><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
   <div id="cart"><div class="hd"><h2>Ma sélection</h2><button class="x" title="Fermer">✕</button></div><div class="bd"></div><div class="ft"><button class="btn" id="cartCsv">Exporter en CSV</button><button class="btn o" id="cartCopy">Copier le tableau</button><button class="btn" id="cartZip" title="Fiches PDF par lot + tableau + liens vers les plans">Dossier commercial (ZIP)</button><a id="cartClear">Vider</a></div></div>
   <div class="legend"><span class="lt">On peut proposer</span><i style="background:#0f7c8c"></i>En mandat, lots disponibles<br><i style="background:#9ca3af"></i>En mandat, plus de lot disponible<br><span class="lt">On ne peut pas encore proposer</span><i style="border:2px dashed #ea580c;background:#fff7ed;box-sizing:border-box"></i>Picking à demander (mandat, programme pas ouvert dans l’extranet)<br><i style="border:2px dashed #b91c1c;background:#fef2f2;box-sizing:border-box"></i>Sans mandat (vu sur SeLoger) — à prospecter<br><span class="lt">Repères</span><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative : l’extranet ne donne pas l’adresse, pin au centre de la commune<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
 </div>
@@ -544,6 +554,29 @@ function setSide(on) { document.getElementById('app').classList.toggle('nof', !o
 sideBtn.onclick = () => setSide(document.getElementById('app').classList.contains('nof'));
 try { if (localStorage.getItem('sideOff')) setSide(false) } catch (e) {}
 
+// ---------- largeur du volet des critères : poignée sur le bord droit ----------
+// Deux largeurs mémorisées : vue Programmes (--sideW) et vue Lots (--sideWL),
+// le tableau des lots ayant besoin de plus de place. Double-clic : largeur d’origine.
+const appEl = document.getElementById('app');
+const SIDE_DEF = { p: 340, l: 780 };
+function sideVar() { return appEl.classList.contains('lots') ? '--sideWL' : '--sideW'; }
+function sideSet(px, save) {
+  const max = Math.max(SIDE_DEF.p, window.innerWidth - 320);
+  px = Math.round(Math.min(max, Math.max(260, px)));
+  appEl.style.setProperty(sideVar(), px + 'px');
+  if (save) { try { localStorage.setItem(sideVar(), String(px)) } catch (e) {} }
+  setTimeout(() => map.invalidateSize(), 60);
+}
+try { ['--sideW', '--sideWL'].forEach(v => { const s = parseInt(localStorage.getItem(v) || '', 10); if (s) appEl.style.setProperty(v, s + 'px'); }); } catch (e) {}
+(function () {
+  const grip = document.getElementById('sideGrip');
+  let x0 = 0, w0 = 0;
+  const move = e => { sideSet(w0 + (e.clientX - x0), false); };
+  const up = () => { grip.classList.remove('on'); document.body.classList.remove('resizing'); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); sideSet(grip.parentElement.getBoundingClientRect().width, true); };
+  grip.addEventListener('pointerdown', e => { e.preventDefault(); x0 = e.clientX; w0 = grip.parentElement.getBoundingClientRect().width; grip.classList.add('on'); document.body.classList.add('resizing'); window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); });
+  grip.addEventListener('dblclick', () => { appEl.style.removeProperty(sideVar()); try { localStorage.removeItem(sideVar()) } catch (e) {} setTimeout(() => map.invalidateSize(), 60); });
+})();
+
 // ---------- temps de trajet depuis une adresse ----------
 const OSRM = 'https://routing.openstreetmap.de';
 const ISO_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co/functions/v1/isochrone';
@@ -731,12 +764,34 @@ function nearGares(p) {
 // ---------- fiche programme ----------
 let SEL = null;
 const panel = document.getElementById('panel');
-panel.querySelector('.mx').onclick = () => { panel.classList.toggle('max'); try { localStorage.setItem('panelMax', panel.classList.contains('max') ? '1' : '') } catch (e) {} };
-try { if (localStorage.getItem('panelMax')) panel.classList.add('max') } catch (e) {}
+// La fenêtre s’ouvre toujours en grand (demande d’Alex, 15/09/2026). ⛶ la
+// réduit à la dernière largeur choisie ; la poignée du bord gauche la
+// redimensionne (largeur mémorisée), ✕ la ferme.
+panel.querySelector('.mx').onclick = () => { panel.classList.toggle('max'); };
+try { const w = parseInt(localStorage.getItem('--panelW') || '', 10); if (w) panel.style.setProperty('--panelW', w + 'px'); } catch (e) {}
+(function () {
+  const grip = document.getElementById('panelGrip');
+  let x0 = 0, w0 = 0;
+  const clamp = px => Math.round(Math.min(panel.parentElement.getBoundingClientRect().width - 20, Math.max(420, px)));
+  const move = e => { panel.style.setProperty('--panelW', clamp(w0 - (e.clientX - x0)) + 'px'); };
+  const up = () => { grip.classList.remove('on'); document.body.classList.remove('resizing'); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); try { localStorage.setItem('--panelW', String(Math.round(panel.getBoundingClientRect().width))) } catch (e) {} };
+  grip.addEventListener('pointerdown', e => { e.preventDefault(); x0 = e.clientX; w0 = panel.getBoundingClientRect().width; grip.classList.add('on'); document.body.classList.add('resizing'); window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); });
+})();
+function panelLargeurReduite() {
+  if (!panel.classList.contains('max')) return panel.getBoundingClientRect().width;
+  const total = panel.parentElement.getBoundingClientRect().width;
+  let w = 0; try { w = parseInt(localStorage.getItem('--panelW') || '', 10) || 0 } catch (e) {}
+  if (!w) w = Math.min(total * .66, 980);
+  return Math.min(total - 20, Math.max(420, w));
+}
 panel.querySelector('.x').onclick = () => { SEL = null; WALK.clearLayers(); JR.clearLayers(); panel.classList.remove('open'); renderMap(); renderList(); };
 function select(p, fly) {
   SEL = p;
-  if (fly && p.lat) { const z = Math.max(map.getZoom(), 15); const off = window.innerWidth > 900 ? Math.round(panel.getBoundingClientRect().width / 2) : 0; const pt = map.project([p.lat, p.lng], z).add([off, 0]); map.flyTo(map.unproject(pt, z), z, { duration: .6 }); }
+  const dejaOuvert = panel.classList.contains('open');
+  if (!dejaOuvert) panel.classList.add('max'); // nouvelle ouverture : en grand ; déjà ouverte : on garde la taille en cours
+  // Le recentrage laisse la place de la fenêtre réduite : si on la réduit
+  // avec ⛶, le programme est visible à côté, pas caché dessous.
+  if (fly && p.lat) { const z = Math.max(map.getZoom(), 15); const off = window.innerWidth > 900 ? Math.round(panelLargeurReduite() / 2) : 0; const pt = map.project([p.lat, p.lng], z).add([off, 0]); map.flyTo(map.unproject(pt, z), z, { duration: .6 }); }
   panel.classList.add('open');
   panel.querySelector('h2').textContent = p.nom;
   panel.querySelector('.sub').textContent = [p.promoteur, p.adresse, (p.cp || '') + ' ' + (p.ville || '')].filter(Boolean).join(' · ');
