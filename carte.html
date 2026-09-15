@@ -103,6 +103,10 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .pin.ap{background:#fff;border:2.5px dashed var(--approx);box-shadow:0 2px 6px rgba(0,0,0,.35)}
 .pin.hl{background:#f59e0b;transform:scale(1.35)}
 .pin.pk{background:#fff7ed;border:2.5px dashed #ea580c;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.pin.nm{background:#fef2f2;border:2.5px dashed #b91c1c;box-shadow:0 2px 6px rgba(0,0,0,.35);opacity:.85}
+.tag.nm{background:#fee2e2;color:#991b1b;font-weight:600}
+.nmbox{background:#fef2f2;border:1px solid #fca5a5;color:#7f1d1d;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:12.5px;line-height:1.4}
+.legend .lt{font-weight:700;color:#14213d;margin:4px 0 2px;display:block}.legend .lt:first-child{margin-top:0}.legend small{color:#6b7280;display:block;margin-top:3px;line-height:1.3}
 .tag.pk{background:#ffedd5;color:#9a3412;font-weight:600}
 .pkbox{background:#fff7ed;border:1px solid #fdba74;color:#7c2d12;border-radius:8px;padding:8px 10px;margin:8px 0;font-size:12.5px;line-height:1.4}
 .pin.sold{background:#9ca3af;box-shadow:0 0 0 2px #9ca3af,0 2px 6px rgba(0,0,0,.35)}
@@ -182,7 +186,7 @@ table.lots td.r{text-align:right}
 <header>
   <h1>Programmes pigés<small>Île-de-France</small></h1><span class="pige" id="pige"></span>
   <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
-  <button id="sideBtn" title="Afficher / masquer les critères">◧ Critères</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes</span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
+  <button id="sideBtn" title="Afficher / masquer les critères">◧ Critères</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
 </header>
 <aside>
   <div class="filters">
@@ -235,7 +239,7 @@ table.lots td.r{text-align:right}
   <button id="back" hidden>↩ Retour</button>
   <div id="panel"><div class="hd"><button class="mx" title="Agrandir / réduire">⛶</button><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
   <div id="cart"><div class="hd"><h2>Ma sélection</h2><button class="x" title="Fermer">✕</button></div><div class="bd"></div><div class="ft"><button class="btn" id="cartCsv">Exporter en CSV</button><button class="btn o" id="cartCopy">Copier le tableau</button><button class="btn" id="cartZip" title="Fiches PDF par lot + tableau + liens vers les plans">Dossier commercial (ZIP)</button><a id="cartClear">Vider</a></div></div>
-  <div class="legend"><i style="background:#0f7c8c"></i>Programme (adresse précise)<br><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative (commune)<br><i style="border:2px dashed #ea580c;background:#fff7ed;box-sizing:border-box"></i>Picking à demander (pas dans l’extranet)<br><i style="background:#9ca3af"></i>Plus de lot disponible<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
+  <div class="legend"><span class="lt">On peut proposer</span><i style="background:#0f7c8c"></i>En mandat, lots disponibles<br><i style="background:#9ca3af"></i>En mandat, plus de lot disponible<br><span class="lt">On ne peut pas encore proposer</span><i style="border:2px dashed #ea580c;background:#fff7ed;box-sizing:border-box"></i>Picking à demander (mandat, programme pas ouvert dans l’extranet)<br><i style="border:2px dashed #b91c1c;background:#fef2f2;box-sizing:border-box"></i>Sans mandat (vu sur SeLoger) — à prospecter<br><span class="lt">Repères</span><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative : l’extranet ne donne pas l’adresse, pin au centre de la commune<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
 </div>
 </div>
 <script type="module">
@@ -309,7 +313,8 @@ function progOK(p) {
   if (F.gare && !(p.gare_dist && p.gare_dist <= +F.gare)) return false;
   if (F.tt && !(F.tt.times[p.id] != null && F.tt.times[p.id] <= F.tt.max * 60)) return false;
   if (F.flags.has('new') && !(p.nouveau || p.nb_nouveaux_lots || p.nb_baisses)) return false;
-  if (F.flags.has('pick') && !p.picking) return false;
+  if (F.flags.has('pick') && !(p.picking && !p.nomandat)) return false;
+  if (F.flags.has('nomandat') && !p.nomandat) return false;
   if (F.flags.has('nopick') && p.picking) return false;
   if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.flags.has('top') || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
   if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || ['top', 'ext', 'pk', 'new'].some(f => F.flags.has(f)));
@@ -320,10 +325,10 @@ function apply() {
   VIS = P.filter(progOK);
   const nl = VIS.reduce((a, p) => a + p.logs.filter(l => F.maison ? l.type === 'Maison' : true).length, 0);
   const nd = VIS.reduce((a, p) => a + p.logs.filter(l => l.st === 'libre' && lotOKnoDispo(l)).length, 0);
-  document.getElementById('kp').textContent = VIS.length;
+  const nnm = VIS.filter(p => p.nomandat).length; document.getElementById('kp').textContent = (VIS.length - nnm).toLocaleString('fr-FR'); document.getElementById('knm').textContent = nnm ? ' + ' + nnm + ' sans mandat' : '';
   document.getElementById('kl').textContent = nl.toLocaleString('fr-FR');
   document.getElementById('kd').textContent = nd.toLocaleString('fr-FR');
-  document.getElementById('kpr').textContent = new Set(VIS.map(p => p.promoteur)).size;
+  document.getElementById('kpr').textContent = new Set(VIS.filter(p => !p.nomandat).map(p => p.promoteur)).size;
   renderList(); renderMap(); renderCrumbs(); renderBack(); renderLotsView(); renderCartBtn(); renderActive();
   clearTimeout(apply._t); apply._t = setTimeout(renderCounts, 30);
 }
@@ -381,6 +386,12 @@ function concessions() {
   if (F.gare) { const G = [300, 500, 800, 1200, 2000], nx = G.find(g => g > +F.gare); if (nx) push('Gare à ' + (nx >= 1000 ? (nx / 1000).toLocaleString('fr-FR') + ' km' : nx + ' m'), { gare: nx }, () => { F.gare = String(nx); document.getElementById('fGare').value = nx; }); }
   if (F.pm2) { const v = Math.round(+F.pm2 * 1.1 / 100) * 100; push('€/m² +10 % (≤ ' + v.toLocaleString('fr-FR') + ')', { pm2: v }, () => { F.pm2 = String(v); const s = document.getElementById('fPm2'); if (![...s.options].some(o => +o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = '≤ ' + v.toLocaleString('fr-FR') + ' €/m²'; s.appendChild(o); } s.value = v; }); }
   if (F.renta) { const v = +F.renta - 0.5; push('Renta ≥ ' + String(v).replace('.', ',') + ' %', { renta: v }, () => { F.renta = String(v); document.getElementById('fRenta').value = v; }); }
+  if (F.budget) push('Sans limite de budget', { budget: '' }, () => { F.budget = ''; document.getElementById('fBudget').value = ''; });
+  if (F.typos.size) push('Toutes les typologies', { typos: new Set() }, () => { F.typos.clear(); [...fT.children].forEach(c => c.classList.remove('on')); });
+  if (F.liv) push('Sans critère de livraison', { liv: '' }, () => { F.liv = ''; F.livS = 2; renderLiv(); });
+  if (F.pm2) push('Sans limite de €/m²', { pm2: '' }, () => { F.pm2 = ''; document.getElementById('fPm2').value = ''; });
+  if (F.renta) push('Sans minimum de renta', { renta: '' }, () => { F.renta = ''; document.getElementById('fRenta').value = ''; });
+  if (F.gare) push('Sans critère de gare', { gare: '' }, () => { F.gare = ''; document.getElementById('fGare').value = ''; });
   if (F.dept) push('Tous les départements', { dept: '' }, () => { F.dept = ''; document.getElementById('fDept').value = ''; map.fitBounds(IDF); });
   if (F.ville) push('Toute l’Île-de-France (pas seulement ' + F.ville + ')', { ville: '' }, () => { F.ville = ''; });
   if (F.promo) push('Tous les promoteurs', { promo: '' }, () => { F.promo = ''; document.getElementById('fPromo').value = ''; });
@@ -390,7 +401,7 @@ function concessions() {
   F.flags.forEach(k => push('Sans « ' + (FLAGS.find(x => x[0] === k) || [k, k])[1] + ' »', { flags: setOn(F.flags, k, false) }, () => { F.flags.delete(k); [...fFl.children].forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); }));
   if (F.maison) push('Appartements aussi', { maison: false }, () => { F.maison = false; document.getElementById('fMaison').checked = false; });
   if (F.tt) { const M = [15, 20, 30, 45, 60, 90], nx = M.find(m => m > F.tt.max); if (nx) out.push({ label: 'Trajet ≤ ' + nx + ' min au lieu de ' + F.tt.max, n: null, go: () => { document.getElementById('ttMax').value = nx; ttRun(); } }); }
-  return out.sort((a, b) => (b.n == null ? -1 : b.n) - (a.n == null ? -1 : a.n)).slice(0, 6);
+  return out.sort((a, b) => (b.n == null ? -1 : b.n) - (a.n == null ? -1 : a.n)).slice(0, 8);
 }
 let CONC = [];
 function concHtml() {
@@ -405,7 +416,7 @@ function lotOKnoDispo(l) { const d = F.st; F.st = new Set(); const r = lotOK(l);
 // ---------- init filtres ----------
 const sel = (id, opts) => { const s = document.getElementById(id); opts.forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; s.appendChild(o); }); return s; };
 const promos = [...new Set(P.map(p => p.promoteur))].sort((a, b) => a.localeCompare(b, 'fr'));
-sel('fPromo', promos.map(x => [x, x + ' (' + P.filter(p => p.promoteur === x).length + ')']));
+sel('fPromo', promos.map(x => [x, x + (P.some(p => p.promoteur === x && !p.nomandat) ? '' : ' — sans mandat') + ' (' + P.filter(p => p.promoteur === x).length + ')']));
 sel('fDept', Object.keys(DEPTS).map(d => [d, d + ' — ' + DEPTS[d]]));
 sel('fBudget', [150, 200, 250, 300, 350, 400, 500, 600, 800, 1000].map(k => [k * 1000, '≤ ' + k + ' k€']));
 const sources = [...new Set(P.flatMap(p => [p.extranet, ...(p.sources || []).map(s => s.extranet)]))].sort((a, b) => a.localeCompare(b, 'fr'));
@@ -414,7 +425,7 @@ sel('fCom', [3, 4, 5, 6, 7].map(k => [k, '≥ ' + k + ' % (' + P.filter(p => p.c
 sel('fPm2', [4000, 4500, 5000, 5500, 6000, 7000, 8000, 10000].map(k => [k, '≤ ' + k.toLocaleString('fr-FR') + ' €/m²']));
 sel('fRenta', [3, 3.5, 4, 4.5, 5, 6].map(k => [k, '≥ ' + String(k).replace('.', ',') + ' %']));
 sel('fGare', [[300, '≤ 300 m d’une gare'], [500, '≤ 500 m (6 min à pied)'], [800, '≤ 800 m (10 min à pied)'], [1200, '≤ 1,2 km (15 min à pied)'], [2000, '≤ 2 km']]);
-const FLAGS = [['top', 'Dernier étage'], ['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')], ['pick', 'Picking à demander'], ['nopick', 'Sans picking'], ['livre', 'Déjà livré'], ['nonact', 'Pas encore actable']];
+const FLAGS = [['top', 'Dernier étage'], ['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')], ['pick', 'Picking à demander'], ['nomandat', 'Sans mandat'], ['nopick', 'Mandat + stock seulement'], ['livre', 'Déjà livré'], ['nonact', 'Pas encore actable']];
 const fFl = document.getElementById('fFlags');
 FLAGS.forEach(([k, t]) => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.f = k; c.textContent = t; c.onclick = () => { F.flags.has(k) ? F.flags.delete(k) : F.flags.add(k); c.classList.toggle('on'); apply(); }; fFl.appendChild(c); });
 document.getElementById('pige').textContent = META.pige_date ? 'pigé le ' + new Date(META.pige_date).toLocaleDateString('fr-FR') + (META.prev_date ? ' · ' + META.nouveaux_programmes + ' nouveaux programmes, ' + META.nouveaux_lots + ' nouveaux lots, ' + META.baisses + ' baisses depuis le ' + new Date(META.prev_date).toLocaleDateString('fr-FR') : '') : '';
@@ -522,8 +533,8 @@ function renderMap() {
 }
 function pin(p) {
   const nd = p.logs.filter(l => l.st === 'libre').length;
-  const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pinw', html: '<div class="pin' + (p.picking ? ' pk' : (p.geo_approx ? ' ap' : '')) + (nd || p.picking ? '' : ' sold') + (SEL === p ? ' hl' : '') + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) });
-  m.bindTooltip('<b>' + esc(p.nom) + '</b><br>' + esc(p.promoteur) + ' — ' + esc(p.ville) + '<br>' + (p.picking ? '<b style="color:#ea580c">Picking à demander</b> — pas dans l’extranet' : nd + ' dispo · dès ' + fmtk(p.prix_min20 || p.prix_min) + (p.prix_min55 ? ' (' + fmtk(p.prix_min55) + ' en TVA 5,5 %)' : '')) + (p.geo_approx ? '<br><i>position approximative</i>' : ''), { className: 'tt', direction: 'top', offset: [0, -6] });
+  const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pinw', html: '<div class="pin' + (p.nomandat ? ' nm' : p.picking ? ' pk' : (p.geo_approx ? ' ap' : '')) + (nd || p.picking ? '' : ' sold') + (SEL === p ? ' hl' : '') + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) });
+  m.bindTooltip('<b>' + esc(p.nom) + '</b><br>' + esc(p.promoteur) + ' — ' + esc(p.ville) + '<br>' + (p.nomandat ? '<b style="color:#b91c1c">Sans mandat</b> — à prospecter' : p.picking ? '<b style="color:#ea580c">Picking à demander</b> — pas dans l’extranet' : nd + ' dispo · dès ' + fmtk(p.prix_min20 || p.prix_min) + (p.prix_min55 ? ' (' + fmtk(p.prix_min55) + ' en TVA 5,5 %)' : '')) + (p.geo_approx && !p.picking ? '<br><i>position approximative (centre de la commune)</i>' : ''), { className: 'tt', direction: 'top', offset: [0, -6] });
   m.on('click', () => select(p, false)); markers[p.id] = m; return m;
 }
 
@@ -699,8 +710,8 @@ function renderList() {
       const ty = (p.typos || []).join(' · ');
       h += '<div class="it' + (SEL === p ? ' sel' : '') + '" data-id="' + esc(p.id) + '"><div class="n"><span>' + esc(p.nom) + '</span><small>' + esc(p.livraison || '') + '</small></div>' +
         '<div class="m">' + esc(p.promoteur) + (flat ? ' · <b>' + esc(p.ville || '') + '</b>' : '') + (p.adresse ? ' · ' + esc(p.adresse) : '') + '</div>' +
-        '<div class="p">' + (nt ? '<b>' + nd + '</b>/' + nt + ' logements' : (p.lots.length ? p.lots.length + ' lots (annexes seulement)' : (p.picking ? 'stock non ouvert' : 'lots non détaillés'))) + (ty ? ' · ' + ty : '') + (p.prix_min20 || p.prix_min ? ' · dès <b>' + fmtk(p.prix_min20 || p.prix_min) + '</b>' : '') + (p.prix_min55 ? ' <span style="color:#166534">(' + fmtk(p.prix_min55) + ' en 5,5 %)</span>' : '') + (p.prix_m2_moy ? ' · ' + Math.round(p.prix_m2_moy / 100) / 10 + ' k€/m²' : '') + '</div>' +
-        '<div>' + (F.tt && F.tt.times[p.id] != null ? '<span class="tag tt">' + (F.tt.mode === 'car' ? '🚗 ' + Math.round(F.tt.times[p.id] / 60) + ' min' : '🚇 ' + (F.tt.real && F.tt.real[p.id] ? Math.round(F.tt.real[p.id].dur / 60) + ' min' : '≤ ' + F.tt.max + ' min')) + '</span>' : '') + (p.picking ? '<span class="tag pk">Picking à demander</span>' : '') + (p.nouveau && !p.picking ? '<span class="tag nw">Nouveau</span>' : '') + (p.nb_nouveaux_lots ? '<span class="tag nw">+' + p.nb_nouveaux_lots + ' lots</span>' : '') + (p.nb_baisses ? '<span class="tag dn">' + p.nb_baisses + ' baisse' + (p.nb_baisses > 1 ? 's' : '') + '</span>' : '') + (p.commission_pct ? '<span class="tag cm">' + String(p.commission_pct).replace('.', ',') + ' %</span>' : '') + (p.fisc || []).slice(0, 4).map(f => '<span class="tag">' + esc(f) + '</span>').join('') + (p.sources ? '<span class="tag" title="' + esc(p.sources.map(s => s.extranet).join(' / ')) + '">' + p.sources.length + ' sources</span>' : '') + (p.geo_approx ? '<span class="tag ap">position approx.</span>' : '') + (p.lat ? '' : '<span class="tag wn">non géolocalisé</span>') + '</div></div>';
+        '<div class="p">' + (nt ? '<b>' + nd + '</b>/' + nt + ' logements' : (p.lots.length ? p.lots.length + ' lots (annexes seulement)' : (p.nomandat ? 'pas de mandat' : p.picking ? 'stock non ouvert' : 'lots non détaillés'))) + (ty ? ' · ' + ty : '') + (p.prix_min20 || p.prix_min ? ' · dès <b>' + fmtk(p.prix_min20 || p.prix_min) + '</b>' : '') + (p.prix_min55 ? ' <span style="color:#166534">(' + fmtk(p.prix_min55) + ' en 5,5 %)</span>' : '') + (p.prix_m2_moy ? ' · ' + Math.round(p.prix_m2_moy / 100) / 10 + ' k€/m²' : '') + '</div>' +
+        '<div>' + (F.tt && F.tt.times[p.id] != null ? '<span class="tag tt">' + (F.tt.mode === 'car' ? '🚗 ' + Math.round(F.tt.times[p.id] / 60) + ' min' : '🚇 ' + (F.tt.real && F.tt.real[p.id] ? Math.round(F.tt.real[p.id].dur / 60) + ' min' : '≤ ' + F.tt.max + ' min')) + '</span>' : '') + (p.nomandat ? '<span class="tag nm">Sans mandat</span>' : p.picking ? '<span class="tag pk">Picking à demander</span>' : '') + (p.nouveau && !p.picking ? '<span class="tag nw">Nouveau</span>' : '') + (p.nb_nouveaux_lots ? '<span class="tag nw">+' + p.nb_nouveaux_lots + ' lots</span>' : '') + (p.nb_baisses ? '<span class="tag dn">' + p.nb_baisses + ' baisse' + (p.nb_baisses > 1 ? 's' : '') + '</span>' : '') + (p.commission_pct ? '<span class="tag cm">' + String(p.commission_pct).replace('.', ',') + ' %</span>' : '') + (p.fisc || []).slice(0, 4).map(f => '<span class="tag">' + esc(f) + '</span>').join('') + (p.sources ? '<span class="tag" title="' + esc(p.sources.map(s => s.extranet).join(' / ')) + '">' + p.sources.length + ' sources</span>' : '') + (p.geo_approx && !p.picking ? '<span class="tag ap">position approx.</span>' : '') + (p.lat ? '' : '<span class="tag wn">non géolocalisé</span>') + '</div></div>';
     });
   });
   el.innerHTML = h; bindConc(el);
@@ -750,7 +761,7 @@ function select(p, fly) {
     ['Trajet', F.tt ? '<div id="jrInfo">' + (F.tt.times[p.id] != null ? (F.tt.mode === 'car' ? '<b>' + Math.round(F.tt.times[p.id] / 60) + ' min</b> en voiture' : (F.tt.real && F.tt.real[p.id] ? '<b>' + Math.round(F.tt.real[p.id].dur / 60) + ' min</b>' : '<b>moins de ' + F.tt.max + ' min</b>') + ' en transports en commun') : 'hors du périmètre demandé') + ' depuis ' + esc(F.tt.label) + ' <span style="color:#6b7280">— détail du trajet en cours…</span></div>' : null],
     ['Transports', nearGares(p) ? nearGares(p) + '<div id="walkInfo" style="color:#6b7280;margin-top:3px">Temps à pied : calcul…</div>' : null]].filter(x => x[1]);
   const WIDE = new Set(['Adresse', 'Sources', 'Transports', 'Fiscalité', 'Prix', 'Commission', 'Offre', 'Infos', 'Labels', 'Lots']);
-  let h = (p.picking ? '<div class="pkbox"><b>Picking à demander</b> — ce programme est diffusé par ' + esc(p.promoteur) + ' sur SeLoger Neuf mais n’est pas dans l’extranet dont nous disposons. Demander au responsable prescription l’ouverture du programme (grille, disponibilités, documentation). Position approximative : centre de la commune.</div>' : '') + '<div class="kv">' + kv.map(([k, v]) => '<div class="k' + (WIDE.has(k) ? ' kw' : '') + '">' + k + '</div><div' + (WIDE.has(k) ? ' class="w"' : '') + '>' + v + '</div>').join('') + '</div>';
+  let h = (p.nomandat ? '<div class="nmbox"><b>Sans mandat</b> — ' + esc(p.promoteur) + ' diffuse ce programme sur SeLoger Neuf mais GLR n’a pas de mandat avec ce promoteur : on ne peut pas le proposer. À prospecter (demande de mandat), ou à connaître pour répondre à un client qui l’a vu. Position approximative : centre de la commune.</div>' : p.picking ? '<div class="pkbox"><b>Picking à demander</b> — ce programme est diffusé par ' + esc(p.promoteur) + ' sur SeLoger Neuf mais n’est pas dans l’extranet dont nous disposons. Demander au responsable prescription l’ouverture du programme (grille, disponibilités, documentation). Position approximative : centre de la commune.</div>' : '') + '<div class="kv">' + kv.map(([k, v]) => '<div class="k' + (WIDE.has(k) ? ' kw' : '') + '">' + k + '</div><div' + (WIDE.has(k) ? ' class="w"' : '') + '>' + v + '</div>').join('') + '</div>';
   if (p.desc) h += '<div class="desc">' + esc(p.desc) + '</div>';
   const links = [];
   if (p.url) links.push('<a href="' + esc(p.url) + '" target="_blank">' + (p.picking ? 'Voir l’annonce SeLoger ↗' : 'Ouvrir sur l’extranet ↗') + '</a>');
