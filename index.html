@@ -5949,6 +5949,35 @@ function eqLeadVisiblePour(l, prenom) {
     .some(r => r && r.vendeur === prenom);
 }
 
+// ============================================================
+//  RAPPEL CONSERVÉ (15/09/2026)
+//  Un vendeur garde son rappel sur un client même si la paternité est passée à
+//  quelqu'un d'autre (pool, compétition, lien public). Côté base, le rappel
+//  devient une activité supplémentaire à son nom (`activites`, par = lui,
+//  conserve = true) et la fiche reste lisible pour lui. Dans le CRM : la fiche
+//  n'est PAS dans « Mes leads » ni dans ses compteurs, mais l'activité est dans
+//  « Mes activités » à son jour, et depuis là il ouvre la fiche, appelle, laisse
+//  une note et gère son rappel — tout le reste est en lecture seule.
+//  Seule la réattribution volontaire par un gérant fait suivre les activités
+//  au nouveau vendeur (règle du 03/09/2026).
+// ============================================================
+// Le prénom du vendeur dont on regarde l'espace (un gérant peut regarder celui d'un autre)
+function _eqPrenomVue() {
+  const sel = document.getElementById('eq-leads-vendeur');
+  const selId = (sel && sel.value) || (typeof selectedVendeurId !== 'undefined' ? selectedVendeurId : null);
+  const v = selId && (data.vendeurs || []).find(x => x.id === selId);
+  return (v && v.prenom) || (MON_ROLE && MON_ROLE.prenom) || null;
+}
+// Les activités que ce vendeur garde sur une fiche qui n'est pas (ou plus) la sienne
+function eqActivitesConserveesDe(l, prenom) {
+  if (!l || !prenom || l.vendeur === prenom) return [];
+  return eqActivitesDe(l).filter(a => a.par === prenom);
+}
+// Fiche visible seulement parce qu'un rappel y est conservé
+function eqEstConserve(l) { return !!(l && l._conserve); }
+// Les leads vraiment à lui — « Mes leads », compteurs, actions groupées
+function _eqMiens() { return (_eqLeads || []).filter(l => !l._conserve); }
+
 function paterniteEtat(c) {
   if (!c) return null;
   const vendeur = c.vendeur || '';
@@ -6089,7 +6118,8 @@ async function renderEquipeLeads() {
   try {
     // Un lead en compétition (recu_par) apparaît chez chaque vendeur récepteur,
     // même si la paternité n'est pas (encore) à lui.
-    const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}])');
+    // …et une fiche où il garde un rappel conservé (activites, par = lui) arrive aussi.
+    const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}],activites.cs.[{"par":"' + v.prenom + '"}])');
     const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,conjoint,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
@@ -6097,7 +6127,12 @@ async function renderEquipeLeads() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     // Le filtre serveur ramène aussi les leads simplement « reçus » : on écarte
     // ici ceux dont la paternité est déjà tranchée en faveur d'un autre vendeur.
-    _eqLeads = (await res.json()).filter(l => eqLeadVisiblePour(l, v.prenom));
+    _eqLeads = (await res.json()).filter(l => {
+      if (eqLeadVisiblePour(l, v.prenom)) { l._conserve = false; return true; }
+      // Rappel conservé : la fiche est là pour l'activité, pas pour « Mes leads »
+      if (eqActivitesConserveesDe(l, v.prenom).length) { l._conserve = true; return true; }
+      return false;
+    });
     // Une note tapée à l'instant et pas encore en base ne doit pas être
     // effacée de la copie mémoire par ce rechargement (incident Amal Jaafar)
     if (typeof _eqNotesEnAttente !== 'undefined' && _eqNotesEnAttente) {
@@ -6437,7 +6472,7 @@ function _veillePuce(txt, couleur) {
 async function renderVeilleBandeau() {
   const z = document.getElementById('eq-veille-bandeau');
   if (!z) return;
-  const enVeille = (_eqLeads || []).filter(estEnVeille);
+  const enVeille = _eqMiens().filter(estEnVeille);
   const r = await veilleCalculer(true);
   if (!r) return;
   const total = r.reduce((n, x) => n + x.items.length, 0);
@@ -6626,10 +6661,25 @@ function eqTransfertBandeauFiche(l) {
 // et que la réattribution passe par un gérant.
 function eqSuiviParBandeauFiche(l) {
   const moi = (typeof MON_ROLE !== 'undefined' && MON_ROLE) ? MON_ROLE.prenom : null;
-  if (!l || !l.vendeur || !moi || l.vendeur === moi) return '';
-  if (typeof estGerant === 'function' && estGerant()) return '';
+  if (!l || !l.vendeur || !moi) return '';
+  if (l.vendeur === moi && !l._conserve) return '';
+  if (typeof estGerant === 'function' && estGerant() && !l._conserve) return '';
   const e = _vEsc;
   const compet = typeof eqCompetitionOuverte === 'function' && eqCompetitionOuverte(l);
+  if (l._conserve) {
+    // Rappel conservé : il est là pour son rappel, la fiche est à l'autre
+    const mes = eqActivitesConserveesDe(l, _eqPrenomVue());
+    const fmt = (d) => { const dt = new Date(d + 'T12:00:00'); return isNaN(dt) ? d : dt.toLocaleDateString('fr-FR'); };
+    const quand = mes.map(a => fmt(a.le) + (a.heure ? ' à ' + String(a.heure).slice(0, 5).replace(':', 'h') : '') + (a.titre ? ' (' + a.titre + ')' : '')).join(', ');
+    const depuis = l.vendeur_depuis ? new Date(l.vendeur_depuis).toLocaleDateString('fr-FR') : null;
+    return `<div style="background:var(--warning)14;border:1px solid var(--warning);border-radius:11px;padding:12px 14px;margin:10px 0">
+      <div style="font-weight:800;font-size:13px;margin-bottom:4px">Client suivi par ${e(l.vendeur)}${depuis ? ' depuis le ' + e(depuis) : ''} — tu gardes ton rappel</div>
+      <div style="font-size:12.5px;line-height:1.55;color:var(--muted)">
+        Tu vois cette fiche parce que ton rappel${mes.length > 1 ? 's' : ''} du <strong>${e(quand)}</strong> a été conservé quand la paternité est passée à ${e(l.vendeur)}.
+        Tu peux appeler le client, laisser une note et reporter ou terminer ton rappel ; le reste de la fiche (statut, critères, sélections, rendez-vous) est à ${e(l.vendeur)} et reste en lecture seule. Quand tu marques ton rappel « Fait », la fiche sort de tes activités.
+      </div>
+    </div>`;
+  }
   return `<div style="background:var(--warning)14;border:1px solid var(--warning);border-radius:11px;padding:12px 14px;margin:10px 0">
     <div style="font-weight:800;font-size:13px;margin-bottom:4px">Client suivi par ${e(l.vendeur)}</div>
     <div style="font-size:12.5px;line-height:1.55;color:var(--muted)">
@@ -6843,6 +6893,9 @@ async function eqExpliqueDepart(id) {
 }
 
 function renderEquipeLeadsTable() {
+  // Les fiches présentes seulement pour un rappel conservé ne sont ni dans le
+  // tableau ni dans les compteurs : ici, _eqLeads = ses leads à lui.
+  const _eqLeads = _eqMiens();
   const tbody = document.getElementById('eq-leads-tbody');
   const countEl = document.getElementById('eq-leads-count');
   const q = (document.getElementById('eq-leads-search')?.value || '').toLowerCase().trim();
@@ -7275,6 +7328,7 @@ function _eqPrixDepuisMessage(message) {
 // jamais partagé avec les autres leads de la même référence.
 async function _eqAnnonceAutoPrix(l) {
   if (!l || l.prix_annonce || _eqAnnoncesTentees.has(l.id)) return;
+  if (l._conserve) return;   // fiche d'un autre vendeur : on n'y écrit pas le prix
   _eqAnnoncesTentees.add(l.id);
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=message&id=eq.' + l.id, {
@@ -7991,6 +8045,22 @@ ${(() => {
       <textarea id="eq-fiche-notes" oninput="eqNotesInput(this.value)" rows="4" placeholder="Notes de l'appel — situation, critères particuliers, à faire…" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;resize:vertical;line-height:1.5;box-sizing:border-box">${esc(_eqNotesAffichees(l))}</textarea>
     </div>
   `;
+
+  // Rappel conservé sur la fiche d'un autre vendeur : lecture seule, sauf les
+  // notes, la fermeture, la copie des coordonnées et ses propres rappels. La base
+  // refuserait de toute façon le reste — autant ne pas le laisser cliquer.
+  if (l._conserve && !(typeof estGerant === 'function' && estGerant())) {
+    const permis = /eqFicheFermer|eqCopy|eqActiviteEditer|eqActiviteFaite|eqActiviteDecaler|eqCriteresBasculer|eqLegende|eqAppelsBascule|eqHistoriqueBascule/;
+    panel.querySelectorAll('button, select, input, textarea').forEach(el => {
+      if (el.id === 'eq-fiche-notes') return;
+      const code = (el.getAttribute('onclick') || '') + (el.getAttribute('onchange') || '') + (el.getAttribute('oninput') || '');
+      if (permis.test(code)) return;
+      el.disabled = true;
+      el.style.opacity = '.45';
+      el.style.cursor = 'not-allowed';
+      el.title = 'Client suivi par ' + (l.vendeur || 'un autre vendeur') + ' — tu ne peux que laisser une note et gérer ton rappel';
+    });
+  }
 
   // On remet la saisie en cours (valeur + position du curseur) et le bandeau
   // d'échec éventuel, qui n'existent plus après la réécriture du panneau.
@@ -9128,7 +9198,7 @@ function eqActToutDeselectionner(){ _eqActSel.clear(); renderEqNotifs(); }
 // Tous les leads qui produisent une ligne d'activité cochable : un rappel
 // programmé, ou un premier appel jamais fait et non retiré de la liste.
 function _eqActLeadsActifs(){
-  return (_eqLeads || []).filter(l => {
+  return _eqMiens().filter(l => {
     if (STATUTS_FINAUX.includes(eqLeadStatut(l))) return false;
     if (l.rappel_le) return true;
     return eqLeadStatut(l) === 'Nouveau' && !l.activite_masquee_le;
@@ -9307,17 +9377,23 @@ async function eqCreneauRappelSync(l) {
   if (!l || !l.id) return;
   const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
   try {
-    // 1. On retire le bloc précédent — l'heure a pu changer, ou disparaître
-    await fetch(SUPABASE_URL + '/rest/v1/creneaux?origine=eq.rappel&contact_id=eq.' + l.id, {
+    // Rappel conservé : chacun ne gère que SES blocs. Sur la fiche d'un autre
+    // vendeur, on ne pose que ses rappels conservés, dans son planning à lui ;
+    // sur sa propre fiche, tout sauf les rappels qu'un ancien vendeur y garde.
+    const prenomVue = _eqPrenomVue();
+    const conserve = !!l._conserve;
+    const vendeur = conserve ? prenomVue : (l.vendeur || prenomVue);
+    if (!vendeur) return;
+    // 1. On retire les blocs précédents de ce vendeur — l'heure a pu changer, ou disparaître
+    await fetch(SUPABASE_URL + '/rest/v1/creneaux?origine=eq.rappel&contact_id=eq.' + l.id + '&vendeur=eq.' + encodeURIComponent(vendeur), {
       method: 'DELETE', headers: entetes
     });
     // Activité principale + activités supplémentaires : chacune à son heure
     const aPoser = [];
-    if (l.rappel_le && l.rappel_heure) aPoser.push({ le: l.rappel_le, heure: l.rappel_heure, titre: l.rappel_titre });
-    eqActivitesDe(l).forEach(a => { if (a.heure) aPoser.push({ le: a.le, heure: a.heure, titre: a.titre }); });
+    if (!conserve && l.rappel_le && l.rappel_heure) aPoser.push({ le: l.rappel_le, heure: l.rappel_heure, titre: l.rappel_titre });
+    (conserve ? eqActivitesConserveesDe(l, prenomVue) : eqActivitesDe(l).filter(a => !(a.conserve && a.par && a.par !== l.vendeur)))
+      .forEach(a => { if (a.heure) aPoser.push({ le: a.le, heure: a.heure, titre: a.titre }); });
     if (!aPoser.length) { await _eqPlanRecharger(); return; }
-    const vendeur = l.vendeur || (MON_ROLE && MON_ROLE.prenom);
-    if (!vendeur) return;
     for (const act of aPoser) {
       const heure = String(act.heure).slice(0, 5);
       const debut = new Date(act.le + 'T' + heure + ':00');
@@ -9388,10 +9464,13 @@ function eqActivitesDe(l) {
 }
 function _eqActId() { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 async function _eqActivitesEcrire(l, liste) {
-  const propres = (liste || []).filter(a => a && a.le).map(a => ({
+  // Les entrées gardent leurs clés (conserve, motif…) : la base refuse à un vendeur
+  // qui n'est pas le propriétaire toute modification des activités des autres.
+  const prenomVue = _eqPrenomVue();
+  const propres = (liste || []).filter(a => a && a.le).map(a => (l._conserve && a.par !== prenomVue) ? a : Object.assign({}, a, {
     id: a.id || _eqActId(), le: a.le, titre: a.titre || null, heure: a.heure ? String(a.heure).slice(0, 5) : null,
     cree_le: a.cree_le || new Date().toISOString(),
-    par: a.par || ((typeof MON_ROLE !== 'undefined' && MON_ROLE && MON_ROLE.prenom) || null)
+    par: a.par || (a.cree_le ? null : prenomVue)
   })).sort((a, b) => (a.le + (a.heure || '')).localeCompare(b.le + (b.heure || '')));
   await _eqLeadPatch(l.id, { activites: propres });
 }
@@ -9401,23 +9480,62 @@ function eqFicheActiviteAjouter() {
   if (!l) return;
   eqRappelPicker('Autre activité', (date, t, h) => {
     if (!date) return;
-    _eqActivitesEcrire(l, eqActivitesDe(l).concat([{ le: date, titre: t, heure: h }]));
+    _eqActivitesEcrire(l, eqActivitesDe(l).concat([{ le: date, titre: t, heure: h, par: _eqPrenomVue() }]));
   }, false, { entete: 'Ajouter une activité', sousTitre: 'En plus de l’activité déjà prévue — ex. « Faire la sélection » la veille du rendez-vous' });
+}
+// Retirer une activité par la fonction interne `activite_retirer` : obligatoire
+// quand la fiche n'est pas la sienne (retirer sa dernière activité conservée lui
+// ferme la lecture de la fiche, ce qu'un UPDATE direct ne peut pas faire), et
+// l'occasion de laisser une trace datée dans les notes pour le vendeur du client.
+async function _eqActiviteRetirerRpc(l, a, trace) {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/activite_retirer', {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_contact: l.id, p_id: a.id, p_trace: trace || null })
+  });
+  if (!res.ok) throw await _eqErreurPatch(res);
+  const r = await res.json();
+  l.activites = r.activites; if (r.notes != null) l.notes = r.notes;
+  if (typeof eqCreneauRappelSync === 'function') await eqCreneauRappelSync(l);
+  if (typeof toast === 'function') toast('✓ Mis à jour', 'var(--success)');
+}
+// Une activité conservée sur la fiche d'un autre vendeur ?
+function _eqActiviteEstConservee(l, a) {
+  return !!(l && a && l.vendeur !== _eqPrenomVue() && a.par === _eqPrenomVue());
+}
+function _eqTraceRappelConserve(l, a, quoi) {
+  const j = new Date().toLocaleDateString('fr-FR');
+  const quand = a.le ? new Date(a.le + 'T12:00:00').toLocaleDateString('fr-FR') : '';
+  return j + ' — ' + (_eqPrenomVue() || '?') + ' : rappel conservé' + (a.titre ? ' « ' + a.titre + ' »' : '') + (quand ? ' du ' + quand : '') + ' ' + quoi;
 }
 // Modifier une activité supplémentaire (date, intitulé, heure) ; « Sans rappel » la retire
 function eqActiviteEditer(contactId, actId) {
   const l = _eqLeads.find(x => x.id === contactId);
   const a = l && eqActivitesDe(l).find(x => x.id === actId);
   if (!a) return;
+  const conservee = _eqActiviteEstConservee(l, a);
   eqRappelPicker('Modifier l’activité', (date, t, h) => {
+    if (!date && conservee) {
+      _eqActiviteRetirerRpc(l, a, _eqTraceRappelConserve(l, a, 'retiré')).then(() => { if (typeof eqMajVue === 'function') eqMajVue(true); })
+        .catch(e => { if (typeof toast === 'function') toast('⚠ ' + (e && e.message || 'Refusé'), 'var(--danger)'); });
+      return;
+    }
     const reste = eqActivitesDe(l).filter(x => x.id !== actId);
     _eqActivitesEcrire(l, date ? reste.concat([Object.assign({}, a, { le: date, titre: t, heure: h })]) : reste);
-  }, false, { titre: a.titre, heure: a.heure, entete: 'Modifier l’activité', sousTitre: 'Activité supplémentaire de cette fiche — « Sans rappel » la retire' });
+  }, false, { titre: a.titre, heure: a.heure, entete: 'Modifier l’activité',
+    sousTitre: conservee ? 'Ton rappel conservé sur ce client — « Sans rappel » le retire, et tu ne verras plus la fiche' : 'Activité supplémentaire de cette fiche — « Sans rappel » la retire' });
 }
 // Terminée (ou retirée) : elle disparaît, la fiche et son historique ne bougent pas
 function eqActiviteFaite(contactId, actId) {
   const l = _eqLeads.find(x => x.id === contactId);
-  if (!l) return;
+  const a = l && eqActivitesDe(l).find(x => x.id === actId);
+  if (!l || !a) return;
+  if (_eqActiviteEstConservee(l, a)) {
+    // Le vendeur du client lit dans les notes que l'appel a été fait
+    _eqActiviteRetirerRpc(l, a, _eqTraceRappelConserve(l, a, 'fait')).then(() => { if (typeof eqMajVue === 'function') eqMajVue(true); })
+      .catch(e => { if (typeof toast === 'function') toast('⚠ ' + (e && e.message || 'Refusé'), 'var(--danger)'); });
+    return;
+  }
   _eqActivitesEcrire(l, eqActivitesDe(l).filter(x => x.id !== actId));
 }
 // Reporter une activité supplémentaire à J+n (compté depuis aujourd'hui, 10/09/2026)
@@ -9433,11 +9551,23 @@ function eqFicheActivitesExtraHtml(l) {
   const esc = _vEsc;
   const auj = new Date().toISOString().slice(0, 10);
   const fmt = (d) => { const dt = new Date(d + 'T12:00:00'); return isNaN(dt) ? d : dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); };
-  return eqActivitesDe(l).map(a => {
+  const prenomVue = _eqPrenomVue();
+  // Sur la fiche d'un autre vendeur (rappel conservé) : seulement ses rappels à lui.
+  // Sur sa fiche : tout, mais un rappel qu'un ancien vendeur y garde se lit sans se
+  // modifier — c'est le sien, il l'appellera lui-même ce jour-là.
+  const liste = l._conserve ? eqActivitesConserveesDe(l, prenomVue) : eqActivitesDe(l);
+  return liste.map(a => {
     const retard = a.le < auj, cejour = a.le === auj;
     const coul = retard ? 'var(--danger)' : cejour ? 'var(--accent)' : 'var(--border)';
+    const dUnAutre = !l._conserve && a.conserve && a.par && a.par !== l.vendeur;
+    const libelle = dUnAutre ? `Rappel de ${esc(a.par)} : ` : l._conserve ? 'Ton rappel conservé : ' : 'Aussi : ';
+    if (dUnAutre) {
+      return `<span title="${esc(a.par)} suivait ce client avant toi et garde ce rappel : il l'appellera ce jour-là et laissera une note ici. La fiche reste la tienne." style="display:inline-flex;align-items:center;gap:7px;background:var(--surface2);border:1px dashed var(--warning);border-radius:9px;padding:6px 11px;font-size:12.5px;color:var(--muted)">
+        ${libelle}<strong>${fmt(a.le)}${a.heure ? ' à ' + esc(String(a.heure).slice(0, 5).replace(':', 'h')) : ''}</strong>${a.titre ? ' — ' + esc(a.titre) : ''}
+      </span>`;
+    }
     return `<span style="display:inline-flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid ${coul};border-radius:9px;padding:6px 11px;font-size:12.5px">
-      <span style="color:${retard ? 'var(--danger)' : 'var(--text)'}">Aussi : <strong>${retard ? fmt(a.le) + ' — en retard' : cejour ? 'aujourd’hui' : fmt(a.le)}${a.heure ? ' à ' + esc(String(a.heure).slice(0, 5).replace(':', 'h')) : ''}</strong>${a.titre ? ' — ' + esc(a.titre) : ''}</span>
+      <span style="color:${retard ? 'var(--danger)' : 'var(--text)'}">${libelle}<strong>${retard ? fmt(a.le) + ' — en retard' : cejour ? 'aujourd’hui' : fmt(a.le)}${a.heure ? ' à ' + esc(String(a.heure).slice(0, 5).replace(':', 'h')) : ''}</strong>${a.titre ? ' — ' + esc(a.titre) : ''}</span>
       <span style="display:inline-flex;gap:3px;align-items:center;border-left:1px solid var(--border);padding-left:7px">
         ${[1, 2, 3].map(n => `<button onclick="eqActiviteDecaler('${l.id}','${a.id}',${n})" title="Reporter à J+${n} (${_eqJourPlus(n)})" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;cursor:pointer;color:var(--text);font-family:var(--font-body);font-size:11px;font-weight:600;padding:2px 7px">J+${n}</button>`).join('')}
       </span>
@@ -9609,7 +9739,9 @@ function renderEqNotifs() {
   });
 
   // 3. Activités programmées et nouveaux leads à appeler
+  const prenomVue = _eqPrenomVue();
   _eqLeads.forEach(l => {
+    if (l._conserve) return;   // fiche d'un autre : seul son rappel conservé compte (3 bis)
     const s = eqLeadStatut(l);
     if (STATUTS_FINAUX.includes(s)) return;
     const boutons = btnFiche(l.id) +
@@ -9655,12 +9787,20 @@ function renderEqNotifs() {
   // cocher, les actions groupées ne portent que sur l'activité principale.
   _eqLeads.forEach(l => {
     const s = eqLeadStatut(l);
-    if (STATUTS_FINAUX.includes(s)) return;
-    eqActivitesDe(l).forEach(a => {
+    if (STATUTS_FINAUX.includes(s) && !l._conserve) return;
+    // Sur une fiche qui n'est pas la sienne : seulement ses rappels conservés.
+    // Sur sa propre fiche : ses activités, sans celles qu'un ancien vendeur y garde.
+    const liste = l._conserve
+      ? eqActivitesConserveesDe(l, prenomVue)
+      : eqActivitesDe(l).filter(a => !(a.conserve && a.par && a.par !== l.vendeur));
+    liste.forEach(a => {
       const hAct = a.heure ? String(a.heure).slice(0, 5) : '';
       const tAct = new Date(a.le + 'T' + (hAct || '00:00') + ':00').getTime();
       const nomCli = esc(nomComplet(l) || '—');
-      const titreAct = (a.titre ? esc(a.titre) : ('Rappeler ' + nomCli)) + eqReperesLead(l);
+      const suiviPar = l._conserve
+        ? ` <span title="La paternité est passée à ${esc(l.vendeur)} — tu gardes ce rappel : tu peux l'appeler et laisser une note, le reste de la fiche est à lui" style="display:inline-block;background:var(--warning)18;border:1px solid var(--warning);border-radius:20px;padding:1px 8px;font-size:10.5px;font-weight:600;vertical-align:middle">suivi par ${esc(l.vendeur)}</span>`
+        : '';
+      const titreAct = (a.titre ? esc(a.titre) : ('Rappeler ' + nomCli)) + eqReperesLead(l) + suiviPar;
       const avantH = hAct ? '<strong>' + esc(hAct.replace(':', 'h')) + '</strong> · ' : '';
       const avantCli = a.titre ? nomCli + ' · ' : '';
       const boutonsA = btnFiche(l.id)
