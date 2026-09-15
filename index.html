@@ -652,6 +652,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
         Carte des programmes
       </div>
+      <div class="nav-item" onclick="goTo(&#39;simulateur&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="8" y1="10" x2="16" y2="10"></line><line x1="8" y1="14" x2="10" y2="14"></line><line x1="14" y1="14" x2="16" y2="14"></line><line x1="8" y1="18" x2="10" y2="18"></line><line x1="14" y1="18" x2="16" y2="18"></line></svg>
+        Simulateur financement
+      </div>
       <div class="nav-item" onclick="goTo(&#39;promoteurs&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v13"></path><path d="M13 21V12a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v9"></path><path d="M2 21h20"></path><path d="M7 10h2M7 14h2M16 15h1"></path></svg>
         Contacts promoteurs
@@ -1938,6 +1942,14 @@
         <a href="carte.html" target="_blank" rel="noopener" class="btn btn-secondary" style="font-size:12px;text-decoration:none">Ouvrir dans un onglet</a>
       </div>
       <iframe id="carte-cadre" title="Carte des programmes" style="width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--border);border-radius:12px;background:#f5f6f8"></iframe>
+    </div>
+
+    <div class="page" id="page-simulateur">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="section-sub">Budget maximum d'un client selon sa situation et le secteur visé, puis montage lot par lot avec les aides mobilisables (PTZ, Action Logement, Paris Logement, TVA 5,5 %). Version de test — estimations hors étude bancaire.</div>
+        <a href="simulateur.html" target="_blank" rel="noopener" class="btn btn-secondary" style="font-size:12px;text-decoration:none">Ouvrir dans un onglet</a>
+      </div>
+      <iframe id="simulateur-cadre" title="Simulateur de financement" style="width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--border);border-radius:12px;background:#f6f4ef"></iframe>
     </div>
 
     <div class="page" id="page-promoteurs">
@@ -3316,7 +3328,7 @@ const pages = {
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'pilotage': 'Pilotage commercial',
-  'mails': 'Mails automatiques', 'carte': 'Carte des programmes'
+  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simulateur financement'
 };
 
 let currentSpace = 'gerant';
@@ -3359,6 +3371,15 @@ function loadCarte() {
   f.src = 'carte.html?embed=1';
 }
 
+// Le simulateur de financement vit dans simulateur.html, à côté d'index.html
+// (barèmes 2026 et taux dans le fichier lui-même). Chargé à la première
+// ouverture puis conservé : la saisie du client reste en place.
+function loadSimulateur() {
+  const f = document.getElementById('simulateur-cadre');
+  if (!f || f.src) return;
+  f.src = 'simulateur.html?embed=1';
+}
+
 // ---- Thème clair / sombre ----
 function applyTheme(name) {
   const light = name === 'light';
@@ -3386,6 +3407,7 @@ function goTo(id, el) {
   else if (id === 'promoteurs') loadPromoteurs();
   else if (id === 'mails') loadMailsGuide();
   else if (id === 'carte') loadCarte();
+  else if (id === 'simulateur') loadSimulateur();
   else if (id === 'journal') loadJournal();
   else if (id === 'pilotage') pilInit();
   else if (id === 'factures') renderFactures();
