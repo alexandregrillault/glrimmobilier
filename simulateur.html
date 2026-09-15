@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulateur de financement — GLR Immobilier</title>
+<style>
+:root{
+  --bg:#f6f4ef; --card:#ffffff; --ink:#1c2230; --muted:#6b7280; --line:#e6e2d8;
+  --navy:#1f2f4d; --gold:#b8922e; --gold-bg:#fbf4e3; --green:#1f7a4d; --green-bg:#e8f5ee;
+  --red:#b23a3a; --red-bg:#fbeaea; --blue-bg:#eef3fb; --radius:14px;
+}
+*{box-sizing:border-box}
+body.embed header{padding:10px 20px}body.embed header h1{font-size:16px}body.embed header .sub{display:none}body.embed main{padding:16px 14px 60px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+header{background:var(--navy);color:#fff;padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+header h1{margin:0;font-size:20px;font-weight:600;letter-spacing:.2px}
+header .sub{opacity:.75;font-size:13px}
+header button{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px}
+header button:hover{background:rgba(255,255,255,.1)}
+main{max-width:1180px;margin:0 auto;padding:24px 20px 80px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px 24px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.card h2{margin:0 0 4px;font-size:17px;font-weight:600}
+.card .lead{color:var(--muted);font-size:13px;margin:0 0 16px}
+.step{display:inline-block;background:var(--navy);color:#fff;border-radius:999px;font-size:12px;padding:2px 10px;margin-right:8px;vertical-align:middle}
+label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+.f{margin-bottom:14px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+@media(max-width:600px){.row,.row3{grid-template-columns:1fr}}
+input[type=number],input[type=text],select{width:100%;padding:9px 11px;border:1px solid #d6d2c8;border-radius:9px;font-size:15px;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid #c9b77a;border-color:#c9b77a}
+.unit{position:relative}
+.unit span{position:absolute;right:11px;top:9px;color:var(--muted);font-size:13px}
+.seg{display:flex;border:1px solid #d6d2c8;border-radius:9px;overflow:hidden}
+.seg button{flex:1;border:0;background:#fff;padding:9px 6px;cursor:pointer;font-size:14px;color:var(--ink)}
+.seg button.on{background:var(--navy);color:#fff}
+.help{font-size:12px;color:var(--muted);margin-top:3px}
+abbr{text-decoration:underline dotted;cursor:help;text-underline-offset:3px}
+.big{background:var(--gold-bg);border:1px solid #ecd9a6;border-radius:12px;padding:16px 18px;margin:12px 0}
+.big .k{font-size:13px;color:#7a6224;text-transform:uppercase;letter-spacing:.6px}
+.big .v{font-size:32px;font-weight:700;color:var(--navy);line-height:1.15}
+.big .s{font-size:13px;color:#6b5a2a;margin-top:4px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+@media(max-width:600px){.kpis{grid-template-columns:1fr 1fr}}
+.kpi{background:#faf9f6;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.kpi .k{font-size:12px;color:var(--muted)}
+.kpi .v{font-size:18px;font-weight:600}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.badge{font-size:12.5px;border-radius:999px;padding:4px 11px;border:1px solid transparent}
+.badge.ok{background:var(--green-bg);color:var(--green);border-color:#bfe3cd}
+.badge.no{background:#f1f0ec;color:#7a7a7a;border-color:#e0ded8;text-decoration:line-through}
+.badge.warn{background:var(--red-bg);color:var(--red);border-color:#f0c4c4}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.total td{font-weight:600;border-top:2px solid var(--navy);border-bottom:0}
+tr.sub td{color:var(--muted);font-size:13px}
+details{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--navy)}
+.note{font-size:12.5px;color:var(--muted);margin-top:10px}
+.adv{background:var(--green-bg);border:1px solid #bfe3cd;border-radius:12px;padding:12px 16px;margin:12px 0}
+.adv .t{font-weight:600;color:var(--green);margin-bottom:4px}
+.adv li{margin:2px 0}
+.adv ul{margin:6px 0 0 18px;padding:0}
+.lotcard{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:14px;background:#fff}
+.lotcard h3{margin:0 0 10px;font-size:15px;display:flex;justify-content:space-between;align-items:center}
+.lotcard h3 button{border:0;background:transparent;color:var(--red);cursor:pointer;font-size:13px}
+.btn{background:var(--navy);color:#fff;border:0;border-radius:9px;padding:10px 16px;font-size:14px;cursor:pointer}
+.btn.sec{background:#fff;color:var(--navy);border:1px solid var(--navy)}
+.warnbox{background:var(--red-bg);border:1px solid #f0c4c4;color:#7a2b2b;border-radius:10px;padding:10px 12px;font-size:13px;margin:8px 0}
+.infobox{background:var(--blue-bg);border:1px solid #cddcf3;color:#2b3f66;border-radius:10px;padding:10px 12px;font-size:13px;margin:8px 0}
+/* panneaux */
+.panel{position:fixed;top:0;right:-560px;width:min(540px,100%);height:100%;background:#fff;border-left:1px solid var(--line);box-shadow:-8px 0 30px rgba(0,0,0,.08);transition:right .25s;z-index:20;overflow:auto;padding:24px 26px}
+.panel.open{right:0}
+.panel h2{margin:0 0 6px;font-size:18px}
+.panel .close{position:absolute;top:14px;right:16px;border:0;background:transparent;font-size:22px;cursor:pointer;color:var(--muted)}
+.panel dl{margin:16px 0 0}
+.panel dt{font-weight:600;margin-top:12px}
+.panel dd{margin:2px 0 0;color:#374151;font-size:14px}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.2);z-index:15;display:none}
+.overlay.on{display:block}
+.params .f{margin-bottom:10px}
+.small{font-size:12px;color:var(--muted)}
+.hl{background:#fff7dd}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Simulateur de financement</h1>
+    <div class="sub">GLR Immobilier — usage interne, version de test. Estimations hors étude bancaire.</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button onclick="openPanel('params')">Paramètres marché</button>
+    <button onclick="openPanel('lex')">Lexique</button>
+  </div>
+</header>
+
+<main>
+<div class="grid">
+  <!-- ÉTAPE 1 -->
+  <section class="card">
+    <h2><span class="step">1</span>Le client</h2>
+    <p class="lead">Ce qu'on récupère à la qualification. Le budget maximum se calcule tout de suite, selon le profil et le secteur visé.</p>
+
+    <div class="f">
+      <label>Projet</label>
+      <select id="projet">
+        <option value="rp" selected>Résidence principale</option>
+        <option value="rs">Résidence secondaire</option>
+        <option value="inv">Investissement locatif</option>
+        <option value="proche">Logement pour un proche (parents qui achètent pour un enfant)</option>
+      </select>
+    </div>
+
+    <div class="f">
+      <label>Emprunteurs</label>
+      <div class="seg" id="segNb"><button class="on" data-v="1">Une personne</button><button data-v="2">Deux personnes</button></div>
+    </div>
+
+    <div id="emprunteurs"></div>
+
+    <div class="row">
+      <div class="f">
+        <label>Personnes qui occuperont le logement</label>
+        <select id="foyer">
+          <option value="1" selected>1 personne</option><option value="2">2 personnes</option><option value="3">3 personnes</option>
+          <option value="4">4 personnes</option><option value="5">5 personnes</option><option value="6">6 personnes</option><option value="7">7 personnes</option><option value="8">8 personnes ou plus</option>
+        </select>
+        <div class="help">Enfants compris (garde alternée aussi), pas seulement les emprunteurs.</div>
+      </div>
+      <div class="f">
+        <label>Secteur visé par le client</label>
+        <select id="zone">
+          <option value="paris">Paris (zone A bis)</option>
+          <option value="limitrophe">Commune limitrophe de Paris (zone A bis)</option>
+          <option value="abis">Autre commune en zone A bis</option>
+          <option value="a" selected>Île-de-France zone A</option>
+          <option value="b1">Île-de-France zone B1</option>
+        </select>
+        <div class="help">La zone d'une commune : <a href="https://www.service-public.gouv.fr/simulateur/calcul/zonage-abc" target="_blank">simulateur officiel</a>.</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="f">
+        <label>Logement actuel</label>
+        <select id="logement">
+          <option value="loc" selected>Locataire (parc privé)</option>
+          <option value="hlm">Locataire en logement social</option>
+          <option value="heberge">Hébergé (chez les parents, un proche)</option>
+          <option value="proprio">Propriétaire de sa résidence principale</option>
+          <option value="exproprio">Ancien propriétaire, vendu il y a moins de 2 ans</option>
+        </select>
+      </div>
+      <div class="f" id="fLoyer">
+        <label>Loyer actuel</label>
+        <div class="unit"><input type="number" id="loyerActuel" value="1100" step="50"><span>€ / mois</span></div>
+        <div class="help">Sert à comparer avec la future mensualité.</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="f">
+        <label><abbr title="Revenu fiscal de référence de l'avant-dernière année (avis d'imposition reçu l'an dernier)">RFR N-2</abbr> des emprunteurs</label>
+        <div class="unit"><input type="number" id="rfr" value="36000" step="1000"><span>€</span></div>
+        <div class="help" id="rfrHelp">Ligne « revenu fiscal de référence » de l'avis d'imposition 2025 (revenus 2024). À deux non mariés : la somme des deux avis.</div>
+      </div>
+      <div class="f">
+        <label>Crédits en cours (mensualités)</label>
+        <div class="unit"><input type="number" id="credits" value="0" step="50"><span>€ / mois</span></div>
+        <div class="help">Crédit auto, conso, pension versée. Un prêt étudiant en cours compte.</div>
+      </div>
+    </div>
+
+    <div class="row3">
+      <div class="f">
+        <label>Apport personnel</label>
+        <div class="unit"><input type="number" id="apport" value="20000" step="1000"><span>€</span></div>
+      </div>
+      <div class="f">
+        <label>Donation familiale</label>
+        <div class="unit"><input type="number" id="donation" value="0" step="1000"><span>€</span></div>
+        <div class="help">Exonérée jusqu'à 100 000 € par parent (+ 31 865 € en don d'argent) tous les 15 ans.</div>
+      </div>
+      <div class="f">
+        <label>Prêt familial</label>
+        <div class="unit"><input type="number" id="pretFam" value="0" step="1000"><span>€</span></div>
+        <div class="help">À déclarer au-delà de 5 000 € ; la banque le compte comme apport s'il n'a pas de mensualité.</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="f">
+        <label>Durée souhaitée</label>
+        <select id="duree"><option value="15">15 ans</option><option value="20">20 ans</option><option value="25" selected>25 ans</option></select>
+        <div class="help" id="dureeHelp"></div>
+      </div>
+      <div class="f">
+        <label>Autre prêt à 0 % (offre jeunes d'une banque, prêt de la commune…)</label>
+        <div class="row" style="gap:8px">
+          <div class="unit"><input type="number" id="pret0" value="0" step="1000"><span>€</span></div>
+          <div class="unit"><input type="number" id="pret0Duree" value="10" step="1"><span>ans</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="blocRP">
+      <div class="row">
+        <div class="f">
+          <label>Réside à Paris depuis 12 mois (locataire ou hébergé)</label>
+          <div class="seg" id="segParis"><button data-v="1">Oui</button><button class="on" data-v="0">Non</button></div>
+          <div class="help">Condition du Prêt Paris Logement 0 %. Agents de la Ville, AP-HP, police, pompiers : dispensés.</div>
+        </div>
+        <div class="f">
+          <label>Situation dérogatoire PTZ</label>
+          <div class="seg" id="segDerog"><button data-v="1">Oui</button><button class="on" data-v="0">Non</button></div>
+          <div class="help">Carte mobilité inclusion « invalidité », AAH/AEEH, ou logement rendu inhabitable par un sinistre : PTZ possible même en étant propriétaire.</div>
+        </div>
+      </div>
+      <div class="f">
+        <label>Caution ou garantie des parents</label>
+        <div class="seg" id="segCaution"><button data-v="1">Oui</button><button class="on" data-v="0">Non</button></div>
+        <div class="help">Ne change pas le calcul, mais rassure la banque sur un dossier jeune ou en CDD.</div>
+      </div>
+    </div>
+
+    <div id="alertes"></div>
+    <div id="resCapa"></div>
+  </section>
+
+  <!-- ÉTAPE 2 -->
+  <section class="card">
+    <h2><span class="step">2</span>Les lots sélectionnés</h2>
+    <p class="lead">On adapte le montage lot par lot : aides réellement mobilisables, mensualité, et ce que le client gagne concrètement.</p>
+    <div id="lots"></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="addLot()">+ Ajouter un lot</button>
+    </div>
+  </section>
+</div>
+</main>
+
+<!-- PANNEAU PARAMÈTRES -->
+<div class="overlay" id="overlay" onclick="closePanels()"></div>
+<aside class="panel params" id="p-params">
+  <button class="close" onclick="closePanels()">×</button>
+  <h2>Paramètres marché</h2>
+  <p class="small">Taux moyens constatés début septembre 2026 (source Meilleurtaux, hors assurance). À mettre à jour quand le marché bouge.</p>
+  <div class="row3">
+    <div class="f"><label>Taux 15 ans</label><div class="unit"><input type="number" id="t15" value="3.28" step="0.01"><span>%</span></div></div>
+    <div class="f"><label>Taux 20 ans</label><div class="unit"><input type="number" id="t20" value="3.40" step="0.01"><span>%</span></div></div>
+    <div class="f"><label>Taux 25 ans</label><div class="unit"><input type="number" id="t25" value="3.60" step="0.01"><span>%</span></div></div>
+  </div>
+  <div class="row">
+    <div class="f"><label>Assurance emprunteur (sur capital initial)</label><div class="unit"><input type="number" id="tAss" value="0.34" step="0.01"><span>% / an</span></div></div>
+    <div class="f"><label>Taux d'endettement max</label><div class="unit"><input type="number" id="endet" value="35" step="1"><span>%</span></div></div>
+  </div>
+  <div class="row">
+    <div class="f"><label>Frais de notaire VEFA</label><div class="unit"><input type="number" id="fNot" value="2.5" step="0.1"><span>% du prix</span></div></div>
+    <div class="f"><label>Garantie + frais de dossier</label><div class="unit"><input type="number" id="fGar" value="1.0" step="0.1"><span>% du prêt</span></div></div>
+  </div>
+  <div class="row3">
+    <div class="f"><label>Âge max en fin de prêt</label><div class="unit"><input type="number" id="ageFin" value="75" step="1"><span>ans</span></div></div>
+    <div class="f"><label>Reste à vivre min. par adulte</label><div class="unit"><input type="number" id="ravAdulte" value="800" step="50"><span>€</span></div></div>
+    <div class="f"><label>Reste à vivre min. par enfant</label><div class="unit"><input type="number" id="ravEnfant" value="300" step="50"><span>€</span></div></div>
+  </div>
+  <div class="row">
+    <div class="f"><label>Part du loyer retenue par la banque (investisseur)</label><div class="unit"><input type="number" id="pLoyer" value="70" step="5"><span>%</span></div></div>
+    <div class="f"><label>Taux du prêt Action Logement</label><div class="unit"><input type="number" id="tPAL" value="1.0" step="0.1"><span>%</span></div></div>
+  </div>
+  <h2 style="font-size:15px;margin-top:18px">Barèmes 2026 intégrés</h2>
+  <p class="small">PTZ : décret 2025-299 (plafonds, tranches, quotités 50/40/40/20 % en collectif neuf, différés 10/8/2/0 ans). Prêt Action Logement : 30 000 € max, 40 % du coût max, 25 ans, plafonds Action Logement 2026. Prêt Paris Logement 0 % : 24 200 € / 39 600 €, 15 ans, plafonds 2026. TVA 5,5 % : plafonds PLS 2026 majorés de 11 %. Ces barèmes sont dans le code et se mettent à jour une fois par an.</p>
+</aside>
+
+<!-- PANNEAU LEXIQUE -->
+<aside class="panel" id="p-lex">
+  <button class="close" onclick="closePanels()">×</button>
+  <h2>Lexique vendeur</h2>
+  <p class="small">Les mots qu'on emploie avec le client et ce qu'ils veulent dire.</p>
+  <dl>
+    <dt>RFR N-2 (revenu fiscal de référence)</dt><dd>Le revenu du foyer tel que le fisc le calcule, sur l'avant-dernière année. En 2026 on prend le RFR 2024, sur l'avis d'imposition reçu en 2025. C'est LE chiffre qui ouvre ou ferme les aides : demander l'avis d'imposition dès le premier échange, pas les fiches de paie.</dd>
+    <dt>Primo-accédant</dt><dd>N'a pas été propriétaire de sa résidence principale au cours des 2 dernières années. Un client qui a été propriétaire il y a 3 ans est primo-accédant. (Pour le prêt Action Logement : primo-accédant ou non-propriétaire depuis 10 ans.)</dd>
+    <dt>Taux d'endettement</dt><dd>Part des revenus nets qui part dans les crédits, assurance comprise. Les banques s'arrêtent à 35 % (règle HCSF). C'est ce qui fixe la mensualité maximale, donc le budget.</dd>
+    <dt>Reste à vivre</dt><dd>Ce qui reste au foyer chaque mois une fois toutes les mensualités payées. Les banques veulent en général 800 à 1 000 € par adulte et 300 à 400 € par enfant.</dd>
+    <dt>Capacité d'emprunt</dt><dd>Le capital maximum que la banque prête pour la mensualité maximale et la durée choisie. Plus la durée est longue, plus la capacité monte, mais plus les intérêts coûtent.</dd>
+    <dt>Coût de l'opération</dt><dd>Le prix du logement TTC (hors frais de notaire). C'est la base des calculs du PTZ et du prêt Action Logement.</dd>
+    <dt>Frais de notaire réduits</dt><dd>Dans le neuf, 2 à 3 % du prix contre 7 à 8 % dans l'ancien. Ce n'est pas une aide, c'est un avantage automatique de la VEFA.</dd>
+    <dt>PTZ (prêt à taux zéro)</dt><dd>Prêt de l'État sans intérêt, en complément du prêt bancaire, réservé aux primo-accédants pour leur résidence principale sous plafond de RFR. Le montant est un pourcentage (la « quotité ») du coût plafonné de l'opération, selon la tranche de revenus. Il commence à être remboursé après une période de différé (jusqu'à 10 ans) : pendant ce temps, le client ne paie que le prêt bancaire.</dd>
+    <dt>Tranche (PTZ)</dt><dd>On divise le RFR par un coefficient familial (1 pour une personne, 1,5 pour deux, 1,8 pour trois, 2,1 pour quatre…) et on compare au barème de la zone. Tranche 1 = revenus les plus modestes = PTZ le plus élevé (50 %) et différé le plus long.</dd>
+    <dt>Quotité</dt><dd>Pourcentage du coût plafonné financé par le PTZ : 50, 40, 40 ou 20 % selon la tranche, en appartement neuf.</dd>
+    <dt>Différé</dt><dd>Période pendant laquelle un prêt n'est pas remboursé. Le PTZ en a un (10, 8 ou 2 ans selon la tranche) ; le prêt bancaire peut en avoir un pendant la construction en VEFA.</dd>
+    <dt>Lissage</dt><dd>La banque organise le prêt principal pour que la mensualité totale reste la même pendant toute la durée, même quand le PTZ commence à être remboursé. Le client a une seule mensualité constante.</dd>
+    <dt>Prêt Action Logement (ex « 1 % patronal » ou « 1 % logement »)</dt><dd>Prêt à 1 % jusqu'à 30 000 € (max 40 % du coût), sur 25 ans max, pour les salariés d'entreprises privées de 10 salariés et plus, primo-accédants, sous plafond de RFR, résidence principale neuve. Il faut l'accord de l'employeur et déposer la demande 30 jours ouvrés avant la signature notaire. Il se cumule avec le PTZ.</dd>
+    <dt>Prêt Paris Logement 0 % (PPL)</dt><dd>Prêt de la Ville de Paris sans intérêt sur 15 ans : 24 200 € pour une personne, 39 600 € à partir de deux. Le logement doit être dans Paris, le client locataire à Paris depuis 12 mois (sauf agents de la Ville, soignants, policiers, pompiers), primo-accédant, sous plafond de RFR. Les prêts doivent couvrir au moins 90 % du prix : trop d'apport fait perdre le PPL.</dd>
+    <dt>TVA à 5,5 %</dt><dd>Au lieu de 20 % : le prix du lot baisse d'environ 12 %. Conditions : le programme est en QPV/ANRU ou à moins de 300 m, résidence principale, RFR N-2 sous plafond (plafonds PLS + 11 %). Le client s'engage à occuper le logement 10 ans (remboursement dégressif de l'avantage s'il revend avant). C'est de loin l'aide la plus puissante.</dd>
+    <dt>QPV / ANRU</dt><dd>Quartier prioritaire de la politique de la ville / quartier en rénovation urbaine (Agence nationale pour la rénovation urbaine). C'est le promoteur qui indique si le programme est en zone TVA réduite.</dd>
+    <dt>Zone A bis, A, B1</dt><dd>Classement des communes selon la tension du marché. A bis = Paris et sa proche banlieue, A = le reste de l'agglomération, B1 = la grande couronne moins tendue. Les plafonds des aides dépendent de la zone du logement acheté.</dd>
+    <dt>PLS</dt><dd>Prêt locatif social : c'est le nom du barème de plafonds de ressources qui sert (majoré de 11 %) pour la TVA 5,5 %.</dd>
+    <dt>Assurance emprunteur</dt><dd>Assurance décès-invalidité obligatoire sur le prêt, comptée dans les 35 %. Environ 0,3 à 0,4 % du capital par an pour un emprunteur jeune en bonne santé.</dd>
+    <dt>TAEG</dt><dd>Taux annuel effectif global : le coût total du crédit (intérêts + assurance + frais) exprimé en taux. C'est le chiffre à comparer entre deux offres.</dd>
+    <dt>Effort d'épargne (investisseur)</dt><dd>Ce que l'investisseur sort réellement de sa poche chaque mois : mensualité + charges non récupérables + taxe foncière − loyer. C'est le chiffre qui parle à un investisseur, pas le prix.</dd>
+    <dt>Revenus locatifs retenus</dt><dd>La banque compte en général 70 % du loyer attendu dans les revenus de l'investisseur (les 30 % restants couvrent vacance et charges). C'est ce qui permet à un investisseur d'emprunter plus qu'un accédant à revenus égaux.</dd>
+    <dt>Rattachement fiscal</dt><dd>Un jeune de moins de 21 ans (25 ans s'il est étudiant) peut être rattaché à la déclaration de ses parents. Pour le PTZ, on retient alors ses seuls revenus personnels de l'année N-2, reconstitués par une simulation sur impots.gouv, pas le RFR des parents. Souvent très bas → tranche 1.</dd>
+    <dt>Revenu plancher (coût / 9)</dt><dd>Pour le PTZ, si le RFR N-2 est inférieur au coût de l'opération divisé par 9, c'est ce dernier chiffre qui est retenu. C'est ce qui empêche un gros achat avec un RFR minuscule de décrocher la tranche 1 : un alternant qui achète 250 000 € est calculé sur 27 800 € de revenu.</dd>
+    <dt>Exonération des apprentis</dt><dd>Le salaire d'un apprenti est exonéré d'impôt sur le revenu jusqu'à un SMIC annuel, et la gratification de stage aussi. Résultat : un RFR N-2 quasi nul pendant deux ans après la fin de l'alternance, donc un PTZ au maximum dès le premier CDI.</dd>
+    <dt>Période d'essai</dt><dd>Les banques financent un CDI une fois l'essai terminé. Exception fréquente : jeune diplômé embauché dans un secteur porteur, ou co-emprunteur en CDI confirmé. On prépare le dossier pendant l'essai, on signe l'offre après.</dd>
+    <dt>Caution / garantie parentale</dt><dd>Un parent s'engage à payer si l'enfant ne peut plus. Ne compte pas dans les revenus, mais rassure la banque sur un dossier fragile (CDD, jeune actif, faible apport).</dd>
+    <dt>Co-emprunteur</dt><dd>Personne qui emprunte avec le client et dont les revenus comptent : conjoint, concubin, ou parent. Attention au PTZ avec un parent co-emprunteur non occupant : possible mais à valider avec le courtier.</dd>
+    <dt>Donation familiale</dt><dd>Chaque parent peut donner 100 000 € par enfant tous les 15 ans sans droits, plus 31 865 € en don d'argent (parent ou grand-parent de moins de 80 ans, enfant majeur). Déclaration au fisc dans le mois (formulaire 2735). La banque la compte comme apport.</dd>
+    <dt>Prêt familial</dt><dd>Prêt entre proches, à formaliser par écrit et à déclarer au-delà de 5 000 €. Sans mensualité, la banque le traite comme un apport ; avec mensualité, comme un crédit en cours.</dd>
+    <dt>Prêt relais</dt><dd>Pour un propriétaire qui achète avant d'avoir vendu : la banque avance 60 à 70 % de la valeur du bien actuel, remboursés à la vente. Coût : intérêts sur 12 à 24 mois.</dd>
+    <dt>Prêts fonctionnaires</dt><dd>Les agents publics n'ont pas droit au prêt Action Logement, mais aux prêts complémentaires du Crédit Social des Fonctionnaires et de certaines mutuelles, à taux réduit.</dd>
+    <dt>Prêt jeune / prêt 0 % bancaire</dt><dd>Offres commerciales de certaines banques pour les moins de 30 ou 35 ans : une petite enveloppe à 0 % ou à taux bonifié en complément du prêt principal. Se renseigne au cas par cas, à saisir dans « Autre prêt à 0 % ».</dd>
+    <dt>Secundo-accédant</dt><dd>Client déjà propriétaire de sa résidence principale. Plus de PTZ, d'Action Logement ni de Paris Logement, mais la TVA 5,5 % reste possible et la revente sert d'apport.</dd>
+    <dt>Dérogation PTZ</dt><dd>Un propriétaire garde droit au PTZ s'il détient une carte mobilité inclusion « invalidité », perçoit l'AAH ou l'AEEH, ou si son logement a été rendu inhabitable par une catastrophe reconnue.</dd>
+    <dt>Garde alternée</dt><dd>Les enfants en garde alternée comptent dans les personnes destinées à occuper le logement, pour les plafonds et le coût plafonné du PTZ.</dd>
+    <dt>PSLA / BRS</dt><dd>Montages d'accession sociale (location-accession, bail réel solidaire) réservés à certains programmes : TVA 5,5 %, prix encadrés, PTZ possible. Cas à part, non couverts par ce simulateur.</dd>
+    <dt>Accord de principe</dt><dd>Lettre d'une banque ou du courtier qui confirme que le dossier est finançable, avant la réservation. C'est le rôle du partenaire courtier, pas du simulateur.</dd>
+  </dl>
+</aside>
+
+<script>
+/* ===================== BARÈMES 2026 ===================== */
+const BAR = {
+  ptz: {
+    plafRess: { abis:[49000,73500,88200,102900,117600,132300,147000,161700], a:[49000,73500,88200,102900,117600,132300,147000,161700], b1:[34500,51750,62100,72450,82800,93150,103500,113850] },
+    plafOp:   { abis:[150000,225000,270000,315000,360000], a:[150000,225000,270000,315000,360000], b1:[135000,202500,243000,283500,324000] },
+    coef:[1,1.5,1.8,2.1,2.4,2.7,3.0,3.3],
+    tranches:{ abis:[25000,31000,37000], a:[25000,31000,37000], b1:[21500,26000,30000] }, // seuils T1,T2,T3 ; au-delà T4
+    quotColl:[0.5,0.4,0.4,0.2], quotInd:[0.3,0.2,0.2,0.1],
+    duree:[25,20,15,10], differe:[10,8,2,0]
+  },
+  pal: { max:30000, partMax:0.40, dureeMax:25,
+    plaf:{ abis:[43953,65691,86112,102812,122326,137649], a:[43953,65691,78963,94585,111971,126001], b1:[35825,47842,57531,69455,81705,92080] },
+    plafSup:{ abis:15335, a:14039, b1:10273 } },
+  ppl: { m1:24200, m2:39600, duree:15, plaf:[38907,54891,71953,85906,102209] },
+  tva: { // PLS 2026 × 1,11
+    paris:[34996,52303,68562,81858,97395,109595], parisSup:12212,
+    idf:[34996,52303,62871,75309,89150,100322], idfSup:11177, majo:1.11 }
+};
+
+/* ===================== ÉTAT ===================== */
+const S = { nb:1, parisLoc:0, derog:0, caution:0, lots:[], emp:[ {age:30,statut:'cdi',rev:3200,prive:1,rattache:0}, {age:30,statut:'cdi',rev:2000,prive:1,rattache:0} ] };
+let lotSeq = 0;
+const STATUTS = [
+  ['cdi','CDI (période d\'essai terminée)'],['cdi_essai','CDI en période d\'essai'],['cdd','CDD / intérim'],['alternant','Alternant / apprenti'],['etudiant','Étudiant sans revenus'],
+  ['indep','Indépendant, libéral, gérant'],['public','Fonctionnaire / secteur public'],['retraite','Retraité'],['sans','Sans activité']
+];
+// part des revenus retenue par la banque et étiquette de finançabilité
+const REGLES = {
+  cdi:      {part:1,   note:null},
+  cdi_essai:{part:1,   note:'CDI en période d\'essai : la plupart des banques attendent la fin de l\'essai (ou un diplôme dans un secteur porteur). Le dossier se prépare maintenant, l\'offre se signe après.'},
+  cdd:      {part:1,   note:'CDD / intérim : revenus retenus seulement avec 2 à 3 ans de continuité dans le même secteur (avis d\'imposition à l\'appui). Un co-emprunteur en CDI ou une caution parentale débloque souvent le dossier.'},
+  alternant:{part:0,   note:'Alternant : pas finançable seul tant que le CDI n\'est pas signé. À préparer dès maintenant : son salaire d\'apprenti est exonéré d\'impôt jusqu\'à un SMIC annuel, donc son RFR N-2 est très bas → PTZ en tranche 1 (50 %, différé 10 ans) dès l\'embauche.'},
+  etudiant: {part:0,   note:'Étudiant sans revenus : pas d\'emprunt à son nom. Trois montages possibles : les parents achètent pour le loger (projet « Logement pour un proche »), les parents co-empruntent, ou donation + caution pour un petit lot.'},
+  indep:    {part:1,   note:'Indépendant : revenus = moyenne des 2 ou 3 derniers bilans (pas le chiffre d\'affaires). Pas de prêt Action Logement (réservé aux salariés).'},
+  public:   {part:1,   note:'Secteur public : pas de prêt Action Logement, mais prêts fonctionnaires (CSF, mutuelles) et dispense de la condition de résidence pour le Prêt Paris Logement (agents de la Ville, AP-HP, police, pompiers).'},
+  retraite: {part:1,   note:'Retraité : durée limitée par l\'âge de fin de prêt et assurance plus chère (compter 0,8 à 1,5 % par an). PTZ possible s\'il est primo-accédant.'},
+  sans:     {part:0,   note:'Sans activité : revenus non retenus. Le dossier ne tient que sur un co-emprunteur.'}
+};
+
+function seg(id, key){ const el=document.getElementById(id); if(!el) return; el.querySelectorAll('button').forEach(b=>b.onclick=()=>{ el.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); S[key]= isNaN(+b.dataset.v)? b.dataset.v : +b.dataset.v; if(key==='nb') renderEmprunteurs(); recalc(); }); }
+seg('segNb','nb'); seg('segParis','parisLoc'); seg('segDerog','derog'); seg('segCaution','caution');
+document.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',recalc));
+
+const $ = id=>document.getElementById(id);
+const num = id=>+($(id).value||0);
+const eur = v=>Math.round(v).toLocaleString('fr-FR')+' €';
+const eurM = v=>Math.round(v).toLocaleString('fr-FR')+' €/mois';
+const pct = v=>(v*100).toFixed(1).replace('.',',')+' %';
+
+function renderEmprunteurs(){
+  const el=$('emprunteurs'); if(!el) return;
+  el.innerHTML = S.emp.slice(0,S.nb).map((e,i)=>`<div class="lotcard" style="margin:0 0 12px;padding:12px 14px;background:#faf9f6">
+    <div class="small" style="font-weight:600;margin-bottom:8px">${S.nb>1?'Emprunteur '+(i+1):'Emprunteur'}</div>
+    <div class="row3">
+      <div class="f"><label>Situation</label><select oninput="upEmp(${i},'statut',this.value)">${STATUTS.map(o=>`<option value="${o[0]}" ${e.statut===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></div>
+      <div class="f"><label>Revenus nets</label><div class="unit"><input type="number" value="${e.rev}" step="100" oninput="upEmp(${i},'rev',this.value)"><span>€ / mois</span></div></div>
+      <div class="f"><label>Âge</label><div class="unit"><input type="number" value="${e.age}" step="1" oninput="upEmp(${i},'age',this.value)"><span>ans</span></div></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>Salarié du privé, entreprise ≥ 10 salariés</label><div class="seg"><button class="${e.prive?'on':''}" onclick="upEmp(${i},'prive',1)">Oui</button><button class="${!e.prive?'on':''}" onclick="upEmp(${i},'prive',0)">Non</button></div></div>
+      <div class="f"><label>Rattaché au foyer fiscal des parents en 2024</label><div class="seg"><button class="${e.rattache?'on':''}" onclick="upEmp(${i},'rattache',1)">Oui</button><button class="${!e.rattache?'on':''}" onclick="upEmp(${i},'rattache',0)">Non</button></div></div>
+    </div></div>`).join('');
+}
+function upEmp(i,k,v){ S.emp[i][k]= (k==='statut')? v : +v; if(k==='prive'||k==='rattache') renderEmprunteurs(); recalc(); }
+
+function params(){
+  return { t:{15:num('t15')/100,20:num('t20')/100,25:num('t25')/100}, ass:num('tAss')/100, endet:num('endet')/100,
+    fNot:num('fNot')/100, fGar:num('fGar')/100, pLoyer:num('pLoyer')/100, tPAL:num('tPAL')/100, ageFin:num('ageFin')||75, ravAdulte:num('ravAdulte')||800, ravEnfant:num('ravEnfant')||300 };
+}
+function zoneKey(z){ return (z==='paris'||z==='limitrophe'||z==='abis')?'abis':z; }
+function idx(foyer,max){ return Math.min(foyer,max)-1; }
+
+/* ===================== PROFIL CLIENT ===================== */
+function client(){
+  const p=params();
+  const emps=S.emp.slice(0,S.nb);
+  const projet=$('projet').value, logement=$('logement').value;
+  let revenus=0, alertes=[], salarie=0, rattache=0, ageMax=0, rev0=0;
+  emps.forEach((e,i)=>{ const r=REGLES[e.statut]; revenus+=e.rev*r.part; if(r.part===0) rev0+=e.rev; if(r.note) alertes.push(r.note); if(['cdi','cdi_essai','cdd','alternant'].includes(e.statut)&&e.prive) salarie=1; if(e.rattache) rattache=1; ageMax=Math.max(ageMax,e.age||0); });
+  if(rev0>0 && revenus>0) alertes.push('Les '+eurM(rev0)+' de l\'emprunteur non finançable ne sont pas retenus par la banque : le calcul repose sur l\'autre emprunteur.');
+  // primo-accession
+  let primo = !(logement==='proprio'||logement==='exproprio');
+  if(!primo && S.derog){ primo=true; alertes.push('Situation dérogatoire : le PTZ reste ouvert malgré la propriété actuelle (à justifier : carte mobilité inclusion, AAH/AEEH, arrêté de catastrophe).'); }
+  if(logement==='proprio') alertes.push('Déjà propriétaire : pas de PTZ, d\'Action Logement ni de Paris Logement. La TVA 5,5 % reste possible (pas de condition de primo-accession). Prévoir la vente ou un prêt relais.');
+  if(logement==='heberge') alertes.push('Hébergé : pas de loyer à comparer, mais un vrai point fort à mettre en avant, sa capacité d\'épargne (apport déjà constitué ou en cours). Compte comme primo-accédant.');
+  if(logement==='hlm') alertes.push('Locataire HLM : primo-accédant à part entière ; Action Logement et certains bailleurs proposent en plus des dispositifs de sortie du parc social. Le pool PSLA/BRS des promoteurs peut lui être ouvert en priorité.');
+  if(rattache) alertes.push('Rattaché fiscalement aux parents en 2024 : pour le PTZ, seuls ses revenus personnels de 2024 comptent (simulation du RFR sur impots.gouv, pas le RFR des parents). Souvent très bas → tranche 1.');
+  // durée max par l'âge
+  let duree=num('duree'); const dureeMaxAge=Math.max(5,Math.min(25,p.ageFin-ageMax));
+  const dureeHelp=$('dureeHelp'); if(dureeHelp) dureeHelp.textContent = dureeMaxAge<25 ? 'Limité à '+dureeMaxAge+' ans par l\'âge (fin de prêt à '+p.ageFin+' ans au plus).' : '';
+  if(duree>dureeMaxAge){ duree=dureeMaxAge>=20?20:15; alertes.push('Durée ramenée à '+duree+' ans à cause de l\'âge de fin de prêt ('+p.ageFin+' ans).'); }
+  const apport=num('apport')+num('donation')+num('pretFam');
+  if(num('pretFam')>0) alertes.push('Prêt familial : à formaliser par écrit et à déclarer aux impôts au-delà de 5 000 € ; s\'il a une mensualité, la banque la compte dans l\'endettement.');
+  if(projet==='rs') alertes.push('Résidence secondaire : aucune aide (ni PTZ, ni Action Logement, ni TVA 5,5 %). Frais de notaire réduits et exonération de taxe foncière restent acquis.');
+  if(projet==='proche') alertes.push('Achat par les parents pour loger un enfant : c\'est un investissement sans loyer (ou avec un loyer modéré si bail signé). Pas d\'aide, mais donation et démembrement possibles pour préparer la transmission — à voir avec le notaire.');
+  if(S.caution) alertes.push('Caution parentale : la banque y est sensible sur un dossier jeune ; elle ne remplace pas les revenus mais fait passer un CDD ou un CDI en période d\'essai.');
+  return { projet, logement, primo, salarie, parisLoc:S.parisLoc, foyer:Math.max(num('foyer'),S.nb), zone:$('zone').value, revenus, credits:num('credits'), rfr:num('rfr'), apport, duree, loyerActuel: logement==='heberge'?0:num('loyerActuel'), pret0:num('pret0'), pret0Duree:Math.max(1,num('pret0Duree')||10), alertes, ageMax, rav: p.ravAdulte*Math.min(S.nb,2)+p.ravEnfant*Math.max(0,num('foyer')-S.nb) };
+}
+
+/* ===================== FORMULES ===================== */
+function mens(C,taux,ans){ const n=ans*12, r=taux/12; if(C<=0) return 0; if(r===0) return C/n; return C*r/(1-Math.pow(1+r,-n)); }
+function schedAide(C,taux,dureeTot,differe){ const n=dureeTot*12, d=differe*12, out=[]; const m=mens(C,taux,dureeTot-differe); for(let i=1;i<=n;i++) out.push(i<=d?0:m); return out; }
+function capitalLisse(M,taux,ans,ass,aides){ const n=ans*12, r=taux/12; let A=0,B=0; for(let t=1;t<=n;t++){ const v=Math.pow(1+r,-t); A+=v; let a=0; aides.forEach(s=>{a+=(s[t-1]||0)}); B+=a*v; } const C=(M*A-B)/(1+ass/12*A); return Math.max(0,C); }
+function mensLisse(C,taux,ans,ass,aides){ const n=ans*12, r=taux/12; let A=0,B=0; for(let t=1;t<=n;t++){ const v=Math.pow(1+r,-t); A+=v; let a=0; aides.forEach(s=>{a+=(s[t-1]||0)}); B+=a*v; } return (C*(1+ass/12*A)+B)/A; }
+function interets(C,taux,ans){ return mens(C,taux,ans)*ans*12-C; }
+
+/* ===================== AIDES ===================== */
+function ptz(cl, lot){
+  const z=zoneKey(lot.zone), f=cl.foyer, r={ok:false,montant:0,raisons:[]};
+  if(cl.projet!=='rp'){r.raisons.push('réservé à la résidence principale');return r;}
+  if(!cl.primo){r.raisons.push('pas primo-accédant');return r;}
+  const plafR=BAR.ptz.plafRess[z][idx(f,8)];
+  const revenu=Math.max(cl.rfr, lot.cout/9);
+  if(revenu>plafR){r.raisons.push('RFR '+eur(cl.rfr)+' > plafond '+eur(plafR));return r;}
+  const q=revenu/BAR.ptz.coef[idx(f,8)], s=BAR.ptz.tranches[z];
+  const tr = q<=s[0]?0 : q<=s[1]?1 : q<=s[2]?2 : 3;
+  const plafOp=BAR.ptz.plafOp[z][idx(f,5)];
+  const quot=(lot.type==='ind'?BAR.ptz.quotInd:BAR.ptz.quotColl)[tr];
+  r.ok=true; r.tranche=tr+1; r.quot=quot; r.base=Math.min(lot.cout,plafOp); r.montant=Math.round(r.base*quot);
+  r.duree=BAR.ptz.duree[tr]; r.differe=BAR.ptz.differe[tr]; r.plafOp=plafOp; r.plafR=plafR; r.revenuRetenu=revenu; r.plancher = lot.cout/9>cl.rfr;
+  return r;
+}
+function pal(cl, lot, p){
+  const z=zoneKey(lot.zone), f=cl.foyer, r={ok:false,montant:0,raisons:[]};
+  if(cl.projet!=='rp'){r.raisons.push('réservé à la résidence principale');return r;}
+  if(!cl.salarie){r.raisons.push('aucun emprunteur salarié du privé (≥ 10 salariés)');return r;}
+  if(!cl.primo){r.raisons.push('pas primo-accédant');return r;}
+  const t=BAR.pal.plaf[z]; const plaf= f<=6? t[f-1] : t[5]+(f-6)*BAR.pal.plafSup[z];
+  if(cl.rfr>plaf){r.raisons.push('RFR > plafond '+eur(plaf));return r;}
+  r.ok=true; r.montant=Math.round(Math.min(BAR.pal.max, BAR.pal.partMax*lot.cout)); r.duree=Math.min(BAR.pal.dureeMax, cl.duree); r.taux=p.tPAL; r.plaf=plaf; return r;
+}
+function ppl(cl, lot, majore){
+  const r={ok:false,montant:0,raisons:[]}, f=cl.foyer;
+  if(cl.projet!=='rp'){r.raisons.push('réservé à la résidence principale');return r;}
+  if(lot.zone!=='paris'){r.raisons.push('lot hors Paris');return r;}
+  if(!cl.parisLoc){r.raisons.push('ne réside pas à Paris depuis 12 mois');return r;}
+  if(!cl.primo){r.raisons.push('pas primo-accédant');return r;}
+  const plaf=BAR.ppl.plaf[idx(f,5)];
+  if(cl.rfr>plaf){r.raisons.push('RFR > plafond '+eur(plaf));return r;}
+  r.ok=true; r.montant= (f>=2?BAR.ppl.m2:BAR.ppl.m1)*(majore?1.5:1); r.majore=!!majore; r.duree=BAR.ppl.duree; r.plaf=plaf; return r;
+}
+function tva55(cl, lot){
+  const r={ok:false,raisons:[]}, f=cl.foyer;
+  if(cl.projet!=='rp'){r.raisons.push('réservé à la résidence principale');return r;}
+  if(!lot.qpv){r.raisons.push('programme hors QPV/ANRU');return r;}
+  const t=(lot.zone==='paris'||lot.zone==='limitrophe')?BAR.tva.paris:BAR.tva.idf, sup=(lot.zone==='paris'||lot.zone==='limitrophe')?BAR.tva.parisSup:BAR.tva.idfSup;
+  const plaf=Math.round((f<=6? t[f-1] : t[5]+(f-6)*sup)*BAR.tva.majo);
+  if(cl.rfr>plaf){r.raisons.push('RFR > plafond '+eur(plaf));return r;}
+  r.ok=true; r.plaf=plaf; return r;
+}
+
+/* ===================== MONTAGE D'UN LOT ===================== */
+function montage(cl, lot, p){
+  const taux=p.t[cl.duree];
+  const tv=tva55(cl,lot);
+  const prix = tv.ok ? lot.prix/1.20*1.055 : lot.prix;
+  const ecoTVA = tv.ok ? lot.prix-prix : 0;
+  const L={cout:prix, zone:lot.zone, type:lot.type};
+  const aPTZ=ptz(cl,L), aPAL=pal(cl,L,p);
+  let aPPL=ppl(cl,L,false);
+  const notaire=prix*p.fNot;
+  let apport=cl.apport, apportNote=null;
+  if(aPPL.ok && apport>0.10*prix){ apportNote='Apport limité à 10 % du prix pour conserver le Prêt Paris Logement (le reste garde sa place en épargne).'; apport=0.10*prix; }
+  const besoin = prix+notaire-apport;
+  const p0 = Math.min(cl.pret0, Math.max(0,besoin));
+  let ptzM=aPTZ.montant, palM=aPAL.montant, pplM=aPPL.montant;
+  const calc=()=>{ let pr = besoin - ptzM - palM - pplM - p0; pr += Math.max(0,pr)*p.fGar; return Math.max(0,pr); };
+  let principal=calc();
+  // PPL majoré : si les prêts > 2 ans hors PPL (moins 24 200 €) dépassent la moitié du prix
+  if(aPPL.ok && (principal+palM+ptzM+p0-BAR.ppl.m1) > 0.5*prix){ aPPL=ppl(cl,L,true); pplM=aPPL.montant; principal=calc(); }
+  if(aPTZ.ok && ptzM > principal+palM+pplM+p0){ ptzM=Math.max(0,Math.floor(principal+palM+pplM+p0)); principal=calc(); aPTZ.note='PTZ plafonné au montant des autres prêts'; }
+  const aides=[]; if(aPTZ.ok&&ptzM>0) aides.push(schedAide(ptzM,0,aPTZ.duree,aPTZ.differe)); if(aPAL.ok) aides.push(schedAide(palM,aPAL.taux,aPAL.duree,0)); if(aPPL.ok) aides.push(schedAide(pplM,0,aPPL.duree,0)); if(p0>0) aides.push(schedAide(p0,0,Math.min(cl.pret0Duree,cl.duree),0));
+  const M = mensLisse(principal,taux,cl.duree,p.ass,aides);
+  const assM = principal*p.ass/12;
+  const invest = cl.projet==='inv';
+  const loyerRetenu = invest ? (lot.loyer||0)*p.pLoyer : 0;
+  const revRet = cl.revenus+loyerRetenu;
+  const endet = revRet>0 ? (M+cl.credits)/revRet : 9;
+  const resteAVivre = revRet - M - cl.credits;
+  const gains=[];
+  if(ecoTVA>0) gains.push({l:'TVA à 5,5 % au lieu de 20 %', v:ecoTVA});
+  if(aPTZ.ok&&ptzM>0) gains.push({l:'Intérêts évités grâce au PTZ ('+eur(ptzM)+' à 0 %)', v:interets(ptzM,taux,aPTZ.duree)});
+  if(aPAL.ok) gains.push({l:'Intérêts évités grâce au prêt Action Logement ('+eur(palM)+' à '+(aPAL.taux*100).toFixed(1).replace('.',',')+' %)', v:interets(palM,taux,aPAL.duree)-interets(palM,aPAL.taux,aPAL.duree)});
+  if(aPPL.ok) gains.push({l:'Intérêts évités grâce au Prêt Paris Logement'+(aPPL.majore?' majoré':'')+' ('+eur(pplM)+' à 0 %)', v:interets(pplM,taux,aPPL.duree)});
+  if(p0>0) gains.push({l:'Intérêts évités grâce au prêt complémentaire à 0 % ('+eur(p0)+')', v:interets(p0,taux,Math.min(cl.pret0Duree,cl.duree))});
+  const notaireAncien = lot.prix*0.075; gains.push({l:'Frais de notaire réduits (neuf) par rapport à l\'ancien', v:notaireAncien-notaire, info:true});
+  const principalSans = Math.max(0,(lot.prix + lot.prix*p.fNot - cl.apport)*(1+p.fGar));
+  const Msans = mens(principalSans,taux,cl.duree)+principalSans*p.ass/12;
+  const coutTotal = M*cl.duree*12 - (principal+ptzM+palM+pplM+p0);
+  let inv=null; if(invest||cl.projet==='proche'||cl.projet==='rs'){ const charges=(lot.charges||0)+(lot.tf||0)/12; const loyer= invest?(lot.loyer||0):(cl.projet==='proche'?(lot.loyer||0):0); inv={loyer, charges, effort: M+charges-loyer, rentaBrute: loyer*12/lot.prix}; }
+  return {prix,ecoTVA,tv,aPTZ,aPAL,aPPL,ptzM,palM,pplM,p0,notaire,apport,apportNote,principal,M,assM,endet,resteAVivre,revRet,loyerRetenu,gains,Msans,principalSans,coutTotal,taux,inv};
+}
+
+/* ===================== CAPACITÉ MAX (étape 1) ===================== */
+function capacite(cl,p){
+  const taux=p.t[cl.duree];
+  const Mmax = Math.max(0, cl.revenus*p.endet - cl.credits);
+  const Cmax = capitalLisse(Mmax,taux,cl.duree,p.ass,[]);
+  const budgetSans = (Cmax/(1+p.fGar)+cl.apport)/(1+p.fNot);
+  // Le PTZ fait des marches (tranches, plafond) : on balaie les prix par pas de 1 000 € puis on affine
+  const maxPrix=(qpv)=>{ const hi=Math.max(budgetSans*2.5,150000); const lot={zone:cl.zone,type:'coll',qpv,prix:0}; let best=0, bm=null;
+    for(let x=1000;x<=hi;x+=1000){ lot.prix=x; const m=montage(cl,lot,p); if(m.M<=Mmax){best=x;bm=m;} }
+    let lo=best, hi2=best+1000; for(let i=0;i<12;i++){ const mid=(lo+hi2)/2; lot.prix=mid; const m=montage(cl,lot,p); if(m.M<=Mmax){lo=mid;bm=m;} else hi2=mid; }
+    return {prix:lo, m:bm}; };
+  const r1=maxPrix(false); const budgetAvec=r1.prix, best=r1.m;
+  let budgetQPV=null; const r2=maxPrix(true); if(r2.m&&r2.m.tv.ok) budgetQPV={prixAffiche:r2.prix, prixPaye:r2.m.prix};
+  return {Mmax,Cmax,budgetSans,budgetAvec,best,budgetQPV,taux};
+}
+
+/* ===================== RENDU ===================== */
+function badges(m,noTva){
+  const b=[];
+  const mk=(ok,label,why)=>`<span class="badge ${ok?'ok':'no'}" title="${why||''}">${label}</span>`;
+  if(!noTva) b.push(mk(m.tv.ok,'TVA 5,5 %',m.tv.raisons.join(', ')));
+  b.push(mk(m.aPTZ.ok&&m.ptzM>0,'PTZ'+(m.aPTZ.ok?' tranche '+m.aPTZ.tranche:''),m.aPTZ.raisons.join(', ')));
+  b.push(mk(m.aPAL.ok,'Action Logement',m.aPAL.raisons.join(', ')));
+  b.push(mk(m.aPPL.ok,'Paris Logement 0 %'+(m.aPPL.majore?' majoré':''),m.aPPL.raisons.join(', ')));
+  if(m.p0>0) b.push(mk(true,'Prêt 0 % complémentaire',''));
+  return `<div class="badges">${b.join('')}</div>`;
+}
+function renderAlertes(cl){
+  const el=$('alertes'); if(!el) return;
+  el.innerHTML = cl.alertes.length ? `<details open><summary>Points d'attention sur ce profil (${cl.alertes.length})</summary>${cl.alertes.map(a=>`<div class="infobox">${a}</div>`).join('')}</details>` : '';
+}
+function renderCapa(){
+  const cl=client(), p=params(); renderAlertes(cl);
+  const fl=$('fLoyer'); if(fl) fl.style.display = cl.logement==='heberge'?'none':'';
+  if(cl.revenus<=0){ $('resCapa').innerHTML=`<div class="warnbox">Aucun revenu retenu par la banque avec ce profil : pas de capacité d'emprunt en propre. Voir les points d'attention ci-dessus pour les montages possibles.</div>`; return; }
+  if(cl.projet!=='rp'){
+    const Mmax=Math.max(0,cl.revenus*p.endet-cl.credits); const Cmax=capitalLisse(Mmax,p.t[cl.duree],cl.duree,p.ass,[]);
+    const budget=(Cmax/(1+p.fGar)+cl.apport)/(1+p.fNot);
+    const lib = cl.projet==='inv' ? 'hors loyer futur' : cl.projet==='rs' ? 'résidence secondaire' : 'logement pour un proche';
+    $('resCapa').innerHTML=`
+      <div class="big"><div class="k">Budget d'achat maximum (${lib})</div><div class="v">${eur(budget)}</div>
+      <div class="s">Mensualité max ${eurM(Mmax)} sur ${cl.duree} ans à ${(p.t[cl.duree]*100).toFixed(2).replace('.',',')} %.${cl.projet==='inv'?` La banque ajoutera ${Math.round(p.pLoyer*100)} % du loyer attendu aux revenus : le budget réel se calcule lot par lot à l'étape 2.`:''}</div></div>
+      <div class="kpis"><div class="kpi"><div class="k">Mensualité max (${Math.round(p.endet*100)} %)</div><div class="v">${eurM(Mmax)}</div></div><div class="kpi"><div class="k">Capital empruntable</div><div class="v">${eur(Cmax)}</div></div><div class="kpi"><div class="k">Apport total</div><div class="v">${eur(cl.apport)}</div></div></div>
+      <div class="note">Aucune aide (PTZ, Action Logement, Paris Logement, TVA 5,5 %) hors résidence principale.</div>`;
+    return;
+  }
+  const c=capacite(cl,p); const m=c.best;
+  const plus=c.budgetAvec-c.budgetSans;
+  let html=`
+    <div class="big"><div class="k">Budget d'achat maximum, aides comprises</div><div class="v">${eur(c.budgetAvec)}</div>
+      <div class="s">Prix TTC du logement, frais de notaire financés. Sans les aides : ${eur(c.budgetSans)}${plus>500?` — les aides font gagner <b>${eur(plus)}</b> de budget.`:'.'}</div></div>
+    ${m?badges(m,true):''}
+    <div class="kpis">
+      <div class="kpi"><div class="k">Mensualité max (${Math.round(p.endet*100)} % d'endettement)</div><div class="v">${eurM(c.Mmax)}</div></div>
+      <div class="kpi"><div class="k">Capital bancaire max</div><div class="v">${eur(c.Cmax)}</div></div>
+      <div class="kpi"><div class="k">Taux retenu (${cl.duree} ans)</div><div class="v">${(c.taux*100).toFixed(2).replace('.',',')} %</div></div>
+    </div>`;
+  if(c.budgetQPV) html+=`<div class="infobox"><b>Si le lot est en QPV/ANRU (TVA 5,5 %)</b> : le client est sous les plafonds, il peut viser un lot affiché jusqu'à <b>${eur(c.budgetQPV.prixAffiche)}</b> en TVA 20 %, qu'il paiera ${eur(c.budgetQPV.prixPaye)}.</div>`;
+  if(m){
+    html+=`<details><summary>Comment on y arrive</summary>
+    <table>
+      <tr><td>Revenus nets retenus par la banque</td><td class="n">${eurM(cl.revenus)}</td></tr>
+      <tr><td>Mensualité maximale (${Math.round(p.endet*100)} % − crédits en cours)</td><td class="n">${eurM(c.Mmax)}</td></tr>
+      <tr><td>Prêt bancaire principal (${cl.duree} ans, ${(c.taux*100).toFixed(2).replace('.',',')} % + assurance ${(p.ass*100).toFixed(2).replace('.',',')} %)</td><td class="n">${eur(m.principal)}</td></tr>
+      ${m.ptzM>0?`<tr><td>PTZ (tranche ${m.aPTZ.tranche}, ${Math.round(m.aPTZ.quot*100)} % de ${eur(m.aPTZ.base)}, différé ${m.aPTZ.differe} ans, ${m.aPTZ.duree} ans)${m.aPTZ.plancher?' — revenu retenu = coût/9, le RFR étant plus bas':''}</td><td class="n">${eur(m.ptzM)}</td></tr>`:''}
+      ${m.aPAL.ok?`<tr><td>Prêt Action Logement (${(m.aPAL.taux*100).toFixed(1).replace('.',',')} %, ${m.aPAL.duree} ans)</td><td class="n">${eur(m.palM)}</td></tr>`:''}
+      ${m.aPPL.ok?`<tr><td>Prêt Paris Logement${m.aPPL.majore?' majoré':''} (0 %, 15 ans)</td><td class="n">${eur(m.pplM)}</td></tr>`:''}
+      ${m.p0>0?`<tr><td>Prêt complémentaire à 0 % (${Math.min(cl.pret0Duree,cl.duree)} ans)</td><td class="n">${eur(m.p0)}</td></tr>`:''}
+      <tr><td>Apport (personnel + famille)</td><td class="n">${eur(m.apport)}</td></tr>
+      <tr class="sub"><td>− Frais de notaire (${(p.fNot*100).toFixed(1).replace('.',',')} %) et garantie (${(p.fGar*100).toFixed(1).replace('.',',')} % du prêt)</td><td class="n">− ${eur(m.notaire+m.principal*p.fGar/(1+p.fGar))}</td></tr>
+      <tr class="total"><td>Prix du logement</td><td class="n">${eur(c.budgetAvec)}</td></tr>
+    </table>
+    <div class="note">Le PTZ est calculé sur le coût plafonné de l'opération dans la zone choisie (${eur(m.aPTZ.plafOp||0)} pour ${cl.foyer} personne${cl.foyer>1?'s':''}). Mensualité lissée : le client paie la même somme tous les mois, y compris quand le PTZ commence à se rembourser. Reste à vivre attendu par les banques pour ce foyer : ${eurM(cl.rav)}.</div>
+    </details>`;
+    const raisons=[];
+    if(!m.aPTZ.ok) raisons.push('PTZ : '+m.aPTZ.raisons.join(', ')); if(!m.aPAL.ok) raisons.push('Action Logement : '+m.aPAL.raisons.join(', ')); if(!m.aPPL.ok) raisons.push('Paris Logement : '+m.aPPL.raisons.join(', '));
+    if(raisons.length) html+=`<div class="note">Non mobilisable — ${raisons.join(' · ')}.</div>`;
+  }
+  $('resCapa').innerHTML=html;
+}
+
+function addLot(pre){
+  const id=++lotSeq; const cl=client();
+  S.lots.push(Object.assign({id, nom:'Lot '+id, prix:cl.projet==='inv'?220000:300000, zone:cl.zone, qpv:false, type:'coll', loyer:cl.projet==='proche'?0:900, charges:80, tf:900, surface:45}, pre||{}));
+  renderLots();
+}
+function rmLot(id){ S.lots=S.lots.filter(l=>l.id!==id); renderLots(); }
+function upLot(id,k,v){ const l=S.lots.find(x=>x.id===id); if(!l) return; l[k]= (k==='nom'||k==='zone'||k==='type')? v : (k==='qpv'? v==='1' : +v); renderLotResult(l); }
+
+function lotForm(l){
+  const pj=$('projet').value; const inv=pj!=='rp';
+  return `<div class="row3">
+    <div class="f"><label>Nom / programme</label><input type="text" value="${l.nom}" oninput="upLot(${l.id},'nom',this.value)"></div>
+    <div class="f"><label>Prix TTC (TVA 20 %)</label><div class="unit"><input type="number" value="${l.prix}" step="5000" oninput="upLot(${l.id},'prix',this.value)"><span>€</span></div></div>
+    <div class="f"><label>Surface</label><div class="unit"><input type="number" value="${l.surface}" step="1" oninput="upLot(${l.id},'surface',this.value)"><span>m²</span></div></div>
+  </div>
+  <div class="row3">
+    <div class="f"><label>Secteur du lot</label><select onchange="upLot(${l.id},'zone',this.value)">
+      ${['paris|Paris (A bis)','limitrophe|Commune limitrophe de Paris (A bis)','abis|Autre commune zone A bis','a|Zone A','b1|Zone B1'].map(o=>{const [v,t]=o.split('|');return `<option value="${v}" ${l.zone===v?'selected':''}>${t}</option>`}).join('')}</select></div>
+    <div class="f"><label>Programme en QPV / ANRU</label><select onchange="upLot(${l.id},'qpv',this.value)"><option value="0" ${!l.qpv?'selected':''}>Non</option><option value="1" ${l.qpv?'selected':''}>Oui (TVA 5,5 % possible)</option></select></div>
+    <div class="f"><label>Type</label><select onchange="upLot(${l.id},'type',this.value)"><option value="coll" ${l.type==='coll'?'selected':''}>Appartement</option><option value="ind" ${l.type==='ind'?'selected':''}>Maison</option></select></div>
+  </div>
+  ${inv?`<div class="row3">
+    ${pj!=='rs'?`<div class="f"><label>${pj==='proche'?'Loyer demandé au proche (0 si logé gratuitement)':'Loyer estimé'}</label><div class="unit"><input type="number" value="${l.loyer}" step="10" oninput="upLot(${l.id},'loyer',this.value)"><span>€/mois</span></div></div>`:''}
+    <div class="f"><label>Charges non récupérables</label><div class="unit"><input type="number" value="${l.charges}" step="10" oninput="upLot(${l.id},'charges',this.value)"><span>€/mois</span></div></div>
+    <div class="f"><label>Taxe foncière (après exonération)</label><div class="unit"><input type="number" value="${l.tf}" step="50" oninput="upLot(${l.id},'tf',this.value)"><span>€/an</span></div></div>
+  </div>`:''}`;
+}
+
+function renderLots(){
+  if(!S.lots.length){ $('lots').innerHTML='<div class="note">Aucun lot. Ajoute les lots de la sélection pour voir le montage de chacun.</div>'; return; }
+  $('lots').innerHTML=S.lots.map(l=>`<div class="lotcard" id="lot${l.id}"><h3><span>${l.nom}</span><button onclick="rmLot(${l.id})">Retirer</button></h3>${lotForm(l)}<div id="res${l.id}"></div></div>`).join('');
+  S.lots.forEach(renderLotResult);
+}
+
+function renderLotResult(l){
+  const cl=client(), p=params(); const m=montage(cl,l,p); const el=$('res'+l.id); if(!el) return;
+  if(cl.revenus<=0){ el.innerHTML='<div class="warnbox">Aucun revenu retenu : montage impossible au nom du client seul.</div>'; return; }
+  const Mmax = (m.revRet)*p.endet - cl.credits;
+  const ok = m.M<=Mmax+0.5;
+  const ravOk = m.resteAVivre>=cl.rav;
+  const diffLoyer = cl.loyerActuel? m.M-cl.loyerActuel : null;
+  const totalGains = m.gains.filter(g=>!g.info).reduce((s,g)=>s+g.v,0);
+  let html='';
+  if(cl.projet==='rp'){
+    html+=`<div class="big" style="margin-top:6px"><div class="k">Mensualité tout compris</div><div class="v">${eurM(m.M)}</div>
+      <div class="s">${ok?`Dans les clous : ${pct(m.endet)} d'endettement (max ${Math.round(p.endet*100)} %), reste à vivre ${eurM(m.resteAVivre)}${ravOk?'':' <span style="color:var(--red)">(sous le minimum attendu de '+eurM(cl.rav)+')</span>'}.`:`<span style="color:var(--red)">Dépasse la capacité : ${pct(m.endet)} d'endettement, il faudrait ${eurM(m.M-Mmax)} de moins.</span>`}
+      ${diffLoyer!==null?(diffLoyer<=0?` Moins cher que son loyer actuel de ${eurM(-diffLoyer)}.`:` Soit ${eurM(diffLoyer)} de plus que son loyer actuel.`):(cl.logement==='heberge'?' Première charge de logement : à comparer avec son épargne mensuelle actuelle.':'')}</div></div>`;
+    html+=badges(m);
+    if(totalGains>0) html+=`<div class="adv"><div class="t">Ce que le client gagne sur ce lot : ${eur(totalGains)}</div><ul>${m.gains.filter(g=>!g.info).map(g=>`<li>${g.l} : <b>${eur(g.v)}</b></li>`).join('')}</ul>
+      <div class="small" style="margin-top:6px">Sans aucune aide, la mensualité serait de ${eurM(m.Msans)} (${eurM(m.Msans-m.M)} de plus chaque mois).</div></div>`;
+    if(m.apportNote) html+=`<div class="infobox">${m.apportNote}</div>`;
+    html+=`<details><summary>Le montage en détail</summary><table>
+      <tr><td>Prix affiché (TVA 20 %)</td><td class="n">${eur(l.prix)}</td></tr>
+      ${m.tv.ok?`<tr class="hl"><td>Prix avec TVA 5,5 %</td><td class="n">${eur(m.prix)}</td></tr>`:''}
+      <tr><td>Frais de notaire (${(p.fNot*100).toFixed(1).replace('.',',')} %)</td><td class="n">${eur(m.notaire)}</td></tr>
+      <tr><td>Garantie et frais de dossier</td><td class="n">${eur(m.principal*p.fGar/(1+p.fGar))}</td></tr>
+      <tr class="total"><td>Coût total</td><td class="n">${eur(m.prix+m.notaire+m.principal*p.fGar/(1+p.fGar))}</td></tr>
+      <tr><td colspan="2" style="padding-top:12px;font-weight:600">Financement</td></tr>
+      <tr><td>Apport (personnel + famille)</td><td class="n">${eur(m.apport)}</td></tr>
+      ${m.ptzM>0?`<tr><td>PTZ — tranche ${m.aPTZ.tranche}, ${Math.round(m.aPTZ.quot*100)} % de ${eur(m.aPTZ.base)}, 0 %, ${m.aPTZ.duree} ans dont ${m.aPTZ.differe} de différé${m.aPTZ.plancher?' (revenu retenu = coût/9)':''}${m.aPTZ.note?' ('+m.aPTZ.note+')':''}</td><td class="n">${eur(m.ptzM)}</td></tr>`:''}
+      ${m.aPAL.ok?`<tr><td>Prêt Action Logement — ${(m.aPAL.taux*100).toFixed(1).replace('.',',')} %, ${m.aPAL.duree} ans</td><td class="n">${eur(m.palM)}</td></tr>`:''}
+      ${m.aPPL.ok?`<tr><td>Prêt Paris Logement${m.aPPL.majore?' majoré':''} — 0 %, 15 ans</td><td class="n">${eur(m.pplM)}</td></tr>`:''}
+      ${m.p0>0?`<tr><td>Prêt complémentaire à 0 % — ${Math.min(cl.pret0Duree,cl.duree)} ans</td><td class="n">${eur(m.p0)}</td></tr>`:''}
+      <tr><td>Prêt bancaire — ${(m.taux*100).toFixed(2).replace('.',',')} % sur ${cl.duree} ans, assurance ${(p.ass*100).toFixed(2).replace('.',',')} %</td><td class="n">${eur(m.principal)}</td></tr>
+      <tr><td colspan="2" style="padding-top:12px;font-weight:600">Chaque mois</td></tr>
+      <tr><td>Mensualité lissée (prêt bancaire + prêts aidés + assurance)</td><td class="n">${eurM(m.M)}</td></tr>
+      <tr class="sub"><td>dont assurance</td><td class="n">${eurM(m.assM)}</td></tr>
+      <tr><td>Taux d'endettement</td><td class="n">${pct(m.endet)}</td></tr>
+      <tr><td>Reste à vivre (minimum attendu ${eurM(cl.rav)})</td><td class="n">${eurM(m.resteAVivre)}</td></tr>
+      <tr><td>Coût du crédit sur ${cl.duree} ans (intérêts + assurance)</td><td class="n">${eur(m.coutTotal)}</td></tr>
+      <tr><td>Prix au m²${m.tv.ok?' (TVA 5,5 %)':''}</td><td class="n">${l.surface?eur(m.prix/l.surface)+'/m²':'—'}</td></tr>
+    </table>
+    <div class="note">Pièces à demander : avis d'imposition 2025 (RFR 2024)${S.emp.slice(0,S.nb).some(e=>e.rattache)?' + avis des parents et simulation du RFR personnel sur impots.gouv':''}, 3 derniers bulletins de paie ou 2 derniers bilans, justificatif d'apport${num('donation')>0?', acte ou déclaration de don (formulaire 2735)':''}${m.aPAL.ok?', attestation employeur pour Action Logement (dossier à déposer 30 jours ouvrés avant la signature)':''}${m.aPPL.ok?', justificatif de résidence à Paris sur 12 mois':''}${m.tv.ok?', attestation du promoteur sur la zone QPV/ANRU':''}. L'accord de principe est établi par le courtier partenaire.</div>
+    </details>`;
+    const raisons=[]; if(!m.aPTZ.ok||m.ptzM===0) raisons.push('PTZ : '+(m.aPTZ.raisons.join(', ')||'non mobilisable')); if(!m.aPAL.ok) raisons.push('Action Logement : '+m.aPAL.raisons.join(', ')); if(!m.aPPL.ok) raisons.push('Paris Logement : '+m.aPPL.raisons.join(', ')); if(!m.tv.ok) raisons.push('TVA 5,5 % : '+m.tv.raisons.join(', '));
+    if(raisons.length) html+=`<div class="note">Non mobilisable — ${raisons.join(' · ')}.</div>`;
+  } else {
+    const i=m.inv; const lib = cl.projet==='inv'?'Effort d\'épargne mensuel':'Coût mensuel réel';
+    html+=`<div class="big" style="margin-top:6px"><div class="k">${lib}</div><div class="v">${i.effort>0?eurM(i.effort):'0 € — autofinancé'}</div>
+      <div class="s">Mensualité ${eurM(m.M)} + charges et taxe foncière ${eurM(i.charges)}${i.loyer?` − loyer ${eurM(i.loyer)}`:''}. ${ok?`Endettement ${pct(m.endet)}${cl.projet==='inv'?` avec ${Math.round(p.pLoyer*100)} % du loyer retenu`:''}.`:`<span style="color:var(--red)">Endettement ${pct(m.endet)} : dépasse ${Math.round(p.endet*100)} %.</span>`}</div></div>
+    <div class="kpis">${cl.projet==='inv'?`<div class="kpi"><div class="k">Rentabilité brute</div><div class="v">${pct(i.rentaBrute)}</div></div><div class="kpi"><div class="k">Loyer retenu par la banque</div><div class="v">${eurM(m.loyerRetenu)}</div></div>`:`<div class="kpi"><div class="k">Reste à vivre</div><div class="v">${eurM(m.resteAVivre)}</div></div><div class="kpi"><div class="k">Coût du crédit</div><div class="v">${eur(m.coutTotal)}</div></div>`}<div class="kpi"><div class="k">Prix au m²</div><div class="v">${l.surface?eur(l.prix/l.surface):'—'}</div></div></div>
+    <details><summary>Le montage en détail</summary><table>
+      <tr><td>Prix TTC</td><td class="n">${eur(l.prix)}</td></tr>
+      <tr><td>Frais de notaire (${(p.fNot*100).toFixed(1).replace('.',',')} %)</td><td class="n">${eur(m.notaire)}</td></tr>
+      <tr><td>Apport (personnel + famille)</td><td class="n">${eur(m.apport)}</td></tr>
+      <tr><td>Prêt bancaire — ${(m.taux*100).toFixed(2).replace('.',',')} % sur ${cl.duree} ans</td><td class="n">${eur(m.principal)}</td></tr>
+      <tr><td>Mensualité assurance comprise</td><td class="n">${eurM(m.M)}</td></tr>
+      ${i.loyer?`<tr><td>Loyer</td><td class="n">${eurM(i.loyer)}</td></tr>`:''}
+      <tr><td>Charges non récupérables + taxe foncière</td><td class="n">${eurM(i.charges)}</td></tr>
+      <tr class="total"><td>${lib}</td><td class="n">${eurM(i.effort)}</td></tr>
+      <tr><td>Revenus retenus par la banque${cl.projet==='inv'?` (revenus + ${Math.round(p.pLoyer*100)} % du loyer)`:''}</td><td class="n">${eurM(m.revRet)}</td></tr>
+      <tr><td>Coût du crédit sur ${cl.duree} ans</td><td class="n">${eur(m.coutTotal)}</td></tr>
+    </table><div class="note">${cl.projet==='inv'?'Hors fiscalité (LMNP, déficit foncier) et hors exonération de taxe foncière des 2 premières années. Le loyer estimé est à sourcer sur la grille du programme ou le marché local.':cl.projet==='proche'?'Un loyer même modéré permet de déduire les charges et d\'ouvrir la location meublée ; un logement prêté gratuitement ne donne aucun avantage fiscal. À voir avec le notaire pour la donation ou le démembrement.':'Résidence secondaire : ni aide ni fiscalité particulière ; certaines communes majorent la taxe d\'habitation sur les résidences secondaires.'}</div></details>`;
+  }
+  el.innerHTML=html;
+}
+
+function recalc(){ const pj=$('projet').value; $('blocRP').style.display = pj==='rp'?'':'none'; renderCapa(); if(S.lots.length){ renderLots(); } }
+function openPanel(w){ closePanels(); $('p-'+w).classList.add('open'); $('overlay').classList.add('on'); }
+function closePanels(){ document.querySelectorAll('.panel').forEach(p=>p.classList.remove('open')); $('overlay').classList.remove('on'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePanels(); });
+
+if(location.search.includes('embed=1')) document.body.classList.add('embed');
+// démarrage : un lot d'exemple
+renderEmprunteurs(); recalc(); addLot({nom:'Exemple — T2 Saint-Denis', prix:265000, zone:'a', qpv:true, surface:42});
+</script>
+</body>
+</html>
