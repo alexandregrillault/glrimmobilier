@@ -158,14 +158,9 @@
   var SUPA = "https://hydqfbxdtpmbuooexekp.supabase.co";
   var params = new URLSearchParams(location.search);
   var token = params.get("t") || "";       // remplacé par le lien personnel après une réservation publique
-  // Adresse par prénom, sans jeton : glrimmobilier.com/rdv/nour (la même page
-  // est déposée dans un dossier par commercial sur le site) ou ?v=nour. Le
-  // serveur retrouve le lien public du commercial et renvoie son jeton.
+  // Adresse par prénom, sans jeton : glrimmobilier.com/rdv/?v=nour. Le serveur
+  // retrouve le lien public du commercial et renvoie son jeton.
   var slugVendeur = (params.get("v") || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (!token && !slugVendeur){
-    var m = location.pathname.match(/\/rdv\/([a-z0-9-]+)\/?$/i);
-    if (m) slugVendeur = m[1].toLowerCase().replace(/[^a-z0-9]/g, "");
-  }
   var FN = token ? SUPA + "/functions/v1/rdv/" + encodeURIComponent(token)
                  : SUPA + "/functions/v1/rdv/?v=" + encodeURIComponent(slugVendeur);
   var cont = document.getElementById("contenu");
