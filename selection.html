@@ -81,7 +81,7 @@
   .maj-bandeau { display:flex; align-items:center; gap:11px; background:linear-gradient(180deg,#fdfaf3,#fbf6ea); border:1px solid var(--gold); border-left:4px solid var(--gold); border-radius:12px; padding:12px 15px; margin:16px 0 4px; box-shadow:0 2px 8px rgba(200,169,110,.16); }
   .maj-bandeau b { font-family:Georgia,serif; font-size:14.5px; color:var(--dark); }
   .maj-bandeau span { font-size:13px; color:var(--muted); }
-  .card .num-neuf { position:absolute; top:12px; right:12px; background:#fff; color:var(--gold-fonce); border:1px solid var(--gold); font-size:11px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; padding:3px 11px; border-radius:14px; z-index:3; box-shadow:0 2px 8px rgba(26,29,35,.12); }
+  .card .num-neuf, .lot .num-neuf, .prog .num-neuf { position:absolute; top:12px; right:12px; background:#fff; color:var(--gold-fonce); border:1px solid var(--gold); font-size:11px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; padding:3px 11px; border-radius:14px; z-index:3; box-shadow:0 2px 8px rgba(26,29,35,.12); }
 
   /* Villes en tête de sélection : un raccourci vers chaque commune */
   .villes-tete { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 4px; }
@@ -139,15 +139,88 @@
   .comp-invite button { border:none; background:var(--gold); color:#fff; border-radius:12px; padding:13px 26px; font-size:14.5px; font-weight:700; cursor:pointer; transition:background .15s; }
   .comp-invite button:hover { background:var(--gold-fonce); }
 
-  .cta-rdv { width:100%; margin-top:14px; border:none; background:var(--gold); color:#fff; border-radius:12px; padding:14px; font-size:15px; font-weight:700; letter-spacing:.3px; cursor:pointer; transition:background .15s; box-shadow:0 3px 10px rgba(200,169,110,.35); }
-  .cta-rdv:hover { background:var(--gold-fonce); }
+  /* Rendez-vous depuis un lot : en second plan, pour laisser la place aux
+     boutons d'avis (la carte rendez-vous en fin de page reste dorée). */
+  .cta-rdv { width:100%; margin-top:12px; border:1.5px solid var(--dark); background:#fff; color:var(--dark); border-radius:12px; padding:12px; font-size:14px; font-weight:700; letter-spacing:.3px; cursor:pointer; font-family:inherit; transition:all .15s; }
+  .cta-rdv:hover { background:var(--dark); color:#fff; }
 
-  .avis { border-top:1px dashed #e0d9c8; margin-top:16px; padding-top:14px; }
-  .avis-titre { font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
-  .avis-btns { display:flex; gap:8px; flex-wrap:wrap; }
-  .ab { border:1px solid #ddd6c8; background:#faf8f4; border-radius:22px; padding:8px 14px; font-size:13.5px; cursor:pointer; transition:all .15s; }
-  .ab:hover { border-color:var(--gold); }
-  .ab.on { background:var(--gold); border-color:var(--gold); color:#fff; font-weight:600; }
+  /* ---- Bloc programme : plusieurs lots d'une même résidence ----
+     Ce qui est commun (photo, adresse, carte, livraison, promoteur, descriptif)
+     n'est dit qu'une fois en tête ; chaque lot ne garde que ce qui le
+     distingue : son plan, son prix, ses surfaces, votre avis. */
+  .prog { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; overflow:hidden; margin-bottom:28px; box-shadow:0 2px 12px rgba(26,29,35,.05);
+          opacity:0; transform:translateY(18px); transition:opacity .5s ease, transform .5s ease; }
+  .prog.vue { opacity:1; transform:none; }
+  @media (prefers-reduced-motion:reduce){ .prog { opacity:1; transform:none; transition:none; } }
+  .prog .photo { height:200px; }
+  .prog-nb { position:absolute; top:12px; left:12px; background:var(--gold); color:#fff; font-family:Georgia,serif; font-size:12.5px; padding:3px 11px; border-radius:14px; letter-spacing:1px; z-index:3; }
+  .prog-tete { padding:22px 24px 18px; }
+  .prog-tete h2 { font-size:22px; }
+  .prog-tete .chips { margin-bottom:8px; }
+  .prog-tete .adresse { margin-top:10px; }
+  .prog-tete .carte { height:140px; }
+  /* Barre dépliante : « 3 appartements dans cette résidence » — ouverte à
+     l'arrivée, le client peut replier. Les lots vivent dans une zone teintée
+     pour qu'on voie qu'ils vont ensemble. */
+  .prog-toggle { display:flex; align-items:center; gap:12px; width:100%; margin:18px 0 0; border:1.5px solid var(--gold); background:#fdfaf3; color:var(--dark); border-radius:14px; padding:17px 18px; font-family:Georgia,serif; font-size:19px; font-weight:700; cursor:pointer; text-align:left; transition:background .15s; box-shadow:0 2px 10px rgba(200,169,110,.18); }
+  .prog-toggle:hover { background:#fbf6ea; }
+  .prog-toggle .pt-n { flex:none; background:var(--gold); color:#fff; border-radius:18px; min-width:34px; text-align:center; padding:4px 12px; font-family:'Helvetica Neue',Arial,sans-serif; font-size:15px; font-weight:700; }
+  .prog-toggle .pt-txt { flex:1; min-width:0; }
+  .prog-toggle .pt-neuf { flex:none; background:#fff; color:var(--gold-fonce); border:1px solid var(--gold); font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; padding:3px 10px; border-radius:14px; }
+  .prog-toggle .pt-hint { font-family:'Helvetica Neue',Arial,sans-serif; font-size:13px; font-weight:400; color:var(--muted); white-space:nowrap; }
+  .prog-toggle .pt-chev { flex:none; width:30px; height:30px; border-radius:50%; background:var(--gold); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; transition:transform .2s; }
+  .prog-toggle[aria-expanded="false"] .pt-chev { transform:rotate(-90deg); }
+  .prog-lots { background:#f3efe6; border-top:1px solid var(--bordure); padding:14px; display:flex; flex-direction:column; gap:14px; }
+  .prog-lots[hidden] { display:none; }
+  .lot { position:relative; border:1px solid #e3dccd; border-left:4px solid var(--gold); border-radius:14px; overflow:hidden; background:#fff; box-shadow:0 1px 6px rgba(26,29,35,.05); }
+  .lot .photo.plan { height:230px; }
+  .lot .body { padding:16px 18px 18px; }
+  .lot h2 { font-size:18px; }
+  .lot .num-bien { top:10px; left:10px; }
+  .lot .num-neuf { top:10px; right:10px; }
+  .lot .lot-tete { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+  .lot .lot-tete .num-bien { position:static; }
+  @media (max-width:520px){
+    .prog .photo { height:170px; }
+    .prog-tete { padding:18px 18px 14px; }
+    .prog-toggle { font-size:17px; padding:15px 14px; }
+    .prog-toggle .pt-hint { font-size:12px; }
+    .prog-lots { padding:12px 10px 10px; gap:12px; }
+    .lot .photo.plan { height:200px; }
+    .lot .body { padding:14px 15px 16px; }
+  }
+
+  /* Avis du client : trois vrais boutons, au même gabarit que « Fiche et plans
+     du lot » — les petites pastilles passaient inaperçues (retours clients,
+     septembre 2026). */
+  .avis { border-top:1px solid var(--bordure); margin-top:18px; padding-top:16px; }
+  .avis-titre { font-family:Georgia,serif; font-size:16.5px; font-weight:600; color:var(--dark); margin-bottom:2px; }
+  .avis-sous { font-size:12.5px; color:var(--muted); margin-bottom:11px; }
+  .avis-btns { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .ab { border:1.5px solid #cfc7b6; background:#fff; color:var(--dark); border-radius:12px; padding:12px 8px; min-height:48px; font-size:14px; font-weight:600; font-family:inherit; text-align:center; cursor:pointer; transition:all .15s; }
+  .ab:hover { border-color:var(--gold); background:#fdfaf3; }
+  .ab.on { background:var(--gold); border-color:var(--gold); color:#fff; box-shadow:0 3px 10px rgba(200,169,110,.35); }
+  .ab.on::before { content:"\2713\00a0"; }
+  .ab[data-c="a_discuter"].on { background:var(--dark); border-color:var(--dark); box-shadow:0 3px 10px rgba(26,29,35,.25); }
+  .ab[data-c="pas_pour_moi"].on { background:#8a8f99; border-color:#8a8f99; box-shadow:none; }
+  @media (max-width:420px){ .avis-btns { grid-template-columns:1fr; } .ab { min-height:46px; } }
+  /* Commentaire libre sous l'avis : un lien discret, la zone de saisie n'apparaît qu'à la demande */
+  .com-lien { margin-top:10px; background:none; border:none; padding:0; color:var(--muted); font-size:13px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+  .com-lien:hover { color:var(--gold-fonce); }
+  .com-zone { margin-top:10px; }
+  .com-zone textarea { width:100%; box-sizing:border-box; min-height:64px; resize:vertical; border:1px solid #ddd6c8; background:#faf8f4; border-radius:12px; padding:10px 13px; font:inherit; font-size:13.5px; color:inherit; outline:none; }
+  .com-zone textarea:focus { border-color:var(--gold); }
+  .com-actions { display:flex; gap:8px; align-items:center; margin-top:8px; }
+  .com-env { border:none; background:var(--gold); color:#fff; border-radius:22px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; }
+  .com-env:hover { background:var(--gold-fonce); }
+  .com-annule { background:none; border:none; padding:0; color:var(--muted); font-size:13px; cursor:pointer; }
+  .com-lu { margin-top:10px; font-size:13.5px; color:#3b3f47; font-style:italic; line-height:1.45; }
+  .com-lu .com-lien { margin-top:4px; display:inline-block; font-style:normal; }
+  /* Demande d'option sur le lot : une case, rien de plus */
+  .opt { display:flex; align-items:flex-start; gap:10px; margin-top:12px; padding:10px 12px; border:1px solid #ddd6c8; border-radius:12px; background:#faf8f4; cursor:pointer; font-size:13.5px; line-height:1.4; }
+  .opt input { margin:3px 0 0; width:16px; height:16px; accent-color:var(--gold); cursor:pointer; flex:none; }
+  .opt.on { border-color:var(--gold); background:#fbf6ec; }
+  .opt small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
 
   /* ---- Bloc rendez-vous ---- */
   .rdv { background:var(--dark); border-radius:16px; padding:26px 26px 24px; margin:6px 0 28px; text-align:center; color:#fff; }
@@ -380,6 +453,52 @@
       non.onclick = function(){ fermer(false); };
       fond.onclick = function(e){ if (e.target === fond) fermer(false); };
       document.addEventListener("keydown", touche);
+    });
+  }
+  // ---------- Commentaire libre sous un bien ----------
+  // Facultatif et discret : un lien « Un commentaire sur ce bien ? » ouvre une
+  // petite zone de texte ; le commentaire envoyé s'affiche en italique avec
+  // « Modifier ». Il arrive sur la fiche du client chez le conseiller.
+  function htmlCommentaire(i, texte){
+    var t = (texte || "").trim();
+    if (t){
+      return "<div class='com-lu' data-com='" + i + "'>« " + esc(t) + " »<br><button class='com-lien' data-c-modif='" + i + "'>Modifier</button></div>";
+    }
+    return "<div data-com='" + i + "'><button class='com-lien' data-c-modif='" + i + "'>Un commentaire sur ce bien ?</button></div>";
+  }
+  function brancherCommentaire(bloc, i){
+    var zone = bloc.querySelector("[data-com]");
+    if (!zone) return;
+    var lien = zone.querySelector("[data-c-modif]");
+    if (!lien) return;
+    lien.addEventListener("click", function(){
+      var actuel = ((etatAvis[String(i)] || {}).commentaire || "");
+      zone.className = "com-zone";
+      zone.innerHTML = "<textarea maxlength='1000' placeholder='Ce qui vous plaît, ce qui vous freine, une question…'></textarea>"
+        + "<div class='com-actions'><button class='com-env'>Envoyer</button><button class='com-annule'>Annuler</button></div>";
+      var ta = zone.querySelector("textarea");
+      ta.value = actuel;
+      ta.focus();
+      var remettre = function(texte){
+        var neuf = document.createElement("div");
+        neuf.innerHTML = htmlCommentaire(i, texte);
+        var el = neuf.firstChild;
+        zone.parentNode.replaceChild(el, zone);
+        brancherCommentaire(bloc, i);
+      };
+      zone.querySelector(".com-annule").addEventListener("click", function(){ remettre(actuel); });
+      zone.querySelector(".com-env").addEventListener("click", function(){
+        var texte = ta.value.trim().slice(0, 1000);
+        if (texte === actuel.trim()){ remettre(actuel); return; }
+        var btn = zone.querySelector(".com-env");
+        btn.disabled = true; btn.textContent = "Envoi…";
+        envoyer({ action: "avis", index: i, commentaire: texte }, texte ? "✓ Merci, votre commentaire a bien été transmis" : "Commentaire retiré").then(function(ok){
+          if (!ok){ btn.disabled = false; btn.textContent = "Envoyer"; return; }
+          etatAvis[String(i)] = etatAvis[String(i)] || {};
+          etatAvis[String(i)].commentaire = texte;
+          remettre(texte);
+        });
+      });
     });
   }
   function envoyer(corps, message){
@@ -720,15 +839,66 @@
     return groupes;
   }
 
+  // ---------- Plusieurs lots d'un même programme ----------
+  // « Le Domaine des Prunais — Lot A2 005 » → programme « Le Domaine des
+  // Prunais », lot « Lot A2 005 ». Même découpe que dans le CRM.
+  var RE_LOT = /\s*[-–—]\s*(lot\b.*)$/i;
+  function nomProgramme(b){
+    var t = String((b && b.titre) || "").trim();
+    var m = t.match(RE_LOT);
+    return (m ? t.slice(0, m.index) : t).trim();
+  }
+  function nomLot(b){
+    var t = String((b && b.titre) || "").trim();
+    var m = t.match(RE_LOT);
+    return m ? m[1].trim() : "";
+  }
+  function cleProgramme(b){
+    var t = nomProgramme(b).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    t = t.replace(/\b(le|la|les|du|des|de|d|l|un|une|chapitre|tranche|phase|\d+)\b/g, " ");
+    return t.replace(/[^a-z]/g, "");
+  }
+  function memeProgramme(a, b){
+    var ka = cleProgramme(a), kb = cleProgramme(b);
+    if (ka && kb){
+      var court = ka.length <= kb.length ? ka : kb, long = ka.length <= kb.length ? kb : ka;
+      if (ka === kb || (court.length >= 8 && long.indexOf(court) >= 0)) return true;
+    }
+    // Sans nom exploitable : même adresse confirmée dans la même commune
+    return !!(a.adresseOk && b.adresseOk && a.adresse && a.adresse === b.adresse && (a.ville || "") === (b.ville || ""));
+  }
+  // Dans une ville, les lots d'un même programme se rejoignent (ordre d'apparition conservé)
+  function grouperParProgramme(items){
+    var progs = [];
+    items.forEach(function(o){
+      var p = null;
+      for (var k = 0; k < progs.length; k++) if (memeProgramme(progs[k].items[0].b, o.b)) { p = progs[k]; break; }
+      if (!p) { p = { items: [] }; progs.push(p); }
+      p.items.push(o);
+    });
+    return progs;
+  }
+  function nbProgrammes(liste){
+    var n = 0;
+    grouperParVille(liste).forEach(function(gr){ n += grouperParProgramme(gr.items).length; });
+    return n;
+  }
+  // Première valeur renseignée parmi les lots d'un programme
+  function premier(items, champ){
+    for (var k = 0; k < items.length; k++){ var v = items[k].b && items[k].b[champ]; if (v && (!Array.isArray(v) || v.length)) return v; }
+    return "";
+  }
+
   // Surface, étage, exposition, livraison, annexes
-  function htmlFaits(b){
+  // (compact : livraison et promoteur sont déjà dits en tête de programme)
+  function htmlFaits(b, compact){
     var faits = [];
     if (b.surface) faits.push(["Surface", b.surface]);
     if (b.etage) faits.push(["Étage", b.etage]);
     if (b.terrasse) faits.push(["Terrasse / balcon", b.terrasse]);
     if (b.expo) faits.push(["Exposition", b.expo]);
-    if (b.livraison) faits.push(["Livraison", b.livraison]);
-    if (b.promoteur) faits.push(["Promoteur", b.promoteur]);
+    if (b.livraison && !compact) faits.push(["Livraison", b.livraison]);
+    if (b.promoteur && !compact) faits.push(["Promoteur", b.promoteur]);
     var h = faits.length
       ? "<div class='faits'>" + faits.map(function(f){ return "<div class='fait'><b>" + esc(f[0]) + "</b>" + esc(f[1]) + "</div>"; }).join("") + "</div>"
       : "";
@@ -808,6 +978,134 @@
     };
   }
 
+  // ---------- Rendu d'un lot ----------
+  // compact : le lot fait partie d'un bloc programme — la ville, la photo de
+  // la résidence, l'adresse, le descriptif et les atouts sont déjà en tête.
+  function htmlLienDoc(b){
+    // Un seul bouton documents, au meme format que la demande de rendez-vous :
+    // les clients ne voyaient pas les petits boutons Plan / Plan de masse.
+    // Priorite au lien Otaree (fiche + plans), sinon un document joint par le
+    // conseiller, sinon le plan du lot.
+    var joints = Array.isArray(b.docs) && b.docs.length
+      ? b.docs
+      : (b.pdf ? [{ nom: "Fiche du lot", url: b.pdf }] : []);
+    var lienDoc = b.lien || "";
+    if (!lienDoc){
+      for (var jd = 0; jd < joints.length; jd++){
+        var uj = joints[jd] && (joints[jd].url || (typeof joints[jd] === "string" ? joints[jd] : ""));
+        if (uj){ lienDoc = uj; break; }
+      }
+    }
+    return lienDoc || b.plan || b.masse || "";
+  }
+  function htmlAvis(i){
+    var a = etatAvis[String(i)] || {};
+    var h = "<div class='avis' data-i='" + i + "'>";
+    h += "<div class='avis-titre'>Votre avis sur ce bien ?</div>";
+    h += "<div class='avis-sous'>Un clic suffit — votre conseiller le voit tout de suite.</div>";
+    h += "<div class='avis-btns'>";
+    h += "<button type='button' class='ab" + (a.choix === "interesse" ? " on" : "") + "' data-c='interesse'>Ça m'intéresse</button>";
+    h += "<button type='button' class='ab" + (a.choix === "a_discuter" ? " on" : "") + "' data-c='a_discuter'>À discuter</button>";
+    h += "<button type='button' class='ab" + (a.choix === "pas_pour_moi" ? " on" : "") + "' data-c='pas_pour_moi'>Pas pour moi</button>";
+    h += "</div>";
+    h += "<label class='opt" + (a.option ? " on" : "") + "' data-opt='" + i + "'><input type='checkbox'" + (a.option ? " checked" : "") + "><span>Je souhaite que vous posiez une option sur ce lot<small>Sans engagement : le lot est bloqué pour vous quelques jours, le temps d'en parler.</small></span></label>";
+    h += htmlCommentaire(i, a.commentaire);
+    h += "<button type='button' class='cta-rdv'>Demander un rendez-vous</button>";
+    return h + "</div>";
+  }
+  function htmlLot(b, i, d, compact){
+    var visu = visuelDe(b);
+    // En compact, la photo de la résidence est déjà en tête du bloc : seul le plan compte
+    if (compact && !visu.plan) visu = { url: "", plan: false };
+    var h = "<div class='" + (compact ? "lot" : "card") + "' data-carte='" + i + "'>";
+    var neuf = b && b.nouveau ? "<div class='num-neuf'>Nouveau</div>" : "";
+    if (visu.url){
+      h += "<div class='photo" + (visu.plan ? " plan" : "") + "' data-g='" + i + "'>";
+      h += "<div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf;
+      h += "<img src='" + esc(visu.url) + "' alt='" + (visu.plan ? "Plan du lot — " : "") + esc(b.titre || "Bien") + "' loading='lazy'>";
+      if (visu.plan) h += "<div class='voir-plan'>Voir le plan en grand</div>";
+      h += "</div>";
+    } else if (!compact){
+      h += "<div class='img-vide'><div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf + "<img src='" + LOGO_SRC + "' alt='GLR Immobilier' onerror=\"this.outerHTML='<span class=&quot;txt&quot;>GLR</span>'\"></div>";
+    }
+    h += "<div class='body'>";
+    if (compact){
+      var nl = nomLot(b) || b.titre || ("Bien " + (i + 1));
+      h += "<div class='lot-tete'>" + (visu.url ? "" : "<div class='num-bien'>Bien " + (i + 1) + "</div>" + (b.nouveau ? "<span class='num-neuf' style='position:static'>Nouveau</span>" : "")) + "<h2>" + esc(nl) + "</h2></div>";
+    } else {
+      if (b.ville) h += "<div class='eyebrow'>" + esc(b.ville) + "</div>";
+      h += "<h2>" + esc(b.titre) + "</h2>";
+    }
+    var typos = Array.isArray(b.typologies) ? b.typologies : [];
+    var puces = typos.slice();
+    if (b.nature && puces.indexOf(b.nature) === -1) puces.unshift(b.nature);
+    if (puces.length) h += "<div class='chips'>" + puces.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
+    h += htmlPrix(b);
+    h += htmlRemises(b);
+    h += htmlNote(b, d);
+    h += htmlFaits(b, compact);
+    if (!compact){
+      h += htmlAdresse(b, i, etatAvis[String(i)] || {});
+      if (b.pitch) h += "<p class='pitch'>" + esc(b.pitch) + "</p>";
+      var atouts = Array.isArray(b.atouts) ? b.atouts.slice(0, 5) : [];
+      if (atouts.length) h += "<ul class='atouts'>" + atouts.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
+    }
+    var lienDoc = htmlLienDoc(b);
+    if (lienDoc) h += "<div class='docs'><a class='doc' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>Fiche et plans du lot</a></div>";
+    h += htmlAvis(i);
+    return h + "</div></div>";
+  }
+
+  // ---------- Bloc programme : plusieurs lots d'une même résidence ----------
+  function htmlProgramme(pg, d){
+    var items = pg.items, b0 = items[0].b, i0 = items[0].i, n = items.length;
+    var nom = nomProgramme(b0) || b0.titre || "Résidence";
+    var h = "<div class='prog'>";
+    // Photo de la résidence : la première trouvée sur un des lots
+    var photo = "", iPhoto = i0;
+    for (var k = 0; k < n; k++){ var p = photoDe(items[k].b); if (p){ photo = p; iPhoto = items[k].i; break; } }
+    var nbNeufs = items.filter(function(o){ return o.b && o.b.nouveau; }).length;
+    if (photo){
+      h += "<div class='photo' data-gp='" + iPhoto + "'><div class='prog-nb'>" + n + " biens</div>"
+        + (nbNeufs ? "<div class='num-neuf'>" + (nbNeufs === n ? "Nouveau" : nbNeufs + " nouveau" + (nbNeufs > 1 ? "x" : "")) + "</div>" : "")
+        + "<img src='" + esc(photo) + "' alt='" + esc(nom) + "' loading='lazy'></div>";
+    }
+    h += "<div class='prog-tete'>";
+    h += "<div class='eyebrow'>" + esc(b0.ville || "") + (photo ? "" : " · " + n + " biens") + "</div>";
+    h += "<h2>" + esc(nom) + "</h2>";
+    var puces = [];
+    var promoteur = premier(items, "promoteur"), livraison = premier(items, "livraison"), nature = premier(items, "nature");
+    if (nature) puces.push(nature);
+    if (promoteur) puces.push(promoteur);
+    if (livraison) puces.push("Livraison " + livraison);
+    // Typologies présentes : « T2 · T3 »
+    var typs = [];
+    items.forEach(function(o){ (Array.isArray(o.b.typologies) ? o.b.typologies : []).forEach(function(t){ if (t && typs.indexOf(t) < 0) typs.push(t); }); });
+    if (typs.length) puces.push(typs.join(" · "));
+    if (puces.length) h += "<div class='chips'>" + puces.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
+    var pitch = premier(items, "pitch");
+    if (pitch) h += "<p class='pitch'>" + esc(pitch) + "</p>";
+    var atouts = premier(items, "atouts");
+    if (Array.isArray(atouts) && atouts.length) h += "<ul class='atouts'>" + atouts.slice(0, 5).map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
+    // Adresse : celle du premier lot confirmé ; sinon une seule demande pour toute la résidence
+    var bAdr = null, iAdr = i0;
+    for (var m = 0; m < n; m++){ if (adresseSure(items[m].b)){ bAdr = items[m].b; iAdr = items[m].i; break; } }
+    if (bAdr) h += htmlAdresse(bAdr, iAdr, etatAvis[String(iAdr)] || {});
+    else {
+      var demandee = items.some(function(o){ return (etatAvis[String(o.i)] || {}).adresse_demandee; });
+      h += htmlAdresse(b0, i0, { adresse_demandee: demandee });
+    }
+    // Toujours fermé à l'arrivée (choix d'Alex) ; un lot ajouté depuis la
+    // dernière visite est signalé sur la barre, pas déplié d'office.
+    var ouvert = false;
+    h += "<button type='button' class='prog-toggle' aria-expanded='" + (ouvert ? "true" : "false") + "'><span class='pt-n'>" + n + "</span><span class='pt-txt'>" + (n > 1 ? "appartements sélectionnés" : "appartement sélectionné") + " pour vous</span>" + (nbNeufs ? "<span class='pt-neuf'>" + (nbNeufs > 1 ? nbNeufs + " nouveaux" : "Nouveau") + "</span>" : "") + "<span class='pt-hint'>" + (ouvert ? "Replier" : "Découvrir") + "</span><span class='pt-chev'>\u25BC</span></button>";
+    h += "</div>";
+    h += "<div class='prog-lots'" + (ouvert ? "" : " hidden") + ">";
+    items.forEach(function(o){ h += htmlLot(o.b, o.i, d, true); });
+    h += "</div></div>";
+    return h;
+  }
+
   // ---------- Rendu ----------
   function rendre(d){
     biens = Array.isArray(d.biens) ? d.biens : [];
@@ -821,7 +1119,9 @@
     h += "<p>" + esc(d.message || "Voici une sélection de biens correspondant à vos critères.") + "</p>";
     if (d.vendeur) h += "<div class='sig'>— " + esc(d.vendeur) + ", votre conseiller GLR Immobilier</div>";
     h += "</div>";
-    h += "<div class='meta'><span>" + biens.length + " bien" + (biens.length > 1 ? "s" : "") + " sélectionné" + (biens.length > 1 ? "s" : "") + " pour vous</span>";
+    var nbProg = nbProgrammes(biens);
+    h += "<div class='meta'><span>" + biens.length + " bien" + (biens.length > 1 ? "s" : "") + " sélectionné" + (biens.length > 1 ? "s" : "") + " pour vous"
+      + (nbProg > 1 && nbProg < biens.length ? " · " + nbProg + " résidences" : "") + "</span>";
     if (d.expires_at) h += "<span>·</span><span>Sélection valable jusqu'au " + esc(fmtDate(d.expires_at)) + "</span>";
     h += "</div>";
 
@@ -848,62 +1148,9 @@
         + (vv.cp ? "<span class='ville-cp'>" + esc(vv.cp) + "</span>" : "")
         + "</div><div class='ville-nb'>" + gr.items.length + " bien" + (gr.items.length > 1 ? "s" : "") + "</div></div>";
     }
-    gr.items.forEach(function(o){
-      var b = o.b, i = o.i;
-      var visu = visuelDe(b);
-      h += "<div class='card' data-carte='" + i + "'>";
-      var neuf = b && b.nouveau ? "<div class='num-neuf'>Nouveau</div>" : "";
-      if (visu.url){
-        h += "<div class='photo" + (visu.plan ? " plan" : "") + "' data-g='" + i + "'>";
-        h += "<div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf;
-        h += "<img src='" + esc(visu.url) + "' alt='" + (visu.plan ? "Plan du lot — " : "") + esc(b.titre || "Bien") + "' loading='lazy'>";
-        if (visu.plan) h += "<div class='voir-plan'>Voir le plan en grand</div>";
-        h += "</div>";
-      } else {
-        h += "<div class='img-vide'><div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf + "<img src='" + LOGO_SRC + "' alt='GLR Immobilier' onerror=\"this.outerHTML='<span class=&quot;txt&quot;>GLR</span>'\"></div>";
-      }
-      h += "<div class='body'>";
-      if (b.ville) h += "<div class='eyebrow'>" + esc(b.ville) + "</div>";
-      h += "<h2>" + esc(b.titre) + "</h2>";
-      var typos = Array.isArray(b.typologies) ? b.typologies : [];
-      var puces = typos.slice();
-      if (b.nature && puces.indexOf(b.nature) === -1) puces.unshift(b.nature);
-      if (puces.length) h += "<div class='chips'>" + puces.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
-      h += htmlPrix(b);
-      h += htmlRemises(b);
-      h += htmlNote(b, d);
-      h += htmlFaits(b);
-      h += htmlAdresse(b, i, etatAvis[String(i)] || {});
-      if (b.pitch) h += "<p class='pitch'>" + esc(b.pitch) + "</p>";
-      var atouts = Array.isArray(b.atouts) ? b.atouts.slice(0, 5) : [];
-      if (atouts.length) h += "<ul class='atouts'>" + atouts.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
-      // Un seul bouton documents, au meme format que la demande de rendez-vous :
-      // les clients ne voyaient pas les petits boutons Plan / Plan de masse.
-      // Priorite au lien Otaree (fiche + plans), sinon un document joint par le
-      // conseiller, sinon le plan du lot.
-      var joints = Array.isArray(b.docs) && b.docs.length
-        ? b.docs
-        : (b.pdf ? [{ nom: "Fiche du lot", url: b.pdf }] : []);
-      var lienDoc = b.lien || "";
-      if (!lienDoc){
-        for (var jd = 0; jd < joints.length; jd++){
-          var uj = joints[jd] && (joints[jd].url || (typeof joints[jd] === "string" ? joints[jd] : ""));
-          if (uj){ lienDoc = uj; break; }
-        }
-      }
-      if (!lienDoc) lienDoc = b.plan || b.masse || "";
-      if (lienDoc) h += "<div class='docs'><a class='doc' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>Fiche et plans du lot</a></div>";
-
-      var a = etatAvis[String(i)] || {};
-      h += "<div class='avis' data-i='" + i + "'>";
-      h += "<div class='avis-titre'>Votre avis sur ce bien :</div>";
-      h += "<div class='avis-btns'>";
-      h += "<button class='ab" + (a.choix === "interesse" ? " on" : "") + "' data-c='interesse'>Ça m'intéresse</button>";
-      h += "<button class='ab" + (a.choix === "a_discuter" ? " on" : "") + "' data-c='a_discuter'>À discuter</button>";
-      h += "<button class='ab" + (a.choix === "pas_pour_moi" ? " on" : "") + "' data-c='pas_pour_moi'>Pas pour moi</button>";
-      h += "</div>";
-      h += "<button class='cta-rdv'>Demander un rendez-vous</button>";
-      h += "</div></div></div>";
+    grouperParProgramme(gr.items).forEach(function(pg){
+      if (pg.items.length < 2){ h += htmlLot(pg.items[0].b, pg.items[0].i, d, false); return; }
+      h += htmlProgramme(pg, d);
     });
     });
 
@@ -934,9 +1181,9 @@
       var obs = new IntersectionObserver(function(entries){
         entries.forEach(function(e){ if (e.isIntersecting){ e.target.classList.add("vue"); obs.unobserve(e.target); } });
       }, { threshold: 0.08 });
-      Array.prototype.forEach.call(document.querySelectorAll(".card"), function(c){ obs.observe(c); });
+      Array.prototype.forEach.call(document.querySelectorAll(".card, .prog"), function(c){ obs.observe(c); });
     } else {
-      Array.prototype.forEach.call(document.querySelectorAll(".card"), function(c){ c.classList.add("vue"); });
+      Array.prototype.forEach.call(document.querySelectorAll(".card, .prog"), function(c){ c.classList.add("vue"); });
     }
   }
 
@@ -1138,14 +1385,36 @@
   function brancher(d){
     // Photo : clic → plein écran
     Array.prototype.forEach.call(document.querySelectorAll(".photo"), function(g){
-      var i = parseInt(g.getAttribute("data-g"), 10);
       var im = g.querySelector("img");
-      if (im) im.addEventListener("click", function(){ ouvrirLb(i, 0); });
+      if (!im) return;
+      if (g.hasAttribute("data-gp")){
+        // Photo de la résidence en tête d'un bloc programme : on ouvre sur la photo, pas sur le plan
+        var ip = parseInt(g.getAttribute("data-gp"), 10);
+        im.addEventListener("click", function(){
+          var bl = biens[ip] || {}, j = imagesDe(bl).indexOf(photoDe(bl));
+          ouvrirLb(ip, j < 0 ? 0 : j);
+        });
+        return;
+      }
+      var i = parseInt(g.getAttribute("data-g"), 10);
+      im.addEventListener("click", function(){ ouvrirLb(i, 0); });
     });
 
     // Avis
     Array.prototype.forEach.call(document.querySelectorAll(".avis"), function(bloc){
       var i = parseInt(bloc.getAttribute("data-i"), 10);
+      brancherCommentaire(bloc, i);
+      // Demande d'option : la case part tout de suite, cochée ou décochée
+      var opt = bloc.querySelector("[data-opt] input");
+      if (opt) opt.addEventListener("change", function(){
+        var veut = !!opt.checked;
+        opt.parentNode.className = "opt" + (veut ? " on" : "");
+        envoyer({ action: "avis", index: i, option: veut }, veut ? "✓ Bien noté, votre conseiller revient vers vous pour poser l'option" : "Demande d'option retirée").then(function(ok){
+          if (!ok){ opt.checked = !veut; opt.parentNode.className = "opt" + (!veut ? " on" : ""); return; }
+          etatAvis[String(i)] = etatAvis[String(i)] || {};
+          etatAvis[String(i)].option = veut;
+        });
+      });
       Array.prototype.forEach.call(bloc.querySelectorAll(".ab"), function(btn){
         btn.addEventListener("click", function(){
           Array.prototype.forEach.call(bloc.querySelectorAll(".ab"), function(b2){ b2.classList.remove("on"); });
@@ -1178,6 +1447,19 @@
     });
 
     brancherRdv(d);
+
+    // Bloc programme : replier / déplier la liste des lots
+    Array.prototype.forEach.call(document.querySelectorAll(".prog-toggle"), function(t){
+      t.addEventListener("click", function(){
+        var lots = t.closest(".prog") && t.closest(".prog").querySelector(".prog-lots");
+        if (!lots) return;
+        var ouvert = t.getAttribute("aria-expanded") !== "false";
+        lots.hidden = ouvert;
+        t.setAttribute("aria-expanded", ouvert ? "false" : "true");
+        var hint = t.querySelector(".pt-hint");
+        if (hint) hint.textContent = ouvert ? "Découvrir" : "Replier";
+      });
+    });
 
     document.getElementById("btn-rdv").addEventListener("click", function(){
       var bloc = document.getElementById("bloc-rdv");
