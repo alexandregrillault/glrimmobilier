@@ -5839,6 +5839,19 @@ function veilleSnapshot(l) {
     parking: q.parking || null, terrasse: q.terrasse || null, balcon: q.balcon || null,
     expositions: Array.isArray(q.expositions) ? q.expositions : [],
     tva_reduite: q.tva_reduite || null, ptz: q.ptz || null, etage_rdj: q.etage_rdj || null,
+    // Marge de négociation par critère (« Important » par défaut si rien n'est
+    // précisé — seul « Flexible » autorise à proposer d'élargir ce critère) :
+    // sert à la carte pour savoir quels lots proposer si on assouplit un critère.
+    importance_ville: q.importance_ville || 'important',
+    importance_budget: q.importance_budget || 'important',
+    importance_typologie: q.importance_typologie || 'important',
+    importance_surface: q.importance_surface || 'important',
+    importance_etage: q.importance_etage || 'important',
+    importance_parking: q.importance_parking || 'important',
+    importance_terrasse: q.importance_terrasse || 'important',
+    importance_balcon: q.importance_balcon || 'important',
+    importance_exposition: q.importance_exposition || 'important',
+    importance_livraison: q.importance_livraison || 'important',
     fige_le: new Date().toISOString()
   };
 }
@@ -5951,6 +5964,63 @@ function veilleMatch(l, p, zone) {
   if (anMax && anProg && !/\+/.test(String(c.livraison_max)) && anProg > anMax) return null;
 
   return { marges: marges, exacts: exacts, prix: prix };
+}
+
+// --- Écart à la vente : le lot réellement acheté, comparé aux critères d'origine --
+// Pas de machine learning ici — juste un constat enregistré à chaque vente, pour
+// pouvoir un jour compter (simplement) quels critères sont le plus souvent lâchés.
+// Seuls les critères aux formats fiables sont comparés (ville, budget, typologie,
+// surface, livraison) : étage/parking/terrasse/balcon/exposition ne sont pas
+// toujours renseignés sur un lot saisi à la main, on ne devine pas.
+function venteEcarts(l, lot) {
+  if (!l || !lot) return [];
+  const c = veilleCriteres(l);
+  const ecarts = [];
+
+  const villes = (c.villes || []).map(normLieu).filter(Boolean);
+  if (villes.length && lot.ville && villes.indexOf(normLieu(lot.ville)) === -1) {
+    ecarts.push({ critere: 'ville', demande: (c.villes || []).join(', '), obtenu: lot.ville, negociable: c.importance_ville === 'flexible' });
+  }
+
+  const bmax = c.budget_max != null ? Number(c.budget_max) : null;
+  const bLot = budgetParse(lot.prix);
+  if (bmax && bLot && bLot.max > bmax) {
+    ecarts.push({ critere: 'budget', demande: budgetFmt(bmax), obtenu: budgetFmt(bLot.max), negociable: c.importance_budget === 'flexible', pct: Math.round((bLot.max / bmax - 1) * 100) });
+  }
+
+  const typos = (c.typologies || []).map(veilleTypoCode).filter(Boolean);
+  const typoLot = veilleTypoCode((Array.isArray(lot.typologies) && lot.typologies[0]) || lot.type || '');
+  if (typos.length && typoLot && typos.indexOf(typoLot) === -1) {
+    ecarts.push({ critere: 'typologie', demande: typos.join(' / '), obtenu: typoLot, negociable: c.importance_typologie === 'flexible' });
+  }
+
+  const surfMin = c.surface_min != null ? Number(c.surface_min) : null;
+  const surfLot = lot.surface != null ? parseFloat(String(lot.surface).replace(',', '.')) : null;
+  if (surfMin && surfLot != null && !isNaN(surfLot) && surfLot < surfMin) {
+    ecarts.push({ critere: 'surface', demande: '≥ ' + surfMin + ' m²', obtenu: surfLot + ' m²', negociable: c.importance_surface === 'flexible' });
+  }
+
+  const livMax = c.livraison_max && c.livraison_max !== 'peu_importe' ? parseInt(String(c.livraison_max), 10) : null;
+  const anLot = veilleAnnee(lot.livraison);
+  if (livMax && anLot && anLot > livMax) {
+    ecarts.push({ critere: 'livraison', demande: '≤ ' + c.livraison_max, obtenu: String(anLot), negociable: c.importance_livraison === 'flexible' });
+  }
+
+  return ecarts;
+}
+
+// Lots déjà envoyés à ce client (toutes sélections confondues), pour le picker
+// « quel lot a-t-il acheté » — évite de ressaisir ce qui a déjà été envoyé.
+function _eqLotsEnvoyes(id) {
+  const sels = (_eqSelectionsAll || []).filter(s => s.contact_id === id);
+  const lots = [];
+  sels.forEach(s => (Array.isArray(s.biens) ? s.biens : []).forEach((b) => {
+    lots.push({
+      label: (b.titre || 'Bien') + (b.ville ? ' — ' + b.ville : '') + (b.prix ? ' · ' + b.prix : ''),
+      lot: b, token: s.token
+    });
+  }));
+  return lots;
 }
 
 // --- Paternité des leads (règle v2) -----------------------------------------
@@ -6167,7 +6237,7 @@ async function renderEquipeLeads() {
     // même si la paternité n'est pas (encore) à lui.
     // …et une fiche où il garde un rappel conservé (activites, par = lui) arrive aussi.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}],activites.cs.[{"par":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,conjoint,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,conjoint,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites,vente_lot&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -6252,6 +6322,8 @@ async function eqLeadStatutChange(id, statut) {
   // critères et on note pourquoi rien ne correspond aujourd'hui — c'est ce
   // qui dira dans six mois quels programmes il manque au catalogue.
   if (statut === STATUT_VEILLE) { eqVeilleOuvrir(id); return; }
+  // Vendu : on demande quel lot, pour pouvoir comparer aux critères d'origine.
+  if (statut === 'Vendu') { eqVenteLotOuvrir(id); return; }
   // Étapes actives du pipeline → on choisit quand rappeler le client (J+1 / J+2 / J+3 / date)
   if (['Suivi','Sélections','Retour documentation','Finaliser la vente'].includes(statut)) {
     const dejaVu = _eqLeads.find(x => x.id === id) || {};
@@ -6265,6 +6337,88 @@ async function eqLeadStatutChange(id, statut) {
 
 // Bouton "Appelé" sur un lead Nouveau : passe en Sélections + choix du rappel
 function eqLeadAppele(id) { eqLeadStatutChange(id, 'Sélections'); }
+
+// ---- Vendu : quel lot ? (obligatoire — sert à comparer aux critères d'origine) ----
+let _eqVenteLotId = null;
+let _eqVenteLotsListe = [];
+function eqVenteLotOuvrir(id) {
+  const l = _eqLeads.find(x => x.id === id);
+  if (!l) return;
+  _eqVenteLotId = id;
+  _eqVenteLotsListe = _eqLotsEnvoyes(id);
+  const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const old = document.getElementById('eq-vente-lot-modal'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'eq-vente-lot-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2200;display:flex;align-items:center;justify-content:center;padding:16px';
+  const champStyle = 'background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;width:100%';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:480px;max-width:94vw">
+    <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:4px">Quel lot ${esc(nomComplet(l) || 'ce client')} a-t-il acheté ?</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Nécessaire pour finaliser en « Vendu » — sert à comparer le lot acheté aux critères d'origine de la fiche.</div>
+    ${_eqVenteLotsListe.length ? `<label style="font-size:12px;color:var(--muted)">Un lot déjà envoyé dans une sélection</label>
+    <select id="vl-choix" onchange="_eqVenteLotToggle()" style="${champStyle};margin:4px 0 14px;cursor:pointer">
+      <option value="">— Choisir —</option>
+      ${_eqVenteLotsListe.map((x,i) => `<option value="${i}">${esc(x.label)}</option>`).join('')}
+      <option value="libre">Un autre lot (jamais envoyé formellement)</option>
+    </select>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Aucune sélection envoyée à ce client — renseigne le lot acheté :</div>`}
+    <div id="vl-libre" style="display:${_eqVenteLotsListe.length ? 'none' : 'grid'};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+      <input id="vl-titre" placeholder="Programme — Lot (ex : Alter Ego — A106)" style="${champStyle};grid-column:1/-1">
+      <input id="vl-ville" placeholder="Ville" style="${champStyle}">
+      <input id="vl-prix" placeholder="Prix (ex : 320 000 €)" style="${champStyle}">
+      <input id="vl-type" placeholder="Typologie (ex : T3)" style="${champStyle}">
+      <input id="vl-surface" placeholder="Surface (ex : 65)" style="${champStyle}">
+    </div>
+    <div id="vl-erreur" style="display:none;font-size:12px;color:var(--danger);margin:6px 0">Indique au moins le programme/lot.</div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
+      <button onclick="eqVenteLotAnnuler()" class="btn btn-secondary">Annuler</button>
+      <button onclick="eqVenteLotValider()" class="btn">Confirmer la vente</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+}
+function _eqVenteLotToggle() {
+  const sel = document.getElementById('vl-choix');
+  const zone = document.getElementById('vl-libre');
+  if (zone) zone.style.display = (sel && sel.value === 'libre') ? 'grid' : 'none';
+}
+function eqVenteLotAnnuler() {
+  const m = document.getElementById('eq-vente-lot-modal'); if (m) m.remove();
+  _eqVenteLotId = null;
+  // Le <select> de statut affichait déjà « Vendu » au clic : on réaffiche le vrai statut.
+  if (typeof _eqFicheRender === 'function' && typeof _eqFicheId !== 'undefined' && _eqFicheId) _eqFicheRender();
+  if (typeof renderEquipeLeadsTable === 'function') renderEquipeLeadsTable();
+}
+async function eqVenteLotValider() {
+  const id = _eqVenteLotId;
+  const l = _eqLeads.find(x => x.id === id);
+  if (!l) return;
+  const sel = document.getElementById('vl-choix');
+  let lot = null, source = 'saisie_libre', token = null;
+  if (sel && sel.value && sel.value !== 'libre') {
+    const x = _eqVenteLotsListe[parseInt(sel.value, 10)];
+    if (x) { lot = x.lot; source = 'selection'; token = x.token; }
+  }
+  if (!lot) {
+    const titre = (document.getElementById('vl-titre').value || '').trim();
+    if (!titre) { const err = document.getElementById('vl-erreur'); if (err) err.style.display = 'block'; return; }
+    lot = {
+      titre,
+      ville: (document.getElementById('vl-ville').value || '').trim(),
+      prix: (document.getElementById('vl-prix').value || '').trim(),
+      typologies: [(document.getElementById('vl-type').value || '').trim()].filter(Boolean),
+      surface: (document.getElementById('vl-surface').value || '').trim()
+    };
+  }
+  const ecarts = venteEcarts(l, lot);
+  const venteLot = {
+    titre: lot.titre || '', ville: lot.ville || '', prix: lot.prix || '',
+    typologie: (Array.isArray(lot.typologies) && lot.typologies[0]) || '', surface: lot.surface || '',
+    source, token: token || null, ecarts, enregistre_le: new Date().toISOString()
+  };
+  const m = document.getElementById('eq-vente-lot-modal'); if (m) m.remove();
+  _eqVenteLotId = null;
+  await _eqLeadPatch(id, { statut: 'Vendu', statut_maj: new Date().toISOString(), rappel_le: null, vente_lot: venteLot });
+}
 
 // ---- Sélecteur de rappel (J+1 / J+2 / J+3 / date libre / sans rappel)
 let _eqRappelCb = null;
@@ -7123,26 +7277,32 @@ function eqQualifRemplie(l) {
 function eqCriteresChips(l) {
   const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const q = l.qualif || {};
+  // Un critère marqué « Flexible » (voir la fiche) ressort ici en évidence —
+  // c'est ce qui aide le vendeur à savoir quoi lâcher si les lots ne plaisent pas.
+  const flexible = (champ) => q[champ] === 'flexible';
   const chips = [];
-  if (l.reference_annonce) chips.push('' + esc(l.reference_annonce) + (eqAnnoncePrix(l.reference_annonce) ? ' — ' + esc(eqAnnoncePrix(l.reference_annonce)) : ''));
-  if (q.projet) chips.push('' + ({ residence_principale: 'Résidence principale', residence_secondaire: 'Résidence secondaire', investissement: 'Investissement' }[q.projet] || esc(q.projet)));
-  if (q.commune_residence) chips.push('Habite ' + esc(q.commune_residence));
-  if (l.typologie) chips.push('' + esc(l.typologie));
-  String(l.lieu || '').split(/\s*,\s*/).filter(Boolean).forEach(v => chips.push('' + esc(v)));
-  if (l.budget) chips.push('' + esc(l.budget) + ({ avec: ' (avec PTZ)', sans: ' (sans PTZ)', a_verifier: ' (PTZ à vérifier)' }[q.ptz] || ''));
-  else if (q.ptz) chips.push('' + ({ avec: 'Avec PTZ', sans: 'Sans PTZ', a_verifier: 'PTZ à vérifier' }[q.ptz]));
-  if (q.surface_min) chips.push('≥ ' + esc(q.surface_min) + ' m²');
-  if (q.etage_rdj) chips.push('' + ({ peu_importe: 'Étage/RDJ : peu importe', etage: 'Étage uniquement', rdj: 'RDJ uniquement' }[q.etage_rdj] || esc(q.etage_rdj)));
-  if (q.parking) chips.push('Parking : ' + ({ oui: 'oui', non: 'non', peu_importe: 'peu importe' }[q.parking] || esc(q.parking)));
-  if (q.terrasse) chips.push('Terrasse : ' + ({ oui: 'oui', non: 'non', peu_importe: 'peu importe' }[q.terrasse]) + (q.terrasse === 'oui' && q.terrasse_m2_min ? ' (≥ ' + esc(q.terrasse_m2_min) + ' m²)' : ''));
-  if (q.balcon) chips.push('Balcon : ' + ({ oui: 'oui', non: 'non', peu_importe: 'peu importe' }[q.balcon]) + (q.balcon === 'oui' && q.balcon_m2_min ? ' (≥ ' + esc(q.balcon_m2_min) + ' m²)' : ''));
-  if (q.expositions && q.expositions.length) chips.push('' + q.expositions.map(e => ({ nord: 'Nord', sud: 'Sud', est: 'Est', ouest: 'Ouest' }[e] || e)).join(' / '));
-  if (q.tva_reduite) chips.push('TVA réduite : ' + ({ oui: 'éligible', non: 'non', a_verifier: 'à vérifier' }[q.tva_reduite]));
-  if (q.livraison_max) chips.push('Livraison ≤ ' + (q.livraison_max === 'peu_importe' ? 'peu importe' : (({ debut: 'début ', milieu: 'milieu ', fin: 'fin ' }[q.livraison_periode] || '') + esc(q.livraison_max))));
+  const push = (t, f) => chips.push({ t, f: !!f });
+  if (l.reference_annonce) push('' + esc(l.reference_annonce) + (eqAnnoncePrix(l.reference_annonce) ? ' — ' + esc(eqAnnoncePrix(l.reference_annonce)) : ''));
+  if (q.projet) push('' + ({ residence_principale: 'Résidence principale', residence_secondaire: 'Résidence secondaire', investissement: 'Investissement' }[q.projet] || esc(q.projet)));
+  if (q.commune_residence) push('Habite ' + esc(q.commune_residence));
+  if (l.typologie) push('' + esc(l.typologie), flexible('importance_typologie'));
+  String(l.lieu || '').split(/\s*,\s*/).filter(Boolean).forEach(v => push('' + esc(v), flexible('importance_ville')));
+  if (l.budget) push('' + esc(l.budget) + ({ avec: ' (avec PTZ)', sans: ' (sans PTZ)', a_verifier: ' (PTZ à vérifier)' }[q.ptz] || ''), flexible('importance_budget'));
+  else if (q.ptz) push('' + ({ avec: 'Avec PTZ', sans: 'Sans PTZ', a_verifier: 'PTZ à vérifier' }[q.ptz]));
+  if (q.surface_min) push('≥ ' + esc(q.surface_min) + ' m²', flexible('importance_surface'));
+  if (q.etage_rdj) push('' + ({ peu_importe: 'Étage/RDJ : peu importe', etage: 'Étage uniquement', rdj: 'RDJ uniquement' }[q.etage_rdj] || esc(q.etage_rdj)), flexible('importance_etage'));
+  if (q.parking) push('Parking : ' + ({ oui: 'oui', non: 'non', peu_importe: 'peu importe' }[q.parking] || esc(q.parking)), flexible('importance_parking'));
+  if (q.terrasse) push('Terrasse : ' + ({ oui: 'oui', non: 'non', peu_importe: 'peu importe' }[q.terrasse]) + (q.terrasse === 'oui' && q.terrasse_m2_min ? ' (≥ ' + esc(q.terrasse_m2_min) + ' m²)' : ''), flexible('importance_terrasse'));
+  if (q.balcon) push('Balcon : ' + ({ oui: 'oui', non: 'non', peu_importe: 'peu importe' }[q.balcon]) + (q.balcon === 'oui' && q.balcon_m2_min ? ' (≥ ' + esc(q.balcon_m2_min) + ' m²)' : ''), flexible('importance_balcon'));
+  if (q.expositions && q.expositions.length) push('' + q.expositions.map(e => ({ nord: 'Nord', sud: 'Sud', est: 'Est', ouest: 'Ouest' }[e] || e)).join(' / '), flexible('importance_exposition'));
+  if (q.tva_reduite) push('TVA réduite : ' + ({ oui: 'éligible', non: 'non', a_verifier: 'à vérifier' }[q.tva_reduite]));
+  if (q.livraison_max) push('Livraison ≤ ' + (q.livraison_max === 'peu_importe' ? 'peu importe' : (({ debut: 'début ', milieu: 'milieu ', fin: 'fin ' }[q.livraison_periode] || '') + esc(q.livraison_max))), flexible('importance_livraison'));
   if (!chips.length) return '<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:14px">Aucun critère rempli pour ce client — pense à compléter sa fiche </div>';
+  const flexibles = chips.filter(c => c.f);
   return `<div style="background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:10px 12px;margin-bottom:14px">
     <div style="font-size:10px;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:7px">Critères du client</div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap">${chips.map(c => `<span style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 11px;font-size:12px;font-weight:600">${c}</span>`).join('')}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap">${chips.map(c => `<span style="background:var(--surface);border:1px ${c.f ? 'dashed var(--success)' : 'solid var(--border)'};border-radius:20px;padding:4px 11px;font-size:12px;font-weight:600${c.f ? ';color:var(--success)' : ''}">${c.t}</span>`).join('')}</div>
+    ${flexibles.length ? '<div style="font-size:11px;color:var(--muted);margin-top:8px">Si les lots ne conviennent pas, commence par élargir ce qui est en pointillés vert ci-dessus — c\'est ce que le vendeur a marqué flexible.</div>' : ''}
   </div>`;
 }
 
@@ -7967,6 +8127,16 @@ function _eqFicheRender() {
   // Carte d'une question dans la grille horizontale
   const carte = (contenu) => `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px">${contenu}</div>`;
   const titreQ = (t) => `<div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:8px">${t}</div>`;
+  // Marge de négociation d'un critère (ville, budget, typologie) : sert à la carte
+  // et à la sélection pour savoir quoi proposer d'élargir en priorité pour ce client.
+  const IMPORTANCE_NIVEAUX = [['imperatif','Impératif'],['important','Important'],['flexible','Flexible']];
+  const importanceQ = (champ) => {
+    const val = q[champ] || 'important';
+    return `<div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:9px;border-top:1px dashed var(--border)">
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Marge</span>
+      ${IMPORTANCE_NIVEAUX.map(([v,label]) => `<button onclick="eqQualifSet('${champ}','${v}')" title="${label === 'Flexible' ? 'On peut le proposer comme critère à élargir pour ce client' : label === 'Impératif' ? 'Jamais proposé comme critère à élargir' : 'Ni imposé ni mis en avant comme négociable'}" style="border-radius:20px;padding:3px 9px;font-size:10.5px;font-weight:600;cursor:pointer;border:1px solid ${val===v?'var(--accent)':'var(--border)'};background:${val===v?'var(--accent)':'transparent'};color:${val===v?'#fff':'var(--muted)'}">${label}</button>`).join('')}
+    </div>`;
+  };
   const inputQ = (champ, valeur, placeholder) =>
     `<input id="eq-champ-${champ}" value="${esc(valeur||'').replace(/"/g,'&quot;')}" placeholder="${placeholder}" inputmode="numeric" oninput="eqTexteInput('${champ}', this.value, true)" onchange="eqTexteFlush('${champ}', this.value, true)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
      <div id="eq-etat-${champ}" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>`;
@@ -8054,14 +8224,14 @@ ${(() => {
         <input id="eq-champ-commune_residence" value="${esc(q.commune_residence||'').replace(/"/g,'&quot;')}" placeholder="Rechercher une commune… (ex : Boulogne)" autocomplete="off" oninput="eqVilleRechercheInput(this.value, 'residence');eqTexteInput('commune_residence', this.value, true)" onchange="eqTexteFlush('commune_residence', this.value, true)" onkeydown="if(event.key==='Enter'){eqCommuneChoisie(this.value.trim());this.blur()}" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
         <div id="eq-etat-commune_residence" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>
         <div id="eq-commune-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
-      ${carte(titreQ('Typologie — plusieurs choix possibles') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btnsMulti('eqTypoToggle', [['T1','T1'],['T2','T2'],['T3','T3'],['T4','T4'],['T5+','T5+']], String(l.typologie||'').split(/\s*,\s*/).filter(Boolean))}</div>`)}
+      ${carte(titreQ('Typologie — plusieurs choix possibles') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btnsMulti('eqTypoToggle', [['T1','T1'],['T2','T2'],['T3','T3'],['T4','T4'],['T5+','T5+']], String(l.typologie||'').split(/\s*,\s*/).filter(Boolean))}</div>` + importanceQ('importance_typologie'))}
       ${carte(titreQ('Ville(s) de recherche') + `
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:${villes.length?'8px':'0'}">
           ${villes.map(v => `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--accent)18;border:1px solid var(--accent);border-radius:20px;padding:5px 7px 5px 12px;font-size:12px;font-weight:600;color:var(--text)">${esc(v)}<button onclick="eqVilleRetire(this.dataset.v)" data-v="${esc(v).replace(/"/g,'&quot;')}" title="Retirer" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 3px">✕</button></span>`).join('')}
         </div>
         <input id="eq-ville-input" oninput="eqVilleRechercheInput(this.value)" onkeydown="if(event.key==='Enter'&&this.value.trim())eqVilleAjoute(this.value)" placeholder="Rechercher une ville… (ex : Asnières)" autocomplete="off" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
-        <div id="eq-ville-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
-      ${carte(titreQ('Budget') + champBudget(l.budget) + `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('ptz', [['avec','Avec PTZ'],['sans','Sans PTZ'],['a_verifier','À vérifier']], q.ptz)}</div>` + (l.reference_annonce || l.prix_annonce ? `
+        <div id="eq-ville-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>` + importanceQ('importance_ville'))}
+      ${carte(titreQ('Budget') + champBudget(l.budget) + `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('ptz', [['avec','Avec PTZ'],['sans','Sans PTZ'],['a_verifier','À vérifier']], q.ptz)}</div>` + importanceQ('importance_budget') + (l.reference_annonce || l.prix_annonce ? `
         <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
           <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Annonce cliquée <span style="text-transform:none;letter-spacing:0">— prix du bien, pas le budget du client</span></div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -8074,14 +8244,14 @@ ${(() => {
             ${l.reference_annonce && !_eqRefGenerique(l.reference_annonce) ? `<button onclick="eqAnnoncePrixEdit(this.dataset.r)" data-r="${esc(l.reference_annonce).replace(/"/g,'&quot;')}" title="Renseigner ou corriger le prix (partagé pour tous les leads de cette annonce)" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px 9px;color:var(--text);font-size:11px;cursor:pointer">✎ Prix</button>` : ''}
           </div>
         </div>` : ''))}
-      ${carte(titreQ('Surface minimum (m²)') + inputQ('surface_min', q.surface_min, 'Ex : 60'))}
-      ${carte(titreQ('Étage ou rez-de-jardin ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('etage_rdj', [['peu_importe','Peu importe'],['etage','Étage uniquement'],['rdj','RDJ uniquement']], q.etage_rdj)}</div>`)}
-      ${carte(titreQ('Parking ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('parking', [['oui','Oui'],['non','Non'],['peu_importe','Peu importe']], q.parking)}</div>`)}
-      ${carte(titreQ('Terrasse ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('terrasse', [['oui','Oui'],['non','Non'],['peu_importe','Peu importe']], q.terrasse)}</div>` + (q.terrasse === 'oui' ? `<div style="margin-top:7px">${inputQ('terrasse_m2_min', q.terrasse_m2_min, 'm² minimum de terrasse (ex : 10)')}</div>` : ''))}
-      ${carte(titreQ('Balcon ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('balcon', [['oui','Oui'],['non','Non'],['peu_importe','Peu importe']], q.balcon)}</div>` + (q.balcon === 'oui' ? `<div style="margin-top:7px">${inputQ('balcon_m2_min', q.balcon_m2_min, 'm² minimum de balcon (ex : 5)')}</div>` : ''))}
-      ${carte(titreQ('Exposition — plusieurs choix possibles') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btnsMulti('eqExpoToggle', [['nord','Nord'],['sud','Sud'],['est','Est'],['ouest','Ouest']], q.expositions)}</div>`)}
+      ${carte(titreQ('Surface minimum (m²)') + inputQ('surface_min', q.surface_min, 'Ex : 60') + importanceQ('importance_surface'))}
+      ${carte(titreQ('Étage ou rez-de-jardin ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('etage_rdj', [['peu_importe','Peu importe'],['etage','Étage uniquement'],['rdj','RDJ uniquement']], q.etage_rdj)}</div>` + importanceQ('importance_etage'))}
+      ${carte(titreQ('Parking ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('parking', [['oui','Oui'],['non','Non'],['peu_importe','Peu importe']], q.parking)}</div>` + importanceQ('importance_parking'))}
+      ${carte(titreQ('Terrasse ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('terrasse', [['oui','Oui'],['non','Non'],['peu_importe','Peu importe']], q.terrasse)}</div>` + (q.terrasse === 'oui' ? `<div style="margin-top:7px">${inputQ('terrasse_m2_min', q.terrasse_m2_min, 'm² minimum de terrasse (ex : 10)')}</div>` : '') + importanceQ('importance_terrasse'))}
+      ${carte(titreQ('Balcon ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('balcon', [['oui','Oui'],['non','Non'],['peu_importe','Peu importe']], q.balcon)}</div>` + (q.balcon === 'oui' ? `<div style="margin-top:7px">${inputQ('balcon_m2_min', q.balcon_m2_min, 'm² minimum de balcon (ex : 5)')}</div>` : '') + importanceQ('importance_balcon'))}
+      ${carte(titreQ('Exposition — plusieurs choix possibles') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btnsMulti('eqExpoToggle', [['nord','Nord'],['sud','Sud'],['est','Est'],['ouest','Ouest']], q.expositions)}</div>` + importanceQ('importance_exposition'))}
       ${carte(titreQ('Éligible TVA réduite ?') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('tva_reduite', [['oui','✓ Éligible'],['non','✕ Non'],['a_verifier','À vérifier']], q.tva_reduite)}</div>`)}
-      ${carte(titreQ('Date de livraison maximale') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('livraison_max', [['2026','2026'],['2027','2027'],['2028','2028'],['2029+','2029 et +'],['peu_importe','Peu importe']], q.livraison_max)}</div>` + (q.livraison_max && q.livraison_max !== 'peu_importe' ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('livraison_periode', [['debut','Début d’année'],['milieu','Milieu d’année'],['fin','Fin d’année']], q.livraison_periode)}</div>` : ''))}
+      ${carte(titreQ('Date de livraison maximale') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btns('livraison_max', [['2026','2026'],['2027','2027'],['2028','2028'],['2029+','2029 et +'],['peu_importe','Peu importe']], q.livraison_max)}</div>` + (q.livraison_max && q.livraison_max !== 'peu_importe' ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('livraison_periode', [['debut','Début d’année'],['milieu','Milieu d’année'],['fin','Fin d’année']], q.livraison_periode)}</div>` : '') + importanceQ('importance_livraison'))}
     </div>
 
     <div style="margin-top:14px">
@@ -10469,9 +10639,21 @@ function _selOuvrirCarte() {
   if (!_selCtx || !_selCtx.lead) return;
   const token = _selToken();
   _selCtx.carteSession = token;
+  const c = veilleCriteres(_selCtx.lead);
+  // Seuls les critères marqués « Flexible » par le vendeur peuvent être
+  // proposés en élargissement sur la carte — jamais deviné tout seul.
+  const criteres = {
+    villes: c.villes || [], typologies: c.typologies || [], budget_max: c.budget_max,
+    souple: {
+      ville: c.importance_ville === 'flexible',
+      budget: c.importance_budget === 'flexible',
+      typologie: c.importance_typologie === 'flexible'
+    }
+  };
   const url = 'carte.html?client=' + encodeURIComponent(_selCtx.lead.id)
     + '&nom=' + encodeURIComponent(nomComplet(_selCtx.lead) || '')
-    + '&session=' + token;
+    + '&session=' + token
+    + '&criteres=' + encodeURIComponent(JSON.stringify(criteres));
   window.open(url, '_blank');
 }
 
