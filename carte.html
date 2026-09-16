@@ -14,6 +14,14 @@
 html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--txt);background:var(--bg);font-size:13px}
 #app{--sideW:340px;--sideWL:780px;display:grid;grid-template-columns:var(--sideW) 1fr;grid-template-rows:56px 1fr;height:100%}
 #app.nof{grid-template-columns:0 1fr}#app.nof aside{display:none}
+/* Mode « sélection pour un client » : carte ouverte depuis la fiche d'un client dans le dashboard */
+#app.client-mode{grid-template-rows:56px 40px 1fr}
+#clientBar{grid-column:1/3;display:none;align-items:center;gap:10px;padding:0 14px;background:#FBF8F1;border-bottom:1px solid #B0894C;font-size:12.5px;color:#1E3A32}
+#app.client-mode #clientBar{display:flex}
+#clientBar b{color:#1E3A32}
+#clientBar .m{color:#6b7280}
+#clientBar .valider{margin-left:auto;background:#1E3A32;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12.5px;cursor:pointer;font-weight:600}
+#clientBar .valider:disabled{opacity:.45;cursor:default}
 /* poignée de redimensionnement du volet des critères (bord droit) */
 aside{position:relative}
 #sideGrip{position:absolute;top:0;bottom:0;right:0;width:7px;cursor:col-resize;z-index:30}
@@ -197,6 +205,7 @@ table.lots td.r{text-align:right}
   <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
   <button id="sideBtn" title="Afficher / masquer les critères">◧ Critères</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
 </header>
+<div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
 <aside>
   <div class="filters">
     <div class="row">
@@ -950,6 +959,48 @@ document.getElementById('cartZip').onclick = async () => {
 };
 document.getElementById('cartClear').onclick = () => { CART.clear(); saveCart(); renderCart(); renderCartBtn(); if (SEL) renderLots(SEL); };
 renderCartBtn();
+
+// ---------- mode « sélection pour un client » ----------
+// Ouverte depuis la fiche d'un client dans le dashboard (fenêtre liée via window.open) :
+// les lots cochés dans « Ma sélection » repartent vers la sélection en cours du client,
+// par postMessage — rien de nouveau à apprendre pour le commercial, c'est le même panier.
+(function () {
+  const qp = new URLSearchParams(location.search);
+  const client = { id: qp.get('client') || '', nom: qp.get('nom') || '', session: qp.get('session') || '' };
+  if (!client.id || !client.session || !window.opener) return;
+  // Panier dédié à cette sélection, vide au départ : ne touche pas au panier de
+  // navigation générale (localStorage, partagé entre tous les onglets de la carte).
+  CART = new Set();
+  saveCart = function () {};
+  document.getElementById('app').classList.add('client-mode');
+  document.getElementById('clientBarNom').textContent = client.nom || 'ce client';
+  const btn = document.getElementById('clientBarValider');
+  const majBarre = () => { document.getElementById('clientBarValiderN').textContent = CART.size ? '(' + CART.size + ')' : ''; btn.disabled = !CART.size; };
+  const _renderCartBtnBase = renderCartBtn;
+  renderCartBtn = function () { _renderCartBtnBase(); majBarre(); };
+  majBarre();
+  btn.onclick = () => {
+    const rows = cartRows();
+    if (!rows.length) return;
+    const lots = rows.map(({ l, p }) => ({
+      titre: (p.nom || 'Programme') + (l.n ? ' — Lot ' + l.n : ''),
+      ville: p.ville || '', commune: p.ville || '', adresse: p.adresse || '', adresseBrute: p.adresse || '', codePostal: p.cp || '',
+      promoteur: p.promoteur || '',
+      prix: fmt(l.prix20 || l.prix),
+      surface: l.surf ? String(l.surf).replace('.', ',') + ' m²' : '',
+      etage: l.etage == null ? (l.etage_raw || '') : (l.etage === 0 ? 'RDC' : String(l.etage)),
+      typologies: l.typo ? [l.typo] : [],
+      plan: l.plan || '', masse: '', lien: '', pdf: '', docs: [], image: '', images: [],
+      annexes: [], prixOptions: [], remises: [], atouts: [], pitch: '',
+      // Références pour retrouver le même lot / programme plus tard (plans partagés à venir)
+      _cartePigeId: l.id, _carteProgrammeId: p.id
+    }));
+    window.opener.postMessage({ type: 'glr-carte-lots', session: client.session, lots }, location.origin);
+    document.getElementById('clientBarMsg').textContent = 'envoyé — retourne sur l\'onglet du dashboard';
+    document.getElementById('clientBarValiderLabel').textContent = 'Envoyé ✓'; btn.disabled = true;
+    setTimeout(() => { document.getElementById('clientBarValiderLabel').textContent = 'Valider la sélection'; majBarre(); document.getElementById('clientBarMsg').textContent = 'coche des lots dans la carte, puis valide'; }, 2200);
+  };
+})();
 
 // ---------- vue « Lots » (tableau global des lots filtrés) ----------
 let VIEW = 'p', lvK = 'prix_m2', lvD = 1, lvMax = 300;
