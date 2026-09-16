@@ -22,6 +22,10 @@ html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Seg
 #clientBar .m{color:#6b7280}
 #clientBar .valider{margin-left:auto;background:#1E3A32;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12.5px;cursor:pointer;font-weight:600}
 #clientBar .valider:disabled{opacity:.45;cursor:default}
+#clientBar .crit{display:flex;align-items:center;gap:6px;color:#1E3A32}
+#clientBar .crit button{background:#fff;border:1px solid #B0894C;color:#1E3A32;border-radius:5px;padding:2px 9px;font-size:11.5px;cursor:pointer;font-weight:600}
+#clientBar .crit button:hover{background:#f3ece0}
+#fVillesPop input{width:100%;box-sizing:border-box;padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;margin-bottom:6px}
 /* poignée de redimensionnement du volet des critères (bord droit) */
 aside{position:relative}
 #sideGrip{position:absolute;top:0;bottom:0;right:0;width:7px;cursor:col-resize;z-index:30}
@@ -207,12 +211,16 @@ table.lots td.r{text-align:right}
   <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
   <button id="sideBtn" title="Afficher / masquer les critères">◧ Critères</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
 </header>
-<div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
+<div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="crit" id="clientCritInfo" hidden>· filtré selon ses critères : <b id="clientCritResume"></b><button id="clientCritOff" title="Retirer ce filtre et revenir à toute l'Île-de-France">Retirer le filtre</button></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
 <aside>
   <div class="filters">
     <div class="row">
       <select id="fPromo"><option value="">Tous les promoteurs</option></select>
       <select id="fDept"><option value="">Tous les départements</option></select>
+    </div>
+    <div class="row">
+      <div class="dd" id="fDeptsDD"><button type="button" id="fDeptsBtn">+ départements</button><div class="dd-pop" id="fDeptsPop" hidden></div></div>
+      <div class="dd" id="fVillesDD"><button type="button" id="fVillesBtn">+ villes</button><div class="dd-pop" id="fVillesPop" hidden><input id="fVillesSearch" placeholder="Rechercher une ville…" autocomplete="off"></div></div>
     </div>
     <div class="row">
       <select id="fSource"><option value="">Toutes les sources</option></select>
@@ -295,7 +303,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---------- filtres ----------
-const F = { promo: '', dept: '', typos: new Set(), budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville' };
+const F = { promo: '', dept: '', typos: new Set(), budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
 const NOWK = (() => { const d = new Date(); return d.getFullYear() + (Math.floor(d.getMonth() / 3) + 1) / 10; })();  // clé "année + trimestre/10" du trimestre en cours
 const TODAY = new Date().toISOString().slice(0, 10);
 const isLivre = p => p.livre === true || (p.livraison_key && p.livraison_key < NOWK);
@@ -325,6 +333,8 @@ function progOK(p) {
   if (F.promo && p.promoteur !== F.promo) return false;
   if (F.dept && p.dept !== F.dept) return false;
   if (F.ville && p.ville !== F.ville) return false;
+  if (F.mDepts.size && !F.mDepts.has(p.dept)) return false;
+  if (F.mVilles.size && !F.mVilles.has(p.ville)) return false;
   if (!livOK(p)) return false;
   if (F.flags.has('livre') && !isLivre(p)) return false;
   if (F.flags.has('nonact') && !nonActable(p)) return false;
@@ -374,6 +384,8 @@ function activeList() {
   if (F.promo) add('Promoteur : ' + F.promo, () => { F.promo = ''; document.getElementById('fPromo').value = ''; });
   if (F.dept) add(DEPTS[F.dept] + ' (' + F.dept + ')', () => { F.dept = ''; document.getElementById('fDept').value = ''; map.fitBounds(IDF); });
   if (F.ville) add(F.ville, () => { F.ville = ''; });
+  F.mDepts.forEach(d => add(DEPTS[d] + ' (' + d + ')', () => { F.mDepts.delete(d); renderDeptsMulti(); }));
+  F.mVilles.forEach(v => add(v, () => { F.mVilles.delete(v); renderVillesMulti(); }));
   if (F.source) add('Source : ' + F.source, () => { F.source = ''; document.getElementById('fSource').value = ''; });
   if (F.com) add('Commission ≥ ' + F.com + ' %', () => { F.com = ''; document.getElementById('fCom').value = ''; });
   F.typos.forEach(t => add(t, () => { F.typos.delete(t); [...fT.children].forEach(c => { if (c.firstChild.textContent === t) c.classList.remove('on'); }); }));
@@ -415,6 +427,8 @@ function concessions() {
   if (F.gare) push('Sans critère de gare', { gare: '' }, () => { F.gare = ''; document.getElementById('fGare').value = ''; });
   if (F.dept) push('Tous les départements', { dept: '' }, () => { F.dept = ''; document.getElementById('fDept').value = ''; map.fitBounds(IDF); });
   if (F.ville) push('Toute l’Île-de-France (pas seulement ' + F.ville + ')', { ville: '' }, () => { F.ville = ''; });
+  if (F.mDepts.size) push('Sans le filtre multi-départements', { mDepts: new Set() }, () => { F.mDepts.clear(); renderDeptsMulti(); });
+  if (F.mVilles.size) push('Sans le filtre multi-villes', { mVilles: new Set() }, () => { F.mVilles.clear(); renderVillesMulti(); });
   if (F.promo) push('Tous les promoteurs', { promo: '' }, () => { F.promo = ''; document.getElementById('fPromo').value = ''; });
   if (F.source) push('Toutes les sources', { source: '' }, () => { F.source = ''; document.getElementById('fSource').value = ''; });
   if (F.com) push('Sans minimum de commission', { com: '' }, () => { F.com = ''; document.getElementById('fCom').value = ''; });
@@ -463,7 +477,15 @@ fiscs.forEach(f => { const l = document.createElement('label'); const c = docume
 const fAll = document.createElement('label'); fAll.className = 'all'; fAll.textContent = 'Tout décocher'; fAll.onclick = () => { F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); apply(); }; fPop.appendChild(fAll);
 fBtn.onclick = e => { e.stopPropagation(); fPop.hidden = !fPop.hidden; };
 fPop.onclick = e => e.stopPropagation();
-document.addEventListener('click', () => { fPop.hidden = true; });
+// ---- multi-sélection départements ----
+const fDeptsPop = document.getElementById('fDeptsPop'), fDeptsBtn = document.getElementById('fDeptsBtn');
+function deptsLabel() { const n = F.mDepts.size; fDeptsBtn.textContent = n ? (n === 1 ? DEPTS[[...F.mDepts][0]] : n + ' départements') : '+ départements'; fDeptsBtn.classList.toggle('on', n > 0); }
+function renderDeptsMulti() { fDeptsPop.querySelectorAll('input').forEach(i => i.checked = F.mDepts.has(i.value)); deptsLabel(); }
+Object.keys(DEPTS).forEach(d => { const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = d; c.onchange = () => { c.checked ? F.mDepts.add(d) : F.mDepts.delete(d); deptsLabel(); apply(); }; l.appendChild(c); l.appendChild(document.createTextNode(d + ' — ' + DEPTS[d])); fDeptsPop.appendChild(l); });
+const fDeptsAll = document.createElement('label'); fDeptsAll.className = 'all'; fDeptsAll.textContent = 'Tout décocher'; fDeptsAll.onclick = () => { F.mDepts.clear(); renderDeptsMulti(); apply(); }; fDeptsPop.appendChild(fDeptsAll);
+fDeptsBtn.onclick = e => { e.stopPropagation(); fDeptsPop.hidden = !fDeptsPop.hidden; };
+fDeptsPop.onclick = e => e.stopPropagation();
+document.addEventListener('click', () => { fPop.hidden = true; fDeptsPop.hidden = true; fVillesPop.hidden = true; });
 const fT = document.getElementById('fTypo');
 TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = t; c.onclick = () => { F.typos.has(t) ? F.typos.delete(t) : F.typos.add(t); c.classList.toggle('on'); apply(); }; fT.appendChild(c); });
 ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
@@ -471,7 +493,7 @@ TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'ch
 [...document.getElementById('fLivM').children].forEach(c => c.onclick = () => { F.livM = c.dataset.m; [...c.parentElement.children].forEach(x => x.classList.toggle('on', x === c)); apply(); });
 document.getElementById('fSort').onchange = e => { F.sort = e.target.value; renderList(); };
 document.getElementById('fMaison').onchange = e => { F.maison = e.target.checked; apply(); };
-document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '' }); setSt('libre'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.children].forEach(c => c.classList.remove('on')); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); map.fitBounds(IDF); apply(); };
+document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '' }); setSt('libre'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.children].forEach(c => c.classList.remove('on')); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
 
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
@@ -868,6 +890,26 @@ const nv = s => norm(s).replace(/[-'’]/g, ' ').replace(/\bst\b/g, 'saint').rep
 const villes = [...new Set(P.map(p => p.ville).filter(Boolean))].map(v => ({ t: 'ville', v, n: P.filter(p => p.ville === v).length, cp: P.find(p => p.ville === v).cp }));
 // toutes les communes IDF (même sans programme) : zoom sur le contour
 const communesAll = GEO.contours ? GEO.contours.features.filter(f => !villes.some(v => v.v === f.properties.n)).map(f => ({ v: f.properties.n, d: f.properties.d, f })) : [];
+// ---- multi-sélection villes ----
+const fVillesPop = document.getElementById('fVillesPop'), fVillesBtn = document.getElementById('fVillesBtn'), fVillesSearch = document.getElementById('fVillesSearch');
+function villesLabel() { const n = F.mVilles.size; fVillesBtn.textContent = n ? (n === 1 ? [...F.mVilles][0] : n + ' villes') : '+ villes'; fVillesBtn.classList.toggle('on', n > 0); }
+const fVillesAll = document.createElement('label'); fVillesAll.className = 'all'; fVillesAll.textContent = 'Tout décocher'; fVillesAll.onclick = () => { F.mVilles.clear(); renderVillesMulti(); apply(); };
+function renderVillesList(filtre) {
+  [...fVillesPop.querySelectorAll('label:not(.all)')].forEach(l => l.remove());
+  const sv = nv(filtre || '');
+  villes.filter(v => !sv || nv(v.v).includes(sv)).sort((a, b) => a.v.localeCompare(b.v, 'fr')).slice(0, 200).forEach(v => {
+    const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = v.v; c.checked = F.mVilles.has(v.v);
+    c.onchange = () => { c.checked ? F.mVilles.add(v.v) : F.mVilles.delete(v.v); villesLabel(); apply(); };
+    l.appendChild(c); l.appendChild(document.createTextNode(v.v));
+    fVillesPop.appendChild(l);
+  });
+  fVillesPop.appendChild(fVillesAll);
+}
+function renderVillesMulti() { renderVillesList(fVillesSearch.value); villesLabel(); }
+renderVillesList('');
+fVillesBtn.onclick = e => { e.stopPropagation(); fVillesPop.hidden = !fVillesPop.hidden; if (!fVillesPop.hidden) fVillesSearch.focus(); };
+fVillesPop.onclick = e => e.stopPropagation();
+fVillesSearch.oninput = () => renderVillesList(fVillesSearch.value);
 let sugIdx = -1;
 q.oninput = () => {
   const s = norm(q.value.trim()); sugIdx = -1;
@@ -1058,6 +1100,64 @@ function carteBadgeMatch(m) {
   };
 })();
 
+// ---------- mode « sélection pour un client » : préremplissage des critères ----------
+// Ouverte depuis la fiche d'un client : on préremplit les vrais filtres (pas
+// seulement le badge « ✓ correspond ») et on zoome sur la zone où ressortent
+// ses lots. Le vendeur reste libre de modifier ou de retirer ce filtre.
+function carteAppliquerCriteres() {
+  if (!CARTE_CRIT) return;
+  const villesCrit = (CARTE_CRIT.villes || []).map(v => String(v || '').trim()).filter(Boolean);
+  const typosCrit = [...new Set((CARTE_CRIT.typologies || []).map(carteTypoCode).filter(Boolean))];
+  const bmax = CARTE_CRIT.budget_max != null && CARTE_CRIT.budget_max !== '' ? Number(CARTE_CRIT.budget_max) : null;
+  if (!villesCrit.length && !typosCrit.length && !bmax) return;
+
+  // résout les villes saisies côté client vers les vraies villes de la pige (accents, tirets, CP…)
+  const villesResolues = new Set();
+  villesCrit.forEach(vc => {
+    const svc = nv(String(vc).replace(/\(?\d{4,5}\)?\s*$/, ''));
+    if (!svc) return;
+    let meilleure = null;
+    villes.forEach(v => { const sv = nv(v.v); if (sv === svc || sv.includes(svc) || svc.includes(sv)) { if (!meilleure || v.n > meilleure.n) meilleure = v; } });
+    if (meilleure) villesResolues.add(meilleure.v);
+  });
+  if (villesResolues.size) { F.mVilles = villesResolues; }
+  typosCrit.forEach(t => { if (TYPOS.includes(t)) F.typos.add(t); });
+  let budgetArrondi = null;
+  if (bmax) {
+    budgetArrondi = Math.ceil((bmax * (1 + CARTE_MARGE_BUDGET)) / 5000) * 5000;
+    F.budget = String(budgetArrondi);
+    const s = document.getElementById('fBudget');
+    if (![...s.options].some(o => +o.value === budgetArrondi)) { const o = document.createElement('option'); o.value = budgetArrondi; o.textContent = '≤ ' + fmtk(budgetArrondi); s.appendChild(o); }
+    s.value = budgetArrondi;
+  }
+
+  // reflète l'état dans les contrôles visibles
+  renderVillesMulti();
+  [...fT.children].forEach(c => { if (F.typos.has(c.textContent)) c.classList.add('on'); });
+  apply();
+
+  // zoom sur la zone où ressortent les lots correspondant aux critères
+  const progsMatch = P.filter(p => p.lots.some(l => carteMatchLot(l, p) != null));
+  const pts = (progsMatch.length ? progsMatch : VIS).filter(p => p.lat).map(p => [p.lat, p.lng]);
+  if (pts.length > 1) map.fitBounds(L.latLngBounds(pts).pad(.25), { maxZoom: 15 });
+  else if (pts.length === 1) map.setView(pts[0], 14);
+
+  // bandeau « filtré selon ses critères » — modifiable (via les filtres normaux) et retirable
+  const info = document.getElementById('clientCritInfo');
+  if (info) {
+    const resume = [villesResolues.size ? (villesResolues.size === 1 ? [...villesResolues][0] : villesResolues.size + ' villes') : null, typosCrit.length ? typosCrit.join(', ') : null, budgetArrondi ? '≤ ' + fmtk(budgetArrondi) : null].filter(Boolean).join(' · ');
+    document.getElementById('clientCritResume').textContent = resume;
+    info.hidden = false;
+    document.getElementById('clientCritOff').onclick = () => {
+      F.mVilles.clear(); typosCrit.forEach(t => F.typos.delete(t));
+      if (budgetArrondi) { F.budget = ''; document.getElementById('fBudget').value = ''; }
+      renderVillesMulti(); [...fT.children].forEach(c => { if (typosCrit.includes(c.textContent)) c.classList.remove('on'); });
+      info.hidden = true;
+      map.fitBounds(IDF); apply();
+    };
+  }
+}
+
 // ---------- vue « Lots » (tableau global des lots filtrés) ----------
 let VIEW = 'p', lvK = 'prix_m2', lvD = 1, lvMax = 300;
 document.querySelectorAll('#tabs span').forEach(t => t.onclick = () => { VIEW = t.dataset.t; document.querySelectorAll('#tabs span').forEach(x => x.classList.toggle('on', x === t)); document.getElementById('list').style.display = VIEW === 'p' ? '' : 'none'; document.getElementById('crumbs').style.display = VIEW === 'p' ? '' : 'none'; document.getElementById('lotsview').style.display = VIEW === 'l' ? 'block' : 'none'; document.getElementById('app').classList.toggle('lots', VIEW === 'l'); setTimeout(() => map.invalidateSize(), 50); renderLotsView(); });
@@ -1083,6 +1183,7 @@ function renderLotsView() {
 document.getElementById('csv').onclick = () => {
   dlCsv([CSVH, ...visibleLots().map(({ l, p }) => lotRow(p, l))], 'lots-piges');
 };
+carteAppliquerCriteres();
 apply();
 </script>
 </body>
