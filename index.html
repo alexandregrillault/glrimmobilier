@@ -3371,6 +3371,31 @@ function loadCarte() {
   f.src = 'carte.html?embed=1';
 }
 
+// La carte, ouverte pour un client précis (bouton « Ouvrir la carte » dans une
+// sélection en cours — voir _selOuvrirCarte), renvoie les lots cochés par ce
+// message. On les ajoute à la sélection en cours comme s'ils avaient été
+// saisis à la main — même liste, mêmes boutons (✎, Plan, Retirer…).
+window.addEventListener('message', function (e) {
+  if (e.origin !== location.origin) return;
+  const d = e.data;
+  if (!d || d.type !== 'glr-carte-lots' || !_selCtx || d.session !== _selCtx.carteSession) return;
+  const deja = new Set(_selCtx.libres.map(b => b._cartePigeId).filter(Boolean));
+  const nouveaux = [];
+  (Array.isArray(d.lots) ? d.lots : []).forEach(lot => {
+    if (lot && lot._cartePigeId && deja.has(lot._cartePigeId)) return;
+    _selCtx.libres.push(lot);
+    nouveaux.push(lot);
+    if (lot && lot._cartePigeId) deja.add(lot._cartePigeId);
+  });
+  if (nouveaux.length) {
+    selAjouterLibreRefresh();
+    if (typeof toast === 'function') toast('✓ ' + nouveaux.length + ' lot' + (nouveaux.length > 1 ? 's' : '') + ' ajouté' + (nouveaux.length > 1 ? 's' : '') + ' depuis la carte');
+    // Vignette de plan en tâche de fond, seulement pour les lots qui en ont un
+    // (rare hors Otaree — la plupart n'ont pas de plan sur l'extranet du promoteur)
+    planPreparerLots(nouveaux).then(r => { if (r.faits) selAjouterLibreRefresh(); });
+  }
+});
+
 // Le simulateur de financement vit dans simulateur.html, à côté d'index.html
 // (barèmes 2026 et taux dans le fichier lui-même). Chargé à la première
 // ouverture puis conservé : la saisie du client reste en place.
@@ -10437,6 +10462,19 @@ function _selToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(6))).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
+// Ouvre la carte des programmes dans un nouvel onglet, liée à la sélection en cours :
+// les lots cochés là-bas reviennent automatiquement s'ajouter ici (voir le message
+// 'glr-carte-lots' écouté plus bas), sans rien à faire côté commercial.
+function _selOuvrirCarte() {
+  if (!_selCtx || !_selCtx.lead) return;
+  const token = _selToken();
+  _selCtx.carteSession = token;
+  const url = 'carte.html?client=' + encodeURIComponent(_selCtx.lead.id)
+    + '&nom=' + encodeURIComponent(nomComplet(_selCtx.lead) || '')
+    + '&session=' + token;
+  window.open(url, '_blank');
+}
+
 // ---- Civilité + nom de famille : la page client dit « Bonjour Monsieur Dupont »
 // Devine le nom de famille depuis le nom complet du contact (dernier mot)
 function _selNomFamilleDevine(nom) {
@@ -10529,6 +10567,8 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Colle tes liens Otaree (un par ligne) — titre, plan et plan de masse sont récupérés automatiquement</div>
     <textarea id="sel-otaree-liens" rows="3" placeholder="https://glr-immobilier.otaree.com/v/…" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;resize:vertical"></textarea>
     <button id="sel-otaree-btn" onclick="selExtraireLiens()" class="btn" style="margin:8px 0 16px;font-size:12px">Analyser les liens</button>
+    <div style="font-size:12px;color:var(--muted);margin:0 0 6px">Ou choisis les lots sur la carte (hors Otaree)</div>
+    <button onclick="_selOuvrirCarte()" class="btn btn-secondary" style="margin:0 0 16px;font-size:12px">Ouvrir la carte pour ${_vEsc(nomComplet(l) || 'ce client')}</button>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Lots de la sélection <span style="opacity:.7">(✎ pour compléter prix, surface…)</span></div>
     <div id="sel-libres" style="margin-bottom:14px"><div style="font-size:12px;color:var(--muted)">Aucun lot pour le moment</div></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Ajouter / compléter un lot à la main</div>
