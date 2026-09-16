@@ -167,6 +167,8 @@ table.lots td.r{text-align:right}
 .tag.nw{background:#dcfce7;color:#166534;font-weight:600}
 .tag.dn{background:#fee2e2;color:#991b1b;font-weight:600}
 .tag.cm{background:#fff7ed;color:#9a3412}
+.tag.mex{background:#dcfce7;color:#166534;font-weight:600}
+.tag.mma{background:#fff7ed;color:#9a3412;font-weight:600}
 #tabs{display:flex;border-bottom:1px solid var(--line);font-size:12px}
 #tabs span{flex:1;text-align:center;padding:7px 0;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent}
 #tabs span.on{color:var(--teal);border-color:var(--teal);font-weight:600}
@@ -852,7 +854,7 @@ function renderLots(p) {
   let h = '<table class="lots"><thead><tr>' + cols.map(([k, t]) => '<th data-k="' + k + '">' + t + (sortK === k && k !== 'ck' ? (sortD > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
   ls.forEach(l => {
     const extra = [l.annexes, l.parkings, l.loyer ? 'loyer ' + fmt(l.loyer) : null, l.renta ? 'renta ' + l.renta + ' %' : null, l.dpe ? 'DPE ' + l.dpe : null, l.livraison ? 'livr. ' + l.livraison : null, l.option_fin ? 'option jusqu’au ' + String(l.option_fin).slice(0, 10) : null, (l.fisc || []).join(', ')].filter(Boolean).join(' · ');
-    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (l.plan ? '<a href="' + esc(l.plan) + '" target="_blank">PDF</a>' : '') + '</td></tr>';
+    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (l.plan ? '<a href="' + esc(l.plan) + '" target="_blank">PDF</a>' : '') + '</td></tr>';
   });
   h += '</tbody></table>';
   const t = panel.querySelector('#lotsTbl'); t.innerHTML = h;
@@ -960,13 +962,67 @@ document.getElementById('cartZip').onclick = async () => {
 document.getElementById('cartClear').onclick = () => { CART.clear(); saveCart(); renderCart(); renderCartBtn(); if (SEL) renderLots(SEL); };
 renderCartBtn();
 
-// ---------- mode « sélection pour un client » ----------
-// Ouverte depuis la fiche d'un client dans le dashboard (fenêtre liée via window.open) :
-// les lots cochés dans « Ma sélection » repartent vers la sélection en cours du client,
-// par postMessage — rien de nouveau à apprendre pour le commercial, c'est le même panier.
+// ---------- mode « sélection pour un client » : contexte + critères ----------
+// Ouverte depuis la fiche d'un client dans le dashboard (fenêtre liée via window.open).
+const _qpCarte = new URLSearchParams(location.search);
+const CARTE_CLIENT = { id: _qpCarte.get('client') || '', nom: _qpCarte.get('nom') || '', session: _qpCarte.get('session') || '' };
+let CARTE_CRIT = null;
+try { CARTE_CRIT = JSON.parse(_qpCarte.get('criteres') || 'null'); } catch (e) { CARTE_CRIT = null; }
+
+// Seuil repris de la veille (dashboard) — même règle partout : budget élargi de 15 %.
+const CARTE_MARGE_BUDGET = 0.15;
+function carteTypoCode(t) {
+  const s = String(t == null ? '' : t).toLowerCase();
+  if (/studio/.test(s)) return 'T1';
+  const m = s.match(/t\s*([1-5])/) || s.match(/([1-5])\s*(?:pi|p\b)/);
+  if (!m) return null;
+  return m[1] === '5' ? 'T5+' : 'T' + m[1];
+}
+// Un lot correspond-il aux critères du client ? null = rien à signaler (pas de
+// critères saisis, ou trop d'écarts pour être pertinent). Un critère n'est
+// élargi que si le vendeur l'a explicitement marqué « Flexible » sur la fiche
+// (CARTE_CRIT.souple) — jamais deviné.
+function carteMatchLot(l, p) {
+  if (!CARTE_CRIT) return null;
+  const villes = (CARTE_CRIT.villes || []).map(v => String(v).toLowerCase().trim()).filter(Boolean);
+  const typos = (CARTE_CRIT.typologies || []).map(carteTypoCode).filter(Boolean);
+  const bmax = CARTE_CRIT.budget_max != null ? Number(CARTE_CRIT.budget_max) : null;
+  if (!villes.length && !typos.length && !bmax) return null;
+  const souple = CARTE_CRIT.souple || {};
+  const ecarts = [];
+
+  if (villes.length) {
+    const villeProg = String(p.ville || '').toLowerCase().trim();
+    const ok = villes.some(v => v && villeProg && (villeProg.indexOf(v.replace(/\s*\d{4,5}\s*$/, '').trim()) !== -1 || v.indexOf(villeProg) !== -1));
+    if (!ok) { if (!souple.ville) return null; ecarts.push('secteur : ' + (p.ville || '?')); }
+  }
+  if (bmax) {
+    const prix = l.prix20 || l.prix || null;
+    if (prix != null) {
+      if (prix > bmax * (1 + CARTE_MARGE_BUDGET)) return null;
+      if (prix > bmax) { if (!souple.budget) return null; ecarts.push('budget +' + Math.round((prix / bmax - 1) * 100) + ' %'); }
+    }
+  }
+  if (typos.length) {
+    const code = carteTypoCode(l.typo || l.type);
+    if (code && typos.indexOf(code) === -1) { if (!souple.typologie) return null; ecarts.push('typologie : ' + (l.typo || l.type)); }
+  }
+  if (ecarts.length > 1) return null; // trop d'écarts cumulés : pas assez pertinent pour être mis en avant
+  return ecarts.length ? { niveau: 'marge', raison: ecarts.join(' · ') } : { niveau: 'exact' };
+}
+function carteBadgeMatch(m) {
+  if (!m) return '';
+  return m.niveau === 'exact'
+    ? ' <span class="tag mex" title="Correspond aux critères du client">✓ correspond</span>'
+    : ' <span class="tag mma" title="Correspond en élargissant : ' + esc(m.raison) + '">≈ à élargir</span>';
+}
+
+// ---------- mode « sélection pour un client » : interface ----------
+// Les lots cochés dans « Ma sélection » repartent vers la sélection en cours du
+// client, par postMessage — rien de nouveau à apprendre pour le commercial,
+// c'est le même panier.
 (function () {
-  const qp = new URLSearchParams(location.search);
-  const client = { id: qp.get('client') || '', nom: qp.get('nom') || '', session: qp.get('session') || '' };
+  const client = CARTE_CLIENT;
   if (!client.id || !client.session || !window.opener) return;
   // Panier dédié à cette sélection, vide au départ : ne touche pas au panier de
   // navigation générale (localStorage, partagé entre tous les onglets de la carte).
@@ -1015,7 +1071,7 @@ function renderLotsView() {
   all.sort((a, b) => { const x = g(a), y = g(b); if (x == null) return 1; if (y == null) return -1; return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { numeric: true })) * lvD; });
   const cols = [['ville', 'Ville'], ['prog', 'Programme'], ['n', 'Lot'], ['typo', 'Typo'], ['surf', 'm²'], ['etage', 'Ét.'], ['prix', 'Prix 20 %'], ['prix55', '5,5 %'], ['prix_m2', '€/m²'], ['renta', 'Renta'], ['com', 'Com.'], ['liv', 'Livr.'], ['gare', 'Gare']];
   let h = '<table><thead><tr><th></th>' + cols.map(([k, t]) => '<th data-k="' + k + '">' + t + (lvK === k ? (lvD > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
-  all.slice(0, lvMax).forEach(({ l, p }) => { h += '<tr data-p="' + esc(p.id) + '" data-l="' + esc(l.id) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(p.ville) + '</td><td title="' + esc(p.promoteur) + '">' + esc(p.nom).slice(0, 22) + '</td><td>' + esc(l.n) + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf || '') + '</td><td>' + (l.etage == null ? '' : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td class="r"><b>' + fmtk(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn">↓</span>' : '') + '</td><td class="r" style="color:#166534">' + (l.prix55 ? fmtk(l.prix55) : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td class="r">' + (l.renta ? l.renta + ' %' : '') + '</td><td class="r">' + (p.commission_pct ? String(p.commission_pct).replace('.', ',') + ' %' : '') + '</td><td>' + esc(p.livraison || '') + '</td><td class="r">' + (p.gare_dist ? (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') : '') + '</td></tr>'; });
+  all.slice(0, lvMax).forEach(({ l, p }) => { h += '<tr data-p="' + esc(p.id) + '" data-l="' + esc(l.id) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(p.ville) + '</td><td title="' + esc(p.promoteur) + '">' + esc(p.nom).slice(0, 22) + '</td><td>' + esc(l.n) + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf || '') + '</td><td>' + (l.etage == null ? '' : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td class="r"><b>' + fmtk(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn">↓</span>' : '') + '</td><td class="r" style="color:#166534">' + (l.prix55 ? fmtk(l.prix55) : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td class="r">' + (l.renta ? l.renta + ' %' : '') + '</td><td class="r">' + (p.commission_pct ? String(p.commission_pct).replace('.', ',') + ' %' : '') + '</td><td>' + esc(p.livraison || '') + '</td><td class="r">' + (p.gare_dist ? (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') : '') + '</td></tr>'; });
   h += '</tbody></table>' + (all.length > lvMax ? '<div class="more" id="lvMore">Afficher ' + Math.min(300, all.length - lvMax) + ' lots de plus (' + all.length + ' au total)</div>' : '');
   el.innerHTML = h;
   el.querySelectorAll('th[data-k]').forEach(th => th.onclick = () => { if (lvK === th.dataset.k) lvD = -lvD; else { lvK = th.dataset.k; lvD = 1; } renderLotsView(); });
