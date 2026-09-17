@@ -85,7 +85,12 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 #active{padding:6px 12px;border-bottom:1px solid var(--line);display:flex;gap:4px;align-items:center;flex-wrap:wrap;background:#f9fafb}
 #active .ac{display:inline-flex;align-items:center;gap:5px;border:1px solid #0f7c8c;color:#0f7c8c;background:#fff;border-radius:14px;padding:2px 7px 2px 9px;font-size:11px;font-weight:600}
 #active .ac i{font-style:normal;cursor:pointer;color:#9ca3af;font-weight:700}#active .ac i:hover{color:#dc2626}
-#active .all{font-size:11px;color:var(--teal);cursor:pointer;margin-left:auto}
+#active .edit{font-size:11px;color:var(--teal);cursor:pointer;margin-left:8px;font-weight:600}
+#active .all{font-size:11px;color:var(--muted);cursor:pointer;margin-left:auto}
+.fbar{padding:6px 12px;border-bottom:1px solid var(--line);background:#fff;display:flex}
+.fbar button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--navy)}
+.fbar button:hover{background:#f4f4f4}
+.filters.collapsed{display:none}
 .chip .cnt{opacity:.6;font-weight:400;margin-left:3px;font-size:10px}
 .conc{margin:8px 12px;border:1px solid #fdba74;background:#fff7ed;border-radius:8px;padding:8px 10px;font-size:12px;color:#7c2d12}
 .conc b{display:block;margin-bottom:4px}.conc .o{display:inline-block;margin:2px 4px 2px 0;border:1px solid #fb923c;background:#fff;border-radius:14px;padding:2px 9px;cursor:pointer;color:#9a3412}
@@ -213,6 +218,7 @@ table.lots td.r{text-align:right}
 </header>
 <div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="crit" id="clientCritInfo" hidden>· filtré selon ses critères : <b id="clientCritResume"></b><button id="clientCritOff" title="Retirer ce filtre et revenir à toute l'Île-de-France">Retirer le filtre</button></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
 <aside>
+  <div class="fbar"><button type="button" id="filtToggle">▾ Filtres</button></div>
   <div class="filters">
     <div class="row">
       <select id="fPromo"><option value="">Tous les promoteurs</option></select>
@@ -304,6 +310,10 @@ const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLow
 
 // ---------- filtres ----------
 const F = { promo: '', dept: '', typos: new Set(), budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
+// ---------- repli du volet des filtres une fois des critères saisis (gagner de la place pour la liste) ----------
+let filtersCollapsed = false, filtersTouched = false;
+function setFiltersCollapsed(on) { filtersCollapsed = on; document.querySelector('.filters').classList.toggle('collapsed', on); }
+document.getElementById('filtToggle').onclick = () => { filtersTouched = true; setFiltersCollapsed(!filtersCollapsed); renderActive(); };
 const NOWK = (() => { const d = new Date(); return d.getFullYear() + (Math.floor(d.getMonth() / 3) + 1) / 10; })();  // clé "année + trimestre/10" du trimestre en cours
 const TODAY = new Date().toISOString().slice(0, 10);
 const isLivre = p => p.livre === true || (p.livraison_key && p.livraison_key < NOWK);
@@ -403,9 +413,14 @@ function activeList() {
 }
 function renderActive() {
   const el = document.getElementById('active'), a = activeList();
-  el.hidden = !a.length; if (!a.length) return;
-  el.innerHTML = a.map((x, i) => '<span class="ac">' + esc(x.label) + '<i data-i="' + i + '" title="Retirer ce critère">✕</i></span>').join('') + '<span class="all">Tout effacer</span>';
+  if (!a.length) filtersTouched = false;
+  if (a.length && !filtersCollapsed && !filtersTouched) setFiltersCollapsed(true);
+  document.getElementById('filtToggle').textContent = (filtersCollapsed ? '▸' : '▾') + ' Filtres' + (a.length ? ' (' + a.length + ')' : '');
+  el.hidden = !a.length || !filtersCollapsed;
+  if (!a.length || !filtersCollapsed) return;
+  el.innerHTML = a.map((x, i) => '<span class="ac">' + esc(x.label) + '<i data-i="' + i + '" title="Retirer ce critère">✕</i></span>').join('') + '<span class="edit">Modifier</span><span class="all">Tout effacer</span>';
   el.querySelectorAll('i').forEach(i => i.onclick = () => { a[+i.dataset.i].off(); apply(); });
+  el.querySelector('.edit').onclick = () => { filtersTouched = true; setFiltersCollapsed(false); renderActive(); };
   el.querySelector('.all').onclick = () => document.getElementById('reset').click();
 }
 // ---------- concession assistée ----------
