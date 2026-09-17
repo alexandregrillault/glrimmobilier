@@ -2460,6 +2460,10 @@
         <input type="email" id="vd-email" placeholder="jean@exemple.fr">
       </div>
       <div class="form-group">
+        <label>Téléphone</label>
+        <input type="tel" id="vd-telephone" placeholder="06 XX XX XX XX" title="Sert sur la plaquette de présentation générée pour un client">
+      </div>
+      <div class="form-group">
         <label>Messagerie utilisée</label>
         <select id="vd-messagerie" title="Sert au bouton « Ouvrir dans … » quand un vendeur préfère finir un mail dans sa boîte">
           <option value="gmail">Gmail</option>
@@ -3702,6 +3706,7 @@ function saveVendeur() {
         role: document.getElementById('vd-role').value,
         tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
         email: document.getElementById('vd-email').value.trim(),
+        telephone: document.getElementById('vd-telephone').value.trim(),
         messagerie: document.getElementById('vd-messagerie').value,
         visio: _visioNettoyer(document.getElementById('vd-visio').value)
       };
@@ -3714,6 +3719,7 @@ function saveVendeur() {
       role: document.getElementById('vd-role').value,
       tauxDefaut: parseFloat(document.getElementById('vd-taux').value) || 0,
       email: document.getElementById('vd-email').value.trim(),
+      telephone: document.getElementById('vd-telephone').value.trim(),
       messagerie: document.getElementById('vd-messagerie').value,
       visio: _visioNettoyer(document.getElementById('vd-visio').value)
     });
@@ -5372,6 +5378,7 @@ function openEditVendeur(id) {
   document.getElementById('vd-role').value = v.role || 'Commercial indépendant';
   document.getElementById('vd-taux').value = v.tauxDefaut || '';
   document.getElementById('vd-email').value = v.email || '';
+  document.getElementById('vd-telephone').value = v.telephone || '';
   document.getElementById('vd-messagerie').value = v.messagerie || 'gmail';
   document.getElementById('vd-visio').value = v.visio || '';
   document.querySelector('#modal-vendeur .modal-title').textContent = '✎ Modifier le vendeur';
@@ -8194,6 +8201,7 @@ ${(() => {
       ${(l.rappel_le || eqActivitesDe(l).length) && !STATUTS_FINAUX.includes(cur) ? `<button onclick="eqFicheActiviteAjouter()" title="Une activité de plus sur cette fiche, sans toucher à celle déjà prévue — ex. « Faire la sélection » la veille d’une visio" style="background:none;border:1px dashed var(--border);border-radius:9px;padding:7px 11px;color:var(--muted);font-size:12px;cursor:pointer">+ Autre activité</button>` : ''}
       ${cur === 'Nouveau' ? `<button onclick="eqLeadAppele('${l.id}')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Appelé</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqOuvrirSelection('${l.id}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Envoyer une sélection</button>` : ''}
+      ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="plaqOuvrir('${l.id}')" title="Ouvre la plaquette de présentation dans un nouvel onglet, avec tes coordonnées et le nom du client — à montrer en visio" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Générer la plaquette</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqRdvFixerOuvrir('${l.id}')" title="Vous venez de convenir d'un rendez-vous au téléphone : tu le poses dans ton planning et le client reçoit la confirmation par mail" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Fixer un rendez-vous</button>` : ''}
       ${(() => {
         // Rendez-vous à venir de ce client (réservé ou confirmé) : on peut le déplacer d'ici
@@ -8412,6 +8420,60 @@ async function eqRemiseValider(token, i) {
   biens[i].remises = rs;
   document.getElementById('eq-remise-modal')?.remove();
   await _eqRemisesEnregistrer(token, biens);
+}
+
+// ============================================================
+//  PLAQUETTE DE PRÉSENTATION (connectée à la carte des programmes)
+//  Ouvre plaquette.html dans un nouvel onglet, avec les coordonnées du
+//  conseiller assigné au client (pas forcément celui qui génère : un gérant
+//  peut l'ouvrir pour un commercial) et, si renseignée, la civilité + le nom
+//  du client — jamais de genre deviné, donc demandé à chaque ouverture.
+//  Les chiffres du catalogue (« Notre catalogue ») sont recalculés en direct
+//  par la page elle-même (fonction Supabase plaquette_stats, lecture anonyme).
+// ============================================================
+function plaqOuvrir(contactId) {
+  const l = _eqLeads.find(x => x.id === contactId);
+  if (!l) return;
+  document.getElementById('plaq-modal')?.remove();
+  const np = nomPrenomContact(l);
+  const nomAffiche = _selNomPropre(np.nom_famille || '');
+  const div = document.createElement('div');
+  div.id = 'plaq-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1600;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:420px;max-width:95vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Plaquette pour ${_vEsc(nomComplet(l) || 'ce client')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Comment s'adresser au client sur la couverture — laisse sur la première option si tu préfères ne rien préciser.</div>
+    <select id="plaq-civilite" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:16px">
+      <option value="">Pas de nom sur la couverture</option>
+      <option value="Monsieur">Monsieur${nomAffiche ? ' ' + _vEsc(nomAffiche) : ''}</option>
+      <option value="Madame">Madame${nomAffiche ? ' ' + _vEsc(nomAffiche) : ''}</option>
+    </select>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-secondary" onclick="document.getElementById('plaq-modal').remove()">Annuler</button>
+      <button class="btn" onclick="plaqGenerer('${contactId}')">Ouvrir la plaquette</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+}
+
+function plaqGenerer(contactId) {
+  const l = _eqLeads.find(x => x.id === contactId);
+  if (!l) return;
+  const civilite = document.getElementById('plaq-civilite')?.value || '';
+  const np = nomPrenomContact(l);
+  const nomFamille = _selNomPropre(np.nom_famille || '');
+  document.getElementById('plaq-modal')?.remove();
+  const v = (data.vendeurs || []).find(x => x.prenom === l.vendeur);
+  const params = new URLSearchParams();
+  if (v) {
+    if (v.prenom) params.set('cp', v.prenom);
+    if (v.nom) params.set('cn', v.nom);
+    if (v.email) params.set('ce', v.email);
+    if (v.telephone) params.set('ct', v.telephone);
+  }
+  if (civilite && nomFamille) { params.set('civ', civilite); params.set('client', nomFamille); }
+  window.open('plaquette.html' + (params.toString() ? '?' + params.toString() : ''), '_blank');
 }
 
 // Bloc "Sélections envoyées" de la fiche client : lien reçu, aperçu sans fausser le suivi, détail des avis
