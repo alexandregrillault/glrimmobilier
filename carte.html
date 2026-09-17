@@ -169,8 +169,12 @@ table.lots tr.opt td{color:var(--muted)}
 table.lots td.r{text-align:right}
 .st{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11.5px}
 .st.libre{background:#dcfce7;color:#166534}.st.option{background:#fef3c7;color:#92400e}.st.reserve,.st.bloque{background:#fee2e2;color:#991b1b}
-.legend{position:absolute;left:10px;bottom:10px;z-index:1000;background:#fff;border-radius:8px;padding:8px 10px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.15);color:var(--muted);line-height:1.6}
+.legend{position:absolute;left:10px;bottom:10px;z-index:1000;background:#fff;border-radius:8px;padding:8px 10px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.15);color:var(--muted);line-height:1.6;max-width:260px}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;margin-right:5px}
+.legend .lhead{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:700;color:#14213d}
+.legend .lhead button{border:1px solid var(--line);background:#fff;border-radius:5px;padding:0 6px;font-size:11px;cursor:pointer;color:var(--navy)}
+.legend.collapsed .lbody{display:none}
+.legend .lbody{margin-top:4px}
 .leaflet-control-zoom{border:0!important;box-shadow:0 2px 8px rgba(0,0,0,.15)!important}
 .empty{padding:30px 14px;color:var(--muted);text-align:center}
 .tag.nw{background:#dcfce7;color:#166534;font-weight:600}
@@ -274,7 +278,10 @@ table.lots td.r{text-align:right}
   <button id="back" hidden>↩ Retour</button>
   <div id="panel"><div id="panelGrip" title="Glisser pour élargir ou réduire la fenêtre"></div><div class="hd"><button class="mx" title="Agrandir / réduire">⛶</button><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
   <div id="cart"><div class="hd"><h2>Ma sélection</h2><button class="x" title="Fermer">✕</button></div><div class="bd"></div><div class="ft"><button class="btn" id="cartCsv">Exporter en CSV</button><button class="btn o" id="cartCopy">Copier le tableau</button><button class="btn" id="cartZip" title="Fiches PDF par lot + tableau + liens vers les plans">Dossier commercial (ZIP)</button><a id="cartClear">Vider</a></div></div>
-  <div class="legend"><span class="lt">On peut proposer</span><i style="background:#0f7c8c"></i>En mandat, lots disponibles<br><i style="background:#9ca3af"></i>En mandat, plus de lot disponible<br><span class="lt">On ne peut pas encore proposer</span><i style="border:2px dashed #ea580c;background:#fff7ed;box-sizing:border-box"></i>Picking à demander (mandat, programme pas ouvert dans l’extranet)<br><i style="border:2px dashed #b91c1c;background:#fef2f2;box-sizing:border-box"></i>Sans mandat (vu sur SeLoger) — à prospecter<br><span class="lt">Repères</span><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative : l’extranet ne donne pas l’adresse, pin au centre de la commune<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
+  <div class="legend" id="legendBox">
+    <div class="lhead">Légende <button type="button" id="legendToggle" title="Replier / déplier la légende">▾</button></div>
+    <div class="lbody"><span class="lt">On peut proposer</span><i style="background:#0f7c8c"></i>En mandat, lots disponibles<br><i style="background:#9ca3af"></i>En mandat, plus de lot disponible<br><span class="lt">On ne peut pas encore proposer</span><i style="border:2px dashed #ea580c;background:#fff7ed;box-sizing:border-box"></i>Picking à demander (mandat, programme pas ouvert dans l’extranet)<br><i style="border:2px dashed #b91c1c;background:#fef2f2;box-sizing:border-box"></i>Sans mandat (vu sur SeLoger) — à prospecter<br><span class="lt">Repères</span><i style="border:2px dashed #9333ea;background:#fff;box-sizing:border-box"></i>Position approximative : l’extranet ne donne pas l’adresse, pin au centre de la commune<br><i style="background:#14213d"></i>Regroupement — cliquer pour zoomer<br><span style="display:inline-block;width:10px;height:3px;background:#e2231a;vertical-align:middle;margin-right:5px"></span>Métro / RER / train / tram (IDFM)</div>
+  </div>
 </div>
 </div>
 <script type="module">
@@ -314,6 +321,12 @@ const F = { promo: '', dept: '', typos: new Set(), budget: '', liv: '', livS: 2,
 let filtersCollapsed = false;
 function setFiltersCollapsed(on) { filtersCollapsed = on; document.querySelector('.filters').classList.toggle('collapsed', on); }
 document.getElementById('filtToggle').onclick = () => { setFiltersCollapsed(!filtersCollapsed); renderActive(); };
+// ---------- repli manuel de la légende de la carte ----------
+document.getElementById('legendToggle').onclick = () => {
+  const on = !document.getElementById('legendBox').classList.contains('collapsed');
+  document.getElementById('legendBox').classList.toggle('collapsed', on);
+  document.getElementById('legendToggle').textContent = on ? '▸' : '▾';
+};
 const NOWK = (() => { const d = new Date(); return d.getFullYear() + (Math.floor(d.getMonth() / 3) + 1) / 10; })();  // clé "année + trimestre/10" du trimestre en cours
 const TODAY = new Date().toISOString().slice(0, 10);
 const isLivre = p => p.livre === true || (p.livraison_key && p.livraison_key < NOWK);
