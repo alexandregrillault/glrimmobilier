@@ -5676,6 +5676,7 @@ function eqExportCSV() {
       nomPrenomContact(l).prenom, nomPrenomContact(l).nom_famille, l.email, l.telephone, l.lieu, l.budget, l.typologie, l.intention, l.source,
       fmtD(l.date_lead), fmtD(l.recu_le), fmtD(l.rappel_le), eqLeadStatut(l),
       ({ residence_principale: 'Résidence principale', residence_secondaire: 'Résidence secondaire', investissement: 'Investissement' })[qf.projet] || '', qf.commune_residence || '',
+      qf.adresse_travail || '', (Array.isArray(qf.lignes_transport) ? qf.lignes_transport.join(' / ') : ''),
       qf.surface_min || '', LBL.etage_rdj[qf.etage_rdj] || '', LBL.ouinon[qf.parking] || '',
       LBL.ouinon[qf.terrasse] || '', qf.terrasse_m2_min || '',
       LBL.ouinon[qf.balcon] || '', qf.balcon_m2_min || '',
@@ -5684,7 +5685,7 @@ function eqExportCSV() {
       LBL.livraison[qf.livraison_max] || ((({debut:'Début ',milieu:'Milieu ',fin:'Fin '})[qf.livraison_periode] || '') + (qf.livraison_max || '')), l.notes || ''
     ].map(val).join(';');
   });
-  const csv = '\uFEFF' + ['Prénom;Nom;Email;Téléphone;Ville(s);Budget;Typologie;Intention;Source;Ajouté le;Dernier contact;Rappel;Statut;Projet;Commune de résidence;Surface min (m²);Étage/RDJ;Parking;Terrasse;Terrasse m² min;Balcon;Balcon m² min;Exposition;PTZ;TVA réduite;Livraison max;Notes'].concat(lignes).join('\r\n');
+  const csv = '\uFEFF' + ['Prénom;Nom;Email;Téléphone;Ville(s);Budget;Typologie;Intention;Source;Ajouté le;Dernier contact;Rappel;Statut;Projet;Commune de résidence;Adresse du travail;Ligne(s) de transport;Surface min (m²);Étage/RDJ;Parking;Terrasse;Terrasse m² min;Balcon;Balcon m² min;Exposition;PTZ;TVA réduite;Livraison max;Notes'].concat(lignes).join('\r\n');
   const selV = document.getElementById('eq-leads-vendeur');
   const vendeur = selV && selV.selectedIndex > 0 ? selV.options[selV.selectedIndex].text.trim().split(' ')[0] : 'leads';
   const a = document.createElement('a');
@@ -7265,6 +7266,7 @@ function eqQualifRemplie(l) {
   let n = 0;
   if (q.projet) n++;
   if (q.commune_residence) n++;
+  if (q.adresse_travail || (q.lignes_transport && q.lignes_transport.length)) n++;
   if (l.typologie) n++;
   if (l.lieu) n++;
   if (l.budget) n++;
@@ -7277,7 +7279,7 @@ function eqQualifRemplie(l) {
   if (q.ptz) n++;
   if (q.tva_reduite) n++;
   if (q.livraison_max) n++;
-  return { n, total: 14 };
+  return { n, total: 15 };
 }
 
 // ---- Récapitulatif horizontal des critères du client (bandeau de la fenêtre de sélection)
@@ -7292,6 +7294,8 @@ function eqCriteresChips(l) {
   if (l.reference_annonce) push('' + esc(l.reference_annonce) + (eqAnnoncePrix(l.reference_annonce) ? ' — ' + esc(eqAnnoncePrix(l.reference_annonce)) : ''));
   if (q.projet) push('' + ({ residence_principale: 'Résidence principale', residence_secondaire: 'Résidence secondaire', investissement: 'Investissement' }[q.projet] || esc(q.projet)));
   if (q.commune_residence) push('Habite ' + esc(q.commune_residence));
+  if (q.adresse_travail) push('Travaille près de ' + esc(q.adresse_travail));
+  if (q.lignes_transport && q.lignes_transport.length) push('' + q.lignes_transport.map(esc).join(' / '));
   if (l.typologie) push('' + esc(l.typologie), flexible('importance_typologie'));
   String(l.lieu || '').split(/\s*,\s*/).filter(Boolean).forEach(v => push('' + esc(v), flexible('importance_ville')));
   if (l.budget) push('' + esc(l.budget) + ({ avec: ' (avec PTZ)', sans: ' (sans PTZ)', a_verifier: ' (PTZ à vérifier)' }[q.ptz] || ''), flexible('importance_budget'));
@@ -7739,6 +7743,89 @@ function _eqDeptsCorrespondants(q) {
     if (out.length >= 4) break;
   }
   return out;
+}
+
+// ============================================================
+//  LIEU DE TRAVAIL — adresse exacte (Base Adresse Nationale) et lignes de
+//  transport de prédilection, pour situer le client par rapport aux programmes
+// ============================================================
+const LIGNES_TRANSPORT = [
+  'RER A','RER B','RER C','RER D','RER E',
+  'Métro 1','Métro 2','Métro 3','Métro 3bis','Métro 4','Métro 5','Métro 6','Métro 7','Métro 7bis','Métro 8','Métro 9','Métro 10','Métro 11','Métro 12','Métro 13','Métro 14',
+  'Tramway T1','Tramway T2','Tramway T3a','Tramway T3b','Tramway T4','Tramway T5','Tramway T6','Tramway T7','Tramway T8','Tramway T9','Tramway T10','Tramway T11','Tramway T12','Tramway T13',
+  'Transilien H','Transilien J','Transilien K','Transilien L','Transilien N','Transilien P','Transilien R','Transilien U'
+];
+
+let _eqAdresseTimer = null;
+let _eqAdresseDerniereRecherche = '';
+// Autocomplétion d'adresse exacte (API officielle Base Adresse Nationale)
+function eqAdresseTravailInput(q) {
+  q = String(q || '').trim();
+  _eqAdresseDerniereRecherche = q;
+  clearTimeout(_eqAdresseTimer);
+  const box = document.getElementById('eq-adresse-travail-sugg');
+  if (!box) return;
+  if (q.length < 4) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 12px">Recherche…</div>';
+  _eqAdresseTimer = setTimeout(async () => {
+    const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let items = [];
+    try {
+      const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=6&q=' + encodeURIComponent(q));
+      const d = r.ok ? await r.json() : null;
+      items = ((d && d.features) || []).map(f => f.properties && f.properties.label).filter(Boolean);
+    } catch(e) { items = []; }
+    if (q !== _eqAdresseDerniereRecherche) return;
+    const boxNow = document.getElementById('eq-adresse-travail-sugg');
+    if (!boxNow) return;
+    boxNow.innerHTML = items.length === 0
+      ? '<div style="font-size:12px;color:var(--muted);padding:8px 12px">Aucune adresse trouvée</div>'
+      : items.map(v => `<button onclick="eqAdresseTravailChoisie(this.dataset.v)" data-v="${esc(v).replace(/"/g,'&quot;')}" style="display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:9px 12px;color:var(--text);font-size:13px;cursor:pointer">${esc(v)}</button>`).join('');
+  }, 250);
+}
+function eqAdresseTravailChoisie(val) {
+  const champ = document.getElementById('eq-champ-adresse_travail');
+  if (champ) champ.value = val;
+  const box = document.getElementById('eq-adresse-travail-sugg');
+  if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+  eqTexteFlush('adresse_travail', val, true);
+}
+
+// Lignes de transport de prédilection : choix multiples dans une liste fixe (pas d'appel réseau)
+function eqLigneRechercheInput(q) {
+  q = String(q || '').trim();
+  const box = document.getElementById('eq-ligne-sugg');
+  if (!box) return;
+  const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const l = _eqLeads.find(x => x.id === _eqFicheId);
+  const deja = (l && l.qualif && l.qualif.lignes_transport) || [];
+  const sansAccent = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const cible = sansAccent(q);
+  const items = LIGNES_TRANSPORT.filter(v => !deja.includes(v) && sansAccent(v).includes(cible));
+  if (!q) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = items.length === 0
+    ? '<div style="font-size:12px;color:var(--muted);padding:8px 12px">Aucune ligne trouvée</div>'
+    : items.slice(0, 12).map(v => `<button onclick="eqLigneAjoute(this.dataset.v)" data-v="${esc(v).replace(/"/g,'&quot;')}" style="display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:9px 12px;color:var(--text);font-size:13px;cursor:pointer">${esc(v)}</button>`).join('');
+}
+async function eqLigneAjoute(valeur) {
+  const l = _eqLeads.find(x => x.id === _eqFicheId);
+  if (!l) return;
+  const q = Object.assign({}, l.qualif || {});
+  const liste = Array.isArray(q.lignes_transport) ? [...q.lignes_transport] : [];
+  if (!liste.includes(valeur)) liste.push(valeur);
+  q.lignes_transport = liste;
+  await _eqLeadPatch(l.id, { qualif: q });
+  _eqFicheRender();
+}
+async function eqLigneRetire(valeur) {
+  const l = _eqLeads.find(x => x.id === _eqFicheId);
+  if (!l) return;
+  const q = Object.assign({}, l.qualif || {});
+  q.lignes_transport = (Array.isArray(q.lignes_transport) ? q.lignes_transport : []).filter(v => v !== valeur);
+  await _eqLeadPatch(l.id, { qualif: q });
+  _eqFicheRender();
 }
 
 // Commune de résidence choisie dans les suggestions : on remplit le champ et on enregistre
@@ -8232,6 +8319,15 @@ ${(() => {
         <input id="eq-champ-commune_residence" value="${esc(q.commune_residence||'').replace(/"/g,'&quot;')}" placeholder="Rechercher une commune… (ex : Boulogne)" autocomplete="off" oninput="eqVilleRechercheInput(this.value, 'residence');eqTexteInput('commune_residence', this.value, true)" onchange="eqTexteFlush('commune_residence', this.value, true)" onkeydown="if(event.key==='Enter'){eqCommuneChoisie(this.value.trim());this.blur()}" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
         <div id="eq-etat-commune_residence" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>
         <div id="eq-commune-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
+      ${carte(titreQ('Lieu de travail') + `<div style="font-size:10.5px;color:var(--muted);margin:-4px 0 7px">Pour situer le client par rapport aux programmes — adresse exacte et/ou ligne(s) empruntées.</div>
+        <input id="eq-champ-adresse_travail" value="${esc(q.adresse_travail||'').replace(/"/g,'&quot;')}" placeholder="Adresse exacte du travail…" autocomplete="off" oninput="eqAdresseTravailInput(this.value);eqTexteInput('adresse_travail', this.value, true)" onchange="eqTexteFlush('adresse_travail', this.value, true)" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
+        <div id="eq-etat-adresse_travail" style="font-size:11px;color:var(--muted);margin-top:4px;min-height:14px"></div>
+        <div id="eq-adresse-travail-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 ${(q.lignes_transport||[]).length?'8px':'0'}">
+          ${(q.lignes_transport||[]).map(v => `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--accent)18;border:1px solid var(--accent);border-radius:20px;padding:5px 7px 5px 12px;font-size:12px;font-weight:600;color:var(--text)">${esc(v)}<button onclick="eqLigneRetire(this.dataset.v)" data-v="${esc(v).replace(/"/g,'&quot;')}" title="Retirer" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 3px">✕</button></span>`).join('')}
+        </div>
+        <input id="eq-ligne-input" oninput="eqLigneRechercheInput(this.value)" placeholder="Ligne de transport… (ex : RER A, Métro 1)" autocomplete="off" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
+        <div id="eq-ligne-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
       ${carte(titreQ('Typologie — plusieurs choix possibles') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btnsMulti('eqTypoToggle', [['T1','T1'],['T2','T2'],['T3','T3'],['T4','T4'],['T5+','T5+']], String(l.typologie||'').split(/\s*,\s*/).filter(Boolean))}</div>` + importanceQ('importance_typologie'))}
       ${carte(titreQ('Ville(s) de recherche') + `
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:${villes.length?'8px':'0'}">
