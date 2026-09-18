@@ -11709,7 +11709,15 @@ function _selTypeDoc(f, texte) {
   if (/\b(notice|descriptif|plaquette|brochure|reglement|rcp|grille|tarif|prix|cahier|presentation|programme|residence|acte|contrat|reservation|garantie|dpe|plans?[ _\-]*(etage|niveau)|facade|perspective|perspectives)\b/.test(n)) return 'commun';
   if (/\bplan\b/.test(n)) return 'plan';
   if (/notice descriptive|cahier des charges|reglement de copropriete|grille de prix|grille tarifaire|liste des prix/.test(t)) return 'commun';
-  if (texte.trim().length < 80 && !/surface|prix|pi[èe]ces|typologie|habitable/.test(t)) return 'plan';   // presque pas de texte : un dessin
+  // Un plan de lot ne porte que des cotes et légendes de CAO — écrites en
+  // CAPITALES (cartouche, noms de pièces, « SURFACE HABITABLE ») — alors
+  // qu'une vraie fiche descriptive est rédigée en phrases, casse normale.
+  // C'est cette casse qui les distingue, pas la présence du mot « surface ».
+  const brut = texte.trim();
+  if (brut.length < 20) return 'plan';   // quasiment pas de texte extrait (scan) : un dessin
+  const lettres = texte.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ]/g, '');
+  const ratioMaj = lettres.length ? (lettres.match(/[A-ZÀ-Ö]/g) || []).length / lettres.length : 0;
+  if (brut.length < 500 && ratioMaj > 0.5) return 'plan';   // texte en capitales de cartouche : un dessin
   return 'fiche';
 }
 function _selChampsDepuisTexte(t) {
@@ -11920,13 +11928,23 @@ async function selAjouterLibre() {
   // Les documents déjà attachés au lot (quand on le rouvre avec ✎) sont conservés.
   const docs = Array.isArray(_selCtx.docsExistants) ? _selCtx.docsExistants.slice() : [];
   const fichiers = _selFichiersChoisis.slice();
+  let planAuto = '', masseAuto = '';
   if (fichiers.length) {
     const zone = document.getElementById('sel-l-docs');
     let rates = 0;
     for (let i = 0; i < fichiers.length; i++) {
       if (zone) zone.textContent = 'Envoi ' + (i + 1) + '/' + fichiers.length + ' — ' + fichiers[i].name;
       const url = await _selEnvoyerDocUneFois(fichiers[i], i);
-      if (url) docs.push({ nom: _selNomDoc(fichiers[i].name), url: url });
+      if (url) {
+        docs.push({ nom: _selNomDoc(fichiers[i].name), url: url });
+        // Repère le plan (et le plan de masse) parmi les fichiers joints, comme
+        // « Analyser les documents » — pour que le plan s'affiche même quand
+        // le titre était déjà saisi (le cas normal pour un lot hors Otaree).
+        const texte = await _selTextePdf(fichiers[i], 6);
+        const typeDoc = _selTypeDoc(fichiers[i], texte);
+        if (typeDoc === 'plan' && !planAuto) planAuto = url;
+        if (typeDoc === 'masse' && !masseAuto) masseAuto = url;
+      }
       else rates++;
     }
     if (zone) zone.textContent = '';
@@ -11950,7 +11968,7 @@ async function selAjouterLibre() {
     annexes: Array.isArray(_base.annexes) ? _base.annexes : [],
     prixOptions: Array.isArray(_base.prixOptions) ? _base.prixOptions : [],
     surfacePonderee: _base.surfacePonderee || '',
-    plan: val('plan'), masse: val('masse'), pdf: pdfUrl, docs: docs,
+    plan: val('plan') || planAuto || _base.plan || '', masse: val('masse') || masseAuto || _base.masse || '', pdf: pdfUrl, docs: docs,
     adresse: _base.adresse || '', adresseBrute: _base.adresseBrute || '', commune: _base.commune || '',
     codePostal: _base.codePostal || '', geo: _base.geo || null, adresseOk: !!_base.adresseOk,
     remises: ((val('remise') || _selMontantRemise(val('remiseMontant')))
