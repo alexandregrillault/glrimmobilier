@@ -6644,6 +6644,36 @@ async function veilleCharger(force) {
 }
 
 // Croise tous les clients en veille avec tous les programmes du catalogue
+// Catalogue veille : les programmes de la carte (pige extranets) qu'on peut
+// reellement proposer -- mandat + au moins un lot libre (source != picking/
+// nomandat, cf. legende de la carte). Separe de _selChargerProgrammes (qui
+// sert a composer les selections avec sa fiche marketing) : ici on ne veut
+// que les donnees de matching, pas d'image/pitch/atouts.
+let _veilleCatalogue = null;
+async function _veilleChargerCatalogue(force) {
+  if (_veilleCatalogue && !force) return _veilleCatalogue;
+  try {
+    const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+    const [progs, lots] = await Promise.all([
+      _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=id,nom,ville,dept,livraison,prix_min&source=not.in.(picking,nomandat)&nb_libres=gt.0&order=nom.asc', entetes),
+      _sbTout(SUPABASE_URL + '/rest/v1/pige_lots?select=programme_id,typo,prix&st=eq.libre', entetes)
+    ]);
+    const prixParTypo = {};
+    lots.forEach(x => {
+      if (!x.programme_id || !x.typo) return;
+      const g = prixParTypo[x.programme_id] || (prixParTypo[x.programme_id] = {});
+      const p = Number(x.prix);
+      if (p && (!g[x.typo] || p < g[x.typo])) g[x.typo] = p;
+    });
+    _veilleCatalogue = progs.map(p => ({
+      slug: p.id, nom: p.nom, ville: p.ville, dept: p.dept, livraison: p.livraison,
+      prix_min: p.prix_min,
+      typologies: Object.keys(prixParTypo[p.id] || {}).map(type => ({ type: type, prix: prixParTypo[p.id][type] }))
+    }));
+  } catch (e) { _veilleCatalogue = []; }
+  return _veilleCatalogue;
+}
+
 async function veilleCalculer(force) {
   if (_veilleReveils && !force) return _veilleReveils;
   if (_veilleEnCours) return null;
@@ -6652,7 +6682,7 @@ async function veilleCalculer(force) {
     const leads = await veilleCharger(force);
     // Personne en veille : on ne va pas télécharger les communes de France
     if (!leads.length) { _veilleReveils = []; return _veilleReveils; }
-    const progs = await _selChargerProgrammes();
+    const progs = await _veilleChargerCatalogue(force);
     const out = [];
     for (const p of (progs || [])) {
       const zone = await veilleZone(p);
