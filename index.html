@@ -295,12 +295,24 @@
   .rm-kpi { flex: 1 1 140px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
   .rm-kpi b { display: block; font-family: var(--font-head); font-size: 22px; font-weight: 700; color: var(--text); }
   .rm-kpi span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .rm-trend { display: block; margin-top: 6px; font-size: 11px; font-weight: 600; }
+  .rm-trend-up { color: var(--accent); }
+  .rm-trend-down, .rm-trend-flat { color: var(--muted); }
   .rm-note { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
   .rm-note:last-child { margin-bottom: 0; }
+  .rm-note-tags { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .rm-note-tags select { width: auto; margin-top: 0; }
   .rm-note-titre { font-family: var(--font-head); font-weight: 700; font-size: 13.5px; margin-bottom: 5px; }
   .rm-note-texte { font-size: 13px; color: var(--text); line-height: 1.55; white-space: pre-wrap; }
-  .rm-note textarea, .rm-note input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 8px 10px; margin-top: 6px; }
+  .rm-note textarea, .rm-note input, .rm-note select { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 8px 10px; margin-top: 6px; }
   .rm-note textarea { resize: vertical; min-height: 60px; }
+  .rm-tag { border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .rm-tag-reseaux { background: rgba(79,127,232,.12); color: var(--accent2); border-color: rgba(79,127,232,.3); }
+  .rm-tag-newsletter { background: rgba(200,169,110,.15); color: var(--accent); border-color: rgba(200,169,110,.35); }
+  .rm-tag-equipe { background: var(--surface); color: var(--muted); border-color: var(--border); }
+  .rm-tag-brouillon { background: var(--surface); color: var(--muted); border-color: var(--border); }
+  .rm-tag-pret { background: rgba(245,166,35,.15); color: var(--warning); border-color: rgba(245,166,35,.3); }
+  .rm-tag-publie { background: rgba(62,207,142,.15); color: var(--success); border-color: rgba(62,207,142,.3); }
   .rm-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
 
   /* ---- FORM / MODAL ---- */
@@ -3452,14 +3464,35 @@ function _rmNum(n) { return (n == null ? 0 : n).toLocaleString('fr-FR'); }
 function _rmEuro(n) { return (n == null || n === '') ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €'; }
 function _rmDate(d) { return d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'; }
 
-function rmKpi(val, label) {
-  return '<div class="rm-kpi"><b>' + _rmNum(val) + '</b><span>' + _esc(label) + '</span></div>';
+function _rmDelta(cur, prev) {
+  if (prev == null || cur == null) return '';
+  const d = cur - prev;
+  if (d > 0) return '<span class="rm-trend rm-trend-up">▲ +' + _rmNum(d) + '</span>';
+  if (d < 0) return '<span class="rm-trend rm-trend-down">▼ ' + _rmNum(d) + '</span>';
+  return '<span class="rm-trend rm-trend-flat">= stable</span>';
 }
+function _rmCanalLabel(c) { return c === 'newsletter' ? 'Newsletter' : c === 'equipe' ? 'Équipe' : 'Réseaux'; }
+function _rmStatutLabel(s) { return s === 'pret' ? 'Prêt' : s === 'publie' ? 'Publié' : 'Brouillon'; }
+
+function rmKpi(val, label, deltaHtml) {
+  return '<div class="rm-kpi"><b>' + _rmNum(val) + '</b><span>' + _esc(label) + '</span>' + (deltaHtml || '') + '</div>';
+}
+
+// Repliée par défaut : la page reste courte à l'ouverture (KPI + à retenir +
+// angles), le détail promoteur/lots ne s'affiche qu'à la demande — pensé pour
+// être projeté en réunion sans noyer l'essentiel. État gardé en mémoire tant
+// que l'onglet reste ouvert (pas persisté au-delà).
+let _rmDetailOuvert = false;
+function rmToggleDetail() { _rmDetailOuvert = !_rmDetailOuvert; renderRapportMarche(); }
 
 function renderRapportMarche() {
   const body = document.getElementById('rm-body');
   if (!body || !_rmData) return;
   const maj = _rmData.maj, historique = _rmData.historique, evenements = _rmData.evenements, notes = _rmData.notes, lots = _rmData.lots;
+  // Pige précédente (historique est trié pige_date desc, created_at desc — donc
+  // historique[0] est la pige courante) : sert à donner une tendance à chaque KPI.
+  const prevMaj = historique[1] || null;
+  const d = (champ) => prevMaj ? _rmDelta(maj[champ], prevMaj[champ]) : '';
 
   const parType = {};
   evenements.forEach(e => { (parType[e.type] = parType[e.type] || []).push(e); });
@@ -3517,16 +3550,33 @@ function renderRapportMarche() {
 
   const lotsARegarder = nouveauxLots.concat(liberes);
 
+  const cardPromoteur = '<div class="card"><div class="card-header"><div class="card-title">Par promoteur</div></div>' +
+    (lignesPromoteur.length ?
+      '<table><thead><tr><th>Promoteur</th><th>Nouveaux progr.</th><th>Nouveaux lots</th><th>Hausses</th><th>Baisses</th><th>Vendus</th></tr></thead><tbody>' +
+      lignesPromoteur.map(l => '<tr><td>' + _esc(l.nom) + '</td><td>' + (l.nouveau_programme || '—') + '</td><td>' + (l.nouveau_lot || '—') +
+        '</td><td>' + (l.hausse_prix || '—') + '</td><td>' + (l.baisse_prix || '—') + '</td><td>' + (l.vendu || '—') + '</td></tr>').join('') +
+      '</tbody></table>' : '<div class="rm-empty" style="padding:16px 24px">Aucun mouvement par promoteur cette pige.</div>') +
+    '</div>';
+  const cardLots = lotsARegarder.length ? '<div class="card"><div class="card-header"><div class="card-title">Lots à regarder (nouveaux ou redevenus libres)</div></div>' +
+    '<table><thead><tr><th>Ville</th><th>Programme</th><th>Typo</th><th>Surface</th><th>Prix</th><th>Statut</th></tr></thead><tbody>' +
+    lotsARegarder.slice(0, 30).map(e => {
+      const l = lots[e.lot_id] || {};
+      return '<tr><td>' + _esc(e.ville) + '</td><td>' + _esc(e.nom_programme) + '</td><td>' + _esc(l.typo || '—') + '</td><td>' +
+        (l.surf ? l.surf + ' m²' : '—') + '</td><td>' + _rmEuro(l.prix) + '</td><td>' + (e.type === 'nouveau_lot' ? 'Nouveau' : 'Redevenu libre') + '</td></tr>';
+    }).join('') + '</tbody></table>' +
+    (lotsARegarder.length > 30 ? '<div class="rm-empty" style="padding:12px 24px">+ ' + (lotsARegarder.length - 30) + ' autres lots — détail complet sur la carte des programmes.</div>' : '') +
+  '</div>' : '';
+
   body.innerHTML =
     '<div class="rm-kpi-strip">' +
-      rmKpi(maj.nb_programmes, 'Programmes suivis') +
-      rmKpi(maj.nb_logements, 'Logements') +
-      rmKpi(maj.nb_libres, 'Dont libres') +
-      rmKpi(maj.nb_nouveaux_programmes, 'Nouveaux programmes') +
-      rmKpi(maj.nb_nouveaux_lots, 'Nouveaux lots') +
-      rmKpi(maj.nb_vendus, 'Vendus') +
-      rmKpi(maj.nb_hausses, 'Hausses de prix') +
-      rmKpi(maj.nb_baisses, 'Baisses de prix') +
+      rmKpi(maj.nb_programmes, 'Programmes suivis', d('nb_programmes')) +
+      rmKpi(maj.nb_logements, 'Logements', d('nb_logements')) +
+      rmKpi(maj.nb_libres, 'Dont libres', d('nb_libres')) +
+      rmKpi(maj.nb_nouveaux_programmes, 'Nouveaux programmes', d('nb_nouveaux_programmes')) +
+      rmKpi(maj.nb_nouveaux_lots, 'Nouveaux lots', d('nb_nouveaux_lots')) +
+      rmKpi(maj.nb_vendus, 'Vendus', d('nb_vendus')) +
+      rmKpi(maj.nb_hausses, 'Hausses de prix', d('nb_hausses')) +
+      rmKpi(maj.nb_baisses, 'Baisses de prix', d('nb_baisses')) +
     '</div>' +
     '<div class="card"><div class="card-header"><div class="card-title">À retenir</div></div>' +
       '<div style="padding:16px 24px">' +
@@ -3536,37 +3586,39 @@ function renderRapportMarche() {
     '<div class="card"><div class="card-header"><div class="card-title">Angles de contenu</div>' +
       '<button class="btn btn-ghost btn-sm" onclick="rmAjouterNote()">+ Ajouter un angle</button></div>' +
       '<div style="padding:16px 24px" id="rm-notes">' + renderNotesHtml(notes) + '</div></div>' +
-    '<div class="card"><div class="card-header"><div class="card-title">Par promoteur</div></div>' +
-      (lignesPromoteur.length ?
-        '<table><thead><tr><th>Promoteur</th><th>Nouveaux progr.</th><th>Nouveaux lots</th><th>Hausses</th><th>Baisses</th><th>Vendus</th></tr></thead><tbody>' +
-        lignesPromoteur.map(l => '<tr><td>' + _esc(l.nom) + '</td><td>' + (l.nouveau_programme || '—') + '</td><td>' + (l.nouveau_lot || '—') +
-          '</td><td>' + (l.hausse_prix || '—') + '</td><td>' + (l.baisse_prix || '—') + '</td><td>' + (l.vendu || '—') + '</td></tr>').join('') +
-        '</tbody></table>' : '<div class="rm-empty" style="padding:16px 24px">Aucun mouvement par promoteur cette pige.</div>') +
+    '<div style="display:flex;justify-content:flex-end;margin-bottom:' + (_rmDetailOuvert ? '12' : '4') + 'px">' +
+      '<button class="btn btn-ghost btn-sm" onclick="rmToggleDetail()">' + (_rmDetailOuvert ? 'Masquer le détail' : 'Voir le détail (par promoteur, lots à regarder)') + '</button>' +
     '</div>' +
-    (lotsARegarder.length ? '<div class="card"><div class="card-header"><div class="card-title">Lots à regarder (nouveaux ou redevenus libres)</div></div>' +
-      '<table><thead><tr><th>Ville</th><th>Programme</th><th>Typo</th><th>Surface</th><th>Prix</th><th>Statut</th></tr></thead><tbody>' +
-      lotsARegarder.slice(0, 30).map(e => {
-        const l = lots[e.lot_id] || {};
-        return '<tr><td>' + _esc(e.ville) + '</td><td>' + _esc(e.nom_programme) + '</td><td>' + _esc(l.typo || '—') + '</td><td>' +
-          (l.surf ? l.surf + ' m²' : '—') + '</td><td>' + _rmEuro(l.prix) + '</td><td>' + (e.type === 'nouveau_lot' ? 'Nouveau' : 'Redevenu libre') + '</td></tr>';
-      }).join('') + '</tbody></table>' +
-      (lotsARegarder.length > 30 ? '<div class="rm-empty" style="padding:12px 24px">+ ' + (lotsARegarder.length - 30) + ' autres lots — détail complet sur la carte des programmes.</div>' : '') +
-    '</div>' : '') +
+    (_rmDetailOuvert ? cardPromoteur + cardLots : '') +
     '<div style="color:var(--muted);font-size:11.5px;margin-top:4px">Pigé le ' + _rmDate(maj.pige_date) + '. Tendance (programmes suivis) : ' + _esc(histoLine) + '.</div>';
+}
+
+function renderNoteBodyHtml(n) {
+  return '<div class="rm-note-titre">' + _esc(n.titre || 'Sans titre') + '</div>' +
+    '<div class="rm-note-texte">' + _esc(n.texte || '') + '</div>' +
+    '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-ghost btn-sm" onclick="rmModifierNote(' + n.id + ')">Modifier</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="rmCopierNote(' + n.id + ')">Copier</button>' +
+      '<button class="btn btn-danger btn-sm" onclick="rmSupprimerNote(' + n.id + ')">Supprimer</button>' +
+    '</div>';
 }
 
 function renderNotesHtml(notes) {
   if (!notes.length) return '<div class="rm-empty">Aucun angle enregistré pour l’instant — ajoutez le premier ci-dessus.</div>';
-  return notes.map(n =>
-    '<div class="rm-note" id="rm-note-' + n.id + '">' +
-      '<div class="rm-note-titre">' + _esc(n.titre || 'Sans titre') + '</div>' +
-      '<div class="rm-note-texte">' + _esc(n.texte || '') + '</div>' +
-      '<div style="margin-top:8px;display:flex;gap:8px">' +
-        '<button class="btn btn-ghost btn-sm" onclick="rmModifierNote(' + n.id + ')">Modifier</button>' +
-        '<button class="btn btn-danger btn-sm" onclick="rmSupprimerNote(' + n.id + ')">Supprimer</button>' +
+  return notes.map(n => {
+    const canal = n.canal || 'reseaux', statut = n.statut || 'brouillon';
+    return '<div class="rm-note" id="rm-note-' + n.id + '">' +
+      '<div class="rm-note-tags">' +
+        '<select class="rm-tag rm-tag-' + canal + '" onchange="rmChangerCanal(' + n.id + ', this.value)">' +
+          ['reseaux', 'newsletter', 'equipe'].map(c => '<option value="' + c + '"' + (c === canal ? ' selected' : '') + '>' + _rmCanalLabel(c) + '</option>').join('') +
+        '</select>' +
+        '<select class="rm-tag rm-tag-' + statut + '" onchange="rmChangerStatut(' + n.id + ', this.value)">' +
+          ['brouillon', 'pret', 'publie'].map(s => '<option value="' + s + '"' + (s === statut ? ' selected' : '') + '>' + _rmStatutLabel(s) + '</option>').join('') +
+        '</select>' +
       '</div>' +
-    '</div>'
-  ).join('');
+      '<div id="rm-note-body-' + n.id + '">' + renderNoteBodyHtml(n) + '</div>' +
+    '</div>';
+  }).join('');
 }
 
 function rmAjouterNote() {
@@ -3575,6 +3627,10 @@ function rmAjouterNote() {
   const div = document.createElement('div');
   div.className = 'rm-note';
   div.innerHTML =
+    '<div class="rm-note-tags">' +
+      '<select id="rm-new-canal">' + ['reseaux', 'newsletter', 'equipe'].map(c => '<option value="' + c + '">' + _rmCanalLabel(c) + '</option>').join('') + '</select>' +
+      '<select id="rm-new-statut">' + ['brouillon', 'pret', 'publie'].map(s => '<option value="' + s + '">' + _rmStatutLabel(s) + '</option>').join('') + '</select>' +
+    '</div>' +
     '<input id="rm-new-titre" placeholder="Titre de l’angle (ex. Bricklane monte de prix)">' +
     '<textarea id="rm-new-texte" placeholder="Le texte à reprendre pour un post, une newsletter ou un brief équipe…"></textarea>' +
     '<div style="margin-top:8px;display:flex;gap:8px">' +
@@ -3589,13 +3645,15 @@ function rmAjouterNote() {
 async function rmSauverNouvelleNote() {
   const titre = ((document.getElementById('rm-new-titre') || {}).value || '').trim();
   const texte = ((document.getElementById('rm-new-texte') || {}).value || '').trim();
+  const canal = (document.getElementById('rm-new-canal') || {}).value || 'reseaux';
+  const statut = (document.getElementById('rm-new-statut') || {}).value || 'brouillon';
   if (!titre && !texte) { renderRapportMarche(); return; }
   const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
   try {
     const ordre = _rmData.notes.length;
     const r = await fetch(SUPABASE_URL + '/rest/v1/pige_notes', {
       method: 'POST', headers: h,
-      body: JSON.stringify({ pige_maj_id: _rmData.maj.id, titre: titre, texte: texte, ordre: ordre })
+      body: JSON.stringify({ pige_maj_id: _rmData.maj.id, titre: titre, texte: texte, ordre: ordre, canal: canal, statut: statut })
     });
     if (!r.ok) throw new Error();
     const created = (await r.json())[0];
@@ -3609,7 +3667,7 @@ async function rmSauverNouvelleNote() {
 
 function rmModifierNote(id) {
   const n = _rmData.notes.find(x => x.id === id);
-  const el = document.getElementById('rm-note-' + id);
+  const el = document.getElementById('rm-note-body-' + id);
   if (!n || !el) return;
   el.innerHTML =
     '<input id="rm-edit-titre-' + id + '" value="' + _esc(n.titre || '') + '">' +
@@ -3635,6 +3693,36 @@ async function rmSauverNote(id) {
     renderRapportMarche();
   } catch (e) {
     toast('⚠ Enregistrement impossible', 'var(--danger)');
+  }
+}
+
+async function rmPatchNote(id, patch) {
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/pige_notes?id=eq.' + id, {
+      method: 'PATCH', headers: h, body: JSON.stringify(Object.assign({ updated_at: new Date().toISOString() }, patch))
+    });
+    if (!r.ok) throw new Error();
+    const n = _rmData.notes.find(x => x.id === id);
+    if (n) Object.assign(n, patch);
+    toast('✓ Mis à jour');
+  } catch (e) {
+    toast('⚠ Mise à jour impossible', 'var(--danger)');
+    renderRapportMarche();
+  }
+}
+function rmChangerCanal(id, canal) { rmPatchNote(id, { canal: canal }); }
+function rmChangerStatut(id, statut) { rmPatchNote(id, { statut: statut }); }
+
+async function rmCopierNote(id) {
+  const n = _rmData.notes.find(x => x.id === id);
+  if (!n) return;
+  const texte = (n.titre ? n.titre + '\n\n' : '') + (n.texte || '');
+  try {
+    await navigator.clipboard.writeText(texte);
+    toast('✓ Copié dans le presse-papiers');
+  } catch (e) {
+    toast('⚠ Copie impossible (autorisation navigateur)', 'var(--danger)');
   }
 }
 
