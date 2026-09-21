@@ -7853,15 +7853,17 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && _eqFiche
 function eqFicheRappelEdit() {
   const l = _eqLeads.find(x => x.id === _eqFicheId);
   if (!l) return;
-  // Un client qu'on programme n'est plus un lead que personne n'a touché : s'il
-  // est encore « Nouveau », la fenêtre propose de le passer en « Suivi ». Case
-  // décochée = il reste Nouveau (un premier appel programmé avant tout contact).
-  const encoreNouveau = eqLeadStatut(l) === 'Nouveau';
-  eqRappelPicker('Planifier le prochain rappel', (rappel, t, h, suivi) => {
-    const corps = _eqActivitePatch(rappel, t, h);
-    if (rappel && encoreNouveau && suivi) { corps.statut = 'Suivi'; corps.statut_maj = new Date().toISOString(); }
-    return _eqLeadPatch(l.id, corps);
-  }, false, { titre: l.rappel_titre, heure: l.rappel_heure, proposerSuivi: encoreNouveau });
+  _eqRdvProposerAnnulation(l, () => {
+    // Un client qu'on programme n'est plus un lead que personne n'a touché : s'il
+    // est encore « Nouveau », la fenêtre propose de le passer en « Suivi ». Case
+    // décochée = il reste Nouveau (un premier appel programmé avant tout contact).
+    const encoreNouveau = eqLeadStatut(l) === 'Nouveau';
+    eqRappelPicker('Planifier le prochain rappel', (rappel, t, h, suivi) => {
+      const corps = _eqActivitePatch(rappel, t, h);
+      if (rappel && encoreNouveau && suivi) { corps.statut = 'Suivi'; corps.statut_maj = new Date().toISOString(); }
+      return _eqLeadPatch(l.id, corps);
+    }, false, { titre: l.rappel_titre, heure: l.rappel_heure, proposerSuivi: encoreNouveau });
+  });
 }
 // Reporter la MÊME activité sans quitter la fiche : intitulé et heure conservés,
 // seule la date bouge. J+1 / J+2 / J+3 se comptent depuis AUJOURD'HUI (même
@@ -8699,6 +8701,70 @@ function _rdvQuand(c) {
   const d = new Date(c.debut);
   const j = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   return j.charAt(0).toUpperCase() + j.slice(1) + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ============================================================
+//  PROPOSER D'ANNULER UN RDV CONFIRMÉ AU MOMENT DE PLANIFIER UNE ACTIVITÉ
+//  Cas fréquent : le vendeur a eu le client au téléphone avant l'heure prévue
+//  et n'a plus besoin de la visio/l'appel. Dès qu'il planifie une activité
+//  (« + Planifier une activité » ou « + Autre activité ») sur une fiche qui a
+//  un RDV confirmé à venir, on lui propose d'abord de l'annuler (21/09/2026).
+// ============================================================
+function _eqRdvConfirmeAVenir(l) {
+  if (!l) return null;
+  return (_eqRdv || []).filter(x => x.contact_id === l.id && x.statut === 'confirme' && new Date(x.fin || x.debut) >= new Date())
+    .sort((a, b) => new Date(a.debut) - new Date(b.debut))[0] || null;
+}
+let _eqRdvProposerSuite = null;
+function _eqRdvProposerAnnulation(l, suite) {
+  const c = _eqRdvConfirmeAVenir(l);
+  if (!c) { suite(); return; }
+  const old = document.getElementById('eq-rdv-propose-annul'); if (old) old.remove();
+  const div = document.createElement('div');
+  div.id = 'eq-rdv-propose-annul';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2100;display:flex;align-items:center;justify-content:center';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:340px;max-width:90vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:6px">RDV confirmé avec ce client</div>
+    <div style="font-size:12.5px;color:var(--text);line-height:1.5;margin-bottom:18px">${_vEsc(nomComplet(l) || 'Ce client')} a un rendez-vous confirmé <strong>${_vEsc(_rdvQuand(c))}</strong>${c.mode ? ' (' + _vEsc(c.mode) + ')' : ''}. Si tu l'as déjà eu au téléphone, tu peux l'annuler.</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button onclick="_eqRdvAnnulerEtContinuer('${c.id}')" style="background:var(--danger);border:none;border-radius:10px;padding:10px 14px;color:#fff;cursor:pointer;font-size:13px;font-weight:700">Annuler le rendez-vous</button>
+      <button onclick="_eqRdvProposerFerme()" style="background:none;border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:var(--text);cursor:pointer;font-size:13px">Garder le rendez-vous</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) _eqRdvProposerFerme(); });
+  document.body.appendChild(div);
+  _eqRdvProposerSuite = suite;
+}
+function _eqRdvProposerFerme() {
+  const el = document.getElementById('eq-rdv-propose-annul'); if (el) el.remove();
+  const suite = _eqRdvProposerSuite; _eqRdvProposerSuite = null;
+  if (suite) suite();
+}
+async function _eqRdvAnnulerEtContinuer(creneauId) {
+  const el = document.getElementById('eq-rdv-propose-annul'); if (el) el.remove();
+  await _eqFicheRdvAnnuler(creneauId);
+  const suite = _eqRdvProposerSuite; _eqRdvProposerSuite = null;
+  if (suite) suite();
+}
+// Annule un RDV confirmé depuis la fiche client — même comportement que le
+// bouton du planning équipe (eqPlanLiberer) : créneau libéré, client prévenu
+// par mail « rendez-vous annulé », rappel du vendeur recalé à J+1.
+async function _eqFicheRdvAnnuler(creneauId) {
+  const c = (_eqRdv || []).find(x => x.id === creneauId);
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + creneauId, {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ statut: 'libre', contact_id: null, selection_token: null, client_nom: null, client_message: null, reserve_le: null })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await _planMajSelection(c && c.selection_token, { reserve: false, confirme: false, refuse: true });
+    await _planCalerRappel(c && c.contact_id, 1);
+    const notif = await rdvNotifierClient(c && c.selection_token, 'annule', {});
+    _eqRdv = (_eqRdv || []).filter(x => x.id !== creneauId);
+    if (typeof toast === 'function') toast('Rendez-vous annulé — le client est prévenu' + _rdvNotifMot(notif), 'var(--warning)');
+  } catch (e) { if (typeof toast === 'function') toast('⚠ Impossible d’annuler ce rendez-vous', 'var(--danger)'); }
+  if (typeof _eqFicheRender === 'function') _eqFicheRender();
 }
 
 // ============================================================
@@ -9853,10 +9919,12 @@ async function _eqActivitesEcrire(l, liste) {
 function eqFicheActiviteAjouter() {
   const l = _eqLeads.find(x => x.id === _eqFicheId);
   if (!l) return;
-  eqRappelPicker('Autre activité', (date, t, h) => {
-    if (!date) return;
-    _eqActivitesEcrire(l, eqActivitesDe(l).concat([{ le: date, titre: t, heure: h, par: _eqPrenomVue() }]));
-  }, false, { entete: 'Ajouter une activité', sousTitre: 'En plus de l’activité déjà prévue — ex. « Faire la sélection » la veille du rendez-vous' });
+  _eqRdvProposerAnnulation(l, () => {
+    eqRappelPicker('Autre activité', (date, t, h) => {
+      if (!date) return;
+      _eqActivitesEcrire(l, eqActivitesDe(l).concat([{ le: date, titre: t, heure: h, par: _eqPrenomVue() }]));
+    }, false, { entete: 'Ajouter une activité', sousTitre: 'En plus de l’activité déjà prévue — ex. « Faire la sélection » la veille du rendez-vous' });
+  });
 }
 // Retirer une activité par la fonction interne `activite_retirer` : obligatoire
 // quand la fiche n'est pas la sienne (retirer sa dernière activité conservée lui
