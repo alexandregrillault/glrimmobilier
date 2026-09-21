@@ -290,6 +290,19 @@
   .btn-danger:hover { background: rgba(232,80,79,.25); }
   .btn-sm { padding: 5px 12px; font-size: 12px; }
 
+  /* ---- RAPPORT MARCHÉ ---- */
+  .rm-kpi-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+  .rm-kpi { flex: 1 1 140px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .rm-kpi b { display: block; font-family: var(--font-head); font-size: 22px; font-weight: 700; color: var(--text); }
+  .rm-kpi span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .rm-note { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+  .rm-note:last-child { margin-bottom: 0; }
+  .rm-note-titre { font-family: var(--font-head); font-weight: 700; font-size: 13.5px; margin-bottom: 5px; }
+  .rm-note-texte { font-size: 13px; color: var(--text); line-height: 1.55; white-space: pre-wrap; }
+  .rm-note textarea, .rm-note input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; padding: 8px 10px; margin-top: 6px; }
+  .rm-note textarea { resize: vertical; min-height: 60px; }
+  .rm-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
+
   /* ---- FORM / MODAL ---- */
   .modal-overlay {
     display: none;
@@ -634,6 +647,10 @@
       <div class="nav-item" onclick="goTo(&#39;treso-prev&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18"></path><path d="M17 6h6v6"></path></svg>
         Trésorerie prév.
+      </div>
+      <div class="nav-item" onclick="goTo(&#39;rapport-marche&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h9l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"></path><path d="M8 13l2.5 2.5L15 11"></path></svg>
+        Rapport marché
       </div>
       <div class="nav-section">Marketing</div>
       <div class="nav-item active" onclick="goTo(&#39;contacts&#39;, this)">
@@ -1944,6 +1961,20 @@
       <iframe id="carte-cadre" title="Carte des programmes" style="width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--border);border-radius:12px;background:#f5f6f8"></iframe>
     </div>
 
+    <!-- PAGE: RAPPORT MARCHÉ — synthèse de chaque pige (Supabase pige_maj / pige_evenements),
+         réservée aux gérants. Angles de contenu éditables (pige_notes), à reprendre pour les
+         réseaux/newsletter ou pour briefer l'équipe. -->
+    <div class="page" id="page-rapport-marche">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+        <div>
+          <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Rapport marché</div>
+          <div class="section-sub">Les mouvements du marché depuis la dernière pige — à partager en interne et à retravailler en angles de contenu.</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadRapportMarche(true)">Actualiser</button>
+      </div>
+      <div id="rm-body"><div class="empty"><p>Chargement…</p></div></div>
+    </div>
+
     <div class="page" id="page-simulateur">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
         <div class="section-sub">Budget maximum d'un client selon sa situation et le secteur visé, puis montage lot par lot avec les aides mobilisables (PTZ, Action Logement, Paris Logement, TVA 5,5 %). Version de test — estimations hors étude bancaire.</div>
@@ -3049,7 +3080,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev',
+const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev', 'rapport-marche',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage'];
 
 function appliquerRole() {
@@ -3332,7 +3363,7 @@ const pages = {
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'pilotage': 'Pilotage commercial',
-  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simulateur financement'
+  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simulateur financement', 'rapport-marche': 'Rapport marché'
 };
 
 let currentSpace = 'gerant';
@@ -3364,6 +3395,260 @@ function loadMailsGuide() {
   if (!f) return;
   const theme = document.body.classList.contains('light') ? 'light' : 'dark';
   f.src = 'mails.html?embed=1&theme=' + theme + '&v=' + Date.now();
+}
+
+// ============================================================
+//  RAPPORT MARCHÉ — synthèse de chaque pige (pige_maj + pige_evenements,
+//  réservés aux gérants par RLS). Les « angles de contenu » (pige_notes)
+//  sont écrits ici, à la main, pour être retravaillés dans le temps —
+//  ils ne sont jamais régénérés automatiquement.
+// ============================================================
+let _rmData = null;
+
+async function loadRapportMarche(force) {
+  const body = document.getElementById('rm-body');
+  if (_rmData && !force) { renderRapportMarche(); return; }
+  if (body) body.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    const rMaj = await fetch(SUPABASE_URL + '/rest/v1/pige_maj?select=*&order=pige_date.desc,created_at.desc&limit=8', { headers: h });
+    if (!rMaj.ok) throw new Error();
+    const majs = await rMaj.json();
+    if (!majs.length) { if (body) body.innerHTML = '<div class="empty"><p>Aucune pige enregistrée pour le moment.</p></div>'; return; }
+    const maj = majs[0];
+    // Deux piges peuvent tomber le même jour : on isole les événements de CETTE
+    // pige précise par une fenêtre de ±10 min autour de son horodatage, pas par
+    // la seule date.
+    const t0 = new Date(maj.created_at).getTime();
+    const lo = new Date(t0 - 10 * 60000).toISOString();
+    const hi = new Date(t0 + 10 * 60000).toISOString();
+    const qEv = SUPABASE_URL + '/rest/v1/pige_evenements?select=*&pige_date=eq.' + maj.pige_date +
+      '&created_at=gte.' + encodeURIComponent(lo) + '&created_at=lte.' + encodeURIComponent(hi) + '&order=type.asc&limit=3000';
+    const qNotes = SUPABASE_URL + '/rest/v1/pige_notes?select=*&pige_maj_id=eq.' + maj.id + '&order=ordre.asc';
+    const [rEv, rNotes] = await Promise.all([fetch(qEv, { headers: h }), fetch(qNotes, { headers: h })]);
+    const evenements = rEv.ok ? await rEv.json() : [];
+    const notes = rNotes.ok ? await rNotes.json() : [];
+    // Détail des lots nouveaux/redevenus libres (typo, surface, prix) tant qu'ils
+    // existent encore côté pige_lots — un lot vendu en est retiré, donc inutile
+    // de chercher son détail après coup.
+    const idsAEnrichir = Array.from(new Set(evenements
+      .filter(e => e.type === 'nouveau_lot' || e.type === 'liberation')
+      .map(e => e.lot_id).filter(Boolean)));
+    const lots = {};
+    for (let i = 0; i < idsAEnrichir.length; i += 150) {
+      const tranche = idsAEnrichir.slice(i, i + 150);
+      const rL = await fetch(SUPABASE_URL + '/rest/v1/pige_lots?select=id,typo,surf,prix&id=in.(' + tranche.map(encodeURIComponent).join(',') + ')', { headers: h });
+      if (rL.ok) (await rL.json()).forEach(l => { lots[l.id] = l; });
+    }
+    _rmData = { maj, historique: majs, evenements, notes, lots };
+  } catch (e) {
+    if (body) body.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><p>Impossible de charger le rapport marché.</p></div>';
+    return;
+  }
+  renderRapportMarche();
+}
+
+function _rmNum(n) { return (n == null ? 0 : n).toLocaleString('fr-FR'); }
+function _rmEuro(n) { return (n == null || n === '') ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €'; }
+function _rmDate(d) { return d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'; }
+
+function rmKpi(val, label) {
+  return '<div class="rm-kpi"><b>' + _rmNum(val) + '</b><span>' + _esc(label) + '</span></div>';
+}
+
+function renderRapportMarche() {
+  const body = document.getElementById('rm-body');
+  if (!body || !_rmData) return;
+  const maj = _rmData.maj, historique = _rmData.historique, evenements = _rmData.evenements, notes = _rmData.notes, lots = _rmData.lots;
+
+  const parType = {};
+  evenements.forEach(e => { (parType[e.type] = parType[e.type] || []).push(e); });
+  const nouveauxProgs = parType.nouveau_programme || [];
+  const nouveauxLots = parType.nouveau_lot || [];
+  const liberes = parType.liberation || [];
+  const vendus = parType.vendu || [];
+  const hausses = parType.hausse_prix || [];
+  const baisses = parType.baisse_prix || [];
+
+  // Constats automatiques : recalculés à chaque ouverture à partir des événements,
+  // jamais stockés — la matière brute pour les angles de contenu ci-dessous.
+  const constats = [];
+  if (nouveauxProgs.length === 1) {
+    const p = nouveauxProgs[0];
+    constats.push('Un nouveau programme avec du stock dispo : ' + p.nom_programme + ' (' + p.ville + ', ' + p.promoteur + ')');
+  } else if (nouveauxProgs.length > 1) {
+    constats.push(nouveauxProgs.length + ' nouveaux programmes avec du stock dispo : ' +
+      nouveauxProgs.slice(0, 3).map(p => p.nom_programme + ' (' + p.ville + ')').join(', ') + (nouveauxProgs.length > 3 ? '…' : ''));
+  } else {
+    constats.push('Aucun nouveau programme sur cette pige.');
+  }
+  if (vendus.length) {
+    const parProg = {};
+    vendus.forEach(e => { const k = e.nom_programme + ' (' + e.ville + ')'; parProg[k] = (parProg[k] || 0) + 1; });
+    const top = Object.entries(parProg).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    constats.push('Ça se vend : ' + top.map(t => t[0] + ' — ' + t[1] + (t[1] > 1 ? ' vendus' : ' vendu')).join(' · '));
+  }
+  if (hausses.length) {
+    constats.push(hausses.length + (hausses.length > 1 ? ' lots augmentent de prix' : ' lot augmente de prix') +
+      (hausses[0].nom_programme ? ', notamment ' + hausses[0].nom_programme + ' (' + hausses[0].ville + ')' : '') + '.');
+  }
+  if (baisses.length) {
+    constats.push(baisses.length + (baisses.length > 1 ? ' lots baissent de prix' : ' lot baisse de prix') + '.');
+  }
+  if (liberes.length >= 10) {
+    constats.push(liberes.length + ' lots redevenus libres (option ou réservation tombée) — à repasser sur vos fiches clients.');
+  }
+
+  // Répartition par promoteur (compacte, top 10)
+  const parPromoteur = {};
+  evenements.forEach(e => {
+    if (!e.promoteur) return;
+    const p = (parPromoteur[e.promoteur] = parPromoteur[e.promoteur] || { nouveau_programme: 0, nouveau_lot: 0, hausse_prix: 0, baisse_prix: 0, vendu: 0 });
+    if (p[e.type] != null) p[e.type]++;
+  });
+  const lignesPromoteur = Object.entries(parPromoteur)
+    .map(([nom, c]) => Object.assign({ nom: nom, total: c.nouveau_programme + c.nouveau_lot + c.hausse_prix + c.baisse_prix + c.vendu }, c))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+
+  const histoLine = historique.slice(0, 6).slice().reverse()
+    .map(m => _rmDate(m.pige_date).split(' ').slice(0, 2).join(' ') + ' : ' + _rmNum(m.nb_programmes))
+    .join('  →  ');
+
+  const lotsARegarder = nouveauxLots.concat(liberes);
+
+  body.innerHTML =
+    '<div class="rm-kpi-strip">' +
+      rmKpi(maj.nb_programmes, 'Programmes suivis') +
+      rmKpi(maj.nb_logements, 'Logements') +
+      rmKpi(maj.nb_libres, 'Dont libres') +
+      rmKpi(maj.nb_nouveaux_programmes, 'Nouveaux programmes') +
+      rmKpi(maj.nb_nouveaux_lots, 'Nouveaux lots') +
+      rmKpi(maj.nb_vendus, 'Vendus') +
+      rmKpi(maj.nb_hausses, 'Hausses de prix') +
+      rmKpi(maj.nb_baisses, 'Baisses de prix') +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">À retenir</div></div>' +
+      '<div style="padding:16px 24px">' +
+      (constats.length ? '<ul style="padding-left:18px;display:grid;gap:8px;font-size:13.5px;line-height:1.5;margin:0">' +
+        constats.map(c => '<li>' + _esc(c) + '</li>').join('') + '</ul>' : '<div class="rm-empty">Rien de notable cette pige.</div>') +
+      '</div></div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Angles de contenu</div>' +
+      '<button class="btn btn-ghost btn-sm" onclick="rmAjouterNote()">+ Ajouter un angle</button></div>' +
+      '<div style="padding:16px 24px" id="rm-notes">' + renderNotesHtml(notes) + '</div></div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Par promoteur</div></div>' +
+      (lignesPromoteur.length ?
+        '<table><thead><tr><th>Promoteur</th><th>Nouveaux progr.</th><th>Nouveaux lots</th><th>Hausses</th><th>Baisses</th><th>Vendus</th></tr></thead><tbody>' +
+        lignesPromoteur.map(l => '<tr><td>' + _esc(l.nom) + '</td><td>' + (l.nouveau_programme || '—') + '</td><td>' + (l.nouveau_lot || '—') +
+          '</td><td>' + (l.hausse_prix || '—') + '</td><td>' + (l.baisse_prix || '—') + '</td><td>' + (l.vendu || '—') + '</td></tr>').join('') +
+        '</tbody></table>' : '<div class="rm-empty" style="padding:16px 24px">Aucun mouvement par promoteur cette pige.</div>') +
+    '</div>' +
+    (lotsARegarder.length ? '<div class="card"><div class="card-header"><div class="card-title">Lots à regarder (nouveaux ou redevenus libres)</div></div>' +
+      '<table><thead><tr><th>Ville</th><th>Programme</th><th>Typo</th><th>Surface</th><th>Prix</th><th>Statut</th></tr></thead><tbody>' +
+      lotsARegarder.slice(0, 30).map(e => {
+        const l = lots[e.lot_id] || {};
+        return '<tr><td>' + _esc(e.ville) + '</td><td>' + _esc(e.nom_programme) + '</td><td>' + _esc(l.typo || '—') + '</td><td>' +
+          (l.surf ? l.surf + ' m²' : '—') + '</td><td>' + _rmEuro(l.prix) + '</td><td>' + (e.type === 'nouveau_lot' ? 'Nouveau' : 'Redevenu libre') + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      (lotsARegarder.length > 30 ? '<div class="rm-empty" style="padding:12px 24px">+ ' + (lotsARegarder.length - 30) + ' autres lots — détail complet sur la carte des programmes.</div>' : '') +
+    '</div>' : '') +
+    '<div style="color:var(--muted);font-size:11.5px;margin-top:4px">Pigé le ' + _rmDate(maj.pige_date) + '. Tendance (programmes suivis) : ' + _esc(histoLine) + '.</div>';
+}
+
+function renderNotesHtml(notes) {
+  if (!notes.length) return '<div class="rm-empty">Aucun angle enregistré pour l’instant — ajoutez le premier ci-dessus.</div>';
+  return notes.map(n =>
+    '<div class="rm-note" id="rm-note-' + n.id + '">' +
+      '<div class="rm-note-titre">' + _esc(n.titre || 'Sans titre') + '</div>' +
+      '<div class="rm-note-texte">' + _esc(n.texte || '') + '</div>' +
+      '<div style="margin-top:8px;display:flex;gap:8px">' +
+        '<button class="btn btn-ghost btn-sm" onclick="rmModifierNote(' + n.id + ')">Modifier</button>' +
+        '<button class="btn btn-danger btn-sm" onclick="rmSupprimerNote(' + n.id + ')">Supprimer</button>' +
+      '</div>' +
+    '</div>'
+  ).join('');
+}
+
+function rmAjouterNote() {
+  const zone = document.getElementById('rm-notes');
+  if (!zone) return;
+  const div = document.createElement('div');
+  div.className = 'rm-note';
+  div.innerHTML =
+    '<input id="rm-new-titre" placeholder="Titre de l’angle (ex. Bricklane monte de prix)">' +
+    '<textarea id="rm-new-texte" placeholder="Le texte à reprendre pour un post, une newsletter ou un brief équipe…"></textarea>' +
+    '<div style="margin-top:8px;display:flex;gap:8px">' +
+      '<button class="btn btn-primary btn-sm" onclick="rmSauverNouvelleNote()">Enregistrer</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="renderRapportMarche()">Annuler</button>' +
+    '</div>';
+  zone.prepend(div);
+  const champ = document.getElementById('rm-new-titre');
+  if (champ) champ.focus();
+}
+
+async function rmSauverNouvelleNote() {
+  const titre = ((document.getElementById('rm-new-titre') || {}).value || '').trim();
+  const texte = ((document.getElementById('rm-new-texte') || {}).value || '').trim();
+  if (!titre && !texte) { renderRapportMarche(); return; }
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=representation' };
+  try {
+    const ordre = _rmData.notes.length;
+    const r = await fetch(SUPABASE_URL + '/rest/v1/pige_notes', {
+      method: 'POST', headers: h,
+      body: JSON.stringify({ pige_maj_id: _rmData.maj.id, titre: titre, texte: texte, ordre: ordre })
+    });
+    if (!r.ok) throw new Error();
+    const created = (await r.json())[0];
+    _rmData.notes.push(created);
+    toast('✓ Angle enregistré');
+    renderRapportMarche();
+  } catch (e) {
+    toast('⚠ Enregistrement impossible', 'var(--danger)');
+  }
+}
+
+function rmModifierNote(id) {
+  const n = _rmData.notes.find(x => x.id === id);
+  const el = document.getElementById('rm-note-' + id);
+  if (!n || !el) return;
+  el.innerHTML =
+    '<input id="rm-edit-titre-' + id + '" value="' + _esc(n.titre || '') + '">' +
+    '<textarea id="rm-edit-texte-' + id + '">' + _esc(n.texte || '') + '</textarea>' +
+    '<div style="margin-top:8px;display:flex;gap:8px">' +
+      '<button class="btn btn-primary btn-sm" onclick="rmSauverNote(' + id + ')">Enregistrer</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="renderRapportMarche()">Annuler</button>' +
+    '</div>';
+}
+
+async function rmSauverNote(id) {
+  const titre = ((document.getElementById('rm-edit-titre-' + id) || {}).value || '').trim();
+  const texte = ((document.getElementById('rm-edit-texte-' + id) || {}).value || '').trim();
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/pige_notes?id=eq.' + id, {
+      method: 'PATCH', headers: h, body: JSON.stringify({ titre: titre, texte: texte, updated_at: new Date().toISOString() })
+    });
+    if (!r.ok) throw new Error();
+    const n = _rmData.notes.find(x => x.id === id);
+    if (n) { n.titre = titre; n.texte = texte; }
+    toast('✓ Angle mis à jour');
+    renderRapportMarche();
+  } catch (e) {
+    toast('⚠ Enregistrement impossible', 'var(--danger)');
+  }
+}
+
+async function rmSupprimerNote(id) {
+  if (!confirm('Supprimer cet angle ?')) return;
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/pige_notes?id=eq.' + id, { method: 'DELETE', headers: h });
+    if (!r.ok) throw new Error();
+    _rmData.notes = _rmData.notes.filter(x => x.id !== id);
+    renderRapportMarche();
+  } catch (e) {
+    toast('⚠ Suppression impossible', 'var(--danger)');
+  }
 }
 
 // La carte vit dans carte.html, à côté d'index.html (données lues dans Supabase :
@@ -3436,6 +3721,7 @@ function goTo(id, el) {
   else if (id === 'promoteurs') loadPromoteurs();
   else if (id === 'mails') loadMailsGuide();
   else if (id === 'carte') loadCarte();
+  else if (id === 'rapport-marche') loadRapportMarche();
   else if (id === 'simulateur') loadSimulateur();
   else if (id === 'journal') loadJournal();
   else if (id === 'pilotage') pilInit();
