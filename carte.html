@@ -1557,9 +1557,9 @@ document.getElementById('reset').onclick = () => { ttClear(false); Object.assign
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
 const map = L.map('map', { zoomControl: true, minZoom: 8, maxZoom: 19 }).fitBounds(IDF);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5', { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
 const labelsPane = map.createPane('labels'); labelsPane.style.zIndex = 450; labelsPane.style.pointerEvents = 'none';
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 20, pane: 'labels' }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5', { subdomains: 'abcd', maxZoom: 20, pane: 'labels' }).addTo(map);
 // --- communes (contours) : aplats pastel par département, style carte administrative ---
 const villesAvecProg = new Set(P.map(p => p.ville));
 const DCOL = { '75': '#e8c9c2', '77': '#f2cdb3', '78': '#c7d3a8', '91': '#f3d98f', '92': '#d9c3cf', '93': '#d2dea5', '94': '#f1e6a6', '95': '#ecdc9c' };
@@ -1609,7 +1609,7 @@ function renderBack() { const b = document.getElementById('back'); b.hidden = !(
 document.getElementById('back').onclick = goUp;
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const pn = document.getElementById('panel'); if (pn.classList.contains('open')) pn.querySelector('.x').click(); else goUp(); } });
 function zoomDept(d) { F.dept = d; F.ville = ''; document.getElementById('fDept').value = d; const b = deptBounds[d]; if (b) map.fitBounds(b, { padding: [20, 20] }); apply(); }
-function zoomVille(v) { F.ville = v; let pts = VIS.filter(p => p.ville === v && p.lat).map(p => [p.lat, p.lng]); if (!pts.length) pts = P.filter(p => p.ville === v && p.lat).map(p => [p.lat, p.lng]); if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(.3), { maxZoom: 15 }); apply(); }
+function zoomVille(v) { const pd = (P.find(p => p.ville === v) || {}).dept; if (pd && F.dept !== pd) { F.dept = pd; document.getElementById('fDept').value = pd; } F.ville = v; let pts = VIS.filter(p => p.ville === v && p.lat).map(p => [p.lat, p.lng]); if (!pts.length) pts = P.filter(p => p.ville === v && p.lat).map(p => [p.lat, p.lng]); if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(.3), { maxZoom: 15 }); apply(); }
 let markers = {};
 function bubble(lat, lng, n, label, cls, onclick) {
   const big = cls !== 'v';
