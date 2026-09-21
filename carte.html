@@ -1289,7 +1289,7 @@ table.lots td.r{text-align:right}
     </div>
     <div class="chips" id="fTypo"></div>
     <div class="row tri">
-      <select id="fBudget"><option value="">Budget max</option></select>
+      <input type="number" id="fBudget" placeholder="Budget max (k€)" min="0" step="1" list="fBudgetList" autocomplete="off"><datalist id="fBudgetList"><option value="150"><option value="200"><option value="250"><option value="300"><option value="350"><option value="400"><option value="500"><option value="600"><option value="800"><option value="1000"></datalist>
       <select id="fPm2"><option value="">€/m² max</option></select>
       <select id="fRenta"><option value="">Renta min</option></select>
     </div>
@@ -1425,7 +1425,7 @@ const countWith = patch => withF(patch, () => P.reduce((a, p) => a + (progOK(p) 
 const setOn = (s, v, on) => { const n = new Set(s); on ? n.add(v) : n.delete(v); return n; };
 function renderCounts() {
   const selCount = (id, key) => { const s = document.getElementById(id); [...s.options].forEach(o => { if (!o.value) return; o.textContent = o.textContent.replace(/\s*\(\d[\d\s]*\)$/, '') + ' (' + countWith({ [key]: o.value }).toLocaleString('fr-FR') + ')'; }); };
-  selCount('fPromo', 'promo'); selCount('fDept', 'dept'); selCount('fSource', 'source'); selCount('fCom', 'com'); selCount('fBudget', 'budget'); selCount('fPm2', 'pm2'); selCount('fRenta', 'renta'); selCount('fGare', 'gare');
+  selCount('fPromo', 'promo'); selCount('fDept', 'dept'); selCount('fSource', 'source'); selCount('fCom', 'com'); selCount('fPm2', 'pm2'); selCount('fRenta', 'renta'); selCount('fGare', 'gare');
   const chipCount = (c, n) => { let s = c.querySelector('.cnt'); if (!s) { s = document.createElement('span'); s.className = 'cnt'; c.appendChild(s); } s.textContent = n.toLocaleString('fr-FR'); c.classList.toggle('dim', n === 0 && !c.classList.contains('on')); };
   [...fT.children].forEach(c => { const t = c.firstChild.textContent; chipCount(c, F.typos.has(t) ? VIS.length : countWith({ typos: setOn(F.typos, t, true) })); });
   [...fFl.children].forEach(c => { const k = c.dataset.f; chipCount(c, F.flags.has(k) ? VIS.length : countWith({ flags: setOn(F.flags, k, true) })); });
@@ -1471,7 +1471,7 @@ function renderActive() {
 function concessions() {
   const cur = VIS.length, out = [];
   const push = (label, patch, applyFn, n) => { if (n === undefined) n = countWith(patch); if (n > cur) out.push({ label, n, go: applyFn }); };
-  if (F.budget) { const b = Math.round(+F.budget * 1.1 / 5000) * 5000; push('Budget +10 % (≤ ' + fmtk(b) + ')', { budget: b }, () => { F.budget = String(b); const s = document.getElementById('fBudget'); if (![...s.options].some(o => +o.value === b)) { const o = document.createElement('option'); o.value = b; o.textContent = '≤ ' + fmtk(b); s.appendChild(o); } s.value = b; }); }
+  if (F.budget) { const b = Math.round(+F.budget * 1.1 / 5000) * 5000; push('Budget +10 % (≤ ' + fmtk(b) + ')', { budget: b }, () => { F.budget = String(b); document.getElementById('fBudget').value = Math.round(b / 1000); }); }
   if (F.typos.size) TYPOS.forEach((t, i) => { if (F.typos.has(t)) return; if (!(F.typos.has(TYPOS[i - 1]) || F.typos.has(TYPOS[i + 1]))) return; push('Ajouter les ' + t, { typos: setOn(F.typos, t, true) }, () => { F.typos.add(t); [...fT.children].forEach(c => { if (c.firstChild.textContent === t) c.classList.add('on'); }); }); });
   if (F.st.size === 1 && F.st.has('libre')) push('Inclure les lots optionnés', { st: new Set(['libre', 'option']) }, () => setSt('libre,option'));
   if (F.liv) { if (F.livS === 1) push('Livraison ' + F.liv + ' toute l’année', { livS: 2 }, () => { F.livS = 2; renderLiv(); }); push('Livraison ' + (F.livM === 'eq' ? 'en ' : 'jusqu’en ') + (+F.liv + 1), { liv: +F.liv + 1, livS: 2 }, () => { F.liv = +F.liv + 1; F.livS = 2; renderLiv(); }); }
@@ -1512,7 +1512,6 @@ const sel = (id, opts) => { const s = document.getElementById(id); opts.forEach(
 const promos = [...new Set(P.map(p => p.promoteur))].sort((a, b) => a.localeCompare(b, 'fr'));
 sel('fPromo', promos.map(x => [x, x + (P.some(p => p.promoteur === x && !p.nomandat) ? '' : ' — sans mandat') + ' (' + P.filter(p => p.promoteur === x).length + ')']));
 sel('fDept', Object.keys(DEPTS).map(d => [d, d + ' — ' + DEPTS[d]]));
-sel('fBudget', [150, 200, 250, 300, 350, 400, 500, 600, 800, 1000].map(k => [k * 1000, '≤ ' + k + ' k€']));
 const sources = [...new Set(P.flatMap(p => [p.extranet, ...(p.sources || []).map(s => s.extranet)]))].sort((a, b) => a.localeCompare(b, 'fr'));
 sel('fSource', sources.map(x => [x, x + ' (' + P.filter(p => p.extranet === x || (p.sources || []).some(s => s.extranet === x)).length + ')']));
 sel('fCom', [3, 4, 5, 6, 7].map(k => [k, '≥ ' + k + ' % (' + P.filter(p => p.commission_pct >= k).length + ')']));
@@ -1547,7 +1546,8 @@ fDeptsPop.onclick = e => e.stopPropagation();
 document.addEventListener('click', () => { fPop.hidden = true; fDeptsPop.hidden = true; fVillesPop.hidden = true; });
 const fT = document.getElementById('fTypo');
 TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = t; c.onclick = () => { F.typos.has(t) ? F.typos.delete(t) : F.typos.add(t); c.classList.toggle('on'); apply(); }; fT.appendChild(c); });
-['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
+['fPromo','fDept','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
+document.getElementById('fBudget').oninput = e => { const v = e.target.value; F.budget = v ? String(Math.round(+v * 1000)) : ''; apply(); };
 [...document.getElementById('fStChips').children].forEach(c => c.onclick = () => { setSt(c.dataset.v); apply(); });
 [...document.getElementById('fLivM').children].forEach(c => c.onclick = () => { F.livM = c.dataset.m; [...c.parentElement.children].forEach(x => x.classList.toggle('on', x === c)); apply(); });
 document.getElementById('fSort').onchange = e => { F.sort = e.target.value; renderList(); };
@@ -1981,6 +1981,8 @@ const nv = s => norm(s).replace(/[-'’]/g, ' ').replace(/\bst\b/g, 'saint').rep
 const villes = [...new Set(P.map(p => p.ville).filter(Boolean))].map(v => ({ t: 'ville', v, n: P.filter(p => p.ville === v).length, cp: P.find(p => p.ville === v).cp }));
 // toutes les communes IDF (même sans programme) : zoom sur le contour
 const communesAll = GEO.contours ? GEO.contours.features.filter(f => !villes.some(v => v.v === f.properties.n)).map(f => ({ v: f.properties.n, d: f.properties.d, f })) : [];
+// liste complète pour le sélecteur « + villes » : toutes les communes IDF, avec ou sans programme actuellement
+const villesToutes = [...villes, ...communesAll.map(c => ({ v: c.v }))];
 // ---- multi-sélection villes ----
 const fVillesPop = document.getElementById('fVillesPop'), fVillesBtn = document.getElementById('fVillesBtn'), fVillesSearch = document.getElementById('fVillesSearch');
 function villesLabel() { const n = F.mVilles.size; fVillesBtn.textContent = n ? (n === 1 ? [...F.mVilles][0] : n + ' villes') : '+ villes'; fVillesBtn.classList.toggle('on', n > 0); }
@@ -1988,7 +1990,7 @@ const fVillesAll = document.createElement('label'); fVillesAll.className = 'all'
 function renderVillesList(filtre) {
   [...fVillesPop.querySelectorAll('label:not(.all)')].forEach(l => l.remove());
   const sv = nv(filtre || '');
-  villes.filter(v => !sv || nv(v.v).includes(sv)).sort((a, b) => a.v.localeCompare(b.v, 'fr')).slice(0, 200).forEach(v => {
+  villesToutes.filter(v => !sv || nv(v.v).includes(sv)).sort((a, b) => a.v.localeCompare(b.v, 'fr')).slice(0, 200).forEach(v => {
     const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = v.v; c.checked = F.mVilles.has(v.v);
     c.onchange = () => { c.checked ? F.mVilles.add(v.v) : F.mVilles.delete(v.v); villesLabel(); apply(); };
     l.appendChild(c); l.appendChild(document.createTextNode(v.v));
@@ -2217,9 +2219,7 @@ function carteAppliquerCriteres() {
   if (bmax) {
     budgetArrondi = Math.ceil((bmax * (1 + CARTE_MARGE_BUDGET)) / 5000) * 5000;
     F.budget = String(budgetArrondi);
-    const s = document.getElementById('fBudget');
-    if (![...s.options].some(o => +o.value === budgetArrondi)) { const o = document.createElement('option'); o.value = budgetArrondi; o.textContent = '≤ ' + fmtk(budgetArrondi); s.appendChild(o); }
-    s.value = budgetArrondi;
+    document.getElementById('fBudget').value = Math.round(budgetArrondi / 1000);
   }
 
   // reflète l'état dans les contrôles visibles
