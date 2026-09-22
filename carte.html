@@ -1899,6 +1899,7 @@ function nearGares(p) {
 const SUPABASE_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
 const DOCS = {}; // cache par programme, une fois chargé : {masse, plaquette, lots:{lot_id:url}}
+const DOC_MAX_OCTETS = 20 * 1024 * 1024; // 20 Mo, même limite que côté serveur
 function lienInterneLot(id) { return SUPABASE_URL + '/glr/lot/' + encodeURIComponent(id); }
 async function chargerDocs(p) {
   if (DOCS[p.id]) return DOCS[p.id];
@@ -1928,9 +1929,50 @@ async function chargerDocs(p) {
 async function enregistrerDoc(action, payload) {
   try {
     const r = await fetch(SUPABASE_URL + '/functions/v1/selection', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ action }, payload)) });
-    const d = await r.json();
-    return !!(d && d.ok);
-  } catch (e) { return false; }
+    return await r.json();
+  } catch (e) { return { ok: false }; }
+}
+// Lit un fichier choisi par le vendeur et le rend en base64 (sans le préfixe data:...;base64,)
+function fichierEnBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => { const s = String(r.result || ''); resolve(s.slice(s.indexOf(',') + 1)); };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+// Ouvre le sélecteur de fichiers du système (Finder…) et résout avec le fichier choisi (ou null si annulé)
+function choisirFichier() {
+  return new Promise(resolve => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'application/pdf,.pdf'; input.style.display = 'none';
+    const fini = f => { resolve(f); if (input.parentNode) document.body.removeChild(input); };
+    input.onchange = () => fini((input.files && input.files[0]) || null);
+    input.oncancel = () => fini(null);
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+// Dépôt réel d'un fichier (PDF) depuis la carte : le vendeur choisit le fichier sur son Mac,
+// il est envoyé tel quel au serveur (base64) qui le stocke et renvoie son URL publique.
+async function televerserDoc(target, id, field, btn) {
+  const fichier = await choisirFichier();
+  if (!fichier) return null;
+  if (fichier.type && fichier.type !== 'application/pdf' && !/\.pdf$/i.test(fichier.name)) { alert('Le fichier doit être un PDF.'); return null; }
+  if (fichier.size > DOC_MAX_OCTETS) { alert('Fichier trop lourd (20 Mo maximum).'); return null; }
+  const libelle = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = 'Envoi…'; btn.disabled = true; }
+  try {
+    const data_base64 = await fichierEnBase64(fichier);
+    const res = await enregistrerDoc('doc_upload', { target, id, field, data_base64, content_type: fichier.type || 'application/pdf' });
+    if (!res || !res.ok) { alert('Échec de l’envoi, réessayez.'); return null; }
+    return res.url || null;
+  } catch (e) {
+    alert('Échec de l’envoi, réessayez.');
+    return null;
+  } finally {
+    if (btn) { btn.textContent = libelle; btn.disabled = false; }
+  }
 }
 function docsBoxHtml(p) {
   const d = DOCS[p.id];
@@ -1940,30 +1982,18 @@ function docsBoxHtml(p) {
 }
 function bindDocsBox(p) {
   const box = panel.querySelector('#docsBox'); if (!box) return;
-  box.querySelectorAll('[data-doc]').forEach(b => b.onclick = () => ajouterDocProgramme(p, b.dataset.doc));
+  box.querySelectorAll('[data-doc]').forEach(b => b.onclick = () => ajouterDocProgramme(p, b.dataset.doc, b));
 }
-async function ajouterDocProgramme(p, cle) {
-  const label = cle === 'masse' ? 'plan de masse' : 'plaquette';
-  const saisie = prompt('Lien du ' + label + ' (PDF ou page web) pour ' + p.nom + ' :', (DOCS[p.id] && DOCS[p.id][cle]) || '');
-  if (saisie == null) return;
-  const url = saisie.trim();
+async function ajouterDocProgramme(p, cle, btn) {
+  const url = await televerserDoc('programme', p.id, cle, btn);
   if (!url) return;
-  if (!/^https?:\/\//i.test(url)) { alert('Lien invalide : il doit commencer par http:// ou https://'); return; }
-  const payload = { programme_id: p.id }; payload[cle === 'masse' ? 'plan_masse_url' : 'plaquette_url'] = url;
-  const ok = await enregistrerDoc('doc_programme', payload);
-  if (!ok) { alert('Échec de l’enregistrement, réessayez.'); return; }
   if (!DOCS[p.id]) DOCS[p.id] = { masse: '', plaquette: '', lots: {} };
   DOCS[p.id][cle] = url;
   if (SEL === p) { const box = panel.querySelector('#docsBox'); if (box) box.outerHTML = docsBoxHtml(p); bindDocsBox(p); }
 }
-async function ajouterDocLot(p, l) {
-  const saisie = prompt('Lien du plan (PDF) pour le lot ' + l.n + ' :', '');
-  if (saisie == null) return;
-  const url = saisie.trim();
+async function ajouterDocLot(p, l, btn) {
+  const url = await televerserDoc('lot', l.id, 'plan', btn);
   if (!url) return;
-  if (!/^https?:\/\//i.test(url)) { alert('Lien invalide : il doit commencer par http:// ou https://'); return; }
-  const ok = await enregistrerDoc('doc_lot', { lot_id: l.id, plan_url: url });
-  if (!ok) { alert('Échec de l’enregistrement, réessayez.'); return; }
   if (!DOCS[p.id]) DOCS[p.id] = { masse: '', plaquette: '', lots: {} };
   DOCS[p.id].lots[l.id] = url;
   if (SEL === p) renderLots(p);
@@ -2071,7 +2101,7 @@ function renderLots(p) {
   t.querySelectorAll('th').forEach(th => th.onclick = () => { if (th.dataset.k === 'ck' || th.dataset.k === 'lien') return; if (sortK === th.dataset.k) sortD = -sortD; else { sortK = th.dataset.k; sortD = 1; } renderLots(p); });
   t.querySelectorAll('input.ck').forEach(c => c.onchange = () => { toggleCart(c.dataset.l, c.checked); });
   t.querySelectorAll('[data-lien]').forEach(b => b.onclick = () => copierLienLot(LI[b.dataset.lien], b));
-  t.querySelectorAll('[data-ajouter]').forEach(b => b.onclick = () => ajouterDocLot(p, LI[b.dataset.ajouter]));
+  t.querySelectorAll('[data-ajouter]').forEach(b => b.onclick = () => ajouterDocLot(p, LI[b.dataset.ajouter], b));
 }
 
 // ---------- recherche ----------
