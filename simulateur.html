@@ -208,6 +208,12 @@ summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--navy)}
       </div>
     </div>
 
+    <div class="f">
+      <label>Mensualité souhaitée (optionnel)</label>
+      <div class="unit" style="max-width:220px"><input type="number" id="mensVoulue" value="" step="50" placeholder="laisser vide = maximum"><span>€ / mois</span></div>
+      <div class="help">Si le client vise une mensualité précise plutôt que le maximum d'endettement (35 %), le budget est recalculé pour cette mensualité (plafonnée au maximum si elle le dépasse).</div>
+    </div>
+
     <div id="blocRP">
       <div class="row">
         <div class="f">
@@ -249,7 +255,9 @@ summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--navy)}
 <aside class="panel params" id="p-params">
   <button class="close" onclick="closePanels()">×</button>
   <h2>Paramètres marché</h2>
-  <p class="small">Taux moyens constatés début septembre 2026 (source Meilleurtaux, hors assurance). À mettre à jour quand le marché bouge.</p>
+  <p class="small">Bon taux national par durée, récupéré automatiquement sur le baromètre Meilleurtaux (mis à jour chaque semaine, hors assurance). Modifiable à la main si besoin.</p>
+  <p class="small" id="taux-statut">Vérification du taux en cours…</p>
+  <div class="f" style="margin-bottom:14px"><button class="btn" onclick="chargerTauxMarche(true)" style="font-size:12px;padding:6px 10px">Actualiser les taux</button></div>
   <div class="row3">
     <div class="f"><label>Taux 15 ans</label><div class="unit"><input type="number" id="t15" value="3.28" step="0.01"><span>%</span></div></div>
     <div class="f"><label>Taux 20 ans</label><div class="unit"><input type="number" id="t20" value="3.40" step="0.01"><span>%</span></div></div>
@@ -518,9 +526,11 @@ function montage(cl, lot, p){
 }
 
 /* ===================== CAPACITÉ MAX (étape 1) ===================== */
-function capacite(cl,p){
+function capacite(cl,p,mCap){
   const taux=p.t[cl.duree];
-  const Mmax = Math.max(0, cl.revenus*p.endet - cl.credits);
+  const MmaxEndettement = Math.max(0, cl.revenus*p.endet - cl.credits);
+  const plafonne = mCap!=null && mCap>0 && mCap<MmaxEndettement-1;
+  const Mmax = (mCap!=null && mCap>0) ? Math.min(mCap, MmaxEndettement) : MmaxEndettement;
   const Cmax = capitalLisse(Mmax,taux,cl.duree,p.ass,[]);
   const budgetSans = (Cmax/(1+p.fGar)+cl.apport)/(1+p.fNot);
   // Le PTZ fait des marches (tranches, plafond) : on balaie les prix par pas de 1 000 € puis on affine
@@ -530,7 +540,7 @@ function capacite(cl,p){
     return {prix:lo, m:bm}; };
   const r1=maxPrix(false); const budgetAvec=r1.prix, best=r1.m;
   let budgetQPV=null; const r2=maxPrix(true); if(r2.m&&r2.m.tv.ok) budgetQPV={prixAffiche:r2.prix, prixPaye:r2.m.prix};
-  return {Mmax,Cmax,budgetSans,budgetAvec,best,budgetQPV,taux};
+  return {Mmax,MmaxEndettement,plafonne,Cmax,budgetSans,budgetAvec,best,budgetQPV,taux};
 }
 
 /* ===================== RENDU ===================== */
@@ -548,30 +558,18 @@ function renderAlertes(cl){
   const el=$('alertes'); if(!el) return;
   el.innerHTML = cl.alertes.length ? `<details open><summary>Points d'attention sur ce profil (${cl.alertes.length})</summary>${cl.alertes.map(a=>`<div class="infobox">${a}</div>`).join('')}</details>` : '';
 }
-function renderCapa(){
-  const cl=client(), p=params(); renderAlertes(cl);
-  const fl=$('fLoyer'); if(fl) fl.style.display = cl.logement==='heberge'?'none':'';
-  if(cl.revenus<=0){ $('resCapa').innerHTML=`<div class="warnbox">Aucun revenu retenu par la banque avec ce profil : pas de capacité d'emprunt en propre. Voir les points d'attention ci-dessus pour les montages possibles.</div>`; return; }
-  if(cl.projet!=='rp'){
-    const Mmax=Math.max(0,cl.revenus*p.endet-cl.credits); const Cmax=capitalLisse(Mmax,p.t[cl.duree],cl.duree,p.ass,[]);
-    const budget=(Cmax/(1+p.fGar)+cl.apport)/(1+p.fNot);
-    const lib = cl.projet==='inv' ? 'hors loyer futur' : cl.projet==='rs' ? 'résidence secondaire' : 'logement pour un proche';
-    $('resCapa').innerHTML=`
-      <div class="big"><div class="k">Budget d'achat maximum (${lib})</div><div class="v">${eur(budget)}</div>
-      <div class="s">Mensualité max ${eurM(Mmax)} sur ${cl.duree} ans à ${(p.t[cl.duree]*100).toFixed(2).replace('.',',')} %.${cl.projet==='inv'?` La banque ajoutera ${Math.round(p.pLoyer*100)} % du loyer attendu aux revenus : le budget réel se calcule lot par lot à l'étape 2.`:''}</div></div>
-      <div class="kpis"><div class="kpi"><div class="k">Mensualité max (${Math.round(p.endet*100)} %)</div><div class="v">${eurM(Mmax)}</div></div><div class="kpi"><div class="k">Capital empruntable</div><div class="v">${eur(Cmax)}</div></div><div class="kpi"><div class="k">Apport total</div><div class="v">${eur(cl.apport)}</div></div></div>
-      <div class="note">Aucune aide (PTZ, Action Logement, Paris Logement, TVA 5,5 %) hors résidence principale.</div>`;
-    return;
-  }
-  const c=capacite(cl,p); const m=c.best;
+// Un bloc de résultat (budget + kpis + badges + détail), réutilisé pour le scénario "mensualité max"
+// et pour le scénario "mensualité choisie" quand le client en a une en tête.
+function blocBudget(titre,c,p,cl,libMens){
   const plus=c.budgetAvec-c.budgetSans;
+  const m=c.best;
   let html=`
-    <div class="big"><div class="k">Budget d'achat maximum, aides comprises</div><div class="v">${eur(c.budgetAvec)}</div>
+    <div class="big"><div class="k">${titre}</div><div class="v">${eur(c.budgetAvec)}</div>
       <div class="s">Prix TTC du logement, frais de notaire financés. Sans les aides : ${eur(c.budgetSans)}${plus>500?` — les aides font gagner <b>${eur(plus)}</b> de budget.`:'.'}</div></div>
     ${m?badges(m,true):''}
     <div class="kpis">
-      <div class="kpi"><div class="k">Mensualité max (${Math.round(p.endet*100)} % d'endettement)</div><div class="v">${eurM(c.Mmax)}</div></div>
-      <div class="kpi"><div class="k">Capital bancaire max</div><div class="v">${eur(c.Cmax)}</div></div>
+      <div class="kpi"><div class="k">${libMens||('Mensualité max ('+Math.round(p.endet*100)+' % d\'endettement)')}</div><div class="v">${eurM(c.Mmax)}</div></div>
+      <div class="kpi"><div class="k">Capital bancaire</div><div class="v">${eur(c.Cmax)}</div></div>
       <div class="kpi"><div class="k">Taux retenu (${cl.duree} ans)</div><div class="v">${(c.taux*100).toFixed(2).replace('.',',')} %</div></div>
     </div>`;
   if(c.budgetQPV) html+=`<div class="infobox"><b>Si le lot est en QPV/ANRU (TVA 5,5 %)</b> : le client est sous les plafonds, il peut viser un lot affiché jusqu'à <b>${eur(c.budgetQPV.prixAffiche)}</b> en TVA 20 %, qu'il paiera ${eur(c.budgetQPV.prixPaye)}.</div>`;
@@ -579,7 +577,7 @@ function renderCapa(){
     html+=`<details><summary>Comment on y arrive</summary>
     <table>
       <tr><td>Revenus nets retenus par la banque</td><td class="n">${eurM(cl.revenus)}</td></tr>
-      <tr><td>Mensualité maximale (${Math.round(p.endet*100)} % − crédits en cours)</td><td class="n">${eurM(c.Mmax)}</td></tr>
+      <tr><td>Mensualité retenue${c.plafonne?' (mensualité choisie, sous le maximum)':' ('+Math.round(p.endet*100)+' % − crédits en cours)'}</td><td class="n">${eurM(c.Mmax)}</td></tr>
       <tr><td>Prêt bancaire principal (${cl.duree} ans, ${(c.taux*100).toFixed(2).replace('.',',')} % + assurance ${(p.ass*100).toFixed(2).replace('.',',')} %)</td><td class="n">${eur(m.principal)}</td></tr>
       ${m.ptzM>0?`<tr><td>PTZ (tranche ${m.aPTZ.tranche}, ${Math.round(m.aPTZ.quot*100)} % de ${eur(m.aPTZ.base)}, différé ${m.aPTZ.differe} ans, ${m.aPTZ.duree} ans)${m.aPTZ.plancher?' — revenu retenu = coût/9, le RFR étant plus bas':''}</td><td class="n">${eur(m.ptzM)}</td></tr>`:''}
       ${m.aPAL.ok?`<tr><td>Prêt Action Logement (${(m.aPAL.taux*100).toFixed(1).replace('.',',')} %, ${m.aPAL.duree} ans)</td><td class="n">${eur(m.palM)}</td></tr>`:''}
@@ -595,8 +593,41 @@ function renderCapa(){
     if(!m.aPTZ.ok) raisons.push('PTZ : '+m.aPTZ.raisons.join(', ')); if(!m.aPAL.ok) raisons.push('Action Logement : '+m.aPAL.raisons.join(', ')); if(!m.aPPL.ok) raisons.push('Paris Logement : '+m.aPPL.raisons.join(', '));
     if(raisons.length) html+=`<div class="note">Non mobilisable — ${raisons.join(' · ')}.</div>`;
   }
+  return html;
+}
+function renderCapa(){
+  const cl=client(), p=params(); renderAlertes(cl);
+  const fl=$('fLoyer'); if(fl) fl.style.display = cl.logement==='heberge'?'none':'';
+  if(cl.revenus<=0){ $('resCapa').innerHTML=`<div class="warnbox">Aucun revenu retenu par la banque avec ce profil : pas de capacité d'emprunt en propre. Voir les points d'attention ci-dessus pour les montages possibles.</div>`; return; }
+  const mv=Math.max(0,num('mensVoulue'));
+  if(cl.projet!=='rp'){
+    const Mmax=Math.max(0,cl.revenus*p.endet-cl.credits);
+    const MRet = (mv>0)? Math.min(mv,Mmax) : Mmax;
+    const Cmax=capitalLisse(MRet,p.t[cl.duree],cl.duree,p.ass,[]);
+    const budget=(Cmax/(1+p.fGar)+cl.apport)/(1+p.fNot);
+    const lib = cl.projet==='inv' ? 'hors loyer futur' : cl.projet==='rs' ? 'résidence secondaire' : 'logement pour un proche';
+    const titre = mv>0 ? `Budget d'achat pour une mensualité de ${eurM(mv)}` : `Budget d'achat maximum (${lib})`;
+    $('resCapa').innerHTML=`
+      <div class="big"><div class="k">${titre}</div><div class="v">${eur(budget)}</div>
+      <div class="s">Mensualité retenue ${eurM(MRet)} sur ${cl.duree} ans à ${(p.t[cl.duree]*100).toFixed(2).replace('.',',')} %.${cl.projet==='inv'?` La banque ajoutera ${Math.round(p.pLoyer*100)} % du loyer attendu aux revenus : le budget réel se calcule lot par lot à l'étape 2.`:''}</div></div>
+      <div class="kpis"><div class="kpi"><div class="k">Mensualité retenue</div><div class="v">${eurM(MRet)}</div></div><div class="kpi"><div class="k">Capital empruntable</div><div class="v">${eur(Cmax)}</div></div><div class="kpi"><div class="k">Apport total</div><div class="v">${eur(cl.apport)}</div></div></div>
+      ${mv>0 && mv>=Mmax-1?`<div class="note">La mensualité indiquée atteint déjà le maximum d'endettement (${eurM(Mmax)}) : le budget ci-dessus est le plafond.</div>`:''}
+      ${mv>0 && mv<Mmax-1?`<div class="note">À titre de comparaison, le maximum d'endettement (${Math.round(p.endet*100)} %) autoriserait une mensualité de ${eurM(Mmax)}.</div>`:''}
+      <div class="note">Aucune aide (PTZ, Action Logement, Paris Logement, TVA 5,5 %) hors résidence principale.</div>`;
+    return;
+  }
+  const cMax=capacite(cl,p);
+  let html=blocBudget(mv>0?'Budget maximum, aides comprises (mensualité '+Math.round(p.endet*100)+' % d\'endettement)':'Budget d\'achat maximum, aides comprises', cMax, p, cl);
+  if(mv>0 && mv<cMax.Mmax-1){
+    const cCh=capacite(cl,p,mv);
+    html += `<div style="margin:26px 0 16px;border-top:1px dashed var(--line)"></div>`;
+    html += blocBudget(`Budget pour une mensualité choisie de ${eurM(mv)}`, cCh, p, cl, 'Mensualité choisie');
+  } else if(mv>0){
+    html += `<div class="note">La mensualité indiquée (${eurM(mv)}) atteint ou dépasse le maximum d'endettement : le budget ci-dessus est déjà le plafond.</div>`;
+  }
   $('resCapa').innerHTML=html;
 }
+
 
 function addLot(pre){
   const id=++lotSeq; const cl=client();
@@ -701,8 +732,28 @@ function closePanels(){ document.querySelectorAll('.panel').forEach(p=>p.classLi
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePanels(); });
 
 if(location.search.includes('embed=1')) document.body.classList.add('embed');
+
+// ---- Bon taux national en direct (baromètre Meilleurtaux, via l'edge function taux-marche) ----
+const SB_URL='https://hydqfbxdtpmbuooexekp.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
+async function chargerTauxMarche(force){
+  const el=document.getElementById('taux-statut');
+  if(el) el.textContent='Vérification du taux en cours…';
+  try{
+    const r=await fetch(SB_URL+'/functions/v1/taux-marche'+(force?'?force=1':''),{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    if(d.t15==null||d.t20==null||d.t25==null) throw new Error(d.error||'réponse incomplète');
+    $('t15').value=d.t15.toFixed(2); $('t20').value=d.t20.toFixed(2); $('t25').value=d.t25.toFixed(2);
+    recalc();
+    if(el) el.textContent=(d.stale?'Bon taux national (dernière valeur connue, site indisponible) — baromètre du ':'Bon taux national — baromètre Meilleurtaux du ')+(d.date_site||'?')+'.';
+  }catch(e){
+    if(el) el.textContent='Taux en ligne indisponible pour le moment — valeurs par défaut conservées (modifiables à la main).';
+  }
+}
 // démarrage : un lot d'exemple
 renderEmprunteurs(); recalc(); addLot({nom:'Exemple — T2 Saint-Denis', prix:265000, zone:'a', qpv:true, surface:42});
+chargerTauxMarche(false);
 </script>
 </body>
 </html>
