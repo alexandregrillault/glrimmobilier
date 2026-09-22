@@ -683,7 +683,7 @@
       </div>
       <div class="nav-item" onclick="goTo(&#39;simulateur&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="8" y1="10" x2="16" y2="10"></line><line x1="8" y1="14" x2="10" y2="14"></line><line x1="14" y1="14" x2="16" y2="14"></line><line x1="8" y1="18" x2="10" y2="18"></line><line x1="14" y1="18" x2="16" y2="18"></line></svg>
-        Simulateur financement
+        Simuler un financement
       </div>
       <div class="nav-item" onclick="goTo(&#39;promoteurs&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21V8a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v13"></path><path d="M13 21V12a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v9"></path><path d="M2 21h20"></path><path d="M7 10h2M7 14h2M16 15h1"></path></svg>
@@ -3392,7 +3392,7 @@ const pages = {
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-veille': 'Réveil veille', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'pilotage': 'Pilotage commercial',
-  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simulateur financement', 'rapport-marche': 'Rapport marché'
+  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché'
 };
 
 let currentSpace = 'gerant';
@@ -6668,7 +6668,7 @@ async function renderEquipeLeads() {
     // même si la paternité n'est pas (encore) à lui.
     // …et une fiche où il garde un rappel conservé (activites, par = lui) arrive aussi.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}],activites.cs.[{"par":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,conjoint,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites,vente_lot&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,email,telephone,conjoint,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites,vente_lot,simulations&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -7983,6 +7983,27 @@ function eqSimulationsHtml(l) {
 function simOuvrir(contactId) {
   window.open('simulateur.html?embed=1&contact=' + encodeURIComponent(contactId), '_blank');
 }
+
+// Le simulateur, ouvert dans un nouvel onglet, prévient cet onglet-ci quand une
+// simulation vient d'être enregistrée (postMessage) : on rafraîchit la fiche
+// si elle est toujours ouverte sur ce contact, sans recharger toute la page.
+window.addEventListener('message', async (e) => {
+  if (!e.data || e.data.type !== 'glr-simulation-enregistree') return;
+  if (typeof _eqFicheId === 'undefined' || _eqFicheId !== e.data.contact) return;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + encodeURIComponent(e.data.contact) + '&select=simulations', {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (!r.ok) return;
+    const rows = await r.json();
+    const l = _eqLeads.find(x => x.id === e.data.contact);
+    if (l && rows[0]) {
+      l.simulations = rows[0].simulations;
+      const el = document.getElementById('eq-fiche-simulations');
+      if (el) el.outerHTML = eqSimulationsHtml(l);
+    }
+  } catch (err) { /* tant pis, la fiche sera a jour au prochain chargement */ }
+});
 
 function eqFicheFermer() {
   // Avant de fermer : on envoie tout de suite ce qui attendait encore la fin
