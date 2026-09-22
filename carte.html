@@ -1257,8 +1257,14 @@ table.lots td.r{text-align:right}
 #cart .ft a{color:var(--teal);cursor:pointer}
 .btn{border:1px solid var(--teal);background:var(--teal);color:#fff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}
 .btn.o{background:#fff;color:var(--teal)}
+.btn.xs{padding:3px 8px;font-size:11px}
 .ck{width:14px;height:14px;cursor:pointer;accent-color:var(--teal)}
 .lotsbar .btn{margin-left:auto}
+.docsbox{margin:10px 0;padding:10px 12px;background:#f9fafb;border:1px solid var(--line);border-radius:8px;font-size:12.5px}
+.docsbox>b{display:block;margin-bottom:6px}
+.docsbox .dl{display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap}
+.docsbox .dl b{min-width:100px;color:var(--muted);font-weight:600}
+.docsbox .dl a{color:var(--teal)}
 .pige{font-size:11px;color:var(--muted);white-space:nowrap}
 .filters .row.tri>*{flex:1}
 @media (max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:56px 1fr}aside{display:none}header .kpis{display:none}#panel{width:auto;left:10px;min-width:0}}
@@ -1884,6 +1890,92 @@ function nearGares(p) {
     .filter(x => { const k = x.g.nom + '|' + x.g.ligne; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4)
     .map(x => '<span class="tag ok">' + esc(x.g.ligne || x.g.mode) + '</span> ' + esc(x.g.nom) + ' <span style="color:#6b7280">(' + (x.d < 1000 ? Math.round(x.d / 10) * 10 + ' m' : (x.d / 1000).toFixed(1) + ' km') + ')</span>').join('<br>') || null;
 }
+// ---------- documents (plan de masse, plaquette, plan de lot) ----------
+// La carte est une page statique, sans session : la lecture se fait en direct
+// avec la clé anonyme (lecture publique par policy RLS), l'écriture passe par
+// la fonction `selection` (clé service_role côté serveur, pas de policy
+// d'écriture ouverte). Une fois déposé, le lien interne d'un lot se colle dans
+// la même case que les liens Otaree, sur la fiche vendeur.
+const SUPABASE_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
+const DOCS = {}; // cache par programme, une fois chargé : {masse, plaquette, lots:{lot_id:url}}
+function lienInterneLot(id) { return SUPABASE_URL + '/glr/lot/' + encodeURIComponent(id); }
+async function chargerDocs(p) {
+  if (DOCS[p.id]) return DOCS[p.id];
+  const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY };
+  const idsManquants = p.lots.filter(l => !l.plan).map(l => l.id);
+  try {
+    const [prog, lots] = await Promise.all([
+      fetch(SUPABASE_URL + '/rest/v1/documents_programme?programme_id=eq.' + encodeURIComponent(p.id) + '&select=plan_masse_url,plaquette_url', { headers }).then(r => r.ok ? r.json() : []),
+      idsManquants.length
+        ? fetch(SUPABASE_URL + '/rest/v1/documents_lot?lot_id=in.(' + idsManquants.map(id => encodeURIComponent(id)).join(',') + ')&select=lot_id,plan_url', { headers }).then(r => r.ok ? r.json() : [])
+        : Promise.resolve([])
+    ]);
+    const lotsMap = {}; (lots || []).forEach(r => { if (r.plan_url) lotsMap[r.lot_id] = r.plan_url; });
+    // Un ajout depuis « + Plan »/« Ajouter » a pu arriver pendant que cette lecture
+    // était en vol : on fusionne plutôt que d'écraser, l'ajout local l'emporte.
+    const deja = DOCS[p.id] || { masse: '', plaquette: '', lots: {} };
+    DOCS[p.id] = {
+      masse: deja.masse || (prog[0] && prog[0].plan_masse_url) || '',
+      plaquette: deja.plaquette || (prog[0] && prog[0].plaquette_url) || '',
+      lots: Object.assign({}, lotsMap, deja.lots)
+    };
+  } catch (e) {
+    if (!DOCS[p.id]) DOCS[p.id] = { masse: '', plaquette: '', lots: {} };
+  }
+  return DOCS[p.id];
+}
+async function enregistrerDoc(action, payload) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/functions/v1/selection', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ action }, payload)) });
+    const d = await r.json();
+    return !!(d && d.ok);
+  } catch (e) { return false; }
+}
+function docsBoxHtml(p) {
+  const d = DOCS[p.id];
+  if (!d) return '<div class="docsbox" id="docsBox"><b>Documents du programme</b><span style="color:#9ca3af">Chargement…</span></div>';
+  const ligne = (label, url, cle) => '<div class="dl"><b>' + label + '</b>' + (url ? '<a href="' + esc(url) + '" target="_blank">Ouvrir ↗</a><button class="btn o xs" data-doc="' + cle + '">Modifier</button>' : '<span style="color:#9ca3af">Non déposé</span><button class="btn xs" data-doc="' + cle + '">Ajouter</button>') + '</div>';
+  return '<div class="docsbox" id="docsBox"><b>Documents du programme</b>' + ligne('Plan de masse', d.masse, 'masse') + (p.plaquette ? '' : ligne('Plaquette', d.plaquette, 'plaquette')) + '</div>';
+}
+function bindDocsBox(p) {
+  const box = panel.querySelector('#docsBox'); if (!box) return;
+  box.querySelectorAll('[data-doc]').forEach(b => b.onclick = () => ajouterDocProgramme(p, b.dataset.doc));
+}
+async function ajouterDocProgramme(p, cle) {
+  const label = cle === 'masse' ? 'plan de masse' : 'plaquette';
+  const saisie = prompt('Lien du ' + label + ' (PDF ou page web) pour ' + p.nom + ' :', (DOCS[p.id] && DOCS[p.id][cle]) || '');
+  if (saisie == null) return;
+  const url = saisie.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) { alert('Lien invalide : il doit commencer par http:// ou https://'); return; }
+  const payload = { programme_id: p.id }; payload[cle === 'masse' ? 'plan_masse_url' : 'plaquette_url'] = url;
+  const ok = await enregistrerDoc('doc_programme', payload);
+  if (!ok) { alert('Échec de l’enregistrement, réessayez.'); return; }
+  if (!DOCS[p.id]) DOCS[p.id] = { masse: '', plaquette: '', lots: {} };
+  DOCS[p.id][cle] = url;
+  if (SEL === p) { const box = panel.querySelector('#docsBox'); if (box) box.outerHTML = docsBoxHtml(p); bindDocsBox(p); }
+}
+async function ajouterDocLot(p, l) {
+  const saisie = prompt('Lien du plan (PDF) pour le lot ' + l.n + ' :', '');
+  if (saisie == null) return;
+  const url = saisie.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) { alert('Lien invalide : il doit commencer par http:// ou https://'); return; }
+  const ok = await enregistrerDoc('doc_lot', { lot_id: l.id, plan_url: url });
+  if (!ok) { alert('Échec de l’enregistrement, réessayez.'); return; }
+  if (!DOCS[p.id]) DOCS[p.id] = { masse: '', plaquette: '', lots: {} };
+  DOCS[p.id].lots[l.id] = url;
+  if (SEL === p) renderLots(p);
+}
+function copierLienLot(l, btn) {
+  navigator.clipboard.writeText(lienInterneLot(l.id)).then(() => {
+    const t = btn.textContent; btn.textContent = 'Copié ✓'; btn.disabled = true;
+    setTimeout(() => { btn.textContent = t; btn.disabled = false; }, 1500);
+  }).catch(() => alert('Impossible de copier le lien.'));
+}
+
+
 // ---------- fiche programme ----------
 let SEL = null;
 const panel = document.getElementById('panel');
@@ -1949,11 +2041,14 @@ function select(p, fly) {
   (p.docs || []).forEach(d => { const [t, u] = String(d).split('→'); if (u) links.push('<a href="' + esc(u) + '" target="_blank">' + esc(t || 'Document') + '</a>'); });
   if (p.img) links.push('<a href="' + esc(p.img) + '" target="_blank">Visuel</a>');
   if (links.length) h += '<div class="links">' + links.join('') + '</div>';
+  h += docsBoxHtml(p);
   h += '<div class="lotsbar"><b>Lots</b><select id="lTypo"><option value="">Toutes typos</option>' + TYPOS.map(t => '<option>' + t + '</option>').join('') + '</select><select id="lSt"><option value="">Tous statuts</option><option value="libre">Libres</option><option value="libre,option">Libres + optionnés</option></select><span id="lCount" style="color:#6b7280"></span><button class="btn o" id="lAll">Tout sélectionner</button></div><div id="lotsTbl" style="overflow-x:auto"></div>';
   panel.querySelector('.bd').innerHTML = h;
   panel.querySelector('#lTypo').onchange = panel.querySelector('#lSt').onchange = () => renderLots(p);
   panel.querySelector('#lSt').value = [...F.st].join(',');
   panel.querySelector('#lAll').onclick = () => { const ty = panel.querySelector('#lTypo').value, st = panel.querySelector('#lSt').value; p.lots.filter(l => (!ty || l.typo === ty) && (!st || st.split(',').includes(l.st))).forEach(l => CART.add(l.id)); saveCart(); renderLots(p); renderCartBtn(); };
+  bindDocsBox(p);
+  chargerDocs(p).then(() => { if (SEL !== p) return; const box = panel.querySelector('#docsBox'); if (box) { box.outerHTML = docsBoxHtml(p); bindDocsBox(p); } renderLots(p); });
   renderLots(p); renderMap(); renderList(); drawWalks(p); showJourney(p);
   const it = document.querySelector('.it.sel'); if (it) it.scrollIntoView({ block: 'nearest' });
 }
@@ -1961,18 +2056,22 @@ let sortK = 'n', sortD = 1;
 function renderLots(p) {
   const ty = panel.querySelector('#lTypo').value, st = panel.querySelector('#lSt').value;
   let ls = p.lots.filter(l => (!ty || l.typo === ty) && (!st || st.split(',').includes(l.st)));
-  const cols = [['ck', ''], ['n', 'N°'], ['type', 'Type'], ['typo', 'Typo'], ['surf', 'Surface'], ['etage', 'Étage'], ['expo', 'Expo'], ['annexes', 'Extérieur / annexes'], ['prix20', 'Prix TVA 20 %'], ['prix55', 'Prix TVA 5,5 %'], ['prix_m2', '€/m²'], ['st', 'Statut'], ['plan', 'Plan']];
+  const cols = [['ck', ''], ['n', 'N°'], ['type', 'Type'], ['typo', 'Typo'], ['surf', 'Surface'], ['etage', 'Étage'], ['expo', 'Expo'], ['annexes', 'Extérieur / annexes'], ['prix20', 'Prix TVA 20 %'], ['prix55', 'Prix TVA 5,5 %'], ['prix_m2', '€/m²'], ['st', 'Statut'], ['plan', 'Plan'], ['lien', 'Lien']];
+  const docs = DOCS[p.id];
   ls.sort((a, b) => { let x = a[sortK], y = b[sortK]; if (x == null) return 1; if (y == null) return -1; if (typeof x === 'number' && typeof y === 'number') return (x - y) * sortD; return String(x).localeCompare(String(y), 'fr', { numeric: true }) * sortD; });
   panel.querySelector('#lCount').textContent = ls.length + ' lot' + (ls.length > 1 ? 's' : '') + (p.lots.length !== ls.length ? ' / ' + p.lots.length : '');
   let h = '<table class="lots"><thead><tr>' + cols.map(([k, t]) => '<th data-k="' + k + '">' + t + (sortK === k && k !== 'ck' ? (sortD > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
   ls.forEach(l => {
     const extra = [l.annexes, l.parkings, l.loyer ? 'loyer ' + fmt(l.loyer) : null, l.renta ? 'renta ' + l.renta + ' %' : null, l.dpe ? 'DPE ' + l.dpe : null, l.livraison ? 'livr. ' + l.livraison : null, l.option_fin ? 'option jusqu’au ' + String(l.option_fin).slice(0, 10) : null, (l.fisc || []).join(', ')].filter(Boolean).join(' · ');
-    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (l.plan ? '<a href="' + esc(l.plan) + '" target="_blank">PDF</a>' : '') + '</td></tr>';
+    const planUrl = l.plan || (docs && docs.lots[l.id]) || '';
+    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (planUrl ? '<a href="' + esc(planUrl) + '" target="_blank">PDF</a>' : '') + '</td><td>' + (planUrl ? '<button class="btn o xs" data-lien="' + esc(l.id) + '">Copier</button>' : '<button class="btn xs" data-ajouter="' + esc(l.id) + '">+ Plan</button>') + '</td></tr>';
   });
   h += '</tbody></table>';
   const t = panel.querySelector('#lotsTbl'); t.innerHTML = h;
-  t.querySelectorAll('th').forEach(th => th.onclick = () => { if (th.dataset.k === 'ck') return; if (sortK === th.dataset.k) sortD = -sortD; else { sortK = th.dataset.k; sortD = 1; } renderLots(p); });
+  t.querySelectorAll('th').forEach(th => th.onclick = () => { if (th.dataset.k === 'ck' || th.dataset.k === 'lien') return; if (sortK === th.dataset.k) sortD = -sortD; else { sortK = th.dataset.k; sortD = 1; } renderLots(p); });
   t.querySelectorAll('input.ck').forEach(c => c.onchange = () => { toggleCart(c.dataset.l, c.checked); });
+  t.querySelectorAll('[data-lien]').forEach(b => b.onclick = () => copierLienLot(LI[b.dataset.lien], b));
+  t.querySelectorAll('[data-ajouter]').forEach(b => b.onclick = () => ajouterDocLot(p, LI[b.dataset.ajouter]));
 }
 
 // ---------- recherche ----------
