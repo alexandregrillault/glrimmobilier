@@ -113,6 +113,31 @@
   .icon-rows li{display:flex;gap:13px;align-items:flex-start;font-size:13.5px;line-height:1.55;color:var(--ink)}
   .icon-rows li .icowrap{flex:none;width:30px;height:30px;margin-top:1px}
 
+  /* Frise horizontale (parcours) */
+  .frise-section{margin-top:26px}
+  .frise-section:first-child{margin-top:0}
+  .frise-section h3{font-family:var(--serif);font-size:14.5px;font-weight:700;color:var(--teal);margin-bottom:18px}
+  .frise{display:flex;align-items:flex-start;position:relative}
+  .frise::before{content:'';position:absolute;top:15px;left:15px;right:15px;height:1.5px;background:var(--line);z-index:0}
+  .frise-step{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;padding:0 8px;z-index:1}
+  .frise-step .n{width:30px;height:30px;border-radius:50%;background:var(--white);border:1.5px solid var(--gold-light);color:var(--gold);
+    display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;font-size:12.5px;flex:none}
+  .frise-step h4{font-family:var(--serif);font-size:13px;font-weight:700;color:var(--ink);margin-top:11px}
+  .frise-step p{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.45}
+  @media (max-width:900px){
+    .frise{flex-direction:column;gap:16px}
+    .frise::before{display:none}
+    .frise-step{flex-direction:row;text-align:left;align-items:flex-start;gap:12px;padding:0}
+    .frise-step h4,.frise-step p{margin-top:0}
+  }
+
+  /* Contact — bloc centré */
+  .contact-center{display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;margin-top:6px}
+  .contact-nom{font-family:var(--serif);font-size:clamp(24px,3.4vw,34px);font-weight:700;color:var(--ink)}
+  .contact-tel{font-family:var(--serif);font-size:clamp(42px,6.4vw,66px);font-weight:700;color:var(--teal);margin-top:24px;letter-spacing:.5px}
+  .contact-sub-row{margin-top:16px;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center}
+  .contact-sub-row .dot{color:var(--gold-light)}
+
   .slide-body{flex:1;display:flex;flex-direction:column;justify-content:center;width:100%}
 
   .cta-banner{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:26px 30px;
@@ -300,12 +325,12 @@
     slides.push({ html:
       '<div class="eyebrow reveal">NOTRE CATALOGUE</div><h2 class="reveal">Ce que nous avons actuellement en stock</h2>' +
       '<div class="lead reveal">Carte des programmes GLR, Île-de-France — données en temps réel' + (villesClient.length ? ', filtrée sur vos secteurs de recherche' : '') + '.</div>' +
-      '<div class="content reveal" style="display:flex;gap:22px;align-items:stretch;flex-wrap:wrap">' +
-      '<div style="flex:1 1 62%;min-width:300px">' +
+      '<div class="content reveal" style="display:flex;gap:22px;align-items:stretch;flex-wrap:wrap;max-width:100%">' +
+      '<div style="flex:1 1 72%;min-width:340px">' +
       '<div class="map-wrap"><iframe src="' + esc(mapSrc) + '" loading="lazy" title="Carte des programmes GLR"></iframe></div>' +
       (villesClient.length ? '<div class="map-villes">Filtré sur : <b>' + esc(villesClient.join(', ')) + '</b></div>' : '') +
       '</div>' +
-      '<div style="flex:1 1 230px;min-width:210px" class="stat-col">' +
+      '<div style="flex:0 0 220px;min-width:190px" class="stat-col">' +
       '<div class="stat-chip"><b class="js-avec-lots">…</b><span>avec lots disponibles</span></div>' +
       '<div class="stat-chip"><b class="js-total">…</b><span>programmes suivis</span></div>' +
       '<div class="stat-chip"><b class="js-promoteurs">…</b><span>promoteurs partenaires</span></div>' +
@@ -330,51 +355,41 @@
     '<a class="cta-sim" href="simulateur.html" target="_blank" rel="noopener">Lancer la simulation <span class="arrow">→</span></a></div>'
   });
 
-  // 6. Notre parcours — méthode GLR + grandes étapes VEFA, deux colonnes parallèles
+  // 6. Notre parcours — méthode GLR + grandes étapes VEFA, en frises horizontales
   slides.push({ html:
     '<div class="eyebrow reveal">DE LA RECHERCHE À LA LIVRAISON</div><h2 class="reveal">Notre parcours, à vos côtés</h2>' +
-    '<div class="content reveal cols2">' +
-    '<div><h3>Notre méthode</h3><ol class="steps">' +
+    '<div class="content reveal" style="max-width:100%">' +
+    '<div class="frise-section"><h3>Notre méthode</h3><div class="frise">' +
     [['Écoute','On comprend votre projet — ville, budget, typologie, calendrier.'],
      ['Sélection','Une sélection personnalisée, sur l’ensemble du marché disponible.'],
      ['Visite & financement','Visite des biens retenus et simulation de financement.'],
      ['Réservation','Montage du dossier et contrat de réservation.'],
      ['Suivi','Accompagnement jusqu’à la remise des clés, et au-delà.']]
-    .map(function(c,i){ return '<li><div class="n">' + (i+1) + '</div><div><h3>' + esc(c[0]) + '</h3><p>' + esc(c[1]) + '</p></div></li>'; }).join('') +
-    '</ol></div>' +
-    '<div><h3>Les grandes étapes VEFA</h3><ol class="steps">' +
+    .map(function(c,i){ return '<div class="frise-step"><div class="n">' + (i+1) + '</div><h4>' + esc(c[0]) + '</h4><p>' + esc(c[1]) + '</p></div>'; }).join('') +
+    '</div></div>' +
+    '<div class="frise-section"><h3>Les grandes étapes VEFA</h3><div class="frise">' +
     [['Réservation','Signature du contrat de réservation préliminaire.'],
      ['Acte authentique','Offre de prêt puis signature chez le notaire.'],
      ['Construction','Appels de fonds selon l’avancement des travaux.'],
      ['Livraison','Remise des clés et vérifications contradictoires.'],
      ['Garanties','Parfait achèvement, biennale et décennale.']]
-    .map(function(c,i){ return '<li><div class="n">' + (i+1) + '</div><div><h3>' + esc(c[0]) + '</h3><p>' + esc(c[1]) + '</p></div></li>'; }).join('') +
-    '</ol></div>' +
+    .map(function(c,i){ return '<div class="frise-step"><div class="n">' + (i+1) + '</div><h4>' + esc(c[0]) + '</h4><p>' + esc(c[1]) + '</p></div>'; }).join('') +
+    '</div></div>' +
     '</div>'
   });
 
-  // 7. Contact — en écho à la couverture
+  // 7. Contact — les coordonnées du conseiller, en grand et centrées
   slides.push({ html:
-    '<div class="eyebrow reveal">GLR IMMOBILIER</div><h1 class="reveal">Restons en contact</h1>' +
-    '<div class="split">' +
-      '<div class="split-left reveal">' +
-      (conseillerNomComplet ? '<div class="conseiller-nom" style="font-size:19px">' + esc(conseillerNomComplet) + '</div><div class="conseiller-sub">Conseiller en immobilier neuf — GLR Immobilier</div>' : '') +
-      '<div class="contact-grid">' +
-      (conseillerTel ? '<div><div class="k">Téléphone</div><div class="v">' + esc(conseillerTel) + '</div></div>' : '') +
-      (conseillerEmail ? '<div><div class="k">E-mail</div><div class="v">' + esc(conseillerEmail) + '</div></div>' : '') +
-      '<div><div class="k">Site</div><div class="v">www.glrimmobilier.com</div></div>' +
+    '<div class="eyebrow reveal" style="justify-content:center">GLR IMMOBILIER</div><h1 class="reveal" style="text-align:center">Restons en contact</h1>' +
+    '<div class="contact-center reveal">' +
+      (conseillerNomComplet ? '<div class="contact-nom">' + esc(conseillerNomComplet) + '</div><div class="conseiller-sub" style="margin-top:5px">Conseiller en immobilier neuf — GLR Immobilier</div>' : '') +
+      (conseillerTel ? '<div class="contact-tel">' + esc(conseillerTel) + '</div>' : '') +
+      '<div class="contact-sub-row">' +
+      (conseillerEmail ? '<span>' + esc(conseillerEmail) + '</span><span class="dot">•</span>' : '') +
+      '<span>www.glrimmobilier.com</span>' +
       '</div>' +
-      '<div class="legal" style="margin-top:auto">GLR Immobilier — Carte professionnelle CPI 7501 2025 000 000 211 (CCI Paris Île-de-France) — RC Pro Allianz n° 64194122 — RCS Paris 933 789 612</div>' +
-      '</div>' +
-      '<div class="panel reveal">' +
-        '<div class="eyebrow">EN RÉSUMÉ</div>' +
-        '<div class="stat-col" style="justify-content:flex-start;gap:14px">' +
-        '<div class="stat-chip"><b class="js-avec-lots">…</b><span>lots disponibles aujourd’hui</span></div>' +
-        '<div class="stat-chip"><b class="js-promoteurs">…</b><span>promoteurs partenaires</span></div>' +
-        '</div>' +
-        '<div class="panel-tag">Merci pour votre confiance.</div>' +
-      '</div>' +
-    '</div>'
+    '</div>' +
+    '<div class="legal reveal" style="text-align:center;margin:30px auto 0;max-width:640px">GLR Immobilier — Carte professionnelle CPI 7501 2025 000 000 211 (CCI Paris Île-de-France) — RC Pro Allianz n° 64194122 — RCS Paris 933 789 612</div>'
   });
 
   var deck = document.getElementById('deck');
