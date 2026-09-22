@@ -9105,6 +9105,7 @@ function plaqGenerer(contactId) {
     if (v.telephone) params.set('ct', v.telephone);
   }
   if (civilite && nomFamille) { params.set('civ', civilite); params.set('client', nomFamille); }
+  if (contactId) params.set('contact', contactId);
   window.open('plaquette.html' + (params.toString() ? '?' + params.toString() : ''), '_blank');
 }
 
