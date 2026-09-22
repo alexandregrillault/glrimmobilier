@@ -921,6 +921,9 @@ async function enregistrerSimulation(){
         body: JSON.stringify({ simulations })
       });
       if(!rEcrit.ok) throw new Error('HTTP '+rEcrit.status);
+      // Prevenir la fiche client (onglet CRM d'origine, ouverte par simOuvrir)
+      // pour qu'elle se rafraichisse sans recharger toute la page.
+      if (window.opener) { try { window.opener.postMessage({ type: 'glr-simulation-enregistree', contact: CTX_CONTACT }, '*'); } catch (e) {} }
     }
     if(statutEl) statutEl.textContent='Simulation enregistrée ✓';
   }catch(e){
