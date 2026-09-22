@@ -228,6 +228,10 @@
   var clientNom = (qs.get('client') || '').trim();
   var clientLabel = (civilite && clientNom) ? (civilite + ' ' + clientNom) : '';
   var villesClient = (qs.get('villes') || '').split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  // Client identifié (22/09) : permet au bouton "Lancer la simulation" d'ouvrir le
+  // simulateur avec les vrais lots de sa sélection, et d'enregistrer sur sa fiche.
+  var contactId = (qs.get('contact') || '').trim();
+  var simulateurLien = 'simulateur.html' + (contactId ? ('?embed=1&contact=' + encodeURIComponent(contactId)) : '');
 
   var SUPABASE_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co';
   var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
@@ -352,7 +356,7 @@
     '</div>' +
     '<div class="cta-banner reveal"><div><h3>Faisons le calcul ensemble</h3>' +
     '<div class="cta-sim-sub">On simule votre capacité d’emprunt, avec les aides mobilisables, en direct avec vous.</div></div>' +
-    '<a class="cta-sim" href="simulateur.html" target="_blank" rel="noopener">Lancer la simulation <span class="arrow">→</span></a></div>'
+    '<a class="cta-sim" href="' + esc(simulateurLien) + '" target="_blank" rel="noopener">Lancer la simulation <span class="arrow">→</span></a></div>'
   });
 
   // 6. Notre parcours — méthode GLR + grandes étapes VEFA, en frises horizontales
