@@ -733,6 +733,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 6l-10 7L2 6"></path><rect x="2" y="4" width="20" height="16" rx="2"></rect></svg>
         Mes leads
       </div>
+      <div class="nav-item" onclick="goTo(&#39;equipe-veille&#39;, this); renderVeillePage();">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+        Réveil veille<span id="nav-veille-badge" style="display:none;margin-left:6px;background:var(--accent);color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700"></span>
+      </div>
       <div class="nav-item" onclick="goTo(&#39;pool&#39;, this); renderPool();">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h18"></path><path d="M3 12h18"></path><path d="M3 17h18"></path><circle cx="7" cy="7" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="13" cy="12" r="1.6" fill="currentColor" stroke="none"></circle><circle cx="9" cy="17" r="1.6" fill="currentColor" stroke="none"></circle></svg>
         Pool de leads
@@ -1647,7 +1651,6 @@
       </div>
 
       <!-- Filtres rapides -->
-      <div id="eq-veille-bandeau" style="margin-bottom:14px"></div>
       <div id="eq-leads-chips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px"></div>
       <div id="eq-leads-legende" style="margin-bottom:14px"></div>
       <div id="eq-leads-actions" style="margin-bottom:14px"></div>
@@ -1658,6 +1661,21 @@
           <tbody id="eq-leads-tbody"><tr><td colspan="8"><div class="empty"><p>Sélectionne ton nom</p></div></td></tr></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- PAGE: REVEIL VEILLE -->
+    <!-- Programmes nouveaux depuis la derniere pige qui correspondent a des
+         clients en veille (les miens ; en gerant, tous). Rubrique a part,
+         plus de gros bandeau dans Mes leads / Programmes. -->
+    <div class="page" id="page-equipe-veille">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Reveil veille</div>
+          <div class="section-sub" id="veille-page-sub">Nouveautes du marche correspondant a des clients en veille</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="renderVeillePage(true)" title="Rafraichir">↻</button>
+      </div>
+      <div id="veille-page-corps"><div class="empty"><p>Chargement...</p></div></div>
     </div>
 
     <!-- PAGE: POOL DE LEADS -->
@@ -1950,7 +1968,6 @@
       <div style="color:var(--muted);font-size:13px;margin-bottom:18px;max-width:680px">
         Chaque programme génère une page de réservation visio. Crée-le ici, puis clique « Copier le lien » pour récupérer l'URL à mettre dans tes mails de campagne.
       </div>
-      <div id="prog-veille-bandeau" style="margin-bottom:16px"></div>
       <div id="programmes-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px"></div>
     </div>
 
@@ -3372,7 +3389,7 @@ function toast(msg = '✓ Enregistré', color = 'var(--success)') {
 // ============================================================
 const pages = {
   dashboard: 'Tableau de bord', ventes: 'Ventes', charges: 'Charges', 'treso-prev': 'Trésorerie prévisionnelle', vendeurs: 'Vendeurs',
-  'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
+  'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-veille': 'Réveil veille', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'pilotage': 'Pilotage commercial',
   'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simulateur financement', 'rapport-marche': 'Rapport marché'
@@ -7060,9 +7077,26 @@ async function _veilleChargerCatalogue(force) {
   if (_veilleCatalogue && !force) return _veilleCatalogue;
   try {
     const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+    // Seules les vraies nouveautes depuis la derniere pige declenchent un
+    // reveil : un programme flambant neuf, ou un lot neuf apparu sur un
+    // programme deja connu (champ "nouveau", recalcule a chaque pige par le
+    // pipeline). Matcher tout le catalogue proposable (800+ programmes)
+    // contre tous les clients en veille noierait l'ecran de correspondances
+    // qui existaient deja avant et qu'on n'avait simplement jamais vues :
+    // si on n'avait rien trouve pour un client avant cette connexion a la
+    // carte, ca reste comme ca jusqu'a une vraie nouveaute au marche.
+    const [progsNouveaux, lotsNouveaux] = await Promise.all([
+      _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=id&source=not.in.(picking,nomandat)&nb_libres=gt.0&nouveau=is.true', entetes),
+      _sbTout(SUPABASE_URL + '/rest/v1/pige_lots?select=programme_id&st=eq.libre&nouveau=is.true', entetes)
+    ]);
+    const ids = new Set();
+    progsNouveaux.forEach(p => { if (p.id) ids.add(p.id); });
+    lotsNouveaux.forEach(l => { if (l.programme_id) ids.add(l.programme_id); });
+    if (!ids.size) { _veilleCatalogue = []; return _veilleCatalogue; }
+    const idsList = Array.from(ids).map(id => '"' + String(id).replace(/"/g, '\\"') + '"').join(',');
     const [progs, lots] = await Promise.all([
-      _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=id,nom,ville,dept,livraison,prix_min&source=not.in.(picking,nomandat)&nb_libres=gt.0&order=nom.asc', entetes),
-      _sbTout(SUPABASE_URL + '/rest/v1/pige_lots?select=programme_id,typo,prix&st=eq.libre', entetes)
+      _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=id,nom,ville,dept,livraison,prix_min&id=in.(' + idsList + ')&source=not.in.(picking,nomandat)&order=nom.asc', entetes),
+      _sbTout(SUPABASE_URL + '/rest/v1/pige_lots?select=programme_id,typo,prix&st=eq.libre&programme_id=in.(' + idsList + ')', entetes)
     ]);
     const prixParTypo = {};
     lots.forEach(x => {
@@ -7113,47 +7147,63 @@ function _veillePuce(txt, couleur) {
     + ';color:' + (couleur || 'var(--text)') + ';border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;margin:1px 3px 1px 0">' + _veilleEsc(txt) + '</span>';
 }
 
-// Bandeau « Mes leads » : ce qui vient de se libérer pour mes clients en veille
+// Badge du menu "Réveil veille" : plus de gros bandeau, juste un chiffre.
+function _veilleMajBadge(total) {
+  const b = document.getElementById('nav-veille-badge');
+  if (!b) return;
+  if (total > 0) { b.textContent = total; b.style.display = 'inline-block'; }
+  else { b.style.display = 'none'; }
+}
+
+// Appelé après tout ce qui peut changer les correspondances (chargement des
+// leads, sortie/écart de veille…) : met à jour le badge, et la rubrique elle-
+// même si elle est ouverte.
 async function renderVeilleBandeau() {
-  const z = document.getElementById('eq-veille-bandeau');
+  const r = await veilleCalculer(true);
+  if (!r) return;
+  _veilleMajBadge(r.reduce((n, x) => n + x.items.length, 0));
+  const page = document.getElementById('page-equipe-veille');
+  if (page && page.classList.contains('active')) renderVeillePage();
+}
+
+// Idem depuis la page Programmes : le badge du menu + les compteurs par
+// programme (veilleNbPour), sans bandeau dans la page elle-même.
+async function renderProgVeilleBandeau() {
+  const r = await veilleCalculer(true);
+  if (!r) return;
+  _veilleMajBadge(r.reduce((n, x) => n + x.items.length, 0));
+  renderProgrammes();
+}
+
+// Rubrique "Réveil veille" : les nouveautés du catalogue (depuis la dernière
+// pige) qui correspondent à mes clients en veille.
+async function renderVeillePage() {
+  const z = document.getElementById('veille-page-corps');
   if (!z) return;
+  z.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
   const enVeille = _eqMiens().filter(estEnVeille);
   const r = await veilleCalculer(true);
   if (!r) return;
   const total = r.reduce((n, x) => n + x.items.length, 0);
-  if (!enVeille.length && !total) { z.innerHTML = ''; return; }
+  _veilleMajBadge(total);
+  if (!enVeille.length && !total) {
+    z.innerHTML = '<div class="empty"><p>Aucun client en veille pour le moment.</p></div>';
+    return;
+  }
   if (!total) {
-    z.innerHTML = `<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:11px;padding:11px 14px;font-size:12.5px;color:var(--muted)">
-      ${enVeille.length} client(s) en veille — aucun programme du catalogue ne leur correspond pour l'instant.
-      <button onclick="eqLeadsSetFilter('statut:${STATUT_VEILLE}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12.5px;text-decoration:underline;padding:0 0 0 6px">Les voir</button>
+    z.innerHTML = `<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:11px;padding:14px 16px;font-size:13px;color:var(--muted)">
+      ${enVeille.length} client(s) en veille — aucune nouveauté du catalogue ne leur correspond pour l'instant.
+      <button onclick="eqLeadsSetFilter('statut:${STATUT_VEILLE}'); goToPage('equipe-leads');" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;text-decoration:underline;padding:0 0 0 6px">Les voir</button>
     </div>`;
     return;
   }
-  z.innerHTML = `<div style="background:var(--accent)12;border:1px solid var(--accent);border-radius:11px;padding:13px 15px">
-    <div style="font-family:var(--font-head);font-size:14px;font-weight:800;margin-bottom:3px">Réveil veille — ${total} client(s) à rappeler</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Marge appliquée : budget +${Math.round(VEILLE_MARGE_BUDGET*100)} % et villes limitrophes${_veilleZonesEchec ? ' <span style="color:var(--warning)">(communes alentours indisponibles — correspondance sur la ville exacte seulement)</span>' : ''}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      ${r.map(x => `<button onclick="veilleModale('${_veilleEsc(x.p.slug)}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:9px 13px;color:var(--text);font-size:12.5px;cursor:pointer;text-align:left">
-        <strong>${_veilleEsc(x.p.nom)}</strong><br><span style="font-size:11px;color:var(--muted)">${_veilleEsc(x.p.ville || '')} · ${x.items.length} client(s)</span>
+  z.innerHTML = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${total} client(s) à rappeler — marge appliquée : budget +${Math.round(VEILLE_MARGE_BUDGET*100)} % et villes limitrophes${_veilleZonesEchec ? ' <span style="color:var(--warning)">(communes alentours indisponibles — correspondance sur la ville exacte seulement)</span>' : ''}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+      ${r.map(x => `<button onclick="veilleModale('${_veilleEsc(x.p.slug)}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:13px;cursor:pointer;text-align:left">
+        <strong>${_veilleEsc(x.p.nom)}</strong><br><span style="font-size:11.5px;color:var(--muted)">${_veilleEsc(x.p.ville || '')} · ${x.items.length} client(s)</span>
       </button>`).join('')}
-    </div>
-  </div>`;
-}
-
-// Bandeau et compteurs de la page Programmes
-async function renderProgVeilleBandeau() {
-  const z = document.getElementById('prog-veille-bandeau');
-  if (!z) return;
-  const r = await veilleCalculer(true);
-  if (!r) return;
-  const total = r.reduce((n, x) => n + x.items.length, 0);
-  const enVeille = (_veilleLeads || []).length;
-  if (!enVeille) { z.innerHTML = ''; return; }
-  z.innerHTML = `<div style="background:${total ? 'var(--accent)12' : 'var(--surface2)'};border:1px solid ${total ? 'var(--accent)' : 'var(--border)'};border-radius:11px;padding:13px 15px">
-    <div style="font-family:var(--font-head);font-size:14px;font-weight:800">${enVeille} client(s) en veille${total ? ' — ' + total + ' correspondance(s)' : ''}</div>
-    <div style="font-size:12px;color:var(--muted);margin-top:3px">Chaque programme affiche les clients dont il coche les critères, budget élargi de ${Math.round(VEILLE_MARGE_BUDGET*100)} % et villes limitrophes comprises.</div>
-  </div>`;
-  renderProgrammes();
+    </div>`;
 }
 function veilleNbPour(slug) {
   if (!_veilleReveils) return null;
@@ -7887,6 +7937,51 @@ function eqHistoriqueHtml(l) {
       <span style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;flex:1">Historique — ${esc(compteur)}</span>
       <span style="color:var(--muted);font-size:12px">${_eqHistoOuvert ? 'masquer ▾' : 'afficher ▸'}</span>
     </div>${corps}</div>`;
+}
+
+// ---- Simulations de financement de la fiche (une par simulation enregistrée,
+// par le vendeur depuis cette fiche ou par le client depuis sa feuille sélection).
+// Même mécanique que le bloc Historique ci-dessus ; source : contacts.simulations,
+// déjà en mémoire sur la fiche (l.simulations), aucun appel réseau supplémentaire.
+// Bornée à 20 côté serveur (edge function "selection") : rien n'y reste à vie.
+let _eqSimuOuvert = false;
+
+function eqSimulationsBasculer() {
+  _eqSimuOuvert = !_eqSimuOuvert;
+  const l = _eqLeads.find(x => x.id === _eqFicheId);
+  const el = document.getElementById('eq-fiche-simulations');
+  if (el && l) el.outerHTML = eqSimulationsHtml(l);
+}
+
+function eqSimulationsHtml(l) {
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : '—';
+  const eur = (v) => (v == null || !Number.isFinite(Number(v))) ? '—' : new Intl.NumberFormat('fr-FR').format(Math.round(Number(v))) + ' €';
+  const simus = Array.isArray(l.simulations) ? l.simulations : [];
+  const compteur = simus.length ? simus.length + ' simulation' + (simus.length > 1 ? 's' : '') : 'aucune';
+  let corps = '';
+  if (_eqSimuOuvert) {
+    if (!simus.length) corps = '<div style="font-size:12px;color:var(--muted);padding:8px 12px">Rien encore sur cette fiche</div>';
+    else corps = '<div style="max-height:320px;overflow-y:auto">' + simus.map(s => {
+      const n = Array.isArray(s.lots) ? s.lots.length : 0;
+      return `<div style="display:grid;grid-template-columns:118px 90px 1fr;gap:10px;align-items:baseline;padding:7px 12px;border-top:1px solid var(--border);font-size:12.5px">
+        <span style="color:var(--muted);white-space:nowrap">${_vEsc(fmtD(s.date))}</span>
+        <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.origine === 'vendeur' ? 'Vendeur' : 'Client'}</span>
+        <span>Budget visé ${_vEsc(eur(s.budgetMax))}${n ? ' · ' + n + ' lot' + (n > 1 ? 's' : '') + ' simulés' : ''}</span>
+      </div>`;
+    }).join('') + '</div>';
+  }
+  return `<div id="eq-fiche-simulations" style="margin:0 0 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <div onclick="eqSimulationsBasculer()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px">
+      <span style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;flex:1">Simulations — ${_vEsc(compteur)}</span>
+      <span style="color:var(--muted);font-size:12px">${_eqSimuOuvert ? 'masquer ▾' : 'afficher ▸'}</span>
+    </div>${corps}</div>`;
+}
+
+// Ouvre le simulateur de financement dans un nouvel onglet, pré-rempli avec les
+// lots déjà envoyés à ce client (le simulateur charge la sélection lui-même via
+// une lecture authentifiée sur `selections?contact_id=eq.<id>`).
+function simOuvrir(contactId) {
+  window.open('simulateur.html?embed=1&contact=' + encodeURIComponent(contactId), '_blank');
 }
 
 function eqFicheFermer() {
@@ -8727,6 +8822,7 @@ ${(() => {
       ${cur === 'Nouveau' ? `<button onclick="eqLeadAppele('${l.id}')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Appelé</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqOuvrirSelection('${l.id}')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Envoyer une sélection</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="plaqOuvrir('${l.id}')" title="Ouvre la plaquette de présentation dans un nouvel onglet, avec tes coordonnées et le nom du client — à montrer en visio" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Générer la plaquette</button>` : ''}
+      ${(!STATUTS_FINAUX.includes(cur) && (_eqSelectionsAll || []).some(s => s.contact_id === l.id)) ? `<button onclick="simOuvrir('${l.id}')" title="Ouvre le simulateur de financement dans un nouvel onglet, avec les lots déjà envoyés à ce client" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Simuler pour ce client</button>` : ''}
       ${!STATUTS_FINAUX.includes(cur) ? `<button onclick="eqRdvFixerOuvrir('${l.id}')" title="Vous venez de convenir d'un rendez-vous au téléphone : tu le poses dans ton planning et le client reçoit la confirmation par mail" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:12px;cursor:pointer">Fixer un rendez-vous</button>` : ''}
       ${(() => {
         // Rendez-vous à venir de ce client (réservé ou confirmé) : on peut le déplacer d'ici
@@ -8745,6 +8841,8 @@ ${(() => {
     ${eqCriteresChips(l)}
 
     ${eqFicheSelectionsHtml(l)}
+
+    ${eqSimulationsHtml(l)}
 
     <div onclick="eqCriteresBasculer()" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:14px 0 8px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
       <span style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;flex:1">Critères de recherche — ${nq.n}/${nq.total} renseignés</span>
