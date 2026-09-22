@@ -139,6 +139,20 @@
   .comp-invite button { border:none; background:var(--gold); color:#fff; border-radius:12px; padding:13px 26px; font-size:14.5px; font-weight:700; cursor:pointer; transition:background .15s; }
   .comp-invite button:hover { background:var(--gold-fonce); }
 
+  /* Rubrique Financement : résumé de la simulation, à part, juste après le bandeau .meta */
+  .financement { background:var(--carte); border:1px solid var(--gold); border-radius:16px; padding:22px 24px; margin:4px 0 22px; box-shadow:0 2px 12px rgba(200,169,110,.15); }
+  .financement-eyebrow { color:var(--gold-fonce); font-size:12px; letter-spacing:1.5px; text-transform:uppercase; font-weight:600; margin-bottom:8px; }
+  .financement-montant { font-family:Georgia,serif; font-size:24px; font-weight:700; color:var(--dark); margin-bottom:6px; }
+  .financement-date { font-size:13px; color:var(--muted); margin-bottom:14px; }
+  .financement-cta { display:inline-block; border:1px solid var(--gold); color:var(--gold-fonce); background:#fff; border-radius:12px; padding:10px 20px; font-size:13.5px; font-weight:700; text-decoration:none; transition:background .15s,color .15s; }
+  .financement-cta:hover { background:var(--gold); color:#fff; }
+
+  /* Mensualité estimée sur un lot concerné par la simulation */
+  .simu-lot { display:flex; align-items:center; gap:8px; background:#faf8f4; border:1px solid #eee8db; border-radius:10px; padding:8px 13px; margin:2px 0 14px; font-size:13.5px; }
+  .simu-lot-label { color:var(--muted); }
+  .simu-lot-montant { margin-left:auto; font-family:Georgia,serif; font-weight:700; color:var(--dark); }
+  .simu-lot-txt { color:var(--muted); }
+
   /* Rendez-vous depuis un lot : en second plan, pour laisser la place aux
      boutons d'avis (la carte rendez-vous en fin de page reste dorée). */
   .cta-rdv { width:100%; margin-top:12px; border:1.5px solid var(--dark); background:#fff; color:var(--dark); border-radius:12px; padding:12px; font-size:14px; font-weight:700; letter-spacing:.3px; cursor:pointer; font-family:inherit; transition:all .15s; }
@@ -761,6 +775,40 @@
     return "<div class='mot'><div class='mot-qui'>" + esc(qui) + "</div><div class='mot-txt'>" + esc(n) + "</div></div>";
   }
 
+  // Clé d'identité d'un lot (même logique que _selCleLot côté CRM : son lien Otaree, à défaut son titre)
+  function _cleLot(b){ return String((b && (b.lien || b.titre)) || "").trim().toLowerCase(); }
+
+  // Rubrique "Financement" : résumé simple de la dernière simulation du client, à part sur la page
+  function htmlFinancement(d){
+    var sim = d && d.simulation;
+    if (!sim) return "";
+    var h = "<div class='financement'>";
+    h += "<div class='financement-eyebrow'>Votre simulation de financement</div>";
+    var bm = Number(sim.budgetMax);
+    if (isFinite(bm) && bm > 0) h += "<div class='financement-montant'>Budget que vous pouvez viser : " + new Intl.NumberFormat('fr-FR').format(Math.round(bm)) + " €</div>";
+    if (sim.date) h += "<div class='financement-date'>Simulation réalisée le " + esc(fmtDate(sim.date)) + ".</div>";
+    h += "<a class='financement-cta' href='simulateur.html?t=" + encodeURIComponent(token) + "' target='_blank' rel='noopener'>Refaire ou ajuster ma simulation</a>";
+    h += "</div>";
+    return h;
+  }
+
+  // Mensualité estimée pour ce lot précis, si la dernière simulation le couvre
+  function htmlSimulationLot(b, d){
+    var sim = d && d.simulation;
+    if (!sim || !Array.isArray(sim.lots)) return "";
+    var cle = _cleLot(b);
+    if (!cle) return "";
+    var s = null;
+    for (var k = 0; k < sim.lots.length; k++){ if (sim.lots[k] && sim.lots[k].cle === cle){ s = sim.lots[k]; break; } }
+    if (!s) return "";
+    if (s.eligible === false){
+      return "<div class='simu-lot'><span class='simu-lot-txt'>D'après votre simulation, ce bien dépasse le budget visé pour l'instant — un ajustement (durée, apport) peut changer la donne.</span></div>";
+    }
+    var m = Number(s.mensualite);
+    if (!isFinite(m) || m <= 0) return "";
+    return "<div class='simu-lot'><span class='simu-lot-label'>Mensualité estimée</span><span class='simu-lot-montant'>" + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €/mois</span></div>";
+  }
+
   // Adresse du programme : affichée seulement si elle a été confirmée
   // (fiche Otaree recoupée avec la Base Adresse Nationale, puis validée par le
   // conseiller). Sinon le client peut la demander en un clic.
@@ -1043,6 +1091,7 @@
     h += htmlPrix(b);
     h += htmlRemises(b);
     h += htmlNote(b, d);
+    h += htmlSimulationLot(b, d);
     h += htmlFaits(b, compact);
     if (!compact){
       h += htmlAdresse(b, i, etatAvis[String(i)] || {});
@@ -1124,6 +1173,8 @@
       + (nbProg > 1 && nbProg < biens.length ? " · " + nbProg + " résidences" : "") + "</span>";
     if (d.expires_at) h += "<span>·</span><span>Sélection valable jusqu'au " + esc(fmtDate(d.expires_at)) + "</span>";
     h += "</div>";
+
+    h += htmlFinancement(d);
 
     // Lots ajoutés depuis la dernière visite : on le dit franchement, sans alerte
     var nbNeufs = biens.filter(function(b){ return b && b.nouveau; }).length;
