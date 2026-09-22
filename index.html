@@ -3437,9 +3437,28 @@ async function loadRapportMarche(force) {
     const qEv = SUPABASE_URL + '/rest/v1/pige_evenements?select=*&pige_date=eq.' + maj.pige_date +
       '&created_at=gte.' + encodeURIComponent(lo) + '&created_at=lte.' + encodeURIComponent(hi) + '&order=type.asc&limit=3000';
     const qNotes = SUPABASE_URL + '/rest/v1/pige_notes?select=*&pige_maj_id=eq.' + maj.id + '&order=ordre.asc';
-    const [rEv, rNotes] = await Promise.all([fetch(qEv, { headers: h }), fetch(qNotes, { headers: h })]);
+    // "Bientôt livrés" : programmes encore pourvus de lots libres, dont la livraison
+    // n'est pas déjà passée, triés du plus proche au plus lointain. livraison_key
+    // (année + trimestre/10, ex. 2026.4 = T4 2026) est déjà normalisé par le pipeline
+    // de pige — bien plus fiable que livraison_raw, dont le format brut varie d'un
+    // extranet à l'autre (certains en JJ/MM/AAAA, d'autres en AAAA-MM-JJ).
+    const now = new Date();
+    const nowKey = now.getFullYear() + (Math.floor(now.getMonth() / 3) + 1) / 10;
+    const qLivres = SUPABASE_URL + '/rest/v1/pige_programmes?select=id,nom,promoteur,ville,livraison,livraison_key,nb_libres,prix_min' +
+      '&nb_libres=gt.0&livraison_key=gte.' + nowKey + '&order=livraison_key.asc&limit=12';
+    const [rEv, rNotes, rLivres] = await Promise.all([
+      fetch(qEv, { headers: h }), fetch(qNotes, { headers: h }),
+      fetch(qLivres, { headers: Object.assign({}, h, { 'Prefer': 'count=exact' }) })
+    ]);
     const evenements = rEv.ok ? await rEv.json() : [];
     const notes = rNotes.ok ? await rNotes.json() : [];
+    let bientotLivres = { rows: [], total: 0 };
+    if (rLivres.ok) {
+      const rows = await rLivres.json();
+      const cr = rLivres.headers.get('content-range');
+      const total = (cr && cr.indexOf('/') !== -1) ? parseInt(cr.split('/')[1], 10) : rows.length;
+      bientotLivres = { rows: rows, total: isNaN(total) ? rows.length : total };
+    }
     // Détail des lots nouveaux/redevenus libres (typo, surface, prix) tant qu'ils
     // existent encore côté pige_lots — un lot vendu en est retiré, donc inutile
     // de chercher son détail après coup.
@@ -3452,7 +3471,7 @@ async function loadRapportMarche(force) {
       const rL = await fetch(SUPABASE_URL + '/rest/v1/pige_lots?select=id,typo,surf,prix&id=in.(' + tranche.map(encodeURIComponent).join(',') + ')', { headers: h });
       if (rL.ok) (await rL.json()).forEach(l => { lots[l.id] = l; });
     }
-    _rmData = { maj, historique: majs, evenements, notes, lots };
+    _rmData = { maj, historique: majs, evenements, notes, lots, bientotLivres };
   } catch (e) {
     if (body) body.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><p>Impossible de charger le rapport marché.</p></div>';
     return;
@@ -3488,7 +3507,7 @@ function rmToggleDetail() { _rmDetailOuvert = !_rmDetailOuvert; renderRapportMar
 function renderRapportMarche() {
   const body = document.getElementById('rm-body');
   if (!body || !_rmData) return;
-  const maj = _rmData.maj, historique = _rmData.historique, evenements = _rmData.evenements, notes = _rmData.notes, lots = _rmData.lots;
+  const maj = _rmData.maj, historique = _rmData.historique, evenements = _rmData.evenements, notes = _rmData.notes, lots = _rmData.lots, bientotLivres = _rmData.bientotLivres || { rows: [], total: 0 };
   // Pige précédente (historique est trié pige_date desc, created_at desc — donc
   // historique[0] est la pige courante) : sert à donner une tendance à chaque KPI.
   const prevMaj = historique[1] || null;
@@ -3557,6 +3576,18 @@ function renderRapportMarche() {
         '</td><td>' + (l.hausse_prix || '—') + '</td><td>' + (l.baisse_prix || '—') + '</td><td>' + (l.vendu || '—') + '</td></tr>').join('') +
       '</tbody></table>' : '<div class="rm-empty" style="padding:16px 24px">Aucun mouvement par promoteur cette pige.</div>') +
     '</div>';
+  // "Bientôt livrés" : premier thème d'une classification par programme demandée par
+  // Alex (21/09) — pensé pour parler autant à l'équipe commerciale (relance client sur
+  // une livraison qui approche) qu'à du contenu externe à terme. Toujours visible (pas
+  // caché derrière "Voir le détail") car c'est la matière la plus actionnable de la page.
+  const cardBientotLivres = bientotLivres.rows.length ? '<div class="card"><div class="card-header"><div class="card-title">Bientôt livrés</div></div>' +
+    '<table><thead><tr><th>Programme</th><th>Ville</th><th>Promoteur</th><th>Livraison</th><th>Lots libres</th><th>Prix dès</th></tr></thead><tbody>' +
+    bientotLivres.rows.map(p => '<tr><td>' + _esc(p.nom) + '</td><td>' + _esc(p.ville || '—') + '</td><td>' + _esc(p.promoteur) +
+      '</td><td>' + _esc(p.livraison || '—') + '</td><td>' + _rmNum(p.nb_libres) + '</td><td>' + _rmEuro(p.prix_min) + '</td></tr>').join('') +
+    '</tbody></table>' +
+    (bientotLivres.total > bientotLivres.rows.length ?
+      '<div class="rm-empty" style="padding:12px 24px">+ ' + (bientotLivres.total - bientotLivres.rows.length) + ' autres programmes livrables dans la même fenêtre — détail complet sur la carte des programmes.</div>' : '') +
+    '</div>' : '';
   const cardLots = lotsARegarder.length ? '<div class="card"><div class="card-header"><div class="card-title">Lots à regarder (nouveaux ou redevenus libres)</div></div>' +
     '<table><thead><tr><th>Ville</th><th>Programme</th><th>Typo</th><th>Surface</th><th>Prix</th><th>Statut</th></tr></thead><tbody>' +
     lotsARegarder.slice(0, 30).map(e => {
@@ -3583,6 +3614,7 @@ function renderRapportMarche() {
       (constats.length ? '<ul style="padding-left:18px;display:grid;gap:8px;font-size:13.5px;line-height:1.5;margin:0">' +
         constats.map(c => '<li>' + _esc(c) + '</li>').join('') + '</ul>' : '<div class="rm-empty">Rien de notable cette pige.</div>') +
       '</div></div>' +
+    cardBientotLivres +
     '<div class="card"><div class="card-header"><div class="card-title">Angles de contenu</div>' +
       '<button class="btn btn-ghost btn-sm" onclick="rmAjouterNote()">+ Ajouter un angle</button></div>' +
       '<div style="padding:16px 24px" id="rm-notes">' + renderNotesHtml(notes) + '</div></div>' +
