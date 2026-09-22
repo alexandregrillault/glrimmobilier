@@ -242,10 +242,12 @@ summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--navy)}
   <section class="card">
     <h2><span class="step">2</span>Les lots sélectionnés</h2>
     <p class="lead">On adapte le montage lot par lot : aides réellement mobilisables, mensualité, et ce que le client gagne concrètement.</p>
+    <div id="lotsContexte"></div>
     <div id="lots"></div>
-    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+    <div id="lotsAjout" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn" onclick="addLot()">+ Ajouter un lot</button>
     </div>
+    <div id="simSauvegarde"></div>
   </section>
 </div>
 </main>
@@ -350,6 +352,20 @@ const BAR = {
     paris:[34996,52303,68562,81858,97395,109595], parisSup:12212,
     idf:[34996,52303,62871,75309,89150,100322], idfSup:11177, majo:1.11 }
 };
+
+/* ===================== ZONE PAR COMMUNE (préremplissage, toujours modifiable) ===================== */
+// Paris + communes qui partagent une frontière avec Paris (classées A bis) : liste géographique stable.
+const COMMUNES_LIMITROPHES_PARIS = ['boulogne-billancourt','neuilly-sur-seine','levallois-perret','clichy','saint-ouen-sur-seine','saint-ouen','saint-mande','vincennes','montrouge','malakoff','vanves','issy-les-moulineaux','pantin','le pre-saint-gervais','pre-saint-gervais','ivry-sur-seine','charenton-le-pont','le kremlin-bicetre','kremlin-bicetre'];
+function _normCommune(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+function zoneDepuisCommune(commune, codePostal){
+  const c = _normCommune(commune);
+  const dep = String(codePostal||'').slice(0,2);
+  if (c === 'paris' || dep === '75') return 'paris';
+  if (COMMUNES_LIMITROPHES_PARIS.indexOf(c) !== -1) return 'limitrophe';
+  if (['92','93','94'].indexOf(dep) !== -1) return 'a';
+  if (['77','78','91','95'].indexOf(dep) !== -1) return 'b1';
+  return 'a'; // repli par défaut, à corriger si besoin dans le sélecteur du lot
+}
 
 /* ===================== ÉTAT ===================== */
 const S = { nb:1, parisLoc:0, derog:0, caution:0, lots:[], emp:[ {age:30,statut:'cdi',rev:3200,prive:1,rattache:0}, {age:30,statut:'cdi',rev:2000,prive:1,rattache:0} ] };
@@ -659,7 +675,7 @@ function lotForm(l){
 
 function renderLots(){
   if(!S.lots.length){ $('lots').innerHTML='<div class="note">Aucun lot. Ajoute les lots de la sélection pour voir le montage de chacun.</div>'; return; }
-  $('lots').innerHTML=S.lots.map(l=>`<div class="lotcard" id="lot${l.id}"><h3><span>${l.nom}</span><button onclick="rmLot(${l.id})">Retirer</button></h3>${lotForm(l)}<div id="res${l.id}"></div></div>`).join('');
+  $('lots').innerHTML=S.lots.map(l=>`<div class="lotcard" id="lot${l.id}"><h3><span>${l.nom}</span>${LOTS_VERROUILLES?'':`<button onclick="rmLot(${l.id})">Retirer</button>`}</h3>${lotForm(l)}<div id="res${l.id}"></div></div>`).join('');
   S.lots.forEach(renderLotResult);
 }
 
@@ -751,8 +767,169 @@ async function chargerTauxMarche(force){
     if(el) el.textContent='Taux en ligne indisponible pour le moment — valeurs par défaut conservées (modifiables à la main).';
   }
 }
-// démarrage : un lot d'exemple
-renderEmprunteurs(); recalc(); addLot({nom:'Exemple — T2 Saint-Denis', prix:265000, zone:'a', qpv:true, surface:42});
+/* ===================== SIMULATION LIÉE À UN CLIENT ===================== */
+// Contexte transmis dans l'URL : ?contact=<id> (vendeur, session CRM déjà ouverte)
+// ou ?t=<jeton> (client, depuis sa feuille sélection — aucune connexion requise).
+const _paramsUrl = new URLSearchParams(location.search);
+const CTX_CONTACT = _paramsUrl.get('contact');
+const CTX_TOKEN = _paramsUrl.get('t');
+let LOTS_VERROUILLES = false; // true une fois les vrais lots de la sélection chargés
+
+const SB_SESSION_KEY = 'glr_session';
+function _lireSessionVendeur(){
+  try { return JSON.parse(localStorage.getItem(SB_SESSION_KEY) || 'null'); } catch(e){ return null; }
+}
+async function _rafraichirSessionVendeur(s){
+  if(!s || !s.refresh_token) return null;
+  try{
+    const r = await fetch(SB_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method:'POST', headers:{apikey:SB_KEY,'Content-Type':'application/json'},
+      body: JSON.stringify({refresh_token: s.refresh_token})
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.access_token) return null;
+    const maj = { access_token:j.access_token, refresh_token:j.refresh_token, expires_at: Date.now() + ((j.expires_in||3600)*1000) };
+    try{ localStorage.setItem(SB_SESSION_KEY, JSON.stringify(maj)); }catch(e){}
+    return maj.access_token;
+  }catch(e){ return null; }
+}
+async function _jetonVendeur(){
+  const s = _lireSessionVendeur();
+  if(!s || !s.access_token) return null;
+  if(!s.expires_at || s.expires_at - Date.now() < 60000){
+    const relance = await _rafraichirSessionVendeur(s);
+    if(relance) return relance;
+  }
+  return s.access_token;
+}
+
+async function chargerLotsReels(){
+  if(!CTX_CONTACT && !CTX_TOKEN) return false;
+  try{
+    let biens = [];
+    if (CTX_TOKEN){
+      const r = await fetch(SB_URL + '/functions/v1/selection/' + encodeURIComponent(CTX_TOKEN) + '?data=1');
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const d = await r.json();
+      if(!d.ok) throw new Error(d.error || 'sélection introuvable');
+      biens = Array.isArray(d.biens) ? d.biens : [];
+    } else {
+      const bearer = await _jetonVendeur();
+      if(!bearer) throw new Error('session vendeur absente');
+      const r = await fetch(SB_URL + '/rest/v1/selections?contact_id=eq.' + encodeURIComponent(CTX_CONTACT) + '&select=biens&limit=1', {
+        headers: { apikey: SB_KEY, Authorization: 'Bearer ' + bearer }
+      });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const rows = await r.json();
+      if(!rows.length) throw new Error('aucune sélection pour ce client');
+      biens = Array.isArray(rows[0].biens) ? rows[0].biens : [];
+    }
+    if(!biens.length) return false;
+    S.lots = [];
+    biens.forEach(b=>{
+      const prix = parseInt(String(b.prix||'').replace(/\D/g,''),10) || 0;
+      const surface = parseFloat(String(b.surface||'').replace(',','.')) || 45;
+      addLot({
+        nom: b.titre || 'Lot',
+        prix, surface,
+        zone: zoneDepuisCommune(b.commune, b.codePostal),
+        qpv:false, type:'coll', loyer:900, charges:80, tf:900,
+        cle: String(b.lien || b.titre || '').trim().toLowerCase()
+      });
+    });
+    LOTS_VERROUILLES = true;
+    renderLots();
+    const ct = $('lotsContexte'); if(ct) ct.innerHTML = '<div class="help">Lots de la sélection envoyée à ce client. Pour changer la liste, modifie sa sélection depuis la fiche.</div>';
+    const ba = $('lotsAjout'); if(ba) ba.style.display = 'none';
+    return true;
+  } catch(e){
+    console.error('chargerLotsReels', e);
+    return false;
+  }
+}
+
+function budgetMaxActuel(){
+  const cl=client(), p=params();
+  if(cl.revenus<=0) return null;
+  const mv=Math.max(0,num('mensVoulue'));
+  if(cl.projet!=='rp'){
+    const Mmax=Math.max(0,cl.revenus*p.endet-cl.credits);
+    const MRet=(mv>0)?Math.min(mv,Mmax):Mmax;
+    const Cmax=capitalLisse(MRet,p.t[cl.duree],cl.duree,p.ass,[]);
+    return (Cmax/(1+p.fGar)+cl.apport)/(1+p.fNot);
+  }
+  const cMax=capacite(cl,p);
+  if(mv>0 && mv<cMax.Mmax-1) return capacite(cl,p,mv).budgetAvec;
+  return cMax.budgetAvec;
+}
+
+function renderSauvegarde(){
+  const el=$('simSauvegarde'); if(!el) return;
+  if(!CTX_CONTACT && !CTX_TOKEN){ el.innerHTML=''; return; }
+  el.innerHTML = `<div style="border-top:1px solid var(--line);padding-top:16px;margin-top:8px">
+    <button class="btn" id="btnEnregistrerSim" onclick="enregistrerSimulation()">Enregistrer la simulation</button>
+    <span id="simStatut" class="small" style="margin-left:10px"></span>
+  </div>`;
+}
+
+async function enregistrerSimulation(){
+  const btn=$('btnEnregistrerSim'), statutEl=$('simStatut');
+  if(!S.lots.length){ if(statutEl) statutEl.textContent='Ajoute au moins un lot avant d’enregistrer.'; return; }
+  if(btn){ btn.disabled=true; btn.textContent='Enregistrement…'; }
+  if(statutEl) statutEl.textContent='';
+  try{
+    const cl=client(), p=params();
+    const budgetMax=budgetMaxActuel();
+    const lots=S.lots.map(l=>{
+      const m=montage(cl,l,p);
+      const cle=l.cle || (l.nom||'').trim().toLowerCase();
+      const aides=[]; if(m.aPTZ.ok&&m.ptzM>0) aides.push('PTZ'); if(m.aPAL.ok) aides.push('Action Logement'); if(m.aPPL.ok) aides.push('Paris Logement 0 %'); if(m.tv.ok) aides.push('TVA 5,5 %');
+      const Mmax=(m.revRet)*p.endet - cl.credits;
+      return { cle, titre:l.nom, prix:l.prix, mensualite:Math.round(m.M), aides, eligible: m.M<=Mmax+0.5 };
+    });
+    const payload={ profil:{ projet:$('projet').value, revenus:Math.round(cl.revenus), apport:Math.round(cl.apport), duree:cl.duree }, lots };
+    if(budgetMax!=null) payload.budgetMax=Math.round(budgetMax);
+
+    if(CTX_TOKEN){
+      const r=await fetch(SB_URL+'/functions/v1/selection/'+encodeURIComponent(CTX_TOKEN), {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(Object.assign({action:'simulation'}, payload))
+      });
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok || !j.ok) throw new Error(j.error||'échec de l’enregistrement');
+    } else {
+      const bearer=await _jetonVendeur();
+      if(!bearer) throw new Error('session vendeur absente — reconnecte-toi sur le CRM');
+      const rLire=await fetch(SB_URL+'/rest/v1/contacts?id=eq.'+encodeURIComponent(CTX_CONTACT)+'&select=simulations', { headers:{apikey:SB_KEY, Authorization:'Bearer '+bearer} });
+      const rowsLire=await rLire.json().catch(()=>[]);
+      const actuelles=Array.isArray(rowsLire && rowsLire[0] && rowsLire[0].simulations) ? rowsLire[0].simulations : [];
+      const nouvelle=Object.assign({ id:(crypto.randomUUID?crypto.randomUUID():String(Date.now())), date:new Date().toISOString(), origine:'vendeur' }, payload, { budgetMax: budgetMax!=null?Math.round(budgetMax):null });
+      const simulations=[nouvelle].concat(actuelles).slice(0,20);
+      const rEcrit=await fetch(SB_URL+'/rest/v1/contacts?id=eq.'+encodeURIComponent(CTX_CONTACT), {
+        method:'PATCH', headers:{apikey:SB_KEY, Authorization:'Bearer '+bearer, 'Content-Type':'application/json', 'Prefer':'return=minimal'},
+        body: JSON.stringify({ simulations })
+      });
+      if(!rEcrit.ok) throw new Error('HTTP '+rEcrit.status);
+    }
+    if(statutEl) statutEl.textContent='Simulation enregistrée ✓';
+  }catch(e){
+    if(statutEl) statutEl.textContent='Erreur : '+(e.message||'échec de l’enregistrement');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='Enregistrer la simulation'; }
+  }
+}
+
+// démarrage
+renderEmprunteurs(); recalc();
+(async function(){
+  const ok = await chargerLotsReels();
+  if(!ok && !CTX_CONTACT && !CTX_TOKEN){
+    addLot({nom:'Exemple — T2 Saint-Denis', prix:265000, zone:'a', qpv:true, surface:42});
+  } else if(!ok && (CTX_CONTACT || CTX_TOKEN)){
+    const el=$('lots'); if(el) el.innerHTML='<div class="warnbox">Impossible de charger les lots de la sélection de ce client. Vérifie la connexion, ou ajoute les lots à la main ci-dessous.</div>';
+  }
+  renderSauvegarde();
+})();
 chargerTauxMarche(false);
 </script>
 </body>
