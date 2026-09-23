@@ -146,11 +146,23 @@
   .financement-date { font-size:13px; color:var(--muted); margin-bottom:14px; }
   .financement-cta { display:inline-block; border:1px solid var(--gold); color:var(--gold-fonce); background:#fff; border-radius:12px; padding:10px 20px; font-size:13.5px; font-weight:700; text-decoration:none; transition:background .15s,color .15s; }
   .financement-cta:hover { background:var(--gold); color:#fff; }
+  /* Dépliant pédagogique « Comment on arrive à ce montant ? » : jamais de chiffre
+     personnel (revenus, apport, durée) — juste la méthode et les aides possibles. */
+  .financement-detail-lien { display:block; margin-top:12px; background:none; border:none; padding:0; color:var(--muted); font-size:13px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; font-family:inherit; }
+  .financement-detail-lien:hover { color:var(--gold-fonce); }
+  .financement-detail { margin-top:14px; padding-top:14px; border-top:1px solid var(--bordure); }
+  .financement-detail p { font-size:13.5px; color:var(--encre); line-height:1.55; margin-bottom:10px; }
+  .financement-detail ul { list-style:none; margin:0; }
+  .financement-detail li { padding-left:19px; position:relative; margin-bottom:6px; font-size:13px; color:var(--encre); line-height:1.4; }
+  .financement-detail li::before { content:"✦"; position:absolute; left:1px; top:1px; color:var(--gold); font-size:11px; }
 
-  /* Mensualité estimée sur un lot concerné par la simulation */
-  .simu-lot { display:flex; align-items:center; gap:8px; background:#faf8f4; border:1px solid #eee8db; border-radius:10px; padding:8px 13px; margin:2px 0 14px; font-size:13.5px; }
+  /* Mensualité estimée sur un lot concerné par la simulation, avec l'économie
+     mensuelle permise par les aides quand il y en a une. */
+  .simu-lot { display:flex; flex-direction:column; gap:5px; background:#faf8f4; border:1px solid #eee8db; border-radius:10px; padding:9px 13px; margin:2px 0 14px; font-size:13.5px; }
+  .simu-lot-ligne { display:flex; align-items:center; gap:8px; }
   .simu-lot-label { color:var(--muted); }
   .simu-lot-montant { margin-left:auto; font-family:Georgia,serif; font-weight:700; color:var(--dark); }
+  .simu-lot-eco { font-size:12px; color:var(--gold-fonce); font-weight:600; }
   .simu-lot-txt { color:var(--muted); }
 
   /* Rendez-vous depuis un lot : en second plan, pour laisser la place aux
@@ -778,7 +790,9 @@
   // Clé d'identité d'un lot (même logique que _selCleLot côté CRM : son lien Otaree, à défaut son titre)
   function _cleLot(b){ return String((b && (b.lien || b.titre)) || "").trim().toLowerCase(); }
 
-  // Rubrique "Financement" : résumé simple de la dernière simulation du client, à part sur la page
+  // Rubrique "Financement" : résumé simple de la dernière simulation du client, à part sur la page.
+  // Un dépliant explique la méthode en général (23/09/2026) — jamais les revenus,
+  // l'apport ou la durée saisis, qui ne quittent pas le conseiller.
   function htmlFinancement(d){
     var sim = d && d.simulation;
     if (!sim) return "";
@@ -788,11 +802,23 @@
     if (isFinite(bm) && bm > 0) h += "<div class='financement-montant'>Budget que vous pouvez viser : " + new Intl.NumberFormat('fr-FR').format(Math.round(bm)) + " €</div>";
     if (sim.date) h += "<div class='financement-date'>Simulation réalisée le " + esc(fmtDate(sim.date)) + ".</div>";
     h += "<a class='financement-cta' href='simulateur.html?t=" + encodeURIComponent(token) + "' target='_blank' rel='noopener'>Refaire ou ajuster ma simulation</a>";
+    h += "<button type='button' class='financement-detail-lien' id='financement-detail-toggle' aria-expanded='false'>Comment on arrive à ce montant ?</button>";
+    h += "<div class='financement-detail' id='financement-detail' hidden>";
+    h += "<p>Cette estimation tient compte du taux actuel du marché, de la durée choisie, et des aides auxquelles vous pouvez prétendre selon le bien :</p>";
+    h += "<ul>";
+    h += "<li>Le prêt à taux zéro (PTZ), qui finance une partie du prix sans intérêts</li>";
+    h += "<li>La TVA réduite à 5,5 % au lieu de 20 %, dans les zones qui y ouvrent droit</li>";
+    h += "<li>Le prêt Action Logement, à taux avantageux</li>";
+    h += "<li>Le Prêt Paris Logement 0 %, pour un achat à Paris</li>";
+    h += "</ul>";
+    h += "<p>Sur chaque bien de votre sélection, la mensualité affichée tient déjà compte de ces aides — avec, quand elles s'appliquent, ce qu'elles vous font gagner chaque mois.</p>";
+    h += "</div>";
     h += "</div>";
     return h;
   }
 
-  // Mensualité estimée pour ce lot précis, si la dernière simulation le couvre
+  // Mensualité estimée pour ce lot précis, si la dernière simulation le couvre —
+  // avec l'économie mensuelle permise par les aides quand la simulation en calcule une.
   function htmlSimulationLot(b, d){
     var sim = d && d.simulation;
     if (!sim || !Array.isArray(sim.lots)) return "";
@@ -806,7 +832,10 @@
     }
     var m = Number(s.mensualite);
     if (!isFinite(m) || m <= 0) return "";
-    return "<div class='simu-lot'><span class='simu-lot-label'>Mensualité estimée</span><span class='simu-lot-montant'>" + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €/mois</span></div>";
+    var h = "<div class='simu-lot'><div class='simu-lot-ligne'><span class='simu-lot-label'>Mensualité estimée</span><span class='simu-lot-montant'>" + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €/mois</span></div>";
+    var eco = Number(s.economie);
+    if (isFinite(eco) && eco > 0) h += "<div class='simu-lot-eco'>Dont " + new Intl.NumberFormat('fr-FR').format(Math.round(eco)) + " €/mois gagnés grâce aux aides</div>";
+    return h + "</div>";
   }
 
   // Adresse du programme : affichée seulement si elle a été confirmée
@@ -1434,6 +1463,17 @@
   }
 
   function brancher(d){
+    // Dépliant « Comment on arrive à ce montant ? » sous la rubrique Financement
+    var finToggle = document.getElementById("financement-detail-toggle");
+    if (finToggle) finToggle.addEventListener("click", function(){
+      var panneau = document.getElementById("financement-detail");
+      if (!panneau) return;
+      var ouvert = finToggle.getAttribute("aria-expanded") === "true";
+      panneau.hidden = ouvert;
+      finToggle.setAttribute("aria-expanded", ouvert ? "false" : "true");
+      finToggle.textContent = ouvert ? "Comment on arrive à ce montant ?" : "Masquer le détail";
+    });
+
     // Photo : clic → plein écran
     Array.prototype.forEach.call(document.querySelectorAll(".photo"), function(g){
       var im = g.querySelector("img");

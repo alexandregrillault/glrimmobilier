@@ -896,7 +896,11 @@ async function enregistrerSimulation(){
       const cle=l.cle || (l.nom||'').trim().toLowerCase();
       const aides=[]; if(m.aPTZ.ok&&m.ptzM>0) aides.push('PTZ'); if(m.aPAL.ok) aides.push('Action Logement'); if(m.aPPL.ok) aides.push('Paris Logement 0 %'); if(m.tv.ok) aides.push('TVA 5,5 %');
       const Mmax=(m.revRet)*p.endet - cl.credits;
-      return { cle, titre:l.nom, prix:l.prix, mensualite:Math.round(m.M), aides, eligible: m.M<=Mmax+0.5 };
+      // Économie mensuelle permise par les aides + la TVA réduite : mensualité sans rien
+      // mobiliser (Msans, calculée sur le prix plein) moins la mensualité réelle (M).
+      // Montrée telle quelle au client sur sa feuille sélection (23/09/2026).
+      const economie=Math.round(Math.max(0, m.Msans-m.M));
+      return { cle, titre:l.nom, prix:l.prix, mensualite:Math.round(m.M), economie, aides, eligible: m.M<=Mmax+0.5 };
     });
     const payload={ profil:{ projet:$('projet').value, revenus:Math.round(cl.revenus), apport:Math.round(cl.apport), duree:cl.duree }, lots };
     if(budgetMax!=null) payload.budgetMax=Math.round(budgetMax);
