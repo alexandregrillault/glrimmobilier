@@ -3801,25 +3801,36 @@ function loadCarte() {
 // sélection en cours — voir _selOuvrirCarte), renvoie les lots cochés par ce
 // message. On les ajoute à la sélection en cours comme s'ils avaient été
 // saisis à la main — même liste, mêmes boutons (✎, Plan, Retirer…).
-window.addEventListener('message', function (e) {
+// Depuis le 24/09/2026, chaque lot coché est recomplété par la même route que
+// le « lien interne » (/glr/lot/<id>, fonction selection) : prix TVA 20 et 5,5,
+// exposition, annexes, livraison, plan du lot stocké chez nous, plan de masse et
+// plaquette du programme — exactement ce qu'un lien Otaree donne. La version
+// courte envoyée par la carte ne sert que de secours si la fonction ne répond pas.
+window.addEventListener('message', async function (e) {
   if (e.origin !== location.origin) return;
   const d = e.data;
   if (!d || d.type !== 'glr-carte-lots' || !_selCtx || d.session !== _selCtx.carteSession) return;
-  const deja = new Set(_selCtx.libres.map(b => b._cartePigeId).filter(Boolean));
+  const ctx = _selCtx;
+  const deja = new Set(ctx.libres.map(b => b._cartePigeId).filter(Boolean));
+  const bruts = (Array.isArray(d.lots) ? d.lots : []).filter(lot => lot && !(lot._cartePigeId && deja.has(lot._cartePigeId)));
+  if (!bruts.length) return;
+  bruts.forEach(lot => { if (lot._cartePigeId) deja.add(lot._cartePigeId); });
+  if (typeof toast === 'function') toast('Récupération de ' + bruts.length + ' lot' + (bruts.length > 1 ? 's' : '') + ' depuis la carte…');
   const nouveaux = [];
-  (Array.isArray(d.lots) ? d.lots : []).forEach(lot => {
-    if (lot && lot._cartePigeId && deja.has(lot._cartePigeId)) return;
-    _selCtx.libres.push(lot);
+  for (const brut of bruts) {
+    let lot = brut;
+    if (brut._cartePigeId) {
+      const riche = await _selLotDepuisLienInterne(brut._cartePigeId);
+      if (riche) lot = Object.assign(riche, { _cartePigeId: brut._cartePigeId, _carteProgrammeId: brut._carteProgrammeId || '' });
+    }
+    if (_selCtx !== ctx) return; // la sélection a été fermée entre-temps : on n'ajoute rien nulle part
+    ctx.libres.push(lot);
     nouveaux.push(lot);
-    if (lot && lot._cartePigeId) deja.add(lot._cartePigeId);
-  });
-  if (nouveaux.length) {
-    selAjouterLibreRefresh();
-    if (typeof toast === 'function') toast('✓ ' + nouveaux.length + ' lot' + (nouveaux.length > 1 ? 's' : '') + ' ajouté' + (nouveaux.length > 1 ? 's' : '') + ' depuis la carte');
-    // Vignette de plan en tâche de fond, seulement pour les lots qui en ont un
-    // (rare hors Otaree — la plupart n'ont pas de plan sur l'extranet du promoteur)
-    planPreparerLots(nouveaux).then(r => { if (r.faits) selAjouterLibreRefresh(); });
   }
+  selAjouterLibreRefresh();
+  if (typeof toast === 'function') toast('✓ ' + nouveaux.length + ' lot' + (nouveaux.length > 1 ? 's' : '') + ' ajouté' + (nouveaux.length > 1 ? 's' : '') + ' depuis la carte — prix, surface, étage et documents récupérés');
+  // Vignette de plan en tâche de fond, pour les lots qui en ont un
+  planPreparerLots(nouveaux).then(r => { if (r.faits && _selCtx === ctx) selAjouterLibreRefresh(); });
 });
 
 // Le simulateur de financement vit dans simulateur.html, à côté d'index.html
@@ -12009,6 +12020,42 @@ async function planRattrapage() {
 }
 
 // Extraction automatique depuis des liens Otaree (via l'edge function, qui interroge l'API publique Otaree)
+// Lot de sélection bâti à partir de la réponse de la fonction `selection`
+// (action « extraire ») — même forme pour un lien Otaree et pour un lot de la
+// carte (lien interne). Un lien interne (/glr/lot/…) n'est pas une page que le
+// client peut ouvrir : il n'est pas gardé comme « lien », la feuille sélection
+// s'appuie alors sur les documents (plan du lot, plan de masse, plaquette).
+function _selLotDepuisExtraction(d, lien) {
+  const lienClient = /\/glr\/lot\//i.test(String(lien || '')) ? '' : (lien || '');
+  return {
+    titre: d.titre || lien || 'Lot', lien: lienClient,
+    ville: d.ville || '', prix: d.prix || '',
+    plan: d.plan || '', masse: d.masse || '', image: d.image || '', images: Array.isArray(d.images) ? d.images : [], pdf: '',
+    docs: Array.isArray(d.docs) ? d.docs.filter(x => x && x.url).map(x => ({ nom: String(x.nom || 'Document'), url: String(x.url) })) : [],
+    adresse: d.adresse || '', adresseBrute: d.adresseBrute || '', commune: d.commune || '', codePostal: d.codePostal || '',
+    geo: d.geo || null, adresseOk: _selAdresseFiable(d),
+    surface: d.surface || '', surfacePonderee: d.surfacePonderee || '',
+    etage: d.etage || '', terrasse: d.terrasse || '', parking: d.parking || '',
+    expo: d.expo || '', livraison: d.livraison || '', promoteur: d.promoteur || '',
+    nature: d.nature || '', annexes: Array.isArray(d.annexes) ? d.annexes : [],
+    prixOptions: Array.isArray(d.prixOptions) ? d.prixOptions : [],
+    pitch: '', typologies: Array.isArray(d.typologies) ? d.typologies : [], atouts: []
+  };
+}
+// Un lot de la carte (id pigé) → lot complet via la route « lien interne ».
+// null si la fonction ne répond pas : l'appelant garde alors la version courte.
+async function _selLotDepuisLienInterne(idLotPige) {
+  const lien = SUPABASE_URL + '/glr/lot/' + encodeURIComponent(String(idLotPige));
+  try {
+    const res = await fetch(SUPABASE_URL + '/functions/v1/selection', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'extraire', lien })
+    });
+    const d = await res.json();
+    return d && d.ok ? _selLotDepuisExtraction(d, lien) : null;
+  } catch (e) { return null; }
+}
+
 async function selExtraireLiens() {
   const ta = document.getElementById('sel-otaree-liens');
   const liens = ta.value.split(/\s+/).map(s => s.trim()).filter(s => /^https?:\/\//.test(s));
@@ -12024,19 +12071,7 @@ async function selExtraireLiens() {
       });
       const d = await res.json();
       if (d.ok) {
-        _selCtx.libres.push({
-          titre: d.titre || lien, lien,
-          ville: d.ville || '', prix: d.prix || '',
-          plan: d.plan || '', masse: d.masse || '', image: d.image || '', images: Array.isArray(d.images) ? d.images : [], pdf: '',
-          adresse: d.adresse || '', adresseBrute: d.adresseBrute || '', commune: d.commune || '', codePostal: d.codePostal || '',
-          geo: d.geo || null, adresseOk: _selAdresseFiable(d),
-          surface: d.surface || '', surfacePonderee: d.surfacePonderee || '',
-          etage: d.etage || '', terrasse: d.terrasse || '', parking: d.parking || '',
-          expo: d.expo || '', livraison: d.livraison || '', promoteur: d.promoteur || '',
-          nature: d.nature || '', annexes: Array.isArray(d.annexes) ? d.annexes : [],
-          prixOptions: Array.isArray(d.prixOptions) ? d.prixOptions : [],
-          pitch: '', typologies: Array.isArray(d.typologies) ? d.typologies : [], atouts: []
-        });
+        _selCtx.libres.push(_selLotDepuisExtraction(d, lien));
         ok++;
       }
     } catch(e) { /* lien suivant */ }

@@ -132,6 +132,9 @@
   .docs { margin:14px 0 2px; }
   .doc { display:block; width:100%; box-sizing:border-box; border:none; background:var(--gold); color:#fff; border-radius:12px; padding:14px; font-size:15px; font-weight:700; letter-spacing:.3px; text-align:center; text-decoration:none; transition:background .15s; box-shadow:0 3px 10px rgba(200,169,110,.35); }
   .doc:hover { background:var(--gold-fonce); color:#fff; }
+  /* Plusieurs documents (plan du lot, plan de masse, plaquette) : boutons côte à côte, en colonne sur mobile */
+  .docs.multi { display:flex; gap:8px; flex-wrap:wrap; }
+  .docs.multi .doc { flex:1 1 140px; width:auto; padding:12px 10px; font-size:14px; }
 
   .comp-invite { background:#fff; border:1px solid var(--gold); border-radius:16px; padding:22px 24px; margin:2px 0 22px; text-align:center; box-shadow:0 2px 10px rgba(200,169,110,.15); }
   .comp-invite h3 { font-family:Georgia,serif; font-size:18px; font-weight:600; margin-bottom:6px; }
@@ -1006,10 +1009,16 @@
     if (b.planImg) return { url: b.planImg, plan: true };
     var p = photoDe(b);
     if (p) return { url: p, plan: false };
-    if (b.plan) return { url: b.plan, plan: true };
+    // Un plan en PDF (lot venu de la carte) ne s'affiche pas dans une balise image :
+    // sans vignette préparée par le conseiller, on retombe sur le logo
+    if (b.plan && !/\.pdf(?:$|\?)/i.test(String(b.plan))) return { url: b.plan, plan: true };
     return { url: "", plan: false };
   }
-  function planEntier(b){ return b.plan || b.planImg || ""; }
+  function estPdf(u){ return /\.pdf(?:$|\?)/i.test(String(u || "")); }
+  // Image du plan montrée dans la visionneuse : la planche complète quand c'est
+  // une image, sinon la vignette préparée (un PDF ne s'affiche pas en image ;
+  // le bouton « Ouvrir le document » de la visionneuse mène alors au PDF).
+  function planEntier(b){ return (b.plan && !estPdf(b.plan)) ? b.plan : (b.planImg || ""); }
   // La visionneuse ouvre d'abord ce que le client a sous les yeux, et le plan
   // y passe en planche complete : c'est la qu'il peut le lire en detail.
   function imagesDe(b){
@@ -1128,8 +1137,18 @@
       var atouts = Array.isArray(b.atouts) ? b.atouts.slice(0, 5) : [];
       if (atouts.length) h += "<ul class='atouts'>" + atouts.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
     }
-    var lienDoc = htmlLienDoc(b);
-    if (lienDoc) h += "<div class='docs'><a class='doc' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>Fiche et plans du lot</a></div>";
+    // Lot venu de la carte des programmes (pas de fiche Otaree) : un bouton par
+    // document remis — plan du lot, plan de masse, plaquette (24/09/2026).
+    // Sinon, le bouton unique habituel (fiche Otaree, ou premier document joint).
+    var docsMulti = (!b.lien && Array.isArray(b.docs)) ? b.docs.filter(function(x){ return x && x.url; }) : [];
+    if (docsMulti.length > 1){
+      h += "<div class='docs multi'>" + docsMulti.map(function(x){
+        return "<a class='doc' href='" + esc(x.url) + "' target='_blank' rel='noopener'>" + esc(x.nom || "Document") + "</a>";
+      }).join("") + "</div>";
+    } else {
+      var lienDoc = htmlLienDoc(b);
+      if (lienDoc) h += "<div class='docs'><a class='doc' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>" + esc(docsMulti.length === 1 ? docsMulti[0].nom || "Fiche et plans du lot" : "Fiche et plans du lot") + "</a></div>";
+    }
     h += htmlAvis(i);
     return h + "</div></div>";
   }
@@ -1302,7 +1321,7 @@
     el.className = estPlan ? "plan" : "";
     el.src = u;
     var lien = document.getElementById("lb-ouvrir");
-    if (lien){ lien.style.display = estPlan ? "" : "none"; lien.href = u; }
+    if (lien){ lien.style.display = estPlan ? "" : "none"; lien.href = (estPlan && bl.plan) ? bl.plan : u; }
     document.getElementById("lb-num").textContent = (imgs.length > 1 ? (lbIdx + 1) + " / " + imgs.length + " — " : "") + (biens[lbBien].titre || "");
     document.getElementById("lb-prec").style.display = imgs.length > 1 ? "" : "none";
     document.getElementById("lb-suiv").style.display = imgs.length > 1 ? "" : "none";

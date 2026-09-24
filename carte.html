@@ -1901,18 +1901,23 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const DOCS = {}; // cache par programme, une fois chargé : {masse, plaquette, lots:{lot_id:url}}
 const DOC_MAX_OCTETS = 20 * 1024 * 1024; // 20 Mo, même limite que côté serveur
 function lienInterneLot(id) { return SUPABASE_URL + '/glr/lot/' + encodeURIComponent(id); }
+// Plan d'un lot à montrer / transmettre : le fichier stocké chez nous d'abord
+// (public, pérenne), sinon l'URL relevée sur l'extranet du promoteur.
+function planLot(p, l) { const d = DOCS[p.id]; return (d && d.lots && d.lots[l.id]) || l.plan || ''; }
 async function chargerDocs(p) {
   if (DOCS[p.id]) return DOCS[p.id];
   const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY };
-  const idsManquants = p.lots.filter(l => !l.plan).map(l => l.id);
+  // Depuis le 24/09/2026 on lit le plan stocké chez nous pour TOUS les lots (plus
+  // seulement ceux sans URL pigée) : l'URL de l'extranet exige souvent une session,
+  // le fichier stocké dans Supabase s'ouvre partout. Paquets de 80 ids (longueur d'URL).
+  const ids = p.lots.map(l => l.id);
+  const paquets = []; for (let i = 0; i < ids.length; i += 80) paquets.push(ids.slice(i, i + 80));
   try {
-    const [prog, lots] = await Promise.all([
+    const [prog, ...lotsParPaquet] = await Promise.all([
       fetch(SUPABASE_URL + '/rest/v1/documents_programme?programme_id=eq.' + encodeURIComponent(p.id) + '&select=plan_masse_url,plaquette_url', { headers }).then(r => r.ok ? r.json() : []),
-      idsManquants.length
-        ? fetch(SUPABASE_URL + '/rest/v1/documents_lot?lot_id=in.(' + idsManquants.map(id => encodeURIComponent(id)).join(',') + ')&select=lot_id,plan_url', { headers }).then(r => r.ok ? r.json() : [])
-        : Promise.resolve([])
+      ...paquets.map(pq => fetch(SUPABASE_URL + '/rest/v1/documents_lot?lot_id=in.(' + pq.map(id => encodeURIComponent(id)).join(',') + ')&select=lot_id,plan_url', { headers }).then(r => r.ok ? r.json() : []))
     ]);
-    const lotsMap = {}; (lots || []).forEach(r => { if (r.plan_url) lotsMap[r.lot_id] = r.plan_url; });
+    const lotsMap = {}; lotsParPaquet.forEach(lots => (lots || []).forEach(r => { if (r.plan_url) lotsMap[r.lot_id] = r.plan_url; }));
     // Un ajout depuis « + Plan »/« Ajouter » a pu arriver pendant que cette lecture
     // était en vol : on fusionne plutôt que d'écraser, l'ajout local l'emporte.
     const deja = DOCS[p.id] || { masse: '', plaquette: '', lots: {} };
@@ -2093,7 +2098,7 @@ function renderLots(p) {
   let h = '<table class="lots"><thead><tr>' + cols.map(([k, t]) => '<th data-k="' + k + '">' + t + (sortK === k && k !== 'ck' ? (sortD > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
   ls.forEach(l => {
     const extra = [l.annexes, l.parkings, l.loyer ? 'loyer ' + fmt(l.loyer) : null, l.renta ? 'renta ' + l.renta + ' %' : null, l.dpe ? 'DPE ' + l.dpe : null, l.livraison ? 'livr. ' + l.livraison : null, l.option_fin ? 'option jusqu’au ' + String(l.option_fin).slice(0, 10) : null, (l.fisc || []).join(', ')].filter(Boolean).join(' · ');
-    const planUrl = l.plan || (docs && docs.lots[l.id]) || '';
+    const planUrl = planLot(p, l);
     h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (planUrl ? '<a href="' + esc(planUrl) + '" target="_blank">PDF</a>' : '') + '</td><td>' + (planUrl ? '<button class="btn o xs" data-lien="' + esc(l.id) + '">Copier</button>' : '<button class="btn xs" data-ajouter="' + esc(l.id) + '">+ Plan</button>') + '</td></tr>';
   });
   h += '</tbody></table>';
@@ -2174,7 +2179,7 @@ function renderCart() {
   bd.querySelectorAll('[data-rm]').forEach(a => a.onclick = () => { toggleCart(a.dataset.rm, false); renderCart(); if (SEL) renderLots(SEL); });
   bd.querySelectorAll('.grp').forEach(g => g.onclick = () => { cart.classList.remove('open'); select(PI[g.dataset.p], true); });
 }
-function lotRow(p, l) { return [p.promoteur, p.nom, p.adresse || '', p.cp || '', p.ville || '', p.livraison || '', (p.fisc || []).join(' / '), p.commission_pct != null ? p.commission_pct : '', l.n, l.type, l.typo || '', l.surf || '', l.etage == null ? (l.etage_raw || '') : l.etage, l.expo || '', l.annexes || '', l.parkings || '', l.prix20 || l.prix || '', l.prix55 || '', l.prix_m2 || '', l.st, l.loyer || '', l.renta || '', p.gare || '', p.gare_dist || '', l.plan || '', p.url || '']; }
+function lotRow(p, l) { return [p.promoteur, p.nom, p.adresse || '', p.cp || '', p.ville || '', p.livraison || '', (p.fisc || []).join(' / '), p.commission_pct != null ? p.commission_pct : '', l.n, l.type, l.typo || '', l.surf || '', l.etage == null ? (l.etage_raw || '') : l.etage, l.expo || '', l.annexes || '', l.parkings || '', l.prix20 || l.prix || '', l.prix55 || '', l.prix_m2 || '', l.st, l.loyer || '', l.renta || '', p.gare || '', p.gare_dist || '', planLot(p, l), p.url || '']; }
 const CSVH = ['Promoteur','Programme','Adresse','CP','Ville','Livraison','Fiscalité','Commission %','Lot','Type','Typo','Surface','Étage','Expo','Annexes','Parkings','Prix TVA 20 %','Prix TVA 5,5 %','€/m²','Statut','Loyer','Renta','Gare','Distance gare (m)','Plan','Extranet'];
 function dlCsv(rows, name) { const csv = '﻿' + rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = name + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); }
 document.getElementById('cartCsv').onclick = () => dlCsv([CSVH, ...cartRows().map(({ l, p }) => lotRow(p, l))], 'selection-lots');
@@ -2197,7 +2202,7 @@ function fichePdf(doc, p, l) {
     ['Transports', p.gare ? p.gare + ' à ' + (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') + ' (' + walk(p.gare_dist) + ')' : ''], ['Commission', p.commission_pct ? String(p.commission_pct).replace('.', ',') + ' %' : ''], ['Source', p.extranet + (p.sources ? ' + ' + p.sources.slice(1).map(s => s.extranet).join(', ') : '')]].filter(r => r[1]);
   rows.forEach(([k, v]) => { doc.setTextColor(110); doc.text(k, M, y); doc.setTextColor(30); const lines = doc.splitTextToSize(String(v), W - M * 2 - 42); doc.text(lines, M + 42, y); y += 6 * lines.length; });
   y += 4; doc.setTextColor(15, 124, 140);
-  if (l.plan) { doc.textWithLink('Plan du lot (PDF)', M, y, { url: l.plan }); y += 6; }
+  if (planLot(p, l)) { doc.textWithLink('Plan du lot (PDF)', M, y, { url: planLot(p, l) }); y += 6; }
   if (p.url) { doc.textWithLink('Fiche programme sur l’extranet', M, y, { url: p.url }); y += 6; }
   (p.docs || []).slice(0, 5).forEach(d => { const [t, u] = String(d).split('→'); if (u) { doc.textWithLink(t || 'Document', M, y, { url: u }); y += 6; } });
   if (p.desc) { y += 4; doc.setTextColor(80); doc.setFontSize(9.5); doc.text(doc.splitTextToSize(p.desc.slice(0, 900), W - M * 2), M, y); }
@@ -2215,7 +2220,7 @@ document.getElementById('cartZip').onclick = async () => {
       const doc = new jsPDF({ unit: 'mm', format: 'a4' }); fichePdf(doc, p, l);
       zip.file('fiche-' + safe(p.ville) + '-' + safe(p.nom) + '-lot-' + safe(l.n) + '.pdf', doc.output('arraybuffer'));
       if (p.id !== last) { last = p.id; links += '<h2>' + esc(p.nom) + ' — ' + esc(p.ville) + '</h2><p>' + esc(p.promoteur) + (p.url ? ' · <a href="' + esc(p.url) + '" target="_blank">extranet</a>' : '') + '</p>' + (p.plaquette ? '<a class="b" href="' + esc(p.plaquette) + '" target="_blank">Plaquette</a>' : '') + (p.docs || []).map(d => { const [t, u] = String(d).split('→'); return u ? '<a class="b" href="' + esc(u) + '" target="_blank">' + esc(t || 'Document') + '</a>' : ''; }).join(''); }
-      links += '<div>Lot <b>' + esc(l.n) + '</b> ' + esc(l.typo || '') + ' — ' + (l.plan ? '<a class="b" href="' + esc(l.plan) + '" target="_blank">Plan du lot</a>' : '<span style="color:#9ca3af">plan non fourni par l’extranet</span>') + '</div>';
+      links += '<div>Lot <b>' + esc(l.n) + '</b> ' + esc(l.typo || '') + ' — ' + (planLot(p, l) ? '<a class="b" href="' + esc(planLot(p, l)) + '" target="_blank">Plan du lot</a>' : '<span style="color:#9ca3af">plan non fourni par l’extranet</span>') + '</div>';
     }
     zip.file('plans-et-documents.html', links + '</html>');
     zip.file('selection.csv', '﻿' + [CSVH, ...rows.map(({ l, p }) => lotRow(p, l))].map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'));
@@ -2310,7 +2315,7 @@ function carteBadgeMatch(m) {
       surface: l.surf ? String(l.surf).replace('.', ',') + ' m²' : '',
       etage: l.etage == null ? (l.etage_raw || '') : (l.etage === 0 ? 'RDC' : String(l.etage)),
       typologies: l.typo ? [l.typo] : [],
-      plan: l.plan || '', masse: '', lien: '', pdf: '', docs: [], image: '', images: [],
+      plan: planLot(p, l), masse: '', lien: '', pdf: '', docs: [], image: '', images: [],
       annexes: [], prixOptions: [], remises: [], atouts: [], pitch: '',
       // Références pour retrouver le même lot / programme plus tard (plans partagés à venir)
       _cartePigeId: l.id, _carteProgrammeId: p.id
