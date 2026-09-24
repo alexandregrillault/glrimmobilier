@@ -1283,7 +1283,12 @@ table.lots td.r{text-align:right}
   <div class="filters">
     <div class="row">
       <select id="fPromo"><option value="">Tous les promoteurs</option></select>
-      <select id="fDept"><option value="">Tous les départements</option></select>
+      <!-- Département : un seul filtre, la liste à cases (« + départements ») juste
+           en dessous. L'ancienne liste déroulante mono-département faisait doublon
+           (retirée le 24/09/2026 à la demande d'Alex) ; l'élément reste, masqué,
+           parce que la navigation par département sur la carte (zoom, fil d'Ariane,
+           bouton retour) s'appuie encore sur sa valeur. -->
+      <select id="fDept" hidden><option value="">Tous les départements</option></select>
     </div>
     <div class="row">
       <div class="dd" id="fDeptsDD"><button type="button" id="fDeptsBtn">+ départements</button><div class="dd-pop" id="fDeptsPop" hidden></div></div>
@@ -1315,7 +1320,7 @@ table.lots td.r{text-align:right}
     </div>
     <div class="livrow"><span class="lbl">Livraison</span><div class="chips" id="fLivM"><span class="chip on" data-m="max" title="Livré au plus tard cette année-là">au plus tard</span><span class="chip" data-m="eq" title="Livré exactement cette année-là">cette année</span></div><div class="chips" id="fLivY"></div><div class="chips" id="fLivS" hidden></div></div>
     <div class="chips" id="fFlags"></div>
-    <div class="livrow"><span class="lbl">Statut</span><div class="chips" id="fStChips"><span class="chip on" data-v="libre">Libres</span><span class="chip" data-v="libre,option">+ optionnés</span><span class="chip" data-v="">Tous</span></div></div>
+    <div class="livrow"><span class="lbl">Statut</span><div class="chips" id="fStChips" title="Cumulables : coche les statuts à afficher (aucun coché = tous)"><span class="chip on" data-v="libre">Libres</span><span class="chip" data-v="option">Optionnés</span><span class="chip" data-v="reserve,bloque">Réservés</span><span class="chip" data-v="vendu">Vendus</span></div></div>
     <div class="tools">
       <select id="fSort" title="Ordre de la liste" style="padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:11px;background:#fff"><option value="ville">Par ville</option><option value="prix">Prix croissant</option><option value="pm2">€/m² croissant</option><option value="liv">Livraison la plus proche</option><option value="tt">Temps de trajet</option><option value="new">Nouveautés d’abord</option></select>
       <label><input type="checkbox" id="fMaison"> Maisons</label>
@@ -1355,7 +1360,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---------- filtres ----------
-const F = { promo: '', dept: '', typos: new Set(), budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
+const F = { promo: '', dept: '', typos: new Set(), extMin: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
 // ---------- repli manuel du volet des filtres (gagner de la place pour la liste) ----------
 let filtersCollapsed = false;
 function setFiltersCollapsed(on) { filtersCollapsed = on; document.querySelector('.filters').classList.toggle('collapsed', on); }
@@ -1377,6 +1382,20 @@ function livOK(p) {
   return F.livM === 'eq' ? (Math.floor(p.livraison_key) === y && p.livraison_key - y <= s) : p.livraison_key <= y + s;
 }
 const META = DATA.meta || {};
+// Surface extérieure d'un lot (m²), lue dans le texte des annexes pigées :
+// « balcon 6.1 m² ; terrasse 10.8 m² », « annexes 57.34 m² », « B : 4 m² »,
+// « Terrasse de 10.22 m² »… Les segments parking / cave / garage sont ignorés.
+// Plusieurs extérieurs s'additionnent. 0 si rien de chiffré.
+function extSurf(l) {
+  if (l._ext != null) return l._ext;
+  let t = 0;
+  String(l.annexes || '').split(/[;|]/).forEach(seg => {
+    if (/parking|park|garage|box|cave|cellier|stationnement|local/i.test(seg)) return;
+    const m = seg.match(/(\d+(?:[.,]\d+)?)\s*m/i);
+    if (m) t += parseFloat(m[1].replace(',', '.')) || 0;
+  });
+  return (l._ext = Math.round(t * 100) / 100);
+}
 function lotOK(l) {
   if (F.st.size && !F.st.has(l.st)) return false;
   if (F.maison && l.type !== 'Maison') return false;
@@ -1387,6 +1406,7 @@ function lotOK(l) {
   if (F.renta && (!l.renta || l.renta < +F.renta)) return false;
   if (F.flags.has('top') && !l.top) return false;
   if (F.flags.has('ext') && !l.ext) return false;
+  if (F.flags.has('ext') && F.extMin && extSurf(l) < +F.extMin) return false;
   if (F.flags.has('pk') && !l.pk) return false;
   if (F.flags.has('new') && !(l.nouveau || l.prix_prev)) return false;
   return true;
@@ -1409,7 +1429,7 @@ function progOK(p) {
   if (F.flags.has('pick') && !(p.picking && !p.nomandat)) return false;
   if (F.flags.has('nomandat') && !p.nomandat) return false;
   if (F.flags.has('nopick') && p.picking) return false;
-  if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.flags.has('top') || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
+  if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.flags.has('top') || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
   if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || ['top', 'ext', 'pk', 'new'].some(f => F.flags.has(f)));
   return p.logs.some(lotOK);
 }
@@ -1434,10 +1454,10 @@ function renderCounts() {
   selCount('fPromo', 'promo'); selCount('fDept', 'dept'); selCount('fSource', 'source'); selCount('fCom', 'com'); selCount('fPm2', 'pm2'); selCount('fRenta', 'renta'); selCount('fGare', 'gare');
   const chipCount = (c, n) => { let s = c.querySelector('.cnt'); if (!s) { s = document.createElement('span'); s.className = 'cnt'; c.appendChild(s); } s.textContent = n.toLocaleString('fr-FR'); c.classList.toggle('dim', n === 0 && !c.classList.contains('on')); };
   [...fT.children].forEach(c => { const t = c.firstChild.textContent; chipCount(c, F.typos.has(t) ? VIS.length : countWith({ typos: setOn(F.typos, t, true) })); });
-  [...fFl.children].forEach(c => { const k = c.dataset.f; chipCount(c, F.flags.has(k) ? VIS.length : countWith({ flags: setOn(F.flags, k, true) })); });
+  [...fFl.querySelectorAll('.chip')].forEach(c => { const k = c.dataset.f; chipCount(c, F.flags.has(k) ? VIS.length : countWith({ flags: setOn(F.flags, k, true) })); });
   [...fLY.children].forEach(c => { const y = +c.dataset.y; chipCount(c, +F.liv === y ? VIS.length : countWith({ liv: y, livS: 2 })); });
   fPop.querySelectorAll('label:not(.all)').forEach(l => { const f = l.querySelector('input').value; l.querySelector('.cnt').textContent = F.fisc.has(f) ? VIS.length : countWith({ fisc: setOn(F.fisc, f, true) }); });
-  [...document.getElementById('fStChips').children].forEach(c => { const v = new Set(c.dataset.v ? c.dataset.v.split(',') : []); chipCount(c, countWith({ st: v })); });
+  [...document.getElementById('fStChips').children].forEach(c => { const vals = c.dataset.v.split(','); const on = vals.every(x => F.st.has(x)); chipCount(c, on ? VIS.length : countWith({ st: new Set([...F.st, ...vals]) })); });
 }
 // ---------- critères actifs ----------
 function activeList() {
@@ -1458,9 +1478,10 @@ function activeList() {
   F.fisc.forEach(f => add(f, () => { F.fisc.delete(f); fPop.querySelectorAll('input').forEach(i => { if (i.value === f) i.checked = false; }); fiscLabel(); }));
   if (F.tt) add((F.tt.mode === 'car' ? '🚗' : '🚇') + ' ≤ ' + F.tt.max + ' min de ' + F.tt.label.split(',')[0], () => ttClear(false));
   if (F.liv) add('Livraison ' + (F.livM === 'eq' ? 'en ' : 'au plus tard ') + F.liv + (F.livS === 1 ? ' (S1)' : ''), () => { F.liv = ''; F.livS = 2; renderLiv(); });
-  F.flags.forEach(k => add((FLAGS.find(x => x[0] === k) || [k, k])[1], () => { F.flags.delete(k); [...fFl.children].forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); }));
+  F.flags.forEach(k => add((FLAGS.find(x => x[0] === k) || [k, k])[1], () => { F.flags.delete(k); [...fFl.children].forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); renderExtMin(); }));
+  if (F.flags.has('ext') && F.extMin) add('Extérieur ≥ ' + String(F.extMin).replace('.', ',') + ' m²', () => { F.extMin = ''; const i = document.getElementById('fExtMin'); if (i) i.value = ''; });
   if (F.maison) add('Maisons', () => { F.maison = false; document.getElementById('fMaison').checked = false; });
-  if (!(F.st.size === 1 && F.st.has('libre'))) add(F.st.size ? 'Libres + optionnés' : 'Tous les statuts', () => { setSt('libre'); });
+  if (!(F.st.size === 1 && F.st.has('libre'))) add(F.st.size ? stLabel(F.st) : 'Tous les statuts', () => { setSt('libre'); });
   return a;
 }
 function renderActive() {
@@ -1498,7 +1519,7 @@ function concessions() {
   if (F.source) push('Toutes les sources', { source: '' }, () => { F.source = ''; document.getElementById('fSource').value = ''; });
   if (F.com) push('Sans minimum de commission', { com: '' }, () => { F.com = ''; document.getElementById('fCom').value = ''; });
   if (F.fisc.size) push('Sans critère de fiscalité', { fisc: new Set() }, () => { F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); });
-  F.flags.forEach(k => push('Sans « ' + (FLAGS.find(x => x[0] === k) || [k, k])[1] + ' »', { flags: setOn(F.flags, k, false) }, () => { F.flags.delete(k); [...fFl.children].forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); }));
+  F.flags.forEach(k => push('Sans « ' + (FLAGS.find(x => x[0] === k) || [k, k])[1] + ' »', { flags: setOn(F.flags, k, false) }, () => { F.flags.delete(k); [...fFl.children].forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); renderExtMin(); }));
   if (F.maison) push('Appartements aussi', { maison: false }, () => { F.maison = false; document.getElementById('fMaison').checked = false; });
   if (F.tt) { const M = [15, 20, 30, 45, 60, 90], nx = M.find(m => m > F.tt.max); if (nx) out.push({ label: 'Trajet ≤ ' + nx + ' min au lieu de ' + F.tt.max, n: null, go: () => { document.getElementById('ttMax').value = nx; ttRun(); } }); }
   return out.sort((a, b) => (b.n == null ? -1 : b.n) - (a.n == null ? -1 : a.n)).slice(0, 8);
@@ -1510,7 +1531,12 @@ function concHtml() {
   return '<div class="conc"><b>' + (VIS.length ? 'Peu de résultats. ' : 'Aucun résultat. ') + 'En relâchant un critère :</b>' + c.map((x, i) => '<span class="o" data-i="' + i + '">' + esc(x.label) + (x.n != null ? '<span>' + x.n + '</span>' : '') + '</span>').join('') + '</div>';
 }
 function bindConc(el) { const c = CONC; el.querySelectorAll('.conc .o').forEach(o => o.onclick = () => { c[+o.dataset.i].go(); apply(); }); }
-function setSt(v) { F.st = new Set(v ? v.split(',') : []); [...document.getElementById('fStChips').children].forEach(c => c.classList.toggle('on', c.dataset.v === v)); }
+// Statuts cumulables (24/09/2026) : F.st = ensemble des statuts cochés ; vide = tous.
+const ST_LABELS = { libre: 'Libres', option: 'Optionnés', reserve: 'Réservés', bloque: 'Bloqués', vendu: 'Vendus' };
+function stLabel(set) { const seen = new Set(); return [...document.getElementById('fStChips').children].filter(c => c.dataset.v.split(',').some(x => set.has(x))).map(c => c.textContent).filter(t => !seen.has(t) && seen.add(t)).join(' + ') || [...set].map(x => ST_LABELS[x] || x).join(' + '); }
+function setSt(v) { F.st = new Set(v ? v.split(',') : []); renderSt(); }
+function renderSt() { [...document.getElementById('fStChips').children].forEach(c => c.classList.toggle('on', c.dataset.v.split(',').every(x => F.st.has(x)))); }
+function toggleSt(v) { const vals = v.split(','); if (vals.every(x => F.st.has(x))) vals.forEach(x => F.st.delete(x)); else vals.forEach(x => F.st.add(x)); renderSt(); }
 function lotOKnoDispo(l) { const d = F.st; F.st = new Set(); const r = lotOK(l); F.st = d; return r; }
 
 // ---------- init filtres ----------
@@ -1526,7 +1552,10 @@ sel('fRenta', [3, 3.5, 4, 4.5, 5, 6].map(k => [k, '≥ ' + String(k).replace('.'
 sel('fGare', [[300, '≤ 300 m d’une gare'], [500, '≤ 500 m (6 min à pied)'], [800, '≤ 800 m (10 min à pied)'], [1200, '≤ 1,2 km (15 min à pied)'], [2000, '≤ 2 km']]);
 const FLAGS = [['top', 'Dernier étage'], ['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')], ['pick', 'Picking à demander'], ['nomandat', 'Sans mandat'], ['nopick', 'Mandat + stock seulement'], ['livre', 'Déjà livré'], ['nonact', 'Pas encore actable']];
 const fFl = document.getElementById('fFlags');
-FLAGS.forEach(([k, t]) => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.f = k; c.textContent = t; c.onclick = () => { F.flags.has(k) ? F.flags.delete(k) : F.flags.add(k); c.classList.toggle('on'); apply(); }; fFl.appendChild(c); });
+FLAGS.forEach(([k, t]) => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.f = k; c.textContent = t; c.onclick = () => { F.flags.has(k) ? F.flags.delete(k) : F.flags.add(k); c.classList.toggle('on'); renderExtMin(); apply(); }; fFl.appendChild(c);
+  if (k === 'ext') { const i = document.createElement('input'); i.type = 'number'; i.id = 'fExtMin'; i.min = '0'; i.step = '1'; i.placeholder = 'm² min'; i.title = 'Surface extérieure minimale (balcon, terrasse, jardin — m²)'; i.autocomplete = 'off'; i.hidden = true; i.style.cssText = 'width:72px;flex:0 0 auto;padding:2px 6px;font-size:11px'; i.oninput = () => { F.extMin = i.value ? String(Math.max(0, +i.value)) : ''; apply(); }; fFl.appendChild(i); } });
+// Le champ « m² min » n'a de sens que si « Extérieur » est coché : caché sinon, et le seuil s'efface
+function renderExtMin() { const i = document.getElementById('fExtMin'); if (!i) return; const on = F.flags.has('ext'); i.hidden = !on; if (!on && F.extMin) { F.extMin = ''; i.value = ''; } }
 document.getElementById('pige').textContent = META.pige_date ? 'pigé le ' + new Date(META.pige_date).toLocaleDateString('fr-FR') + (META.prev_date ? ' · ' + META.nouveaux_programmes + ' nouveaux programmes, ' + META.nouveaux_lots + ' nouveaux lots, ' + META.baisses + ' baisses depuis le ' + new Date(META.prev_date).toLocaleDateString('fr-FR') : '') : '';
 const curY = new Date().getFullYear();
 const years = [...new Set(P.map(p => p.livraison_key && Math.floor(p.livraison_key)).filter(y => y && y >= curY && y <= curY + 6))].sort();
@@ -1554,11 +1583,11 @@ const fT = document.getElementById('fTypo');
 TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = t; c.onclick = () => { F.typos.has(t) ? F.typos.delete(t) : F.typos.add(t); c.classList.toggle('on'); apply(); }; fT.appendChild(c); });
 ['fPromo','fDept','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
 document.getElementById('fBudget').oninput = e => { const v = e.target.value; F.budget = v ? String(Math.round(+v * 1000)) : ''; apply(); };
-[...document.getElementById('fStChips').children].forEach(c => c.onclick = () => { setSt(c.dataset.v); apply(); });
+[...document.getElementById('fStChips').children].forEach(c => c.onclick = () => { toggleSt(c.dataset.v); apply(); });
 [...document.getElementById('fLivM').children].forEach(c => c.onclick = () => { F.livM = c.dataset.m; [...c.parentElement.children].forEach(x => x.classList.toggle('on', x === c)); apply(); });
 document.getElementById('fSort').onchange = e => { F.sort = e.target.value; renderList(); };
 document.getElementById('fMaison').onchange = e => { F.maison = e.target.checked; apply(); };
-document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '' }); setSt('libre'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.children].forEach(c => c.classList.remove('on')); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
+document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '' }); setSt('libre'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.querySelectorAll('.chip')].forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
 
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
@@ -2077,7 +2106,7 @@ function select(p, fly) {
   if (p.img) links.push('<a href="' + esc(p.img) + '" target="_blank">Visuel</a>');
   if (links.length) h += '<div class="links">' + links.join('') + '</div>';
   h += docsBoxHtml(p);
-  h += '<div class="lotsbar"><b>Lots</b><select id="lTypo"><option value="">Toutes typos</option>' + TYPOS.map(t => '<option>' + t + '</option>').join('') + '</select><select id="lSt"><option value="">Tous statuts</option><option value="libre">Libres</option><option value="libre,option">Libres + optionnés</option></select><span id="lCount" style="color:#6b7280"></span><button class="btn o" id="lAll">Tout sélectionner</button></div><div id="lotsTbl" style="overflow-x:auto"></div>';
+  h += '<div class="lotsbar"><b>Lots</b><select id="lTypo"><option value="">Toutes typos</option>' + TYPOS.map(t => '<option>' + t + '</option>').join('') + '</select><select id="lSt"><option value="">Tous statuts</option><option value="libre">Libres</option><option value="libre,option">Libres + optionnés</option>' + (F.st.size && !['libre', 'libre,option'].includes([...F.st].join(',')) ? '<option value="' + esc([...F.st].join(',')) + '">' + esc(stLabel(F.st)) + '</option>' : '') + '</select><span id="lCount" style="color:#6b7280"></span><button class="btn o" id="lAll">Tout sélectionner</button></div><div id="lotsTbl" style="overflow-x:auto"></div>';
   panel.querySelector('.bd').innerHTML = h;
   panel.querySelector('#lTypo').onchange = panel.querySelector('#lSt').onchange = () => renderLots(p);
   panel.querySelector('#lSt').value = [...F.st].join(',');
