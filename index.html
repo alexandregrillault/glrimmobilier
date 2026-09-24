@@ -12033,10 +12033,14 @@ function _selLotDepuisExtraction(d, lien) {
     plan: d.plan || '', masse: d.masse || '', image: d.image || '', images: Array.isArray(d.images) ? d.images : [], pdf: '',
     docs: Array.isArray(d.docs) ? d.docs.filter(x => x && x.url).map(x => ({ nom: String(x.nom || 'Document'), url: String(x.url) })) : [],
     adresse: d.adresse || '', adresseBrute: d.adresseBrute || '', commune: d.commune || '', codePostal: d.codePostal || '',
-    geo: d.geo || null, adresseOk: _selAdresseFiable(d),
+    // Lot de la carte : l'adresse vient de l'extranet du promoteur (fiable par
+    // construction, la fonction le dit avec adresseFiable). Lot Otaree : on
+    // garde le recoupement BAN + confirmation du vendeur.
+    geo: d.geo || null, adresseOk: d.adresseFiable === true || _selAdresseFiable(d),
     surface: d.surface || '', surfacePonderee: d.surfacePonderee || '',
     etage: d.etage || '', terrasse: d.terrasse || '', parking: d.parking || '',
     expo: d.expo || '', livraison: d.livraison || '', promoteur: d.promoteur || '',
+    programme: d.programme || '', plaquette: d.plaquette || '',
     nature: d.nature || '', annexes: Array.isArray(d.annexes) ? d.annexes : [],
     prixOptions: Array.isArray(d.prixOptions) ? d.prixOptions : [],
     pitch: '', typologies: Array.isArray(d.typologies) ? d.typologies : [], atouts: []
@@ -12651,7 +12655,9 @@ function selAjouterLibreRefresh() {
     ? '<div style="font-size:12px;color:var(--muted)">Aucun lot pour le moment</div>'
     : _selCtx.libres.map((b,i) => {
       const nDocs = Array.isArray(b.docs) ? b.docs.length : (b.pdf ? 1 : 0);
-      const badges = nDocs ? '<span title="' + _vEsc((Array.isArray(b.docs) ? b.docs : [{ nom: 'Fiche du lot' }]).map(d => d.nom).join('\n')) + '" style="color:var(--muted)">' + nDocs + ' document' + (nDocs > 1 ? 's' : '') + '</span>' : '<span style="color:var(--warning)">aucun document</span>';
+      const badges = b._carteProgrammeId
+        ? _selDocsCarteBadges(b, i)
+        : (nDocs ? '<span title="' + _vEsc((Array.isArray(b.docs) ? b.docs : [{ nom: 'Fiche du lot' }]).map(d => d.nom).join('\n')) + '" style="color:var(--muted)">' + nDocs + ' document' + (nDocs > 1 ? 's' : '') + '</span>' : '<span style="color:var(--warning)">aucun document</span>');
       return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)">
       <span><strong>${_vEsc(b.titre)}</strong>${b.ville ? ' — ' + _vEsc(b.ville) : ''}${b.prix ? ' · ' + _vEsc(b.prix) : ''}${b.typologies && b.typologies.length ? ' · ' + _vEsc(b.typologies[0]) : ''}${b.surface ? ' · ' + _vEsc(b.surface) : ''}${b.prixOptions && b.prixOptions.length > 1 ? ' · <span style="color:var(--success)">' + b.prixOptions.length + ' régimes de TVA</span>' : ''}${eqRemisesListe(b).length ? ' · <span style="color:var(--accent)">' + eqRemisesListe(b).map(_selRemiseTexte).join(' · ') + '</span>' : ''} <span style="font-size:11px;opacity:.8">${badges}</span></span>
       <span style="white-space:nowrap">
@@ -12664,6 +12670,79 @@ function selAjouterLibreRefresh() {
       </span>
     </div>`; }).join('');
 }
+// ---- Documents d'un lot venu de la carte (plaquette, plan de masse, plan du lot)
+// La feuille du client les montre sous le nom du programme. Quand il en manque
+// un, le vendeur le voit ici et peut le déposer directement (fichier récupéré
+// sur l'intranet du promoteur) : le document est enregistré pour le programme
+// (documents_programme / documents_lot), donc visible sur la carte, pour toute
+// l'équipe, et sur la feuille du client — même si elle a déjà été envoyée, la
+// page le relit à chaque ouverture (24/09/2026, demande d'Alex).
+function _selDocsCarteBadges(b, i) {
+  const promoteur = b.promoteur ? ' de ' + b.promoteur : ' du promoteur';
+  const ok = (txt) => '<span style="color:var(--success)">' + txt + ' ✓</span>';
+  const manque = (txt, champ, cible) => '<span style="color:var(--warning)" title="' + _vEsc(txt + ' absent' + (champ === 'plaquette' ? 'e' : '') + ' de la carte : récupère-l' + (champ === 'plaquette' ? 'a' : 'e') + ' sur l\'intranet' + promoteur + ', puis dépose le fichier ici. Le client le verra sur sa feuille et il restera sur la carte pour toute l\'équipe.') + '">' + txt + ' manquant' + (champ === 'plaquette' ? 'e' : '') + '</span> <button onclick="selDeposerDocCarte(' + i + ',\'' + cible + '\',\'' + champ + '\')" style="background:none;border:1px dashed var(--warning);border-radius:20px;padding:0 8px;color:var(--warning);font-size:11px;cursor:pointer">Déposer</button>';
+  const parts = [];
+  parts.push(b.plaquette ? ok('Plaquette') : manque('Plaquette', 'plaquette', 'programme'));
+  parts.push(b.masse ? ok('Plan de masse') : manque('Plan de masse', 'masse', 'programme'));
+  parts.push(b.plan ? ok('Plan du lot') : manque('Plan du lot', 'plan', 'lot'));
+  return parts.join(' · ');
+}
+function _selDocsCarteRecalculer(b) {
+  const docs = [];
+  if (b.plan) docs.push({ nom: 'Plan du lot', url: b.plan });
+  if (b.masse) docs.push({ nom: 'Plan de masse', url: b.masse });
+  if (b.plaquette) docs.push({ nom: 'Plaquette', url: b.plaquette });
+  b.docs = docs;
+}
+function selDeposerDocCarte(i, cible, champ) {
+  const b = _selCtx && _selCtx.libres[i];
+  if (!b) return;
+  const id = cible === 'lot' ? b._cartePigeId : b._carteProgrammeId;
+  if (!id) { if (typeof toast === 'function') toast('⚠ Ce lot ne vient pas de la carte', 'var(--warning)'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = champ === 'masse' ? '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png' : '.pdf,application/pdf';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    if (f.size > 50 * 1024 * 1024) { if (typeof toast === 'function') toast('⚠ Fichier trop lourd (50 Mo max)', 'var(--danger)'); return; }
+    if (typeof toast === 'function') toast('Envoi du document…');
+    let b64;
+    try {
+      const buf = new Uint8Array(await f.arrayBuffer());
+      let bin = '';
+      for (let k = 0; k < buf.length; k += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(k, k + 0x8000));
+      b64 = btoa(bin);
+    } catch (e) { if (typeof toast === 'function') toast('⚠ Fichier illisible', 'var(--danger)'); return; }
+    const libelle = champ === 'masse' ? 'Plan de masse' : (champ === 'plaquette' ? 'Plaquette' : 'Plan du lot');
+    const nom = cible === 'lot' ? ((b.programme || '') + (b.titre ? ' - ' + b.titre.replace(/^.*?\s-\s/, '') : '')).trim() : (b.programme || '');
+    let j = {};
+    try {
+      const res = await fetch(SUPABASE_URL + '/functions/v1/selection', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'doc_upload', target: cible, id, field: champ, data_base64: b64, content_type: f.type || 'application/pdf', nom })
+      });
+      j = await res.json();
+    } catch (e) { j = {}; }
+    if (!j || !j.ok || !j.url) {
+      const motif = j && j.error === 'format_non_reconnu' ? 'le fichier n\'est ni un PDF ni une image' : (j && j.error === 'fichier_trop_lourd' ? 'fichier trop lourd (50 Mo max)' : 'le serveur n\'a pas répondu');
+      if (typeof toast === 'function') toast('⚠ Dépôt impossible — ' + motif, 'var(--danger)');
+      return;
+    }
+    // Le document vaut pour tous les lots du même programme déjà dans la sélection
+    const ctx = _selCtx;
+    if (!ctx) return;
+    ctx.libres.forEach(x => {
+      if (cible === 'programme' && x._carteProgrammeId === id) { x[champ] = j.url; _selDocsCarteRecalculer(x); }
+      if (cible === 'lot' && x._cartePigeId === id) { x.plan = j.url; x.planImg = null; x.planCadre = null; _selDocsCarteRecalculer(x); }
+    });
+    selAjouterLibreRefresh();
+    if (typeof toast === 'function') toast('✓ ' + libelle + ' enregistré' + (champ === 'plaquette' ? 'e' : '') + ' — visible sur la carte et sur la feuille du client');
+    if (cible === 'lot') planPreparerLots([b]).then(r => { if (r.faits && _selCtx === ctx) selAjouterLibreRefresh(); });
+  };
+  inp.click();
+}
+
 // Vérification de l'adresse d'un lot : Otaree donne parfois la mauvaise voie,
 // alors on recoupe avec la Base Adresse Nationale et le conseiller confirme.
 // Tant que ce n'est pas confirmé, le client ne voit ni adresse ni carte.
@@ -15240,8 +15319,8 @@ async function saveNewContact() {
       situation = 'C\u2019est d\u00e9j\u00e0 ton client : la demande se range dans sa fiche, avec l\u2019historique des \u00e9changes.';
       bouton = 'Ajouter cette demande \u00e0 sa fiche';
     } else if (doublon.libre) {
-      situation = 'Ce client est libre' + (doublon.vendeur ? ' (paternit\u00e9 de ' + esc(doublon.vendeur) + ' \u00e9chue)' : '') + ' : en ajoutant ta demande, il passe dans tes leads pour 14 jours.';
-      bouton = 'Ajouter la demande et le prendre';
+      situation = 'Ce client est libre' + (doublon.vendeur ? ' (paternit\u00e9 de ' + esc(doublon.vendeur) + ' \u00e9chue)' : '') + ' : ouvre sa fiche et travaille-la, tu le r\u00e9cup\u00e8res pour 14 jours.';
+      bouton = 'Ouvrir la fiche';
     } else if (doublon.peut_travailler) {
       situation = (doublon.statut === 'En veille' ? 'Mis en veille par ' : 'En comp\u00e9tition \u2014 re\u00e7u aussi par ') + esc(doublon.vendeur || 'un coll\u00e8gue') + ' : ta demande se note sur sa fiche, et ta premi\u00e8re action te le donne.';
       bouton = 'Ajouter cette demande \u00e0 sa fiche';
@@ -15249,6 +15328,23 @@ async function saveNewContact() {
       situation = 'Suivi par <strong>' + esc(doublon.vendeur || 'un coll\u00e8gue') + '</strong> : ta demande sera not\u00e9e sur sa fiche, mais tu ne peux pas le travailler tant qu\u2019il l\u2019a.';
       bouton = 'Noter la demande sur sa fiche';
     }
+    // Ce que le client avait d\u00e9j\u00e0 donn\u00e9 (\u00e0 qui, quand) : pour rep\u00e9rer d'un
+    // coup d'\u0153il ce qu'il a fait \u00e9voluer par rapport \u00e0 ce que le commercial
+    // vient de saisir dans le formulaire juste au-dessus.
+    const criteres = [];
+    if (doublon.typologie) criteres.push(esc(doublon.typologie));
+    if (doublon.lieu) criteres.push(esc(doublon.lieu));
+    const budgetTxt = (doublon.budget_max != null && typeof budgetTexte === 'function')
+      ? budgetTexte({ min: doublon.budget_min, max: doublon.budget_max, approx: doublon.budget_approx })
+      : (doublon.budget || '');
+    if (budgetTxt) criteres.push(esc(budgetTxt));
+    if (doublon.intention) criteres.push(esc(doublon.intention));
+    const criteresHtml = criteres.length
+      ? '<div style="margin-top:9px;padding:8px 10px;background:var(--surface2);border-radius:8px;font-size:12.5px;color:var(--text)">'
+        + '<strong>D\u00e9j\u00e0 not\u00e9 :</strong> ' + criteres.join(' \u00b7 ')
+        + (doublon.vendeur ? ' <span style="color:var(--muted)">(saisi par ' + esc(doublon.vendeur) + ')</span>' : '')
+        + '</div>'
+      : '';
     montrerErreur('D\u00e9j\u00e0 en base : <strong>' + esc(nomD) + '</strong>'
       + (doublon.date_lead ? ' \u2014 premier contact le ' + esc(doublon.date_lead) : '')
       + (doublon.source ? ' via ' + esc(doublon.source) : '')
@@ -15256,6 +15352,7 @@ async function saveNewContact() {
       + ((doublon.a_moi || gerant) && _ficheAtteignable(doublon.id, estLead)
           ? ' <button onclick="closeNewContact();' + (estLead ? 'eqOuvrirFiche' : 'openEditContact') + '(\'' + doublon.id + '\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:3px 9px;color:var(--text);font-size:12px;cursor:pointer;margin-left:6px">Ouvrir la fiche</button>'
           : '')
+      + criteresHtml
       + '<div style="margin-top:9px;color:var(--muted);font-size:12px">Pas de seconde fiche. ' + situation + '</div>'
       + '<div style="margin-top:9px"><button id="cn-merge-btn" onclick="fusionnerDemandeDansFiche(\'' + doublon.id + '\')" style="background:var(--accent);border:none;border-radius:9px;padding:8px 15px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer">' + bouton + '</button></div>');
     if (btn) { btn.disabled = false; btn.textContent = libelleBtn; }

@@ -135,6 +135,11 @@
   /* Plusieurs documents (plan du lot, plan de masse, plaquette) : boutons côte à côte, en colonne sur mobile */
   .docs.multi { display:flex; gap:8px; flex-wrap:wrap; }
   .docs.multi .doc { flex:1 1 140px; width:auto; padding:12px 10px; font-size:14px; }
+  /* Documents du programme (plaquette, plan de masse) : sous le nom de la résidence */
+  .prog-docs { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 2px; }
+  .prog-docs a { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--gold); color:var(--gold-fonce); background:#fff; border-radius:22px; padding:7px 14px; font-size:13px; font-weight:600; text-decoration:none; transition:all .15s; }
+  .prog-docs a:hover { background:var(--gold); color:#fff; }
+  .prog-docs a svg { flex:none; }
 
   .comp-invite { background:#fff; border:1px solid var(--gold); border-radius:16px; padding:22px 24px; margin:2px 0 22px; text-align:center; box-shadow:0 2px 10px rgba(200,169,110,.15); }
   .comp-invite h3 { font-family:Georgia,serif; font-size:18px; font-weight:600; margin-bottom:6px; }
@@ -1067,6 +1072,18 @@
   // ---------- Rendu d'un lot ----------
   // compact : le lot fait partie d'un bloc programme — la ville, la photo de
   // la résidence, l'adresse, le descriptif et les atouts sont déjà en tête.
+  // Documents du programme, communs à tous ses lots : plaquette et plan de masse,
+  // affichés sous le nom de la résidence (24/09/2026, demande d'Alex). Le premier
+  // lot qui les porte fait foi.
+  function htmlDocsProgramme(items){
+    var plaquette = premier(items, "plaquette"), masse = premier(items, "masse");
+    if (!plaquette && !masse) return "";
+    var ico = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/></svg>";
+    var h = "<div class='prog-docs'>";
+    if (plaquette) h += "<a href='" + esc(plaquette) + "' target='_blank' rel='noopener'>" + ico + "Plaquette du programme</a>";
+    if (masse) h += "<a href='" + esc(masse) + "' target='_blank' rel='noopener'>" + ico + "Plan de masse</a>";
+    return h + "</div>";
+  }
   function htmlLienDoc(b){
     // Un seul bouton documents, au meme format que la demande de rendez-vous :
     // les clients ne voyaient pas les petits boutons Plan / Plan de masse.
@@ -1126,6 +1143,7 @@
     var puces = typos.slice();
     if (b.nature && puces.indexOf(b.nature) === -1) puces.unshift(b.nature);
     if (puces.length) h += "<div class='chips'>" + puces.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
+    if (!compact) h += htmlDocsProgramme([{ b: b }]);
     h += htmlPrix(b);
     h += htmlRemises(b);
     h += htmlNote(b, d);
@@ -1141,6 +1159,9 @@
     // document remis — plan du lot, plan de masse, plaquette (24/09/2026).
     // Sinon, le bouton unique habituel (fiche Otaree, ou premier document joint).
     var docsMulti = (!b.lien && Array.isArray(b.docs)) ? b.docs.filter(function(x){ return x && x.url; }) : [];
+    // Plaquette et plan de masse sont montrés une fois, sous le nom du programme :
+    // au niveau du lot il ne reste que ce qui lui est propre (son plan).
+    if (docsMulti.length) docsMulti = docsMulti.filter(function(x){ return !(b.plaquette && x.url === b.plaquette) && !(b.masse && x.url === b.masse); });
     if (docsMulti.length > 1){
       h += "<div class='docs multi'>" + docsMulti.map(function(x){
         return "<a class='doc' href='" + esc(x.url) + "' target='_blank' rel='noopener'>" + esc(x.nom || "Document") + "</a>";
@@ -1180,6 +1201,7 @@
     items.forEach(function(o){ (Array.isArray(o.b.typologies) ? o.b.typologies : []).forEach(function(t){ if (t && typs.indexOf(t) < 0) typs.push(t); }); });
     if (typs.length) puces.push(typs.join(" · "));
     if (puces.length) h += "<div class='chips'>" + puces.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
+    h += htmlDocsProgramme(items);
     var pitch = premier(items, "pitch");
     if (pitch) h += "<p class='pitch'>" + esc(pitch) + "</p>";
     var atouts = premier(items, "atouts");
