@@ -135,11 +135,18 @@
   /* Plusieurs documents (plan du lot, plan de masse, plaquette) : boutons côte à côte, en colonne sur mobile */
   .docs.multi { display:flex; gap:8px; flex-wrap:wrap; }
   .docs.multi .doc { flex:1 1 140px; width:auto; padding:12px 10px; font-size:14px; }
-  /* Documents du programme (plaquette, plan de masse) : sous le nom de la résidence */
+  /* Documents du programme (plaquette) : sous le nom de la résidence */
   .prog-docs { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 2px; }
   .prog-docs a { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--gold); color:var(--gold-fonce); background:#fff; border-radius:22px; padding:7px 14px; font-size:13px; font-weight:600; text-decoration:none; transition:all .15s; }
   .prog-docs a:hover { background:var(--gold); color:#fff; }
   .prog-docs a svg { flex:none; }
+  /* Plan de masse, juste sous la carte de localisation (25/09/2026) : en image quand
+     le document en est une ; en lien, au même endroit, quand c'est un PDF. */
+  .masse-img { display:block; margin-top:10px; border-radius:12px; overflow:hidden; border:1px solid var(--bordure); }
+  .masse-img img { display:block; width:100%; height:auto; }
+  .masse-lien { display:inline-flex; align-items:center; gap:7px; margin-top:10px; border:1px solid var(--gold); color:var(--gold-fonce); background:#fff; border-radius:22px; padding:7px 14px; font-size:13px; font-weight:600; text-decoration:none; transition:all .15s; }
+  .masse-lien:hover { background:var(--gold); color:#fff; }
+  .masse-lien svg { flex:none; }
 
   .comp-invite { background:#fff; border:1px solid var(--gold); border-radius:16px; padding:22px 24px; margin:2px 0 22px; text-align:center; box-shadow:0 2px 10px rgba(200,169,110,.15); }
   .comp-invite h3 { font-family:Georgia,serif; font-size:18px; font-weight:600; margin-bottom:6px; }
@@ -164,13 +171,11 @@
   .financement-detail li { padding-left:19px; position:relative; margin-bottom:6px; font-size:13px; color:var(--encre); line-height:1.4; }
   .financement-detail li::before { content:"✦"; position:absolute; left:1px; top:1px; color:var(--gold); font-size:11px; }
 
-  /* Mensualité estimée sur un lot concerné par la simulation, avec l'économie
-     mensuelle permise par les aides quand il y en a une. */
-  .simu-lot { display:flex; flex-direction:column; gap:5px; background:#faf8f4; border:1px solid #eee8db; border-radius:10px; padding:9px 13px; margin:2px 0 14px; font-size:13.5px; }
-  .simu-lot-ligne { display:flex; align-items:center; gap:8px; }
+  /* Mensualité estimée sur un lot concerné par la simulation (déjà nette des aides
+     quand le client y a droit — juste la mensualité, pas de détail à part, 23/09/2026) */
+  .simu-lot { display:flex; align-items:center; gap:8px; background:#faf8f4; border:1px solid #eee8db; border-radius:10px; padding:8px 13px; margin:2px 0 14px; font-size:13.5px; }
   .simu-lot-label { color:var(--muted); }
   .simu-lot-montant { margin-left:auto; font-family:Georgia,serif; font-weight:700; color:var(--dark); }
-  .simu-lot-eco { font-size:12px; color:var(--gold-fonce); font-weight:600; }
   .simu-lot-txt { color:var(--muted); }
 
   /* Rendez-vous depuis un lot : en second plan, pour laisser la place aux
@@ -819,14 +824,14 @@
     h += "<li>Le prêt Action Logement, à taux avantageux</li>";
     h += "<li>Le Prêt Paris Logement 0 %, pour un achat à Paris</li>";
     h += "</ul>";
-    h += "<p>Sur chaque bien de votre sélection, la mensualité affichée tient déjà compte de ces aides — avec, quand elles s'appliquent, ce qu'elles vous font gagner chaque mois.</p>";
+    h += "<p>Sur chaque bien de votre sélection, la mensualité affichée tient déjà compte de ces aides quand vous y avez droit.</p>";
     h += "</div>";
     h += "</div>";
     return h;
   }
 
   // Mensualité estimée pour ce lot précis, si la dernière simulation le couvre —
-  // avec l'économie mensuelle permise par les aides quand la simulation en calcule une.
+  // déjà nette des aides quand le client y a droit (juste la mensualité, 23/09/2026).
   function htmlSimulationLot(b, d){
     var sim = d && d.simulation;
     if (!sim || !Array.isArray(sim.lots)) return "";
@@ -840,10 +845,7 @@
     }
     var m = Number(s.mensualite);
     if (!isFinite(m) || m <= 0) return "";
-    var h = "<div class='simu-lot'><div class='simu-lot-ligne'><span class='simu-lot-label'>Mensualité estimée</span><span class='simu-lot-montant'>" + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €/mois</span></div>";
-    var eco = Number(s.economie);
-    if (isFinite(eco) && eco > 0) h += "<div class='simu-lot-eco'>Dont " + new Intl.NumberFormat('fr-FR').format(Math.round(eco)) + " €/mois gagnés grâce aux aides</div>";
-    return h + "</div>";
+    return "<div class='simu-lot'><span class='simu-lot-label'>Mensualité estimée</span><span class='simu-lot-montant'>" + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €/mois</span></div>";
   }
 
   // Adresse du programme : affichée seulement si elle a été confirmée
@@ -1072,17 +1074,24 @@
   // ---------- Rendu d'un lot ----------
   // compact : le lot fait partie d'un bloc programme — la ville, la photo de
   // la résidence, l'adresse, le descriptif et les atouts sont déjà en tête.
-  // Documents du programme, communs à tous ses lots : plaquette et plan de masse,
-  // affichés sous le nom de la résidence (24/09/2026, demande d'Alex). Le premier
-  // lot qui les porte fait foi.
+  var ICO_DOC = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/></svg>";
+  // Documents du programme, communs à tous ses lots : la plaquette, affichée sous
+  // le nom de la résidence (24/09/2026, demande d'Alex). Le plan de masse, lui,
+  // est montré juste sous la carte de localisation (voir htmlPlanMasse, 25/09/2026).
+  // Le premier lot qui porte le document fait foi.
   function htmlDocsProgramme(items){
-    var plaquette = premier(items, "plaquette"), masse = premier(items, "masse");
-    if (!plaquette && !masse) return "";
-    var ico = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/></svg>";
-    var h = "<div class='prog-docs'>";
-    if (plaquette) h += "<a href='" + esc(plaquette) + "' target='_blank' rel='noopener'>" + ico + "Plaquette du programme</a>";
-    if (masse) h += "<a href='" + esc(masse) + "' target='_blank' rel='noopener'>" + ico + "Plan de masse</a>";
-    return h + "</div>";
+    var plaquette = premier(items, "plaquette");
+    if (!plaquette) return "";
+    return "<div class='prog-docs'><a href='" + esc(plaquette) + "' target='_blank' rel='noopener'>" + ICO_DOC + "Plaquette du programme</a></div>";
+  }
+  // Plan de masse, juste sous la carte de localisation (25/09/2026, demande d'Alex) :
+  // affiché en image quand le document en est une (jpg/png) ; la plupart sont des
+  // PDF, qui ne peuvent pas s'afficher dans une balise image — on retombe alors sur
+  // un simple lien, au même endroit.
+  function htmlPlanMasse(masse){
+    if (!masse) return "";
+    if (estPdf(masse)) return "<a class='masse-lien' href='" + esc(masse) + "' target='_blank' rel='noopener'>" + ICO_DOC + "Plan de masse</a>";
+    return "<a class='masse-img' href='" + esc(masse) + "' target='_blank' rel='noopener'><img src='" + esc(masse) + "' alt='Plan de masse' loading='lazy'></a>";
   }
   function htmlLienDoc(b){
     // Un seul bouton documents, au meme format que la demande de rendez-vous :
@@ -1151,6 +1160,7 @@
     h += htmlFaits(b, compact);
     if (!compact){
       h += htmlAdresse(b, i, etatAvis[String(i)] || {});
+      h += htmlPlanMasse(b.masse);
       if (b.pitch) h += "<p class='pitch'>" + esc(b.pitch) + "</p>";
       var atouts = Array.isArray(b.atouts) ? b.atouts.slice(0, 5) : [];
       if (atouts.length) h += "<ul class='atouts'>" + atouts.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
@@ -1214,6 +1224,7 @@
       var demandee = items.some(function(o){ return (etatAvis[String(o.i)] || {}).adresse_demandee; });
       h += htmlAdresse(b0, i0, { adresse_demandee: demandee });
     }
+    h += htmlPlanMasse(premier(items, "masse"));
     // Toujours fermé à l'arrivée (choix d'Alex) ; un lot ajouté depuis la
     // dernière visite est signalé sur la barre, pas déplié d'office.
     var ouvert = false;
