@@ -9530,15 +9530,31 @@ async function eqRdvDeplacerOuvrir(creneauId) {
     <input id="rdv-dep-note" maxlength="200" placeholder="Ex : à sa demande, réunion qui s'éternise" style="${champ};width:100%;margin-bottom:14px">
     ${email ? `<label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="rdv-dep-mail" checked style="accent-color:var(--accent)">Prévenir ${_vEsc(email)} du nouvel horaire (mail + rendez-vous pour son agenda)</label>`
       : '<div style="font-size:12px;color:var(--muted);margin-bottom:16px">Pas d\'email sur la fiche : le client n\'est pas prévenu par le CRM.</div>'}
-    <div style="display:flex;justify-content:flex-end;gap:8px">
-      <button class="btn btn-secondary" onclick="eqRdvDeplacerFermer()">Annuler</button>
-      <button class="btn btn-primary" id="rdv-dep-ok" onclick="eqRdvDeplacerValider()">Déplacer${email ? ' et prévenir' : ''}</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <button onclick="eqRdvDeplacerAnnulerRdv()" style="background:none;border:none;color:var(--danger);font-size:12.5px;cursor:pointer;text-decoration:underline;padding:4px 0">Annuler ce rendez-vous</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="eqRdvDeplacerFermer()">Fermer</button>
+        <button class="btn btn-primary" id="rdv-dep-ok" onclick="eqRdvDeplacerValider()">Déplacer${email ? ' et prévenir' : ''}</button>
+      </div>
     </div>
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) eqRdvDeplacerFermer(); });
   document.body.appendChild(div);
 }
 function eqRdvDeplacerFermer() { const m = document.getElementById('rdv-dep-modal'); if (m) m.remove(); _rdvDepCtx = null; }
+// Annuler le rendez-vous directement depuis la modale « Déplacer » — évite de
+// devoir aller chercher le bouton ✕ du planning quand on est déjà là pour
+// changer l'horaire et qu'on réalise qu'il n'y a plus lieu de le faire.
+// Même moteur que le ✕ du planning (eqPlanLiberer) / la fiche client
+// (_eqFicheRdvAnnuler) : créneau libéré, client prévenu, rappel recalé à J+1.
+async function eqRdvDeplacerAnnulerRdv() {
+  if (!_rdvDepCtx || !_rdvDepCtx.c) return;
+  const id = _rdvDepCtx.c.id;
+  if (!confirm('Annuler ce rendez-vous ? Le client sera prévenu par mail.')) return;
+  eqRdvDeplacerFermer();
+  await _eqFicheRdvAnnuler(id);
+  eqMajVue(true);
+}
 
 async function eqRdvDeplacerValider() {
   if (!_rdvDepCtx) return;
