@@ -1258,6 +1258,15 @@ table.lots td.r{text-align:right}
 .btn{border:1px solid var(--teal);background:var(--teal);color:#fff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}
 .btn.o{background:#fff;color:var(--teal)}
 .btn.xs{padding:3px 8px;font-size:11px}
+#docModal{position:fixed;inset:0;z-index:2000;display:none;align-items:center;justify-content:center;background:rgba(20,33,61,.55)}
+#docModal.on{display:flex}
+#docModal .box{background:#fff;border-radius:10px;width:min(900px,94vw);height:min(90vh,1100px);display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+#docModal .hd{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line)}
+#docModal .hd b{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+#docModal .hd a{font-size:12px;color:var(--teal);white-space:nowrap}
+#docModal .hd button{border:none;background:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);padding:2px 4px}
+#docModal .hd button:hover{color:var(--txt)}
+#docModal iframe{flex:1;border:0;width:100%;border-radius:0 0 10px 10px;background:#fff}
 .ck{width:14px;height:14px;cursor:pointer;accent-color:var(--teal)}
 .lotsbar .btn{margin-left:auto}
 .docsbox{margin:10px 0;padding:10px 12px;background:#f9fafb;border:1px solid var(--line);border-radius:8px;font-size:12.5px}
@@ -1951,6 +1960,21 @@ function lienInterneLot(id) { return SUPABASE_URL + '/glr/lot/' + encodeURICompo
 // Plan d'un lot à montrer / transmettre : le fichier stocké chez nous d'abord
 // (public, pérenne), sinon l'URL relevée sur l'extranet du promoteur.
 function planLot(p, l) { const d = DOCS[p.id]; return (d && d.lots && d.lots[l.id]) || l.plan || ''; }
+// Aperçu d'un document (PDF) dans une fenêtre superposée, sans quitter la carte — le lien
+// « Ouvrir dans un nouvel onglet » et le clic milieu / Ctrl+clic restent disponibles en secours
+// (utile si l'extranet du promoteur exige une session que l'aperçu ne peut pas porter).
+const docModal = document.getElementById('docModal'), docModalFrame = document.getElementById('docModalFrame'), docModalTitre = document.getElementById('docModalTitre'), docModalOuvrir = document.getElementById('docModalOuvrir');
+function apercuDoc(url, titre) {
+  if (!url) return;
+  docModalTitre.textContent = titre || 'Document';
+  docModalOuvrir.href = url;
+  docModalFrame.src = url;
+  docModal.classList.add('on');
+}
+function fermerDocModal() { docModal.classList.remove('on'); docModalFrame.src = ''; }
+document.getElementById('docModalFermer').onclick = fermerDocModal;
+docModal.onclick = e => { if (e.target === docModal) fermerDocModal(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && docModal.classList.contains('on')) fermerDocModal(); });
 async function chargerDocs(p) {
   if (DOCS[p.id]) return DOCS[p.id];
   const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY };
@@ -2029,12 +2053,13 @@ async function televerserDoc(target, id, field, btn) {
 function docsBoxHtml(p) {
   const d = DOCS[p.id];
   if (!d) return '<div class="docsbox" id="docsBox"><b>Documents du programme</b><span style="color:#9ca3af">Chargement…</span></div>';
-  const ligne = (label, url, cle) => '<div class="dl"><b>' + label + '</b>' + (url ? '<a href="' + esc(url) + '" target="_blank">Ouvrir ↗</a><button class="btn o xs" data-doc="' + cle + '">Modifier</button>' : '<span style="color:#9ca3af">Non déposé</span><button class="btn xs" data-doc="' + cle + '">Ajouter</button>') + '</div>';
-  return '<div class="docsbox" id="docsBox"><b>Documents du programme</b>' + ligne('Plan de masse', d.masse, 'masse') + (p.plaquette ? '' : ligne('Plaquette', d.plaquette, 'plaquette')) + '</div>';
+  const ligne = (label, url, cle, previsualisable) => '<div class="dl"><b>' + label + '</b>' + (url ? '<a' + (previsualisable ? ' class="doc-a" data-titre="' + esc(label) + '"' : '') + ' href="' + esc(url) + '" target="_blank">Ouvrir ↗</a><button class="btn o xs" data-doc="' + cle + '">Modifier</button>' : '<span style="color:#9ca3af">Non déposé</span><button class="btn xs" data-doc="' + cle + '">Ajouter</button>') + '</div>';
+  return '<div class="docsbox" id="docsBox"><b>Documents du programme</b>' + ligne('Plan de masse', d.masse, 'masse', true) + (p.plaquette ? '' : ligne('Plaquette', d.plaquette, 'plaquette')) + '</div>';
 }
 function bindDocsBox(p) {
   const box = panel.querySelector('#docsBox'); if (!box) return;
   box.querySelectorAll('[data-doc]').forEach(b => b.onclick = () => ajouterDocProgramme(p, b.dataset.doc, b));
+  box.querySelectorAll('a.doc-a').forEach(a => a.onclick = e => { e.preventDefault(); apercuDoc(a.getAttribute('href'), a.dataset.titre + ' — ' + p.nom); });
 }
 async function ajouterDocProgramme(p, cle, btn) {
   const url = await televerserDoc('programme', p.id, cle, btn);
@@ -2146,7 +2171,7 @@ function renderLots(p) {
   ls.forEach(l => {
     const extra = [l.annexes, l.parkings, l.loyer ? 'loyer ' + fmt(l.loyer) : null, l.renta ? 'renta ' + l.renta + ' %' : null, l.dpe ? 'DPE ' + l.dpe : null, l.livraison ? 'livr. ' + l.livraison : null, l.option_fin ? 'option jusqu’au ' + String(l.option_fin).slice(0, 10) : null, (l.fisc || []).join(', ')].filter(Boolean).join(' · ');
     const planUrl = planLot(p, l);
-    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (planUrl ? '<a href="' + esc(planUrl) + '" target="_blank">PDF</a>' : '') + '</td><td>' + (planUrl ? '<button class="btn o xs" data-lien="' + esc(l.id) + '">Copier</button>' : '<button class="btn xs" data-ajouter="' + esc(l.id) + '">+ Plan</button>') + '</td></tr>';
+    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (planUrl ? '<a class="plan-a" href="' + esc(planUrl) + '" target="_blank" data-n="' + esc(l.n) + '">PDF</a>' : '') + '</td><td>' + (planUrl ? '<button class="btn o xs" data-lien="' + esc(l.id) + '">Copier</button>' : '<button class="btn xs" data-ajouter="' + esc(l.id) + '">+ Plan</button>') + '</td></tr>';
   });
   h += '</tbody></table>';
   const t = panel.querySelector('#lotsTbl'); t.innerHTML = h;
@@ -2154,6 +2179,7 @@ function renderLots(p) {
   t.querySelectorAll('input.ck').forEach(c => c.onchange = () => { toggleCart(c.dataset.l, c.checked); });
   t.querySelectorAll('[data-lien]').forEach(b => b.onclick = () => copierLienLot(LI[b.dataset.lien], b));
   t.querySelectorAll('[data-ajouter]').forEach(b => b.onclick = () => ajouterDocLot(p, LI[b.dataset.ajouter], b));
+  t.querySelectorAll('a.plan-a').forEach(a => a.onclick = e => { e.preventDefault(); apercuDoc(a.getAttribute('href'), 'Plan — lot ' + a.dataset.n); });
 }
 
 // ---------- recherche ----------
@@ -2458,5 +2484,6 @@ document.getElementById('csv').onclick = () => {
 carteAppliquerCriteres();
 apply();
 </script>
+<div id="docModal"><div class="box"><div class="hd"><b id="docModalTitre"></b><a id="docModalOuvrir" href="#" target="_blank" rel="noopener">Ouvrir dans un nouvel onglet ↗</a><button type="button" id="docModalFermer" aria-label="Fermer">✕</button></div><iframe id="docModalFrame"></iframe></div></div>
 </body>
 </html>
