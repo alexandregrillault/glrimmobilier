@@ -72,8 +72,6 @@
   @media (prefers-reduced-motion:reduce){ .card { opacity:1; transform:none; transition:none; } }
 
   .carte-mini { position:relative; height:190px; background-size:cover; background-position:center; cursor:zoom-in; }
-  .carte-mini-vide { background:linear-gradient(135deg,#f4ead9,#efe0c4); cursor:default; }
-  .carte-mini-vide::after { content:"GLR IMMOBILIER"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:Georgia,serif; letter-spacing:3px; font-size:13px; color:var(--gold-fonce); opacity:.55; }
   .badge { position:absolute; top:12px; left:12px; background:rgba(255,255,255,.94); padding:4px 11px; border-radius:8px; font-size:12px; font-weight:700; color:var(--dark); }
   .badge.badge-neuf { left:auto; right:12px; color:var(--gold-fonce); }
 
@@ -88,8 +86,7 @@
   .adresse-row > a { margin-left:auto; color:var(--gold-fonce); font-weight:600; font-size:12.5px; white-space:nowrap; text-decoration:none; }
   .adresse-row > a:hover { text-decoration:underline; }
   .carte { position:relative; height:150px; border-radius:12px; overflow:hidden; border:1px solid var(--bordure); background:#eceae4; cursor:pointer; margin-bottom:10px; }
-  .carte-tuiles { position:absolute; inset:0; }
-  .carte-tuiles img { position:absolute; border:0; }
+  .carte-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border:0; }
   .carte .pin { position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-30px 0 0 -11px; opacity:0; }
   .carte.vue .pin { animation:tombe .55s cubic-bezier(.3,1.4,.5,1) .15s forwards; }
   @keyframes tombe { 0% { opacity:0; transform:translateY(-26px) scale(.85); } 60% { opacity:1; transform:translateY(2px) scale(1); } 100% { opacity:1; transform:translateY(0) scale(1); } }
@@ -786,9 +783,11 @@
     if (adresseSure(b)){
       var g = b.geo, txt = adresseTexte(b);
       var q = encodeURIComponent(txt);
+      var carteUrl = "https://staticmap.openstreetmap.de/staticmap.php?center=" + g.lat + "," + g.lon + "&zoom=16&size=640x300&maptype=mapnik";
       var h2 = "<div class='adresse-row'><svg width='15' height='15' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='#c8a96e'/><circle cx='12' cy='10' r='2.4' fill='#fff'/></svg><span>" + esc(txt) + "</span><a href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Voir sur Maps ↗</a></div>";
-      h2 += "<div class='carte' data-lat='" + g.lat + "' data-lon='" + g.lon + "' data-q='" + esc(q) + "'>";
-      h2 += "<div class='carte-tuiles'></div><div class='pin'>" + PIN.replace(/%23/g, "#") + "</div>";
+      h2 += "<div class='carte vue' data-q='" + esc(q) + "'>";
+      h2 += "<img class='carte-img' src='" + carteUrl + "' alt='' loading='lazy' onerror=\"this.closest('.carte').style.display='none'\">";
+      h2 += "<div class='pin'>" + PIN.replace(/%23/g, "#") + "</div>";
       h2 += "<div class='carte-credits'>&copy; OpenStreetMap</div></div>";
       h2 += "<div class='adr-btns'>";
       h2 += "<a class='adr-btn' href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Ouvrir dans Maps</a>";
@@ -799,34 +798,6 @@
     var demandee = a && a.adresse_demandee;
     return "<div class='adresse-row' style='border-bottom:none'></div><button class='adr-demande' data-adr='" + i + "'" + (demandee ? " disabled" : "") + ">"
       + (demandee ? "✓ Adresse demandée — votre conseiller revient vers vous" : "Demander l'adresse exacte") + "</button>";
-  }
-
-  // Fond de carte : tuiles OpenStreetMap positionnées pour que le lot tombe
-  // pile au centre, sans bibliothèque ni clé d'API.
-  function poserCartes(){
-    Array.prototype.forEach.call(document.querySelectorAll(".carte"), function(el){
-      var lat = parseFloat(el.getAttribute("data-lat")), lon = parseFloat(el.getAttribute("data-lon"));
-      if (!isFinite(lat) || !isFinite(lon)) return;
-      var w = el.clientWidth, hh = el.clientHeight;
-      if (!w || !hh) return;
-      if (el.getAttribute("data-l") === String(w)) return;
-      var z = 16, n = Math.pow(2, z), tuile = 256;
-      var xw = (lon + 180) / 360 * n * tuile;
-      var r = lat * Math.PI / 180;
-      var yw = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n * tuile;
-      var gauche = xw - w / 2, haut = yw - hh / 2;
-      var html = "";
-      for (var ty = Math.floor(haut / tuile); ty <= Math.floor((haut + hh) / tuile); ty++){
-        if (ty < 0 || ty >= n) continue;
-        for (var tx = Math.floor(gauche / tuile); tx <= Math.floor((gauche + w) / tuile); tx++){
-          var mx = ((tx % n) + n) % n;
-          html += "<img src='https://tile.openstreetmap.org/" + z + "/" + mx + "/" + ty + ".png' alt='' loading='lazy' width='256' height='256' style='left:" + Math.round(tx * tuile - gauche) + "px;top:" + Math.round(ty * tuile - haut) + "px'>";
-        }
-      }
-      el.querySelector(".carte-tuiles").innerHTML = html;
-      el.setAttribute("data-l", String(w));
-      el.classList.add("vue");
-    });
   }
 
   function villeEnDeux(v){
@@ -1055,8 +1026,6 @@
       h += "<div class='badge'>" + n + " bien" + (n > 1 ? "s" : "") + "</div>";
       if (nbNeufs) h += "<div class='badge badge-neuf'>" + (nbNeufs === n ? "Nouveau" : nbNeufs + " nouveaux") + "</div>";
       h += "</div>";
-    } else {
-      h += "<div class='carte-mini carte-mini-vide'><div class='badge'>" + n + " bien" + (n > 1 ? "s" : "") + "</div></div>";
     }
     h += "<div class='body-card'>";
     h += "<div class='eyebrow'>" + esc(b0.ville || "") + "</div>";
@@ -1207,12 +1176,6 @@
     document.getElementById("lb-prec").style.display = imgs.length > 1 ? "" : "none";
     document.getElementById("lb-suiv").style.display = imgs.length > 1 ? "" : "none";
   }
-
-  var _majCartes = null;
-  window.addEventListener("resize", function(){
-    clearTimeout(_majCartes);
-    _majCartes = setTimeout(poserCartes, 250);
-  });
 
   function ouvrirComp(){
     var lignes = [
@@ -1462,7 +1425,6 @@
         });
       });
     });
-    poserCartes();
 
     // Comparateur
     var compInvite = document.getElementById("comp-ouvrir");
