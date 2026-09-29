@@ -6,12 +6,12 @@
 <style>
   :root {
     --gold:#c8a96e; --gold-fonce:#b3945a; --dark:#1a1d23; --muted:#6b7280;
-    --bg:#f7f5f1; --carte:#ffffff; --bordure:#e8e3d9; --encre:#3f4550; --gold-clair:#f4ead9;
+    --bg:#f7f5f1; --carte:#ffffff; --bordure:#e8e3d9; --encre:#3f4550; --gold-clair:#f4ead9; --vert:#1e3a32;
   }
   * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
   html { scroll-behavior:smooth; }
   body { background:var(--bg); color:var(--dark); font-family:'Helvetica Neue',Arial,sans-serif; line-height:1.55; }
-  .wrap { max-width:720px; margin:0 auto; padding:28px 18px 110px; }
+  .wrap { max-width:720px; margin:0 auto; padding:28px 18px 132px; }
 
   header { text-align:center; padding:22px 0 18px; }
   .marque { font-family:Georgia,'Times New Roman',serif; letter-spacing:5px; font-size:18px; font-weight:700; }
@@ -24,52 +24,27 @@
   .intro .sig { margin-top:14px; color:var(--muted); font-size:13px; font-style:italic; }
 
   .meta { display:flex; justify-content:center; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:12px; letter-spacing:1px; text-transform:uppercase; margin:14px 0 22px; }
-  .meta span::before { content:""; }
 
-  /* ---- Carte bien ---- */
-  .card { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; overflow:hidden; margin-bottom:28px; box-shadow:0 2px 12px rgba(26,29,35,.05);
-          opacity:0; transform:translateY(18px); transition:opacity .5s ease, transform .5s ease; }
-  .card.vue { opacity:1; transform:none; }
-  @media (prefers-reduced-motion:reduce){ .card { opacity:1; transform:none; transition:none; } }
-
-  .photo { position:relative; height:250px; background:#eceae4; overflow:hidden; user-select:none; }
-  .photo img { width:100%; height:100%; object-fit:cover; display:block; cursor:zoom-in; }
-  /* Le plan du lot : fond blanc et image entière, jamais recadrée par le
-     navigateur — un plan tronqué ne veut plus rien dire. */
-  .photo.plan { background:#fff; border-bottom:1px solid var(--bordure); height:300px; }
-  .photo.plan img { object-fit:contain; padding:12px; box-sizing:border-box; cursor:default; }
-  .voir-plan { position:absolute; right:12px; bottom:12px; z-index:3; display:flex; align-items:center; gap:6px;
-    background:rgba(26,29,35,.82); color:#fff; font-size:11.5px; letter-spacing:.3px; padding:5px 12px; border-radius:16px;
-    pointer-events:none; transition:opacity .2s; }
-  .photo.plan:hover .voir-plan { background:rgba(26,29,35,.94); }
-  .img-vide { position:relative; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#1a1d23,#3a3f4a); height:250px; }
-  .img-vide img { max-width:150px; max-height:120px; object-fit:contain; }
-  .img-vide .txt { color:var(--gold); font-family:Georgia,serif; letter-spacing:6px; font-size:22px; }
-  .num-bien { position:absolute; top:12px; left:12px; background:var(--gold); color:#fff; font-family:Georgia,serif; font-size:12.5px; padding:3px 11px; border-radius:14px; letter-spacing:1px; z-index:3; }
-
-  .body { padding:22px 24px 24px; }
-  .eyebrow { color:var(--gold-fonce); font-size:12px; letter-spacing:1.5px; text-transform:uppercase; font-weight:600; margin-bottom:4px; }
-  h2 { font-family:Georgia,serif; font-size:21px; margin-bottom:4px; font-weight:600; }
-  .prix { font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--encre); margin-bottom:10px; }
-  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
-  .chip { border:1px solid #e0d9c8; background:#faf8f4; border-radius:20px; padding:2px 11px; font-size:12px; color:#4a4f58; }
-  .pitch { font-size:14px; color:var(--encre); margin-bottom:10px; }
+  h2 { font-family:Georgia,serif; font-weight:600; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .chip { border:1px solid #ecdfc4; background:#fbf7ee; border-radius:20px; padding:5px 12px; font-size:12.5px; color:var(--encre); }
+  .pitch { font-size:14px; color:var(--encre); margin:0 0 12px; }
   .atouts { list-style:none; margin:0 0 12px; font-size:13.5px; color:var(--encre); }
   .atouts li { padding-left:20px; position:relative; margin-bottom:3px; }
   .atouts li::before { content:"✦"; position:absolute; left:2px; color:var(--gold); font-size:11px; }
 
-  .det { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:10px 14px; margin:12px 0; padding:13px 15px; background:#faf8f4; border:1px solid #eee8db; border-radius:12px; }
-  .det span { display:block; font-size:10px; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); }
-  .det strong { font-size:13.5px; }
-
-  /* Prix selon le régime de TVA */
-  .prix-blocs { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 12px; }
+  /* Prix selon le régime de TVA — les deux régimes doivent toujours être visibles */
+  .prix-blocs { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 4px; }
   .prix-bloc { flex:0 1 auto; min-width:0; border:1px solid #e0d9c8; border-radius:12px; padding:9px 14px; background:#faf8f4; }
   .prix-bloc.avantage { border-color:var(--gold); background:#fdfaf3; box-shadow:0 1px 6px rgba(200,169,110,.18); }
   .prix-bloc .regime { font-size:11px; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
   .prix-bloc.avantage .regime { color:var(--gold); font-weight:700; }
-  .prix-bloc .montant { font-family:Georgia,serif; font-size:20px; font-weight:700; color:var(--encre); }
+  .prix-bloc .montant { font-family:Georgia,serif; font-size:19px; font-weight:700; color:var(--encre); }
   .prix-bloc .detail { font-size:11.5px; color:var(--muted); margin-top:3px; }
+  .prix-eco { display:inline-block; margin-top:6px; background:var(--gold); color:#fff; border-radius:20px; padding:2px 10px; font-size:11.5px; font-weight:700; }
+  .prix-lois { font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .prix-seule { font-family:Georgia,serif; font-size:16px; font-weight:700; color:var(--encre); margin:6px 0 4px; }
+
   /* Ville : intertitre quand la sélection couvre plusieurs communes */
   .ville-titre { display:flex; align-items:center; gap:12px; margin:38px 0 16px; padding-bottom:9px; border-bottom:2px solid var(--gold); scroll-margin-top:14px; }
   .ville-titre .ville-nom { font-family:Georgia,'Times New Roman',serif; font-size:23px; font-weight:700; color:var(--dark); letter-spacing:.2px; }
@@ -81,7 +56,6 @@
   .maj-bandeau { display:flex; align-items:center; gap:11px; background:linear-gradient(180deg,#fdfaf3,#fbf6ea); border:1px solid var(--gold); border-left:4px solid var(--gold); border-radius:12px; padding:12px 15px; margin:16px 0 4px; box-shadow:0 2px 8px rgba(200,169,110,.16); }
   .maj-bandeau b { font-family:Georgia,serif; font-size:14.5px; color:var(--dark); }
   .maj-bandeau span { font-size:13px; color:var(--muted); }
-  .card .num-neuf, .lot .num-neuf, .prog .num-neuf { position:absolute; top:12px; right:12px; background:#fff; color:var(--gold-fonce); border:1px solid var(--gold); font-size:11px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; padding:3px 11px; border-radius:14px; z-index:3; box-shadow:0 2px 8px rgba(26,29,35,.12); }
 
   /* Villes en tête de sélection : un raccourci vers chaque commune */
   .villes-tete { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0 4px; }
@@ -91,78 +65,122 @@
   .ville-chip:hover { background:var(--gold); box-shadow:0 2px 8px rgba(200,169,110,.3); }
   .ville-chip:hover b, .ville-chip:hover span { color:#fff; }
 
-  /* Adresse du lot + carte */
-  .adresse { display:flex; align-items:flex-start; gap:7px; font-size:13.5px; color:var(--encre); margin:12px 0 8px; }
-  .adresse svg { flex:none; margin-top:1px; }
-  .carte { position:relative; height:150px; border-radius:12px; overflow:hidden; border:1px solid var(--bordure); background:#eceae4; cursor:pointer; }
+  /* ---- Carte bien / programme (format unique, "toute la maquette") ---- */
+  .card { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; overflow:hidden; margin-bottom:24px; box-shadow:0 2px 12px rgba(26,29,35,.05);
+          opacity:0; transform:translateY(18px); transition:opacity .5s ease, transform .5s ease; }
+  .card.vue { opacity:1; transform:none; }
+  @media (prefers-reduced-motion:reduce){ .card { opacity:1; transform:none; transition:none; } }
+
+  .carte-mini { position:relative; height:190px; background-size:cover; background-position:center; cursor:zoom-in; }
+  .carte-mini-vide { background:linear-gradient(135deg,#f4ead9,#efe0c4); cursor:default; }
+  .carte-mini-vide::after { content:"GLR IMMOBILIER"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:Georgia,serif; letter-spacing:3px; font-size:13px; color:var(--gold-fonce); opacity:.55; }
+  .badge { position:absolute; top:12px; left:12px; background:rgba(255,255,255,.94); padding:4px 11px; border-radius:8px; font-size:12px; font-weight:700; color:var(--dark); }
+  .badge.badge-neuf { left:auto; right:12px; color:var(--gold-fonce); }
+
+  .body-card { padding:22px 24px 4px; }
+  .eyebrow { color:var(--gold-fonce); font-size:12px; letter-spacing:1.5px; text-transform:uppercase; font-weight:600; margin-bottom:4px; }
+  .titre-prog { font-size:20px; margin-bottom:10px; }
+
+  /* Adresse + carte OSM (gardée : un vrai plus visuel, même si la maquette ne l'illustrait pas) */
+  .adresse-row { display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--encre); padding:14px 0 12px; border-top:1px solid var(--bordure); }
+  .adresse-row svg { flex:none; }
+  .adresse-row span { flex:1; min-width:0; }
+  .adresse-row > a { margin-left:auto; color:var(--gold-fonce); font-weight:600; font-size:12.5px; white-space:nowrap; text-decoration:none; }
+  .adresse-row > a:hover { text-decoration:underline; }
+  .carte { position:relative; height:150px; border-radius:12px; overflow:hidden; border:1px solid var(--bordure); background:#eceae4; cursor:pointer; margin-bottom:10px; }
   .carte-tuiles { position:absolute; inset:0; }
   .carte-tuiles img { position:absolute; border:0; }
   .carte .pin { position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-30px 0 0 -11px; opacity:0; }
   .carte.vue .pin { animation:tombe .55s cubic-bezier(.3,1.4,.5,1) .15s forwards; }
   @keyframes tombe { 0% { opacity:0; transform:translateY(-26px) scale(.85); } 60% { opacity:1; transform:translateY(2px) scale(1); } 100% { opacity:1; transform:translateY(0) scale(1); } }
   .carte-credits { position:absolute; right:0; bottom:0; background:rgba(255,255,255,.82); color:#5a606b; font-size:9.5px; padding:1px 5px; border-radius:5px 0 0 0; }
-  .adr-btns { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 2px; }
+  .adr-btns { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px; }
   .adr-btn { border:1px solid var(--bordure); background:#fff; color:var(--encre); border-radius:10px; padding:7px 13px; font-size:12.5px; font-weight:600; text-decoration:none; transition:all .15s; }
   .adr-btn:hover { border-color:var(--gold); color:var(--gold-fonce); }
-  .adr-demande { border:1px dashed var(--gold); background:#fffdf8; color:var(--gold-fonce); border-radius:10px; padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer; margin:10px 0 2px; }
+  .adr-demande { border:1px dashed var(--gold); background:#fffdf8; color:var(--gold-fonce); border-radius:10px; padding:9px 14px; font-size:13px; font-weight:600; cursor:pointer; margin:2px 0 12px; }
   .adr-demande:hover { background:var(--gold); color:#fff; border-style:solid; }
   .adr-demande[disabled] { opacity:.75; cursor:default; border-style:solid; }
 
+  /* Documents du programme : plaquette + plan de masse, en pastilles */
+  .docs-row { display:flex; gap:10px; flex-wrap:wrap; padding:2px 0 18px; border-bottom:1px solid var(--bordure); }
+  .doc-pill { display:inline-flex; align-items:center; gap:7px; border:1.5px solid var(--gold); color:var(--gold-fonce); background:var(--gold-clair); border-radius:22px; padding:8px 15px; font-size:12.5px; font-weight:700; text-decoration:none; cursor:pointer; font-family:inherit; transition:background .15s,color .15s; }
+  .doc-pill:hover { background:var(--gold); color:#fff; }
+  .doc-pill .chev { transition:transform .2s ease; }
+  .doc-pill.active .chev, [data-plan-toggle].active .chev { transform:rotate(180deg); }
+
+  /* Panneau qui glisse : plan du lot / plan de masse (choix d'Alex, septembre 2026) */
+  .plan-slide { display:grid; grid-template-rows:0fr; transition:grid-template-rows .28s ease; }
+  .plan-slide.open { grid-template-rows:1fr; }
+  .plan-slide-inner { overflow:hidden; }
+  .plan-panel { margin:12px 0 4px; border:1px solid var(--gold); border-radius:12px; overflow:hidden; background:#faf9f6; box-shadow:0 4px 14px rgba(26,29,35,.06); }
+  .plan-panel .plan-head { display:flex; align-items:center; justify-content:space-between; background:var(--gold-clair); padding:9px 14px; font-size:11.5px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; color:var(--gold-fonce); }
+  .plan-panel .ph-img { position:relative; background:#fff; padding:14px; text-align:center; }
+  .plan-panel .ph-img img { max-width:100%; max-height:420px; object-fit:contain; }
+  .plan-panel .ph-pdf { padding:16px; font-size:13.5px; color:var(--encre); text-align:center; }
+  .plan-panel .ph-pdf a { color:var(--gold-fonce); font-weight:600; }
+  .dl-btn { position:absolute; right:12px; bottom:12px; display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid var(--gold); color:var(--gold-fonce); border-radius:18px; padding:7px 13px; font-size:12px; font-weight:700; text-decoration:none; box-shadow:0 3px 10px rgba(26,29,35,.14); }
+  .dl-btn:hover { background:var(--gold); color:#fff; }
+
   /* Offres commerciales négociées par le conseiller */
-  .remises { display:flex; flex-direction:column; gap:7px; margin:2px 0 14px; }
+  .remises { display:flex; flex-direction:column; gap:7px; margin:0 0 12px; }
   .remise { display:flex; align-items:center; gap:11px; background:linear-gradient(180deg,#fdfaf3,#fbf6ea); border:1px solid var(--gold); border-left:4px solid var(--gold); border-radius:12px; padding:10px 14px; box-shadow:0 2px 8px rgba(200,169,110,.16); }
   .remise .offre-tag { font-size:9.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--gold); border-radius:4px; padding:3px 7px; white-space:nowrap; }
   .remise .offre-txt { font-size:13.5px; font-weight:600; color:var(--dark); }
   .remise .offre-montant { margin-left:auto; font-family:Georgia,serif; font-size:17px; font-weight:700; color:var(--gold-fonce); white-space:nowrap; }
   /* Le mot du conseiller sous un lot */
-  .mot { background:#fff; border:1px solid var(--bordure); border-left:4px solid var(--gold); border-radius:12px; padding:11px 14px; margin:2px 0 14px; }
+  .mot { background:#faf8f4; border:1px solid var(--bordure); border-left:4px solid var(--gold); border-radius:12px; padding:11px 14px; margin:0 0 12px; }
   .mot-qui { font-size:9.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:var(--gold-fonce); margin-bottom:4px; }
   .mot-txt { font-size:14px; line-height:1.5; color:var(--dark); white-space:pre-wrap; }
 
-  .prix-eco { display:inline-block; margin-top:6px; background:var(--gold); color:#fff; border-radius:20px; padding:2px 10px; font-size:11.5px; font-weight:700; }
-  .prix-lois { font-size:11.5px; color:var(--muted); margin-top:2px; }
-
-  /* Faits marquants du lot */
-  .faits { display:flex; gap:7px; flex-wrap:wrap; margin:10px 0 4px; }
-  .fait { border:1px solid #e0d9c8; border-radius:10px; padding:6px 11px; background:#fff; font-size:12.5px; }
-  .fait b { display:block; font-size:10.5px; letter-spacing:.5px; text-transform:uppercase; color:var(--muted); font-weight:600; margin-bottom:1px; }
-  .annexes-lot { font-size:12.5px; color:var(--encre); margin-top:8px; }
+  .annexes-lot { font-size:12px; color:var(--encre); margin:0 0 10px; }
   .annexes-lot span { display:inline-block; border:1px dashed var(--gold); border-radius:20px; padding:3px 11px; margin:3px 5px 0 0; }
 
-  .docs { margin:14px 0 2px; }
-  .doc { display:block; width:100%; box-sizing:border-box; border:none; background:var(--gold); color:#fff; border-radius:12px; padding:14px; font-size:15px; font-weight:700; letter-spacing:.3px; text-align:center; text-decoration:none; transition:background .15s; box-shadow:0 3px 10px rgba(200,169,110,.35); }
-  .doc:hover { background:var(--gold-fonce); color:#fff; }
-  /* Plusieurs documents (plan du lot, plan de masse, plaquette) : boutons côte à côte, en colonne sur mobile */
-  .docs.multi { display:flex; gap:8px; flex-wrap:wrap; }
-  .docs.multi .doc { flex:1 1 140px; width:auto; padding:12px 10px; font-size:14px; }
-  /* Documents du programme (plaquette, plan de masse) : sous le nom de la résidence */
-  .prog-docs { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 2px; }
-  .prog-docs a { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--gold); color:var(--gold-fonce); background:#fff; border-radius:22px; padding:7px 14px; font-size:13px; font-weight:600; text-decoration:none; transition:all .15s; }
-  .prog-docs a:hover { background:var(--gold); color:#fff; }
-  .prog-docs a svg { flex:none; }
-  .prog-docs button.doc-toggle { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--gold); color:var(--gold-fonce); background:#fff; border-radius:22px; padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
-  .prog-docs button.doc-toggle:hover { background:var(--gold); color:#fff; }
-  .prog-docs button.doc-toggle .chev { flex:none; transition:transform .2s ease; }
-  .prog-docs button.doc-toggle.actif .chev { transform:rotate(180deg); }
+  /* Mensualité estimée sur un lot concerné par la simulation, avec l'économie mensuelle */
+  .simu-lot { display:flex; flex-direction:column; gap:5px; background:#faf8f4; border:1px solid #eee8db; border-radius:10px; padding:9px 13px; margin:0 0 12px; font-size:13.5px; }
+  .simu-lot-ligne { display:flex; align-items:center; gap:8px; }
+  .simu-lot-label { color:var(--muted); }
+  .simu-lot-montant { margin-left:auto; font-family:Georgia,serif; font-weight:700; color:var(--dark); }
+  .simu-lot-eco { font-size:12px; color:var(--gold-fonce); font-weight:600; }
+  .simu-lot-txt { color:var(--muted); }
 
-  /* Plan du lot / plan de masse : un panneau qui glisse sous l'image plutôt
-     qu'une fenêtre plein écran (choix d'Alex, septembre 2026) — avec un
-     bouton de téléchargement une fois le panneau ouvert. */
-  .plan-ouvrir { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; box-sizing:border-box; border:none; background:var(--gold); color:#fff; padding:13px; font-size:14px; font-weight:700; letter-spacing:.2px; cursor:pointer; font-family:inherit; transition:background .15s; }
-  .plan-ouvrir:hover { background:var(--gold-fonce); }
-  .plan-ouvrir .chev { flex:none; transition:transform .2s ease; }
-  .plan-ouvrir.actif .chev { transform:rotate(180deg); }
-  .tiroir { display:grid; grid-template-rows:0fr; transition:grid-template-rows .28s ease; }
-  .tiroir.ouvert { grid-template-rows:1fr; }
-  .tiroir-inner { overflow:hidden; }
-  .tiroir-panneau { border-top:1px solid var(--bordure); background:#faf8f4; }
-  .tiroir-tete { padding:10px 16px; font-size:11.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--gold-fonce); background:var(--gold-clair); }
-  .tiroir-img { position:relative; background:#fff; padding:14px; text-align:center; }
-  .tiroir-img img { max-width:100%; max-height:420px; object-fit:contain; }
-  .tiroir-dl { position:absolute; right:14px; bottom:14px; display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid var(--gold); color:var(--gold-fonce); border-radius:18px; padding:7px 13px; font-size:12px; font-weight:700; text-decoration:none; box-shadow:0 3px 10px rgba(26,29,35,.14); }
-  .tiroir-dl:hover { background:var(--gold); color:#fff; }
-  .tiroir-pdf { padding:16px; font-size:13.5px; color:var(--encre); text-align:center; }
-  .tiroir-pdf a { color:var(--gold-fonce); font-weight:600; }
+  /* ---- Lots dans une carte ---- */
+  .lots { padding:0 24px; }
+  .lot-row { padding:16px 0; border-bottom:1px solid #f0ede4; }
+  .lot-row:last-child { border-bottom:none; }
+  .lot-row-top { display:flex; align-items:flex-start; gap:14px; margin-bottom:8px; }
+  .lot-nom { font-weight:700; font-size:14.5px; }
+  .lot-nouveau { color:var(--gold-fonce); font-weight:700; font-size:11px; }
+  .lot-faits { font-size:12px; color:var(--muted); margin-top:2px; }
+  .lot-prix { font-family:Georgia,serif; font-weight:700; font-size:16px; text-align:right; white-space:nowrap; }
+
+  .lot-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:10px 0; flex-wrap:wrap; }
+  .plan-btn { display:inline-flex; align-items:center; gap:7px; border:none; background:var(--gold); color:#fff; border-radius:20px; padding:8px 15px; font-size:12.5px; font-weight:700; flex:none; cursor:pointer; font-family:inherit; }
+  .plan-btn:hover { background:var(--gold-fonce); }
+  .chev { flex:none; transition:transform .2s ease; }
+
+  .avis-mini { display:flex; gap:6px; flex-wrap:wrap; align-items:center; flex:none; }
+  .avis-ico { width:32px; height:32px; border-radius:50%; border:1px solid var(--bordure); background:#fff; display:flex; align-items:center; justify-content:center; flex:none; font-size:14px; cursor:pointer; font-family:inherit; transition:all .15s; }
+  .avis-ico:hover { border-color:var(--gold); }
+  .avis-ico.selected { background:var(--gold); border-color:var(--gold); color:#fff; }
+  .avis-ico[data-avis="a_discuter"].selected { background:var(--dark); border-color:var(--dark); }
+  .avis-ico[data-avis="pas_pour_moi"].selected { background:#8a8f99; border-color:#8a8f99; }
+  .avis-save { background:var(--vert); color:#fff; border:none; border-radius:14px; padding:0 13px; font-size:11.5px; font-weight:700; font-family:inherit; cursor:pointer; flex:none; height:32px; }
+  .avis-save:hover { background:#152a24; }
+  .avis-save:disabled { opacity:.65; cursor:default; }
+
+  .opt { display:flex; align-items:flex-start; gap:10px; margin:0 0 10px; padding:10px 12px; border:1px solid #ddd6c8; border-radius:12px; background:#faf8f4; cursor:pointer; font-size:13px; line-height:1.4; }
+  .opt input { margin:3px 0 0; width:16px; height:16px; accent-color:var(--gold); cursor:pointer; flex:none; }
+  .opt.on { border-color:var(--gold); background:#fbf6ec; }
+  .opt small { display:block; color:var(--muted); font-size:11.5px; margin-top:2px; }
+
+  .lot-comment { display:flex; gap:8px; align-items:center; margin-top:2px; }
+  .lot-comment input { flex:1; min-width:0; border:1px solid var(--bordure); background:#fbfaf8; border-radius:20px; padding:9px 14px; font-size:12.5px; font-family:inherit; color:var(--dark); outline:none; }
+  .lot-comment input:focus { border-color:var(--gold); }
+  .lot-comment input::placeholder { color:#a19c90; }
+  .lot-comment button { border:none; background:var(--vert); color:#fff; border-radius:50%; width:32px; height:32px; display:flex; align-items:center; justify-content:center; flex:none; cursor:pointer; }
+  .lot-comment button:disabled { opacity:.6; cursor:default; }
+
+  .bas-card { height:16px; }
 
   .comp-invite { background:#fff; border:1px solid var(--gold); border-radius:16px; padding:22px 24px; margin:2px 0 22px; text-align:center; box-shadow:0 2px 10px rgba(200,169,110,.15); }
   .comp-invite h3 { font-family:Georgia,serif; font-size:18px; font-weight:600; margin-bottom:6px; }
@@ -177,8 +195,6 @@
   .financement-date { font-size:13px; color:var(--muted); margin-bottom:14px; }
   .financement-cta { display:inline-block; border:1px solid var(--gold); color:var(--gold-fonce); background:#fff; border-radius:12px; padding:10px 20px; font-size:13.5px; font-weight:700; text-decoration:none; transition:background .15s,color .15s; }
   .financement-cta:hover { background:var(--gold); color:#fff; }
-  /* Dépliant pédagogique « Comment on arrive à ce montant ? » : jamais de chiffre
-     personnel (revenus, apport, durée) — juste la méthode et les aides possibles. */
   .financement-detail-lien { display:block; margin-top:12px; background:none; border:none; padding:0; color:var(--muted); font-size:13px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; font-family:inherit; }
   .financement-detail-lien:hover { color:var(--gold-fonce); }
   .financement-detail { margin-top:14px; padding-top:14px; border-top:1px solid var(--bordure); }
@@ -187,158 +203,64 @@
   .financement-detail li { padding-left:19px; position:relative; margin-bottom:6px; font-size:13px; color:var(--encre); line-height:1.4; }
   .financement-detail li::before { content:"✦"; position:absolute; left:1px; top:1px; color:var(--gold); font-size:11px; }
 
-  /* Mensualité estimée sur un lot concerné par la simulation, avec l'économie
-     mensuelle permise par les aides quand il y en a une. */
-  .simu-lot { display:flex; flex-direction:column; gap:5px; background:#faf8f4; border:1px solid #eee8db; border-radius:10px; padding:9px 13px; margin:2px 0 14px; font-size:13.5px; }
-  .simu-lot-ligne { display:flex; align-items:center; gap:8px; }
-  .simu-lot-label { color:var(--muted); }
-  .simu-lot-montant { margin-left:auto; font-family:Georgia,serif; font-weight:700; color:var(--dark); }
-  .simu-lot-eco { font-size:12px; color:var(--gold-fonce); font-weight:600; }
-  .simu-lot-txt { color:var(--muted); }
-
-  /* Rendez-vous depuis un lot : en second plan, pour laisser la place aux
-     boutons d'avis (la carte rendez-vous en fin de page reste dorée). */
-  .cta-rdv { width:100%; margin-top:12px; border:1.5px solid var(--dark); background:#fff; color:var(--dark); border-radius:12px; padding:12px; font-size:14px; font-weight:700; letter-spacing:.3px; cursor:pointer; font-family:inherit; transition:all .15s; }
-  .cta-rdv:hover { background:var(--dark); color:#fff; }
-
-  /* ---- Bloc programme : plusieurs lots d'une même résidence ----
-     Ce qui est commun (photo, adresse, carte, livraison, promoteur, descriptif)
-     n'est dit qu'une fois en tête ; chaque lot ne garde que ce qui le
-     distingue : son plan, son prix, ses surfaces, votre avis. */
-  .prog { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; overflow:hidden; margin-bottom:28px; box-shadow:0 2px 12px rgba(26,29,35,.05);
-          opacity:0; transform:translateY(18px); transition:opacity .5s ease, transform .5s ease; }
-  .prog.vue { opacity:1; transform:none; }
-  @media (prefers-reduced-motion:reduce){ .prog { opacity:1; transform:none; transition:none; } }
-  .prog .photo { height:200px; }
-  .prog-nb { position:absolute; top:12px; left:12px; background:var(--gold); color:#fff; font-family:Georgia,serif; font-size:12.5px; padding:3px 11px; border-radius:14px; letter-spacing:1px; z-index:3; }
-  .prog-tete { padding:22px 24px 18px; }
-  .prog-tete h2 { font-size:22px; }
-  .prog-tete .chips { margin-bottom:8px; }
-  .prog-tete .adresse { margin-top:10px; }
-  .prog-tete .carte { height:140px; }
-  /* Barre dépliante : « 3 appartements dans cette résidence » — ouverte à
-     l'arrivée, le client peut replier. Les lots vivent dans une zone teintée
-     pour qu'on voie qu'ils vont ensemble. */
-  .prog-toggle { display:flex; align-items:center; gap:12px; width:100%; margin:18px 0 0; border:1.5px solid var(--gold); background:#fdfaf3; color:var(--dark); border-radius:14px; padding:17px 18px; font-family:Georgia,serif; font-size:19px; font-weight:700; cursor:pointer; text-align:left; transition:background .15s; box-shadow:0 2px 10px rgba(200,169,110,.18); }
-  .prog-toggle:hover { background:#fbf6ea; }
-  .prog-toggle .pt-n { flex:none; background:var(--gold); color:#fff; border-radius:18px; min-width:34px; text-align:center; padding:4px 12px; font-family:'Helvetica Neue',Arial,sans-serif; font-size:15px; font-weight:700; }
-  .prog-toggle .pt-txt { flex:1; min-width:0; }
-  .prog-toggle .pt-neuf { flex:none; background:#fff; color:var(--gold-fonce); border:1px solid var(--gold); font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; padding:3px 10px; border-radius:14px; }
-  .prog-toggle .pt-hint { font-family:'Helvetica Neue',Arial,sans-serif; font-size:13px; font-weight:400; color:var(--muted); white-space:nowrap; }
-  .prog-toggle .pt-chev { flex:none; width:30px; height:30px; border-radius:50%; background:var(--gold); color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; transition:transform .2s; }
-  .prog-toggle[aria-expanded="false"] .pt-chev { transform:rotate(-90deg); }
-  .prog-lots { background:#f3efe6; border-top:1px solid var(--bordure); padding:14px; display:flex; flex-direction:column; gap:14px; }
-  .prog-lots[hidden] { display:none; }
-  .lot { position:relative; border:1px solid #e3dccd; border-left:4px solid var(--gold); border-radius:14px; overflow:hidden; background:#fff; box-shadow:0 1px 6px rgba(26,29,35,.05); }
-  .lot .photo.plan { height:230px; }
-  .lot .body { padding:16px 18px 18px; }
-  .lot h2 { font-size:18px; }
-  .lot .num-bien { top:10px; left:10px; }
-  .lot .num-neuf { top:10px; right:10px; }
-  .lot .lot-tete { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
-  .lot .lot-tete .num-bien { position:static; }
-  @media (max-width:520px){
-    .prog .photo { height:170px; }
-    .prog-tete { padding:18px 18px 14px; }
-    .prog-toggle { font-size:17px; padding:15px 14px; }
-    .prog-toggle .pt-hint { font-size:12px; }
-    .prog-lots { padding:12px 10px 10px; gap:12px; }
-    .lot .photo.plan { height:200px; }
-    .lot .body { padding:14px 15px 16px; }
-  }
-
-  /* Avis du client : trois vrais boutons, au même gabarit que « Fiche et plans
-     du lot » — les petites pastilles passaient inaperçues (retours clients,
-     septembre 2026). */
-  .avis { border-top:1px solid var(--bordure); margin-top:18px; padding-top:16px; }
-  .avis-titre { font-family:Georgia,serif; font-size:16.5px; font-weight:600; color:var(--dark); margin-bottom:2px; }
-  .avis-sous { font-size:12.5px; color:var(--muted); margin-bottom:11px; }
-  .avis-btns { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-  .ab { border:1.5px solid #cfc7b6; background:#fff; color:var(--dark); border-radius:12px; padding:12px 8px; min-height:48px; font-size:14px; font-weight:600; font-family:inherit; text-align:center; cursor:pointer; transition:all .15s; }
-  .ab:hover { border-color:var(--gold); background:#fdfaf3; }
-  .ab.on { background:var(--gold); border-color:var(--gold); color:#fff; box-shadow:0 3px 10px rgba(200,169,110,.35); }
-  .ab.on::before { content:"\2713\00a0"; }
-  .ab[data-c="a_discuter"].on { background:var(--dark); border-color:var(--dark); box-shadow:0 3px 10px rgba(26,29,35,.25); }
-  .ab[data-c="pas_pour_moi"].on { background:#8a8f99; border-color:#8a8f99; box-shadow:none; }
-  @media (max-width:420px){ .avis-btns { grid-template-columns:1fr; } .ab { min-height:46px; } }
-  /* Commentaire libre sous l'avis : un lien discret, la zone de saisie n'apparaît qu'à la demande */
-  .com-lien { margin-top:10px; background:none; border:none; padding:0; color:var(--muted); font-size:13px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
-  .com-lien:hover { color:var(--gold-fonce); }
-  .com-zone { margin-top:10px; }
-  .com-zone textarea { width:100%; box-sizing:border-box; min-height:64px; resize:vertical; border:1px solid #ddd6c8; background:#faf8f4; border-radius:12px; padding:10px 13px; font:inherit; font-size:13.5px; color:inherit; outline:none; }
-  .com-zone textarea:focus { border-color:var(--gold); }
-  .com-actions { display:flex; gap:8px; align-items:center; margin-top:8px; }
-  .com-env { border:none; background:var(--gold); color:#fff; border-radius:22px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; }
-  .com-env:hover { background:var(--gold-fonce); }
-  .com-annule { background:none; border:none; padding:0; color:var(--muted); font-size:13px; cursor:pointer; }
-  .com-lu { margin-top:10px; font-size:13.5px; color:#3b3f47; font-style:italic; line-height:1.45; }
-  .com-lu .com-lien { margin-top:4px; display:inline-block; font-style:normal; }
-  /* Demande d'option sur le lot : une case, rien de plus */
-  .opt { display:flex; align-items:flex-start; gap:10px; margin-top:12px; padding:10px 12px; border:1px solid #ddd6c8; border-radius:12px; background:#faf8f4; cursor:pointer; font-size:13.5px; line-height:1.4; }
-  .opt input { margin:3px 0 0; width:16px; height:16px; accent-color:var(--gold); cursor:pointer; flex:none; }
-  .opt.on { border-color:var(--gold); background:#fbf6ec; }
-  .opt small { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
-
-  /* ---- Bloc rendez-vous ---- */
-  .rdv { background:var(--dark); border-radius:16px; padding:26px 26px 24px; margin:6px 0 28px; text-align:center; color:#fff; }
-  .rdv h3 { font-family:Georgia,serif; font-size:19px; font-weight:600; margin-bottom:6px; }
-  .rdv p { font-size:13.5px; color:#c8cbd2; margin-bottom:14px; }
-  .rdv-form { display:flex; gap:8px; max-width:440px; margin:0 auto; }
-  .rdv-form input { flex:1; min-width:0; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); border-radius:10px; padding:10px 13px; font-size:13.5px; color:#fff; outline:none; }
-  .rdv-form input::placeholder { color:#9aa0ab; }
-  .rdv-form input:focus { border-color:var(--gold); }
-  .rdv-btn { border:none; background:var(--gold); color:#fff; border-radius:10px; padding:10px 18px; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
-  .rdv-btn:hover { background:var(--gold-fonce); }
-  .rdv-ok { font-size:14px; color:var(--gold); font-weight:600; }
-  .cren-jours { display:flex; flex-direction:column; gap:12px; max-width:520px; margin:0 auto; text-align:left; }
-  .cren-jour-t { font-size:12px; letter-spacing:1px; text-transform:uppercase; color:#9aa0ab; margin-bottom:6px; }
-  .cren-pick { max-width:520px; margin:0 auto; }
-  .cren-etape { font-size:12px; letter-spacing:1px; text-transform:uppercase; color:#9aa0ab; margin:14px 0 8px; text-align:left; }
-  .cren-jrow { display:flex; gap:7px; overflow-x:auto; padding-bottom:6px; -webkit-overflow-scrolling:touch; }
-  .cren-jpill { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px; border:1px solid rgba(255,255,255,.28); background:rgba(255,255,255,.06); color:#fff; border-radius:12px; padding:8px 14px; cursor:pointer; transition:all .15s; }
-  .cren-jpill:hover { border-color:var(--gold); }
-  .cren-jpill-wd { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:#9aa0ab; }
-  .cren-jpill-dm { font-size:14px; font-weight:700; }
-  .cren-jpill.on { background:var(--gold); border-color:var(--gold); }
-  .cren-jpill.on .cren-jpill-wd { color:rgba(255,255,255,.85); }
-  .cren-heures { justify-content:flex-start; }
-  .cren-liste { display:flex; gap:7px; flex-wrap:wrap; }
-  .cren { border:1px solid rgba(255,255,255,.28); background:rgba(255,255,255,.08); color:#fff; border-radius:10px; padding:9px 15px; font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; }
-  .cren:hover { border-color:var(--gold); background:var(--gold); }
-  .cren.off { opacity:.35; cursor:not-allowed; }
-  .cren-autre { margin-top:16px; }
-  .cren-autre button { background:none; border:none; color:#9aa0ab; font-size:13px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
-  .cren-autre button:hover { color:var(--gold); }
-  .rdv-mode { font-size:12.5px; color:#9aa0ab; margin-top:12px; }
-  .rdv-lots { display:inline-block; border:1px solid rgba(200,169,110,.5); border-radius:22px; padding:6px 16px; font-size:13px; color:var(--gold); margin-bottom:14px; font-weight:600; }
-  /* Deux formats : la visio de 30 min, ou l'appel de 10 min */
-  .fmt-choix { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:520px; margin:0 auto 14px; }
-  .fmt { text-align:left; border:1px solid rgba(255,255,255,.28); background:rgba(255,255,255,.06); color:#fff; border-radius:14px; padding:13px 14px; cursor:pointer; transition:all .15s; font-family:inherit; }
-  .fmt:hover { border-color:var(--gold); }
-  .fmt.on { border-color:var(--gold); background:rgba(200,169,110,.16); box-shadow:0 0 0 1px var(--gold) inset; }
-  .fmt-titre { font-family:Georgia,serif; font-size:15.5px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .fmt-duree { font-size:10.5px; letter-spacing:.8px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--gold); border-radius:5px; padding:2px 7px; }
-  .fmt-sous { font-size:12.5px; color:#c8cbd2; margin-top:6px; line-height:1.45; }
-  .fmt-mode { font-size:11px; letter-spacing:.6px; text-transform:uppercase; color:var(--gold); margin-top:8px; font-weight:700; }
-  .fmt-vide { font-size:13px; color:#c8cbd2; margin:8px 0 4px; }
-  @media (max-width:560px){ .fmt-choix { grid-template-columns:1fr; } }
-
   footer { text-align:center; color:var(--muted); font-size:12.5px; margin-top:8px; }
   .partage { margin-top:12px; }
   .partage button { border:1px solid #ddd6c8; background:#fff; border-radius:20px; padding:7px 16px; font-size:12.5px; color:var(--encre); cursor:pointer; }
   .partage button:hover { border-color:var(--gold); }
 
-  /* ---- Barre de progression sticky ---- */
-  #barre { position:fixed; bottom:0; left:0; right:0; background:rgba(255,255,255,.96); backdrop-filter:blur(8px); border-top:1px solid var(--bordure);
-           padding:10px 16px calc(10px + env(safe-area-inset-bottom)); z-index:40; transform:translateY(110%); transition:transform .3s ease; }
-  #barre.show { transform:none; }
-  .barre-in { max-width:720px; margin:0 auto; display:flex; align-items:center; gap:14px; }
-  .prog { flex:1; min-width:0; }
-  .prog-txt { font-size:12px; color:var(--muted); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* ---- Barre du bas : progression + prise de rendez-vous, fusionnées (choix d'Alex, 29/09/2026) ---- */
+  .rdv-wrap { position:fixed; left:0; right:0; bottom:0; z-index:40; transform:translateY(110%); transition:transform .3s ease; }
+  .rdv-wrap.show { transform:none; }
+  #barre { background:rgba(255,255,255,.97); backdrop-filter:blur(8px); border-top:1px solid var(--bordure); padding:10px 16px calc(10px + env(safe-area-inset-bottom)); }
+  .barre-in { max-width:720px; margin:0 auto; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .barre-prog { flex:1; min-width:100px; }
+  .prog-txt { font-size:11.5px; color:var(--muted); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .prog-fond { height:5px; background:#ece7dc; border-radius:3px; overflow:hidden; }
   .prog-rempli { height:100%; width:0; background:var(--gold); border-radius:3px; transition:width .4s ease; }
-  .barre-btn { border:1px solid var(--dark); background:var(--dark); color:#fff; border-radius:10px; padding:9px 15px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
-  .barre-btn.sec { background:#fff; color:var(--dark); }
+  .barre-btn.sec { border:1px solid var(--bordure); background:#fff; color:var(--dark); border-radius:10px; padding:8px 12px; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; flex:none; }
+  .barre-btn.sec:hover { border-color:var(--gold); color:var(--gold-fonce); }
+  .rdv-choix { display:flex; gap:8px; flex:none; }
+  .rdv-format { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; min-width:64px; height:52px; background:var(--gold-clair); color:var(--gold-fonce); border:1.5px solid var(--gold); border-radius:12px; font-weight:700; font-size:11px; font-family:inherit; cursor:pointer; transition:background .15s,color .15s; padding:4px 10px; }
+  .rdv-format small { display:block; font-weight:600; font-size:9px; opacity:.85; }
+  .rdv-format.active { background:var(--vert); color:#fff; border-color:var(--vert); }
+  .rdv-format.rdv-format-ok { background:var(--vert); color:#fff; border-color:var(--vert); min-width:118px; }
+
+  .rdv-bulle { max-height:0; overflow:hidden; background:#fff; border-top:1px solid var(--bordure); box-shadow:0 -8px 20px rgba(0,0,0,.08); transition:max-height .3s ease; }
+  .rdv-bulle.open { max-height:64vh; overflow-y:auto; }
+  .rdv-bulle-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:16px 18px 6px; font-family:Georgia,serif; font-size:15px; font-weight:600; color:var(--dark); }
+  .rdv-bulle-close { background:none; border:none; color:var(--muted); cursor:pointer; padding:4px; font-size:16px; flex:none; }
+  .rdv-bulle-body { padding:2px 18px 20px; }
+
+  .rdv-lots { display:inline-block; border:1px solid var(--gold); border-radius:22px; padding:5px 14px; font-size:12.5px; color:var(--gold-fonce); margin-bottom:10px; font-weight:600; background:var(--gold-clair); }
+  .rdv-ok { font-size:14.5px; color:var(--dark); font-weight:700; margin-bottom:4px; }
+  .rdv-mode { font-size:12.5px; color:var(--muted); margin-bottom:4px; }
+  .cren-pick { text-align:left; }
+  .cren-etape { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin:12px 0 7px; }
+  .cren-jrow { display:flex; gap:7px; overflow-x:auto; padding-bottom:6px; -webkit-overflow-scrolling:touch; }
+  .cren-jpill { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px; border:1px solid var(--bordure); background:#faf8f4; color:var(--dark); border-radius:12px; padding:7px 13px; cursor:pointer; transition:all .15s; font-family:inherit; }
+  .cren-jpill:hover { border-color:var(--gold); }
+  .cren-jpill-wd { font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); }
+  .cren-jpill-dm { font-size:13.5px; font-weight:700; }
+  .cren-jpill.on { background:var(--gold); border-color:var(--gold); }
+  .cren-jpill.on .cren-jpill-wd { color:rgba(255,255,255,.85); }
+  .cren-jpill.on .cren-jpill-dm { color:#fff; }
+  .cren-heures { justify-content:flex-start; }
+  .cren-liste { display:flex; gap:7px; flex-wrap:wrap; }
+  .cren { border:1.5px solid var(--gold); background:var(--gold-clair); color:var(--gold-fonce); border-radius:10px; padding:9px 13px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; transition:all .15s; }
+  .cren:hover { background:var(--gold); color:#fff; }
+  .cren.off { opacity:.35; cursor:not-allowed; }
+  .cren-autre { margin-top:14px; }
+  .cren-autre button { background:none; border:none; color:var(--muted); font-size:12.5px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; font-family:inherit; }
+  .cren-autre button:hover { color:var(--gold-fonce); }
+  .fmt-vide { font-size:13px; color:var(--muted); margin:6px 0 10px; }
+  .rdv-form { display:flex; gap:8px; }
+  .rdv-form input { flex:1; min-width:0; border:1px solid var(--bordure); background:#faf8f4; border-radius:10px; padding:10px 13px; font-size:13.5px; color:var(--dark); outline:none; font-family:inherit; }
+  .rdv-form input:focus { border-color:var(--gold); }
+  .rdv-btn { border:none; background:var(--gold); color:#fff; border-radius:10px; padding:10px 16px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit; }
+  .rdv-btn:hover { background:var(--gold-fonce); }
+  .rdv-confirm { display:flex; align-items:center; gap:12px; margin:6px 0; padding:14px 16px; background:var(--gold-clair); border-radius:12px; text-align:left; font-size:13px; color:var(--dark); }
+  .rdv-confirm strong { display:block; margin-bottom:2px; }
+  @media (max-width:560px){ .cren-liste { gap:6px; } }
 
   /* ---- Comparateur ---- */
   #comp { position:fixed; inset:0; background:rgba(26,29,35,.6); z-index:60; display:none; align-items:center; justify-content:center; padding:18px; }
@@ -367,9 +289,7 @@
   .lb-prec { left:14px; } .lb-suiv { right:14px; }
   .lb-num { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); color:#c8cbd2; font-size:13px; letter-spacing:1px; }
 
-  /* Double confirmation : un doigt qui glisse sur un téléphone ne doit pas
-     réserver un rendez-vous. Rien n'est envoyé tant que le client n'a pas
-     relu le jour, l'heure et le mode et appuyé une seconde fois. */
+  /* Double confirmation avant tout rendez-vous */
   #confirm { position:fixed; inset:0; background:rgba(26,29,35,.55); display:none; align-items:center; justify-content:center; padding:22px; z-index:120; }
   #confirm.show { display:flex; }
   #confirm .boite { background:#fff; border:1px solid var(--bordure); border-radius:16px; max-width:390px; width:100%; padding:26px 24px 22px; text-align:center; box-shadow:0 18px 50px rgba(0,0,0,.22); }
@@ -381,20 +301,21 @@
   #confirm .cf-non { background:#fff; border:1px solid var(--bordure); color:var(--encre); }
   #confirm .cf-oui { background:var(--gold); border:none; color:#fff; }
   #confirm .cf-oui:hover { background:var(--gold-fonce); }
-  #toast { position:fixed; bottom:76px; left:50%; transform:translateX(-50%) translateY(140px); background:var(--dark); color:#fff; border-radius:24px; padding:10px 22px; font-size:13.5px; transition:transform .25s; z-index:80; max-width:88vw; text-align:center; }
+  #toast { position:fixed; bottom:150px; left:50%; transform:translateX(-50%) translateY(220px); background:var(--dark); color:#fff; border-radius:24px; padding:10px 22px; font-size:13.5px; transition:transform .25s; z-index:80; max-width:88vw; text-align:center; }
   #toast.show { transform:translateX(-50%) translateY(0); }
   .etat { text-align:center; color:var(--muted); padding:60px 0; }
   .etat h2 { font-family:Georgia,serif; color:var(--dark); font-size:20px; margin-bottom:10px; }
   .etat p { font-size:14px; max-width:420px; margin:0 auto; }
 
   @media (max-width:520px){
-    .photo, .img-vide { height:210px; }
-    .photo.plan { height:248px; }
     .body { padding:18px; }
     .intro { padding:20px; }
-    .rdv-form { flex-direction:column; }
     .logo { height:84px; }
     .barre-btn { padding:9px 12px; font-size:12.5px; }
+    .rdv-format { min-width:56px; font-size:10px; }
+    .carte-mini { height:160px; }
+    .body-card { padding:18px 18px 2px; }
+    .lots { padding:0 18px; }
   }
 </style></head><body>
 <div class="wrap">
@@ -407,11 +328,17 @@
   <div id="contenu" class="etat">Chargement de votre sélection…</div>
 </div>
 
-<div id="barre"><div class="barre-in">
-  <div class="prog"><div class="prog-txt" id="prog-txt"></div><div class="prog-fond"><div class="prog-rempli" id="prog-rempli"></div></div></div>
-  <button class="barre-btn sec" id="btn-comp" style="display:none">Comparer</button>
-  <button class="barre-btn" id="btn-rdv">Rendez-vous</button>
-</div></div>
+<div class="rdv-wrap" id="rdv-wrap">
+  <div class="rdv-bulle" id="rdv-bulle">
+    <div class="rdv-bulle-head"><span id="rdv-bulle-titre">On fait le point ?</span><button type="button" class="rdv-bulle-close" aria-label="Fermer">✕</button></div>
+    <div class="rdv-bulle-body" id="rdv-bulle-body"></div>
+  </div>
+  <div id="barre"><div class="barre-in">
+    <div class="barre-prog"><div class="prog-txt" id="prog-txt"></div><div class="prog-fond"><div class="prog-rempli" id="prog-rempli"></div></div></div>
+    <button class="barre-btn sec" id="btn-comp" style="display:none">Comparer</button>
+    <div class="rdv-choix" id="rdv-choix"></div>
+  </div></div>
+</div>
 
 <div id="comp"><div class="comp-boite">
   <div class="comp-tete"><h3>Comparer les biens</h3><button class="comp-x" id="comp-x">✕</button></div>
@@ -447,16 +374,15 @@
   var cont = document.getElementById("contenu");
   var etatAvis = {};   // copie locale des avis
   var biens = [];
-  var rdvContexte = ""; // bien depuis lequel le client a cliqué "Demander un rendez-vous"
+  var rdvContexte = ""; // bien depuis lequel le client a marqué "Ça m'intéresse"
+  var donneesCourantes = null;
   // Deux formats (choix d'Alex, septembre 2026), les mêmes que sur le mail de
   // rendez-vous : la visio de 30 min, ou l'appel de 10 min. Des durées courtes,
   // volontairement : un gros créneau fait peur au client. Il ne bloque que
   // cette durée dans l'agenda du conseiller.
   var FORMATS = {
-    // Le client a déjà eu son conseiller au téléphone : on ne se présente pas,
-    // on fait le point sur la sélection (textes adaptés le 03/09/2026).
-    visio: { duree:30, mode:"visio",     titre:"Visio",           sous:"On reprend ensemble les biens qui vous ont plu, écran partagé : les plans, les prix, les étapes jusqu'à la signature — et ce qui est sorti depuis notre échange.", modeLbl:"En visio, 30 minutes" },
-    appel: { duree:10, mode:"telephone", titre:"Point rapide",    sous:"Dix minutes par téléphone pour faire le point : vos coups de cœur dans cette sélection, vos questions, et la suite à donner.", modeLbl:"Par téléphone, 10 minutes" }
+    visio: { duree:30, mode:"visio",     titre:"Visio",        modeLbl:"En visio, 30 minutes" },
+    appel: { duree:10, mode:"telephone", titre:"Appel",        modeLbl:"Par téléphone, 10 minutes" }
   };
   // Les disponibilités du conseiller sont découpées en créneaux de 10 min ; pour
   // ne pas noyer le client sous les horaires, on ne lui montre que les heures
@@ -512,52 +438,6 @@
       document.addEventListener("keydown", touche);
     });
   }
-  // ---------- Commentaire libre sous un bien ----------
-  // Facultatif et discret : un lien « Un commentaire sur ce bien ? » ouvre une
-  // petite zone de texte ; le commentaire envoyé s'affiche en italique avec
-  // « Modifier ». Il arrive sur la fiche du client chez le conseiller.
-  function htmlCommentaire(i, texte){
-    var t = (texte || "").trim();
-    if (t){
-      return "<div class='com-lu' data-com='" + i + "'>« " + esc(t) + " »<br><button class='com-lien' data-c-modif='" + i + "'>Modifier</button></div>";
-    }
-    return "<div data-com='" + i + "'><button class='com-lien' data-c-modif='" + i + "'>Un commentaire sur ce bien ?</button></div>";
-  }
-  function brancherCommentaire(bloc, i){
-    var zone = bloc.querySelector("[data-com]");
-    if (!zone) return;
-    var lien = zone.querySelector("[data-c-modif]");
-    if (!lien) return;
-    lien.addEventListener("click", function(){
-      var actuel = ((etatAvis[String(i)] || {}).commentaire || "");
-      zone.className = "com-zone";
-      zone.innerHTML = "<textarea maxlength='1000' placeholder='Ce qui vous plaît, ce qui vous freine, une question…'></textarea>"
-        + "<div class='com-actions'><button class='com-env'>Envoyer</button><button class='com-annule'>Annuler</button></div>";
-      var ta = zone.querySelector("textarea");
-      ta.value = actuel;
-      ta.focus();
-      var remettre = function(texte){
-        var neuf = document.createElement("div");
-        neuf.innerHTML = htmlCommentaire(i, texte);
-        var el = neuf.firstChild;
-        zone.parentNode.replaceChild(el, zone);
-        brancherCommentaire(bloc, i);
-      };
-      zone.querySelector(".com-annule").addEventListener("click", function(){ remettre(actuel); });
-      zone.querySelector(".com-env").addEventListener("click", function(){
-        var texte = ta.value.trim().slice(0, 1000);
-        if (texte === actuel.trim()){ remettre(actuel); return; }
-        var btn = zone.querySelector(".com-env");
-        btn.disabled = true; btn.textContent = "Envoi…";
-        envoyer({ action: "avis", index: i, commentaire: texte }, texte ? "✓ Merci, votre commentaire a bien été transmis" : "Commentaire retiré").then(function(ok){
-          if (!ok){ btn.disabled = false; btn.textContent = "Envoyer"; return; }
-          etatAvis[String(i)] = etatAvis[String(i)] || {};
-          etatAvis[String(i)].commentaire = texte;
-          remettre(texte);
-        });
-      });
-    });
-  }
   function envoyer(corps, message){
     if (apercu){ toast("Mode aperçu conseiller — aucune action n'est transmise"); return Promise.resolve(false); }
     return fetch(FN, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(corps) })
@@ -565,8 +445,6 @@
       .catch(function(){ toast("Envoi impossible — vérifiez votre connexion et réessayez"); return false; });
   }
   // ---------- Temps de lecture : total et répartition par bien ----------
-  // Une seconde comptée par seconde réellement visible ; le bien crédité est
-  // celui dont la carte occupe le centre de l'écran.
   var tpsTotal = 0, tpsBiens = {};
   function bienAuCentre(){
     var cartes = document.querySelectorAll("[data-carte]");
@@ -589,7 +467,6 @@
     if (apercu || !tpsTotal) return;
     var corps = JSON.stringify({ action: "temps", total: tpsTotal, biens: tpsBiens });
     tpsTotal = 0; tpsBiens = {};
-    // Onglet qui se ferme : sendBeacon en text/plain (pas de prévol CORS, l'envoi survit)
     if (fermeture && navigator.sendBeacon){
       try { if (navigator.sendBeacon(FN, new Blob([corps], { type: "text/plain;charset=UTF-8" }))) return; } catch(e){}
     }
@@ -603,9 +480,8 @@
     window.addEventListener("pagehide", function(){ tpsEnvoi(true); });
   }
 
-  // ---------- Créneaux de rendez-vous ----------
+  // ---------- Rendez-vous ----------
   var MODES_RDV = { visio: "en visio", agence: "à l'agence", sur_place: "sur place", telephone: "par téléphone" };
-  // « en visio · 45 min » à partir de l'état du rendez-vous (durée réelle, sinon format)
   function libelleRdv(e){
     var d = e && e.duree;
     if (!d && e && e.debut && e.fin) d = Math.round((new Date(e.fin) - new Date(e.debut)) / 60000);
@@ -613,7 +489,6 @@
     var m = MODES_RDV[e && e.mode] || "";
     return m + (d ? " · " + d + " min" : "");
   }
-  // Ne garder que les créneaux où la durée du format choisi tient d'affilée
   function creneauxDuFormat(liste){
     var besoin = FORMATS[formatChoisi].duree;
     return horairesMontres((liste || []).filter(function(c){
@@ -631,7 +506,6 @@
     var dt = new Date(iso);
     return isNaN(dt) ? "" : dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   }
-  // Lots que le client a marqués comme intéressants : le rendez-vous devient obligatoire
   function lotsInteresses(){
     var out = [];
     for (var i = 0; i < biens.length; i++){
@@ -653,7 +527,6 @@
     ordre = ordre.slice(0, 21);
     if (!ordre.length) return "";
     var h = "<div class='cren-pick'>";
-    // 1. Les jours disponibles
     h += "<div class='cren-etape'>1. Choisissez un jour</div><div class='cren-jrow'>";
     ordre.forEach(function(k, i){
       var dt = new Date(jours[k][0].debut);
@@ -663,7 +536,6 @@
          + "<span class='cren-jpill-wd'>" + esc(wd) + "</span><span class='cren-jpill-dm'>" + esc(dm) + "</span></button>";
     });
     h += "</div>";
-    // 2. Les heures du jour choisi (les autres jours restent en mémoire, masqués)
     h += "<div class='cren-etape'>2. Choisissez une heure</div>";
     ordre.forEach(function(k, i){
       h += "<div class='cren-liste cren-heures' data-jour='" + esc(k) + "'" + (i === 0 ? "" : " style='display:none'") + ">";
@@ -675,100 +547,112 @@
     return h + "</div>";
   }
 
-  // Une sélection d'un seul lot ne parle pas « des biens » : les tournures au
-  // pluriel des textes fixes passent au singulier (même règle que dans le CRM).
-  function accordUnBien(t){
-    if (!Array.isArray(biens) || biens.length !== 1) return t;
-    return String(t || "")
-      .replace(/les biens qui vous ont plu/gi, "le bien qui vous a plu")
-      .replace(/les biens retenus/gi, "le bien retenu")
-      .replace(/vos coups de cœur/gi, "votre coup de cœur")
-      .replace(/chaque bien/gi, "ce bien")
-      .replace(/les biens/gi, "le bien")
-      .replace(/ces biens/gi, "ce bien");
-  }
-  function htmlModes(){
-    var h = "<div class='fmt-choix'>";
-    ["visio", "appel"].forEach(function(k){
-      var f = FORMATS[k];
-      h += "<button type='button' class='fmt" + (formatChoisi === k ? " on" : "") + "' data-format='" + k + "' aria-pressed='" + (formatChoisi === k) + "'>"
-         + "<div class='fmt-titre'>" + esc(f.titre) + " <span class='fmt-duree'>" + f.duree + " min</span></div>"
-         + "<div class='fmt-sous'>" + esc(accordUnBien(f.sous)) + "</div>"
-         + "<div class='fmt-mode'>" + esc(f.modeLbl) + "</div>"
-         + "</button>";
-    });
-    return h + "</div>";
-  }
-
+  // ---------- Rendu du rendez-vous dans la bulle (barre du bas) ----------
   function htmlRdv(d){
     var rdv = etatAvis.rdv || {};
     var qui = d.vendeur ? esc(d.vendeur) : "votre conseiller";
-    var h = "";
 
-    // Rendez-vous déjà posé
     if (rdv.reserve && rdv.debut && !rdv.refuse){
       var confirme = !!rdv.confirme;
-      h += "<h3>" + (confirme ? "Votre rendez-vous est confirmé" : "Votre créneau est réservé") + "</h3>";
-      h += confirme
-        ? "<p>À très vite avec " + qui + ".</p>"
-        : "<p>" + qui + " vous confirme le rendez-vous très vite.</p>";
-      h += "<div class='rdv-ok'>" + esc(fmtJourLong(rdv.debut)) + " à " + esc(fmtHeure(rdv.debut)) + "</div>";
-      h += "<div class='rdv-mode'>" + (confirme ? "\u2713 Confirmé · " : "En attente de confirmation · ") + esc(libelleRdv(rdv)) + (rdv.lieu ? " — " + esc(rdv.lieu) : "") + "</div>";
-      return h;
+      var h0 = "<div class='rdv-ok'>" + esc(fmtJourLong(rdv.debut)) + " à " + esc(fmtHeure(rdv.debut)) + "</div>";
+      h0 += "<div class='rdv-mode'>" + (confirme ? "À très vite avec " + qui + "." : qui + " vous confirme le rendez-vous très vite.") + "</div>";
+      h0 += "<div class='rdv-mode'>" + (confirme ? "✓ Confirmé · " : "En attente de confirmation · ") + esc(libelleRdv(rdv)) + (rdv.lieu ? " — " + esc(rdv.lieu) : "") + "</div>";
+      return { titre: confirme ? "Rendez-vous confirmé" : "Votre créneau est réservé", corps: h0 };
     }
 
-    // Le conseiller a proposé d'autres créneaux : le client tranche, c'est confirmé d'office
     var props = Array.isArray(d.propositions) ? d.propositions : [];
     if (props.length){
-      h += "<h3>" + qui + " vous propose ces créneaux</h3>";
-      h += "<p>Le créneau que vous aviez choisi n'était finalement pas disponible. Choisissez celui qui vous arrange : il sera confirmé immédiatement.</p>";
-      h += htmlModes();
+      var h1 = "<div class='rdv-mode'>Le créneau choisi n'était finalement pas disponible — choisissez celui qui vous arrange : il sera confirmé immédiatement.</div>";
       var prf = creneauxDuFormat(props);
-      if (!prf.length) h += "<div class='fmt-vide'>Aucun de ces créneaux ne tient en " + FORMATS[formatChoisi].duree + " min — essayez l'autre format.</div>";
-      h += htmlCreneaux(prf, "accepter_proposition");
-      // Aucun des trois ne va : le client donne ses disponibilités plutôt que
-      // de rester sans issue. La demande repart aussitôt chez le conseiller.
-      h += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
-      h += "<div id='rdv-libre' style='display:none;margin-top:14px'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer mes disponibilités</button></div></div>";
-      return h;
+      if (!prf.length) h1 += "<div class='fmt-vide'>Aucun de ces créneaux ne tient en " + FORMATS[formatChoisi].duree + " min — essayez l'autre format.</div>";
+      h1 += htmlCreneaux(prf, "accepter_proposition");
+      h1 += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
+      h1 += "<div id='rdv-libre' style='display:none;margin-top:14px'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer mes disponibilités</button></div></div>";
+      return { titre: qui + " vous propose ces créneaux", corps: h1 };
     }
 
     var lots = lotsInteresses();
     var cr = Array.isArray(d.creneaux) ? d.creneaux : [];
-
+    var titre, note = "";
     if (rdv.refuse){
-      h += "<h3>Choisissez un autre créneau</h3>";
-      h += "<p>Le créneau retenu n'a finalement pas pu être conservé. " + qui + " reste à votre disposition.</p>";
+      titre = "Choisissez un autre créneau";
+      note = "Le créneau retenu n'a finalement pas pu être conservé. " + qui + " reste à votre disposition.";
     } else if (lots.length){
-      h += "<h3>Parlons de " + (lots.length > 1 ? "ces biens" : "ce bien") + "</h3>";
-      h += "<div class='rdv-lots'>" + esc(lots.length > 1 ? lots.length + " lots retenus" : lots[0]) + "</div>";
-      h += "<p>Choisissez le format puis le moment qui vous arrange : " + qui + " vous rappelle pour en parler, répondre à vos questions et affiner la sélection.</p>";
+      titre = lots.length > 1 ? "Parlons de ces biens" : "Parlons de ce bien";
     } else {
-      h += "<h3>On fait le point ?</h3>";
-      h += "<p>Vous avez vu la sélection : choisissez le format puis le moment, " + qui + " vous rappelle pour en discuter et ajuster si besoin.</p>";
+      titre = "On fait le point ?";
     }
-
-    h += "<div id='rdv-contexte' style='font-size:12.5px;color:var(--gold);margin-bottom:10px'></div>";
-    h += htmlModes();
-
+    var h2 = "";
+    if (note) h2 += "<div class='rdv-mode'>" + esc(note) + "</div>";
+    if (lots.length) h2 += "<div class='rdv-lots'>" + esc(lots.length > 1 ? lots.length + " lots retenus" : lots[0]) + "</div>";
     if (cr.length){
       var crf = creneauxDuFormat(cr);
-      if (!crf.length) h += "<div class='fmt-vide'>Aucun créneau de " + FORMATS[formatChoisi].duree + " min n'est ouvert pour le moment — essayez l'autre format, ou indiquez vos disponibilités ci-dessous.</div>";
-      h += htmlCreneaux(crf, "reserver");
-      h += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
-      h += "<div id='rdv-libre' style='display:none;margin-top:14px'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer ma demande</button></div></div>";
+      if (!crf.length) h2 += "<div class='fmt-vide'>Aucun créneau de " + FORMATS[formatChoisi].duree + " min n'est ouvert pour le moment — essayez l'autre format, ou indiquez vos disponibilités ci-dessous.</div>";
+      h2 += htmlCreneaux(crf, "reserver");
+      h2 += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
+      h2 += "<div id='rdv-libre' style='display:none;margin-top:14px'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer ma demande</button></div></div>";
     } else if (rdv.demande){
-      h += "<div class='rdv-ok'>\u2713 Votre demande a bien été transmise — " + qui + " revient vers vous très vite</div>";
+      h2 += "<div class='rdv-ok'>✓ Votre demande a bien été transmise — " + qui + " revient vers vous très vite</div>";
     } else {
-      h += "<div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Demander un rendez-vous</button></div>";
+      h2 += "<div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Demander un rendez-vous</button></div>";
     }
+    return { titre: titre, corps: h2 };
+  }
+
+  // Contenu des deux boutons de format (ou du pavé "rendez-vous confirmé") dans la barre du bas
+  function htmlBarreRdv(){
+    var rdv = etatAvis.rdv || {};
+    if (rdv.reserve && rdv.debut && !rdv.refuse){
+      return "<button type='button' class='rdv-format rdv-format-ok' data-format='_confirme'>" + (rdv.confirme ? "✓ Confirmé" : "✓ Réservé") + "<small>" + esc(fmtHeure(rdv.debut)) + "</small></button>";
+    }
+    var bulleOuverte = document.getElementById("rdv-bulle") && document.getElementById("rdv-bulle").classList.contains("open");
+    var h = "";
+    ["visio", "appel"].forEach(function(k){
+      var f = FORMATS[k];
+      h += "<button type='button' class='rdv-format" + (bulleOuverte && formatChoisi === k ? " active" : "") + "' data-format='" + k + "'><span>" + esc(f.titre) + "</span><small>" + f.duree + " min</small></button>";
+    });
     return h;
+  }
+
+  function majBulle(d){
+    var r = htmlRdv(d);
+    document.getElementById("rdv-bulle-titre").textContent = r.titre;
+    document.getElementById("rdv-bulle-body").innerHTML = r.corps;
+    brancherRdv(d);
+  }
+  function ouvrirBulle(btn, d){
+    var bulle = document.getElementById("rdv-bulle");
+    var dejaActif = btn.classList.contains("active") || btn.classList.contains("rdv-format-ok");
+    Array.prototype.forEach.call(document.querySelectorAll(".rdv-format"), function(b){ if (!b.classList.contains("rdv-format-ok")) b.classList.remove("active"); });
+    if (dejaActif && bulle.classList.contains("open")){ bulle.classList.remove("open"); return; }
+    var k = btn.getAttribute("data-format");
+    if (FORMATS[k]){ formatChoisi = k; modeContact = FORMATS[k].mode; }
+    btn.classList.add("active");
+    majBulle(d);
+    bulle.classList.add("open");
+  }
+  function fermerBulle(){
+    document.getElementById("rdv-bulle").classList.remove("open");
+    Array.prototype.forEach.call(document.querySelectorAll(".rdv-format"), function(b){ b.classList.remove("active"); });
+  }
+  function majRdvUI(d){
+    var choix = document.getElementById("rdv-choix");
+    if (choix) choix.innerHTML = htmlBarreRdv();
+    brancherBarre(d);
+    majBulle(d);
+  }
+  function brancherBarre(d){
+    Array.prototype.forEach.call(document.querySelectorAll(".rdv-format"), function(btn){
+      btn.addEventListener("click", function(){ ouvrirBulle(btn, d); });
+    });
+    var close = document.querySelector(".rdv-bulle-close");
+    if (close) close.onclick = fermerBulle;
   }
 
   // Prix selon le régime fiscal : le plein tarif d'abord, les régimes avantageux ensuite
   function htmlPrix(b){
     var opts = Array.isArray(b.prixOptions) ? b.prixOptions.filter(function(o){ return o && o.prixTexte; }) : [];
-    if (!opts.length) return b.prix ? "<div class='prix'>" + esc(b.prix) + "</div>" : "";
+    if (!opts.length) return b.prix ? "<div class='prix-seule'>" + esc(b.prix) + "</div>" : "";
     var plein = opts[0];
     return "<div class='prix-blocs'>" + opts.map(function(o, i){
       var avantage = i > 0 && o.prix < plein.prix;
@@ -785,9 +669,13 @@
         + "</div>";
     }).join("") + "</div>";
   }
+  function htmlPrixResume(b){
+    var opts = Array.isArray(b.prixOptions) ? b.prixOptions.filter(function(o){ return o && o.prixTexte; }) : [];
+    if (opts.length) return esc(opts[0].prixTexte);
+    return b.prix ? esc(b.prix) : "";
+  }
 
   // Remises et avantages négociés, saisis à la main par le conseiller
-  // (ils ne figurent pas toujours sur la fiche Otaree du lot)
   function remisesDe(b){
     return (Array.isArray(b.remises) ? b.remises : []).filter(function(r){
       return r && (String(r.libelle || "").trim() || Number(r.montant) > 0);
@@ -796,7 +684,7 @@
   function texteRemise(r){
     var m = Number(r.montant);
     var t = String(r.libelle || "Remise").trim() || "Remise";
-    return t + (isFinite(m) && m > 0 ? " \u2212 " + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €" : "");
+    return t + (isFinite(m) && m > 0 ? " − " + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €" : "");
   }
   function htmlRemises(b){
     var rs = remisesDe(b);
@@ -804,7 +692,7 @@
     return "<div class='remises'>" + rs.map(function(r){
       var m = Number(r.montant);
       var libelle = String(r.libelle || "Remise").trim() || "Remise";
-      var montant = isFinite(m) && m > 0 ? "\u2212 " + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €" : "";
+      var montant = isFinite(m) && m > 0 ? "− " + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €" : "";
       return "<div class='remise'><span class='offre-tag'>Offre</span><span class='offre-txt'>" + esc(libelle) + "</span>"
         + (montant ? "<span class='offre-montant'>" + esc(montant) + "</span>" : "") + "</div>";
     }).join("") + "</div>";
@@ -818,12 +706,9 @@
     return "<div class='mot'><div class='mot-qui'>" + esc(qui) + "</div><div class='mot-txt'>" + esc(n) + "</div></div>";
   }
 
-  // Clé d'identité d'un lot (même logique que _selCleLot côté CRM : son lien Otaree, à défaut son titre)
   function _cleLot(b){ return String((b && (b.lien || b.titre)) || "").trim().toLowerCase(); }
 
-  // Rubrique "Financement" : résumé simple de la dernière simulation du client, à part sur la page.
-  // Un dépliant explique la méthode en général (23/09/2026) — jamais les revenus,
-  // l'apport ou la durée saisis, qui ne quittent pas le conseiller.
+  // Rubrique "Financement" : résumé simple de la dernière simulation du client
   function htmlFinancement(d){
     var sim = d && d.simulation;
     if (!sim) return "";
@@ -848,8 +733,6 @@
     return h;
   }
 
-  // Mensualité estimée pour ce lot précis, si la dernière simulation le couvre —
-  // avec l'économie mensuelle permise par les aides quand la simulation en calcule une.
   function htmlSimulationLot(b, d){
     var sim = d && d.simulation;
     if (!sim || !Array.isArray(sim.lots)) return "";
@@ -870,8 +753,6 @@
   }
 
   // Adresse du programme : affichée seulement si elle a été confirmée
-  // (fiche Otaree recoupée avec la Base Adresse Nationale, puis validée par le
-  // conseiller). Sinon le client peut la demander en un clic.
   function adresseSure(b){
     var g = b && b.geo;
     return !!(b && b.adresseOk && b.adresse && g && g.lat && g.lon);
@@ -880,22 +761,24 @@
     return [b.adresse, [b.codePostal, b.commune].filter(Boolean).join(" ")].filter(Boolean).join(", ") || b.ville || "";
   }
   var PIN = "<svg class='pin-svg' width='22' height='22' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='%23c8a96e' stroke='%23fff' stroke-width='1.6'/><circle cx='12' cy='10' r='2.6' fill='%23fff'/></svg>";
-  // Icônes du panneau qui glisse (plan du lot / plan de masse)
   var ICO_PLAN = "<svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='2'/><path d='M3 9h18M9 21V9'/></svg>";
   var ICO_CHEV = "<svg class='chev' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>";
   var ICO_DL = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>";
-  // Panneau qui glisse sous un lot ou un programme : plan, ou plan de masse.
-  // Un PDF ne s'affiche pas en image : un lien suffit pour l'ouvrir.
-  function htmlTiroirPanneau(id, titre, url){
-    var h = "<div class='tiroir' id='tiroir-" + id + "'><div class='tiroir-inner'><div class='tiroir-panneau'>";
-    h += "<div class='tiroir-tete'>" + esc(titre) + "</div>";
+  var ICO_DOC = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/></svg>";
+  var ICO_ENVOYER = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><line x1='22' y1='2' x2='11' y2='13'/><polygon points='22 2 15 22 11 13 2 9 22 2'/></svg>";
+
+  // Panneau qui glisse : plan du lot, ou plan de masse. Un PDF ne s'affiche pas
+  // en image : un lien suffit pour l'ouvrir.
+  function htmlPlanSlide(id, titre, url){
+    var h = "<div class='plan-slide' id='plan-" + id + "'><div class='plan-slide-inner'><div class='plan-panel'>";
+    h += "<div class='plan-head'><span>" + esc(titre) + "</span></div>";
     if (!url){
-      h += "<div class='tiroir-pdf'>Document indisponible pour le moment.</div>";
+      h += "<div class='ph-pdf'>Document indisponible pour le moment.</div>";
     } else if (estPdf(url)){
-      h += "<div class='tiroir-pdf'>Document PDF — <a href='" + esc(url) + "' target='_blank' rel='noopener'>l'ouvrir dans un nouvel onglet</a></div>";
+      h += "<div class='ph-pdf'>Document PDF — <a href='" + esc(url) + "' target='_blank' rel='noopener'>l'ouvrir dans un nouvel onglet</a></div>";
     } else {
-      h += "<div class='tiroir-img'><img src='" + esc(url) + "' alt='" + esc(titre) + "' loading='lazy'>";
-      h += "<a class='tiroir-dl' href='" + esc(url) + "' target='_blank' rel='noopener' download>" + ICO_DL + "<span>Télécharger</span></a></div>";
+      h += "<div class='ph-img'><img src='" + esc(url) + "' alt='" + esc(titre) + "' loading='lazy'>";
+      h += "<a class='dl-btn' href='" + esc(url) + "' target='_blank' rel='noopener' download>" + ICO_DL + "<span>Télécharger</span></a></div>";
     }
     return h + "</div></div></div>";
   }
@@ -903,7 +786,7 @@
     if (adresseSure(b)){
       var g = b.geo, txt = adresseTexte(b);
       var q = encodeURIComponent(txt);
-      var h2 = "<div class='adresse'><svg width='15' height='15' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='#c8a96e'/><circle cx='12' cy='10' r='2.4' fill='#fff'/></svg><span>" + esc(txt) + "</span></div>";
+      var h2 = "<div class='adresse-row'><svg width='15' height='15' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='#c8a96e'/><circle cx='12' cy='10' r='2.4' fill='#fff'/></svg><span>" + esc(txt) + "</span><a href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Voir sur Maps ↗</a></div>";
       h2 += "<div class='carte' data-lat='" + g.lat + "' data-lon='" + g.lon + "' data-q='" + esc(q) + "'>";
       h2 += "<div class='carte-tuiles'></div><div class='pin'>" + PIN.replace(/%23/g, "#") + "</div>";
       h2 += "<div class='carte-credits'>&copy; OpenStreetMap</div></div>";
@@ -914,8 +797,8 @@
       return h2;
     }
     var demandee = a && a.adresse_demandee;
-    return "<button class='adr-demande' data-adr='" + i + "'" + (demandee ? " disabled" : "") + ">"
-      + (demandee ? "\u2713 Adresse demandée — votre conseiller revient vers vous" : "Demander l'adresse exacte") + "</button>";
+    return "<div class='adresse-row' style='border-bottom:none'></div><button class='adr-demande' data-adr='" + i + "'" + (demandee ? " disabled" : "") + ">"
+      + (demandee ? "✓ Adresse demandée — votre conseiller revient vers vous" : "Demander l'adresse exacte") + "</button>";
   }
 
   // Fond de carte : tuiles OpenStreetMap positionnées pour que le lot tombe
@@ -926,7 +809,7 @@
       if (!isFinite(lat) || !isFinite(lon)) return;
       var w = el.clientWidth, hh = el.clientHeight;
       if (!w || !hh) return;
-      if (el.getAttribute("data-l") === String(w)) return;   // déjà posée à cette largeur
+      if (el.getAttribute("data-l") === String(w)) return;
       var z = 16, n = Math.pow(2, z), tuile = 256;
       var xw = (lon + 180) / 360 * n * tuile;
       var r = lat * Math.PI / 180;
@@ -946,9 +829,6 @@
     });
   }
 
-  // Sélection sur plusieurs communes : un lot garde son numéro d'origine,
-  // seuls l'ordre et les intertitres changent.
-  // « Cachan 94230 » → { nom: "Cachan", cp: "94230" }
   function villeEnDeux(v){
     var t = String(v || "").trim();
     var m = t.match(/^(.*?)[\s,]*(\d{5})\s*$/);
@@ -966,9 +846,6 @@
     return groupes;
   }
 
-  // ---------- Plusieurs lots d'un même programme ----------
-  // « Le Domaine des Prunais — Lot A2 005 » → programme « Le Domaine des
-  // Prunais », lot « Lot A2 005 ». Même découpe que dans le CRM.
   var RE_LOT = /\s*[-–—]\s*(lot\b.*)$/i;
   function nomProgramme(b){
     var t = String((b && b.titre) || "").trim();
@@ -981,7 +858,7 @@
     return m ? m[1].trim() : "";
   }
   function cleProgramme(b){
-    var t = nomProgramme(b).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    var t = nomProgramme(b).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     t = t.replace(/\b(le|la|les|du|des|de|d|l|un|une|chapitre|tranche|phase|\d+)\b/g, " ");
     return t.replace(/[^a-z]/g, "");
   }
@@ -991,10 +868,8 @@
       var court = ka.length <= kb.length ? ka : kb, long = ka.length <= kb.length ? kb : ka;
       if (ka === kb || (court.length >= 8 && long.indexOf(court) >= 0)) return true;
     }
-    // Sans nom exploitable : même adresse confirmée dans la même commune
     return !!(a.adresseOk && b.adresseOk && a.adresse && a.adresse === b.adresse && (a.ville || "") === (b.ville || ""));
   }
-  // Dans une ville, les lots d'un même programme se rejoignent (ordre d'apparition conservé)
   function grouperParProgramme(items){
     var progs = [];
     items.forEach(function(o){
@@ -1010,64 +885,25 @@
     grouperParVille(liste).forEach(function(gr){ n += grouperParProgramme(gr.items).length; });
     return n;
   }
-  // Première valeur renseignée parmi les lots d'un programme
   function premier(items, champ){
     for (var k = 0; k < items.length; k++){ var v = items[k].b && items[k].b[champ]; if (v && (!Array.isArray(v) || v.length)) return v; }
     return "";
   }
 
-  // Surface, étage, exposition, livraison, annexes
-  // (compact : livraison et promoteur sont déjà dits en tête de programme)
-  function htmlFaits(b, compact){
-    var faits = [];
-    if (b.surface) faits.push(["Surface", b.surface]);
-    if (b.etage) faits.push(["Étage", b.etage]);
-    if (b.terrasse) faits.push(["Terrasse / balcon", b.terrasse]);
-    if (b.expo) faits.push(["Exposition", b.expo]);
-    if (b.livraison && !compact) faits.push(["Livraison", b.livraison]);
-    if (b.promoteur && !compact) faits.push(["Promoteur", b.promoteur]);
-    var h = faits.length
-      ? "<div class='faits'>" + faits.map(function(f){ return "<div class='fait'><b>" + esc(f[0]) + "</b>" + esc(f[1]) + "</div>"; }).join("") + "</div>"
-      : "";
-    var annexes = Array.isArray(b.annexes) ? b.annexes : [];
-    if (!annexes.length && b.parking) annexes = [{ type: "Parking", nom: b.parking }];
-    if (annexes.length){
-      h += "<div class='annexes-lot'><b style='font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)'>Compris avec le lot</b><br>"
-        + annexes.map(function(a){
-            // « Parking » + « Parking P33 » ne doit pas donner « Parking Parking P33 »
-            var nom = String(a.nom || ""), type = String(a.type || "");
-            var t = (nom && type && nom.toLowerCase().indexOf(type.toLowerCase()) === 0) ? nom : [type, nom].filter(Boolean).join(" ");
-            return "<span>" + esc(t || "Annexe") + (a.surface ? " · " + esc(a.surface) : "") + (a.prix ? " · " + esc(a.prix) : "") + "</span>";
-          }).join("")
-        + "</div>";
-    }
-    return h;
-  }
-
   function photoDe(b){
-    // Une seule photo générale du programme
     if (b.image) return b.image;
     if (Array.isArray(b.images) && b.images.length) return b.images[0];
     return "";
   }
-  // Le plan distingue les lots entre eux, la photo du programme est la meme
-  // pour tous : c'est donc le plan, recadre sur le dessin, qui fait la carte.
   function visuelDe(b){
     if (b.planImg) return { url: b.planImg, plan: true };
     var p = photoDe(b);
     if (p) return { url: p, plan: false };
-    // Un plan en PDF (lot venu de la carte) ne s'affiche pas dans une balise image :
-    // sans vignette préparée par le conseiller, on retombe sur le logo
     if (b.plan && !/\.pdf(?:$|\?)/i.test(String(b.plan))) return { url: b.plan, plan: true };
     return { url: "", plan: false };
   }
   function estPdf(u){ return /\.pdf(?:$|\?)/i.test(String(u || "")); }
-  // Image du plan montrée dans la visionneuse : la planche complète quand c'est
-  // une image, sinon la vignette préparée (un PDF ne s'affiche pas en image ;
-  // le bouton « Ouvrir le document » de la visionneuse mène alors au PDF).
   function planEntier(b){ return (b.plan && !estPdf(b.plan)) ? b.plan : (b.planImg || ""); }
-  // La visionneuse ouvre d'abord ce que le client a sous les yeux, et le plan
-  // y passe en planche complete : c'est la qu'il peut le lire en detail.
   function imagesDe(b){
     var v = visuelDe(b), pl = planEntier(b), ph = photoDe(b), l = [];
     if (v.plan && pl) l.push(pl);
@@ -1087,7 +923,6 @@
 
   if (!token) { ecranVide("Lien introuvable", "Ce lien de sélection n'existe pas ou a expiré. Rapprochez-vous de votre conseiller GLR Immobilier."); return; }
 
-  // ---------- Données de démonstration (aperçu : ?t=demo) ----------
   function donneesDemo(){
     var img1 = "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1200&q=70";
     var img2 = "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1200&q=70";
@@ -1111,29 +946,78 @@
     };
   }
 
-  // ---------- Rendu d'un lot ----------
-  // compact : le lot fait partie d'un bloc programme — la ville, la photo de
-  // la résidence, l'adresse, le descriptif et les atouts sont déjà en tête.
-  // Documents du programme, communs à tous ses lots : plaquette et plan de masse,
-  // affichés sous le nom de la résidence (24/09/2026, demande d'Alex). Le premier
-  // lot qui les porte fait foi.
-  function htmlDocsProgramme(items){
-    var plaquette = premier(items, "plaquette"), masse = premier(items, "masse");
-    if (!plaquette && !masse) return "";
-    var ico = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/></svg>";
-    var idMasse = "masse-" + items[0].i;
-    var h = "<div class='prog-docs'>";
-    if (plaquette) h += "<a href='" + esc(plaquette) + "' target='_blank' rel='noopener'>" + ico + "Plaquette du programme</a>";
-    if (masse) h += "<button type='button' class='doc-toggle' data-tiroir-toggle='" + idMasse + "'>" + ico + "<span class='lbl' data-open='Plan de masse' data-close='Masquer le plan de masse'>Plan de masse</span>" + ICO_CHEV + "</button>";
+  // ---------- Avis (icônes + bouton Enregistrer, choix d'Alex du 29/09/2026) ----------
+  function htmlAvisMini(i){
+    var a = etatAvis[String(i)] || {};
+    var choix = a.choix || "";
+    function ic(c, sym, titre){
+      return "<button type='button' class='avis-ico" + (choix === c ? " selected" : "") + "' data-avis='" + c + "' title='" + esc(titre) + "'>" + sym + "</button>";
+    }
+    var h = "<div class='avis-mini' data-i='" + i + "'>";
+    h += ic("interesse", "✓", "Ça m'intéresse");
+    h += ic("a_discuter", "~", "À discuter");
+    h += ic("pas_pour_moi", "✕", "Pas pour moi");
+    h += "<button type='button' class='avis-save' hidden>Enregistrer</button>";
     h += "</div>";
-    if (masse) h += htmlTiroirPanneau(idMasse, "Plan de masse", masse);
+    return h;
+  }
+  function htmlOption(i, a){
+    return "<label class='opt" + (a.option ? " on" : "") + "' data-opt='" + i + "'><input type='checkbox'" + (a.option ? " checked" : "") + "><span>Je souhaite que vous posiez une option sur ce lot<small>Sans engagement : le lot est bloqué pour vous quelques jours, le temps d'en parler.</small></span></label>";
+  }
+  function htmlLotComment(i, texte){
+    return "<div class='lot-comment' data-com='" + i + "'><input type='text' maxlength='1000' placeholder='Un commentaire pour votre conseiller ?' value=\"" + esc(texte || "") + "\"><button type='button' aria-label='Envoyer'>" + ICO_ENVOYER + "</button></div>";
+  }
+
+  // ---------- Rendu d'un lot, en ligne compacte, dans une carte ----------
+  function htmlLotRow(b, i, d){
+    var a = etatAvis[String(i)] || {};
+    var nl = nomLot(b) || b.titre || ("Bien " + (i + 1));
+    var faits = [b.surface, b.etage ? "Étage " + b.etage : "", b.terrasse, b.expo].filter(Boolean).join(" · ");
+    var h = "<div class='lot-row' data-carte='" + i + "'>";
+    h += "<div class='lot-row-top'>";
+    h += "<div style='flex:1;min-width:0'><div class='lot-nom'>" + esc(nl) + (b.nouveau ? " <span class='lot-nouveau'>· Nouveau</span>" : "") + "</div>";
+    if (faits) h += "<div class='lot-faits'>" + esc(faits) + "</div>";
+    h += "</div>";
+    h += "<div class='lot-prix'>" + htmlPrixResume(b) + "</div>";
+    h += "</div>";
+    // Le détail des régimes de TVA n'est réaffiché sous le prix que s'il y a
+    // vraiment plusieurs régimes à comparer — sinon on répéterait le même prix
+    // deux fois (déjà visible en tête de ligne).
+    var optsTva = Array.isArray(b.prixOptions) ? b.prixOptions.filter(function(o){ return o && o.prixTexte; }) : [];
+    if (optsTva.length > 1) h += htmlPrix(b);
+    h += htmlRemises(b);
+    h += htmlNote(b, d);
+    h += htmlSimulationLot(b, d);
+    var annexes = Array.isArray(b.annexes) ? b.annexes : (b.parking ? [{ type: "Parking", nom: b.parking }] : []);
+    if (annexes.length){
+      h += "<div class='annexes-lot'>" + annexes.map(function(x){
+        var nom = String(x.nom || ""), type = String(x.type || "");
+        var t = (nom && type && nom.toLowerCase().indexOf(type.toLowerCase()) === 0) ? nom : [type, nom].filter(Boolean).join(" ");
+        return "<span>" + esc(t || "Annexe") + (x.surface ? " · " + esc(x.surface) : "") + (x.prix ? " · " + esc(x.prix) : "") + "</span>";
+      }).join("") + "</div>";
+    }
+    var visu = visuelDe(b);
+    var planUrl = visu.plan ? (planEntier(b) || visu.url) : "";
+    var docsMulti = (!b.lien && Array.isArray(b.docs)) ? b.docs.filter(function(x){ return x && x.url; }) : [];
+    if (docsMulti.length) docsMulti = docsMulti.filter(function(x){ return !(b.plaquette && x.url === b.plaquette) && !(b.masse && x.url === b.masse); });
+    var idPlanLot = "lot-" + i;
+    h += "<div class='lot-actions'>";
+    if (planUrl) h += "<button type='button' class='plan-btn' data-plan-toggle='" + idPlanLot + "'>" + ICO_PLAN + "<span class='lbl' data-open='Voir le plan du lot' data-close='Masquer le plan'>Voir le plan du lot</span>" + ICO_CHEV + "</button>";
+    if (docsMulti.length > 1){
+      docsMulti.forEach(function(x){ h += "<a class='doc-pill' href='" + esc(x.url) + "' target='_blank' rel='noopener'>" + ICO_DOC + esc(x.nom || "Document") + "</a>"; });
+    } else {
+      var lienDoc = htmlLienDoc(b);
+      if (lienDoc) h += "<a class='doc-pill' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>" + ICO_DOC + esc(docsMulti.length === 1 ? docsMulti[0].nom || "Fiche et plans du lot" : "Fiche et plans du lot") + "</a>";
+    }
+    h += htmlAvisMini(i);
+    h += "</div>";
+    if (planUrl) h += htmlPlanSlide(idPlanLot, "Plan du lot" + (nomLot(b) ? " — " + nomLot(b) : ""), planUrl);
+    h += htmlOption(i, a);
+    h += htmlLotComment(i, a.commentaire);
+    h += "</div>";
     return h;
   }
   function htmlLienDoc(b){
-    // Un seul bouton documents, au meme format que la demande de rendez-vous :
-    // les clients ne voyaient pas les petits boutons Plan / Plan de masse.
-    // Priorite au lien Otaree (fiche + plans), sinon un document joint par le
-    // conseiller, sinon le plan du lot.
     var joints = Array.isArray(b.docs) && b.docs.length
       ? b.docs
       : (b.pdf ? [{ nom: "Fiche du lot", url: b.pdf }] : []);
@@ -1146,119 +1030,51 @@
     }
     return lienDoc || b.plan || b.masse || "";
   }
-  function htmlAvis(i){
-    var a = etatAvis[String(i)] || {};
-    var h = "<div class='avis' data-i='" + i + "'>";
-    h += "<div class='avis-titre'>Votre avis sur ce bien ?</div>";
-    h += "<div class='avis-sous'>Un clic suffit — votre conseiller le voit tout de suite.</div>";
-    h += "<div class='avis-btns'>";
-    h += "<button type='button' class='ab" + (a.choix === "interesse" ? " on" : "") + "' data-c='interesse'>Ça m'intéresse</button>";
-    h += "<button type='button' class='ab" + (a.choix === "a_discuter" ? " on" : "") + "' data-c='a_discuter'>À discuter</button>";
-    h += "<button type='button' class='ab" + (a.choix === "pas_pour_moi" ? " on" : "") + "' data-c='pas_pour_moi'>Pas pour moi</button>";
+  function htmlDocsProgramme(items){
+    var plaquette = premier(items, "plaquette"), masse = premier(items, "masse");
+    if (!plaquette && !masse) return "";
+    var idMasse = "masse-" + items[0].i;
+    var h = "<div class='docs-row'>";
+    if (plaquette) h += "<a class='doc-pill' href='" + esc(plaquette) + "' target='_blank' rel='noopener'>" + ICO_DOC + "Plaquette du programme</a>";
+    if (masse) h += "<button type='button' class='doc-pill' data-plan-toggle='" + idMasse + "'>" + ICO_DOC + "<span class='lbl' data-open='Plan de masse' data-close='Masquer le plan de masse'>Plan de masse</span>" + ICO_CHEV + "</button>";
     h += "</div>";
-    h += "<label class='opt" + (a.option ? " on" : "") + "' data-opt='" + i + "'><input type='checkbox'" + (a.option ? " checked" : "") + "><span>Je souhaite que vous posiez une option sur ce lot<small>Sans engagement : le lot est bloqué pour vous quelques jours, le temps d'en parler.</small></span></label>";
-    h += htmlCommentaire(i, a.commentaire);
-    h += "<button type='button' class='cta-rdv'>Demander un rendez-vous</button>";
-    return h + "</div>";
-  }
-  function htmlLot(b, i, d, compact){
-    var visu = visuelDe(b);
-    // En compact, la photo de la résidence est déjà en tête du bloc : seul le plan compte
-    if (compact && !visu.plan) visu = { url: "", plan: false };
-    var h = "<div class='" + (compact ? "lot" : "card") + "' data-carte='" + i + "'>";
-    var neuf = b && b.nouveau ? "<div class='num-neuf'>Nouveau</div>" : "";
-    if (visu.url){
-      h += "<div class='photo" + (visu.plan ? " plan" : "") + "' data-g='" + i + "'" + (visu.plan ? " data-plan='1'" : "") + ">";
-      h += "<div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf;
-      h += "<img src='" + esc(visu.url) + "' alt='" + (visu.plan ? "Plan du lot — " : "") + esc(b.titre || "Bien") + "' loading='lazy'>";
-      h += "</div>";
-      // Le plan s'agrandit dans un panneau qui glisse sous l'image plutôt que
-      // dans une fenêtre plein écran (choix d'Alex, septembre 2026).
-      if (visu.plan){
-        var idPlanLot = "plan-" + i;
-        h += "<button type='button' class='plan-ouvrir' data-tiroir-toggle='" + idPlanLot + "'>" + ICO_PLAN
-          + "<span class='lbl' data-open='Agrandir le plan' data-close='Masquer le plan agrandi'>Agrandir le plan</span>" + ICO_CHEV + "</button>";
-        h += htmlTiroirPanneau(idPlanLot, "Plan du lot" + (nomLot(b) ? " — " + nomLot(b) : ""), planEntier(b) || visu.url);
-      }
-    } else if (!compact){
-      h += "<div class='img-vide'><div class='num-bien'>Bien " + (i + 1) + "</div>" + neuf + "<img src='" + LOGO_SRC + "' alt='GLR Immobilier' onerror=\"this.outerHTML='<span class=&quot;txt&quot;>GLR</span>'\"></div>";
-    }
-    h += "<div class='body'>";
-    if (compact){
-      var nl = nomLot(b) || b.titre || ("Bien " + (i + 1));
-      h += "<div class='lot-tete'>" + (visu.url ? "" : "<div class='num-bien'>Bien " + (i + 1) + "</div>" + (b.nouveau ? "<span class='num-neuf' style='position:static'>Nouveau</span>" : "")) + "<h2>" + esc(nl) + "</h2></div>";
-    } else {
-      if (b.ville) h += "<div class='eyebrow'>" + esc(b.ville) + "</div>";
-      h += "<h2>" + esc(b.titre) + "</h2>";
-    }
-    var typos = Array.isArray(b.typologies) ? b.typologies : [];
-    var puces = typos.slice();
-    if (b.nature && puces.indexOf(b.nature) === -1) puces.unshift(b.nature);
-    if (puces.length) h += "<div class='chips'>" + puces.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
-    if (!compact) h += htmlDocsProgramme([{ b: b, i: i }]);
-    h += htmlPrix(b);
-    h += htmlRemises(b);
-    h += htmlNote(b, d);
-    h += htmlSimulationLot(b, d);
-    h += htmlFaits(b, compact);
-    if (!compact){
-      h += htmlAdresse(b, i, etatAvis[String(i)] || {});
-      if (b.pitch) h += "<p class='pitch'>" + esc(b.pitch) + "</p>";
-      var atouts = Array.isArray(b.atouts) ? b.atouts.slice(0, 5) : [];
-      if (atouts.length) h += "<ul class='atouts'>" + atouts.map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
-    }
-    // Lot venu de la carte des programmes (pas de fiche Otaree) : un bouton par
-    // document remis — plan du lot, plan de masse, plaquette (24/09/2026).
-    // Sinon, le bouton unique habituel (fiche Otaree, ou premier document joint).
-    var docsMulti = (!b.lien && Array.isArray(b.docs)) ? b.docs.filter(function(x){ return x && x.url; }) : [];
-    // Plaquette et plan de masse sont montrés une fois, sous le nom du programme :
-    // au niveau du lot il ne reste que ce qui lui est propre (son plan).
-    if (docsMulti.length) docsMulti = docsMulti.filter(function(x){ return !(b.plaquette && x.url === b.plaquette) && !(b.masse && x.url === b.masse); });
-    if (docsMulti.length > 1){
-      h += "<div class='docs multi'>" + docsMulti.map(function(x){
-        return "<a class='doc' href='" + esc(x.url) + "' target='_blank' rel='noopener'>" + esc(x.nom || "Document") + "</a>";
-      }).join("") + "</div>";
-    } else {
-      var lienDoc = htmlLienDoc(b);
-      if (lienDoc) h += "<div class='docs'><a class='doc' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>" + esc(docsMulti.length === 1 ? docsMulti[0].nom || "Fiche et plans du lot" : "Fiche et plans du lot") + "</a></div>";
-    }
-    h += htmlAvis(i);
-    return h + "</div></div>";
+    if (masse) h += htmlPlanSlide(idMasse, "Plan de masse", masse);
+    return h;
   }
 
-  // ---------- Bloc programme : plusieurs lots d'une même résidence ----------
-  function htmlProgramme(pg, d){
+  // ---------- Rendu d'une carte : un programme (même à un seul lot) ----------
+  function htmlCarte(pg, d){
     var items = pg.items, b0 = items[0].b, i0 = items[0].i, n = items.length;
-    var nom = nomProgramme(b0) || b0.titre || "Résidence";
-    var h = "<div class='prog'>";
-    // Photo de la résidence : la première trouvée sur un des lots
+    var nom = nomProgramme(b0) || b0.titre || "Bien";
+    var h = "<div class='card'>";
     var photo = "", iPhoto = i0;
     for (var k = 0; k < n; k++){ var p = photoDe(items[k].b); if (p){ photo = p; iPhoto = items[k].i; break; } }
     var nbNeufs = items.filter(function(o){ return o.b && o.b.nouveau; }).length;
     if (photo){
-      h += "<div class='photo' data-gp='" + iPhoto + "'><div class='prog-nb'>" + n + " biens</div>"
-        + (nbNeufs ? "<div class='num-neuf'>" + (nbNeufs === n ? "Nouveau" : nbNeufs + " nouveau" + (nbNeufs > 1 ? "x" : "")) + "</div>" : "")
-        + "<img src='" + esc(photo) + "' alt='" + esc(nom) + "' loading='lazy'></div>";
+      h += "<div class='carte-mini' data-gp='" + iPhoto + "' style=\"background-image:url('" + esc(photo).replace(/"/g, "&quot;") + "')\">";
+      h += "<div class='badge'>" + n + " bien" + (n > 1 ? "s" : "") + "</div>";
+      if (nbNeufs) h += "<div class='badge badge-neuf'>" + (nbNeufs === n ? "Nouveau" : nbNeufs + " nouveaux") + "</div>";
+      h += "</div>";
+    } else {
+      h += "<div class='carte-mini carte-mini-vide'><div class='badge'>" + n + " bien" + (n > 1 ? "s" : "") + "</div></div>";
     }
-    h += "<div class='prog-tete'>";
-    h += "<div class='eyebrow'>" + esc(b0.ville || "") + (photo ? "" : " · " + n + " biens") + "</div>";
-    h += "<h2>" + esc(nom) + "</h2>";
+    h += "<div class='body-card'>";
+    h += "<div class='eyebrow'>" + esc(b0.ville || "") + "</div>";
+    h += "<h2 class='titre-prog'>" + esc(nom) + "</h2>";
     var puces = [];
     var promoteur = premier(items, "promoteur"), livraison = premier(items, "livraison"), nature = premier(items, "nature");
     if (nature) puces.push(nature);
     if (promoteur) puces.push(promoteur);
     if (livraison) puces.push("Livraison " + livraison);
-    // Typologies présentes : « T2 · T3 »
     var typs = [];
     items.forEach(function(o){ (Array.isArray(o.b.typologies) ? o.b.typologies : []).forEach(function(t){ if (t && typs.indexOf(t) < 0) typs.push(t); }); });
     if (typs.length) puces.push(typs.join(" · "));
     if (puces.length) h += "<div class='chips'>" + puces.map(function(t){ return "<span class='chip'>" + esc(t) + "</span>"; }).join("") + "</div>";
-    h += htmlDocsProgramme(items);
     var pitch = premier(items, "pitch");
     if (pitch) h += "<p class='pitch'>" + esc(pitch) + "</p>";
     var atouts = premier(items, "atouts");
     if (Array.isArray(atouts) && atouts.length) h += "<ul class='atouts'>" + atouts.slice(0, 5).map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
-    // Adresse : celle du premier lot confirmé ; sinon une seule demande pour toute la résidence
+
     var bAdr = null, iAdr = i0;
     for (var m = 0; m < n; m++){ if (adresseSure(items[m].b)){ bAdr = items[m].b; iAdr = items[m].i; break; } }
     if (bAdr) h += htmlAdresse(bAdr, iAdr, etatAvis[String(iAdr)] || {});
@@ -1266,23 +1082,23 @@
       var demandee = items.some(function(o){ return (etatAvis[String(o.i)] || {}).adresse_demandee; });
       h += htmlAdresse(b0, i0, { adresse_demandee: demandee });
     }
-    // Toujours fermé à l'arrivée (choix d'Alex) ; un lot ajouté depuis la
-    // dernière visite est signalé sur la barre, pas déplié d'office.
-    var ouvert = false;
-    h += "<button type='button' class='prog-toggle' aria-expanded='" + (ouvert ? "true" : "false") + "'><span class='pt-n'>" + n + "</span><span class='pt-txt'>" + (n > 1 ? "appartements sélectionnés" : "appartement sélectionné") + " pour vous</span>" + (nbNeufs ? "<span class='pt-neuf'>" + (nbNeufs > 1 ? nbNeufs + " nouveaux" : "Nouveau") + "</span>" : "") + "<span class='pt-hint'>" + (ouvert ? "Replier" : "Découvrir") + "</span><span class='pt-chev'>\u25BC</span></button>";
+    h += htmlDocsProgramme(items);
     h += "</div>";
-    h += "<div class='prog-lots'" + (ouvert ? "" : " hidden") + ">";
-    items.forEach(function(o){ h += htmlLot(o.b, o.i, d, true); });
-    h += "</div></div>";
+
+    h += "<div class='lots'>";
+    items.forEach(function(o){ h += htmlLotRow(o.b, o.i, d); });
+    h += "</div>";
+    h += "<div class='bas-card'></div>";
+    h += "</div>";
     return h;
   }
 
   // ---------- Rendu ----------
   function rendre(d){
+    donneesCourantes = d;
     biens = Array.isArray(d.biens) ? d.biens : [];
     etatAvis = d.avis || {};
     var prenom = d.prenom || "";
-    // « Monsieur Dupont » si le conseiller a renseigné civilité + nom, sinon le prénom
     var destinataire = (d.salutation || "").trim() || prenom;
     var h = "";
     var groupes = grouperParVille(biens);
@@ -1298,15 +1114,13 @@
 
     h += htmlFinancement(d);
 
-    // Lots ajoutés depuis la dernière visite : on le dit franchement, sans alerte
-    var nbNeufs = biens.filter(function(b){ return b && b.nouveau; }).length;
-    if (nbNeufs){
-      h += "<div class='maj-bandeau'><b>" + nbNeufs + " nouveau" + (nbNeufs > 1 ? "x" : "") + " bien"
-        + (nbNeufs > 1 ? "s" : "") + "</b><span>ajouté" + (nbNeufs > 1 ? "s" : "")
+    var nbNeufsTotal = biens.filter(function(b){ return b && b.nouveau; }).length;
+    if (nbNeufsTotal){
+      h += "<div class='maj-bandeau'><b>" + nbNeufsTotal + " nouveau" + (nbNeufsTotal > 1 ? "x" : "") + " bien"
+        + (nbNeufsTotal > 1 ? "s" : "") + "</b><span>ajouté" + (nbNeufsTotal > 1 ? "s" : "")
         + " à votre sélection depuis votre dernière visite</span></div>";
     }
 
-    // Plusieurs communes : raccourcis vers chaque ville, dès l'en-tête
     if (groupes.length > 1){
       h += "<div class='villes-tete'>" + groupes.map(function(gr, k){
         var v = villeEnDeux(gr.ville);
@@ -1315,27 +1129,20 @@
     }
 
     groupes.forEach(function(gr, k){
-    if (groupes.length > 1){
-      var vv = villeEnDeux(gr.ville);
-      h += "<div class='ville-titre' id='ville-" + k + "'><div class='ville-nom'>" + esc(vv.nom)
-        + (vv.cp ? "<span class='ville-cp'>" + esc(vv.cp) + "</span>" : "")
-        + "</div><div class='ville-nb'>" + gr.items.length + " bien" + (gr.items.length > 1 ? "s" : "") + "</div></div>";
-    }
-    grouperParProgramme(gr.items).forEach(function(pg){
-      if (pg.items.length < 2){ h += htmlLot(pg.items[0].b, pg.items[0].i, d, false); return; }
-      h += htmlProgramme(pg, d);
-    });
+      if (groupes.length > 1){
+        var vv = villeEnDeux(gr.ville);
+        h += "<div class='ville-titre' id='ville-" + k + "'><div class='ville-nom'>" + esc(vv.nom)
+          + (vv.cp ? "<span class='ville-cp'>" + esc(vv.cp) + "</span>" : "")
+          + "</div><div class='ville-nb'>" + gr.items.length + " bien" + (gr.items.length > 1 ? "s" : "") + "</div></div>";
+      }
+      grouperParProgramme(gr.items).forEach(function(pg){ h += htmlCarte(pg, d); });
     });
 
-    // Invitation à comparer les lots, juste avant la carte rendez-vous
     if (biens.length >= 2){
       h += "<div class='comp-invite'><h3>Hésitation entre plusieurs lots ?</h3>";
       h += "<p>Mettez-les côte à côte : prix, surface, étage, exposition et livraison dans un seul tableau.</p>";
       h += "<button id='comp-ouvrir'>Comparer les " + biens.length + " biens</button></div>";
     }
-
-    // Bloc rendez-vous (créneaux proposés, sinon demande libre)
-    h += "<div class='rdv' id='bloc-rdv'>" + htmlRdv(d) + "</div>";
 
     h += "<footer>" + (biens.length === 1 ? "Donnez votre avis sur ce bien" : "Donnez votre avis sur chaque bien") + " : votre conseiller adaptera la prochaine sélection.";
     h += "<div class='partage'><button id='btn-partage'>Partager cette sélection</button></div>";
@@ -1344,19 +1151,19 @@
     cont.className = "";
     cont.innerHTML = h;
     brancher(d);
+    majRdvUI(d);
     majProgression();
-    document.getElementById("barre").classList.add("show");
+    document.getElementById("rdv-wrap").classList.add("show");
     tpsDemarrer();
     if (biens.length >= 2) document.getElementById("btn-comp").style.display = "";
 
-    // Apparition douce des cartes
     if ("IntersectionObserver" in window){
       var obs = new IntersectionObserver(function(entries){
         entries.forEach(function(e){ if (e.isIntersecting){ e.target.classList.add("vue"); obs.unobserve(e.target); } });
       }, { threshold: 0.08 });
-      Array.prototype.forEach.call(document.querySelectorAll(".card, .prog"), function(c){ obs.observe(c); });
+      Array.prototype.forEach.call(document.querySelectorAll(".card"), function(c){ obs.observe(c); });
     } else {
-      Array.prototype.forEach.call(document.querySelectorAll(".card, .prog"), function(c){ c.classList.add("vue"); });
+      Array.prototype.forEach.call(document.querySelectorAll(".card"), function(c){ c.classList.add("vue"); });
     }
   }
 
@@ -1409,7 +1216,7 @@
 
   function ouvrirComp(){
     var lignes = [
-      ["Prix", function(b){ return b.prix; }],
+      ["Prix", function(b){ return b.prix || htmlPrixResume(b); }],
       ["Remise", function(b){ return remisesDe(b).map(texteRemise).join(" · "); }],
       ["Adresse", function(b){ return adresseSure(b) ? adresseTexte(b) : ""; }],
       ["Type", function(b){ return (Array.isArray(b.typologies) ? b.typologies.join(", ") : ""); }],
@@ -1444,26 +1251,8 @@
     document.body.style.overflow = "";
   }
 
-  // Câblage du bloc rendez-vous — rejoué à chaque fois que le bloc est redessiné
+  // Câblage du rendez-vous — rejoué à chaque fois que la bulle est redessinée
   function brancherRdv(d){
-    // Visio 45 min ou appel 15 min : les horaires proposés dépendent de la durée
-    Array.prototype.forEach.call(document.querySelectorAll(".fmt"), function(btn){
-      btn.addEventListener("click", function(){
-        var k = btn.getAttribute("data-format");
-        if (!FORMATS[k] || k === formatChoisi) return;
-        formatChoisi = k;
-        modeContact = FORMATS[k].mode;
-        var bloc = document.getElementById("bloc-rdv");
-        var note = document.getElementById("rdv-contexte");
-        var ctx = note ? note.textContent : "";
-        bloc.innerHTML = htmlRdv(d);
-        var note2 = document.getElementById("rdv-contexte");
-        if (note2 && ctx) note2.textContent = ctx;
-        brancherRdv(d);
-      });
-    });
-
-    // Navigation entre les jours (sélecteur en deux temps)
     Array.prototype.forEach.call(document.querySelectorAll(".cren-jpill"), function(p){
       p.addEventListener("click", function(){
         var k = p.getAttribute("data-jour");
@@ -1472,19 +1261,16 @@
       });
     });
 
-    // Choix d'un créneau : réservation classique ou acceptation d'une proposition
     Array.prototype.forEach.call(document.querySelectorAll(".cren"), function(btn){
       btn.addEventListener("click", function(){
         if (apercu){ toast("Mode aperçu conseiller — aucune action n'est transmise"); return; }
         if (btn.classList.contains("off")) return;
         var action = btn.getAttribute("data-action") || "reserver";
-        // Double confirmation : le premier appui ne réserve rien, il ouvre la
-        // relecture. Le second rejoue le même clic, drapeau levé.
         if (!btn._confirme){
           demanderConfirmation({
             titre: action === "accepter_proposition" ? "Confirmer ce rendez-vous ?" : "Réserver ce créneau ?",
             quand: fmtJourLong(btn.getAttribute("data-debut")) + " à " + fmtHeure(btn.getAttribute("data-debut")),
-            comment: FORMATS[formatChoisi].titre + " \u2014 " + FORMATS[formatChoisi].modeLbl.toLowerCase() + (d && d.vendeur ? " avec " + d.vendeur : ""),
+            comment: FORMATS[formatChoisi].titre + " — " + FORMATS[formatChoisi].modeLbl.toLowerCase() + (d && d.vendeur ? " avec " + d.vendeur : ""),
             ok: action === "accepter_proposition" ? "Oui, je confirme" : "Oui, je réserve"
           }).then(function(daccord){
             if (!daccord) return;
@@ -1505,19 +1291,16 @@
           if (res.corps && res.corps.ok && c){
             etatAvis.rdv = { demande: true, reserve: true, confirme: action === "accepter_proposition", refuse: false, debut: c.debut, fin: c.fin, mode: c.mode, lieu: c.lieu, format: formatChoisi };
             d.propositions = [];
-            var bloc = document.getElementById("bloc-rdv");
-            bloc.className = "rdv";
-            bloc.innerHTML = htmlRdv(d);
-            brancherRdv(d);
-            toast(action === "accepter_proposition" ? "\u2713 Rendez-vous confirmé" : "\u2713 Créneau réservé — en attente de confirmation");
+            majRdvUI(d);
+            var bulle = document.getElementById("rdv-bulle");
+            if (bulle) bulle.classList.add("open");
+            toast(action === "accepter_proposition" ? "✓ Rendez-vous confirmé" : "✓ Créneau réservé — en attente de confirmation");
             return;
           }
-          // Le créneau vient d'être pris : on rafraîchit la liste concernée
           if (res.corps && (res.corps.creneaux || res.corps.propositions)){
             if (res.corps.creneaux) d.creneaux = res.corps.creneaux;
             if (res.corps.propositions) d.propositions = res.corps.propositions;
-            document.getElementById("bloc-rdv").innerHTML = htmlRdv(d);
-            brancherRdv(d);
+            majBulle(d);
             toast("Ce créneau vient d'être pris — choisissez-en un autre");
             return;
           }
@@ -1549,14 +1332,12 @@
         etatAvis.rdv = { demande: true, creneau: creneau, mode: modeContact, format: formatChoisi };
         d.propositions = [];
         d.creneaux = [];
-        document.getElementById("bloc-rdv").innerHTML = htmlRdv(d);
-        brancherRdv(d);
+        majBulle(d);
       });
     });
   }
 
   function brancher(d){
-    // Dépliant « Comment on arrive à ce montant ? » sous la rubrique Financement
     var finToggle = document.getElementById("financement-detail-toggle");
     if (finToggle) finToggle.addEventListener("click", function(){
       var panneau = document.getElementById("financement-detail");
@@ -1567,107 +1348,101 @@
       finToggle.textContent = ouvert ? "Comment on arrive à ce montant ?" : "Masquer le détail";
     });
 
-    // Photo : clic → plein écran
-    Array.prototype.forEach.call(document.querySelectorAll(".photo"), function(g){
-      var im = g.querySelector("img");
-      if (!im) return;
-      if (g.hasAttribute("data-gp")){
-        // Photo de la résidence en tête d'un bloc programme : on ouvre sur la photo, pas sur le plan
-        var ip = parseInt(g.getAttribute("data-gp"), 10);
-        im.addEventListener("click", function(){
-          var bl = biens[ip] || {}, j = imagesDe(bl).indexOf(photoDe(bl));
-          ouvrirLb(ip, j < 0 ? 0 : j);
-        });
-        return;
-      }
-      // Le plan a son propre panneau qui glisse (bouton « Agrandir le plan »
-      // sous l'image) : pas de fenêtre plein écran ici.
-      if (g.hasAttribute("data-plan")) return;
-      var i = parseInt(g.getAttribute("data-g"), 10);
-      im.addEventListener("click", function(){ ouvrirLb(i, 0); });
+    // Mini-photo de la carte : clic → plein écran, sur les images du programme
+    Array.prototype.forEach.call(document.querySelectorAll(".carte-mini[data-gp]"), function(g){
+      var ip = parseInt(g.getAttribute("data-gp"), 10);
+      g.addEventListener("click", function(){
+        var bl = biens[ip] || {}, j = imagesDe(bl).indexOf(photoDe(bl));
+        ouvrirLb(ip, j < 0 ? 0 : j);
+      });
     });
 
     // Panneaux qui glissent : plan du lot, plan de masse
-    Array.prototype.forEach.call(document.querySelectorAll("[data-tiroir-toggle]"), function(btn){
+    Array.prototype.forEach.call(document.querySelectorAll("[data-plan-toggle]"), function(btn){
       btn.addEventListener("click", function(){
-        var id = btn.getAttribute("data-tiroir-toggle");
-        var panneau = document.getElementById("tiroir-" + id);
+        var id = btn.getAttribute("data-plan-toggle");
+        var panneau = document.getElementById("plan-" + id);
         if (!panneau) return;
-        var ouvrir = !panneau.classList.contains("ouvert");
-        panneau.classList.toggle("ouvert", ouvrir);
-        btn.classList.toggle("actif", ouvrir);
+        var ouvrir = !panneau.classList.contains("open");
+        panneau.classList.toggle("open", ouvrir);
+        btn.classList.toggle("active", ouvrir);
         var lbl = btn.querySelector(".lbl");
         if (lbl) lbl.textContent = ouvrir ? lbl.getAttribute("data-close") : lbl.getAttribute("data-open");
       });
     });
 
-    // Avis
-    Array.prototype.forEach.call(document.querySelectorAll(".avis"), function(bloc){
+    // Avis : icône sélectionnée puis bouton Enregistrer (choix d'Alex, 29/09/2026)
+    Array.prototype.forEach.call(document.querySelectorAll(".avis-mini"), function(bloc){
       var i = parseInt(bloc.getAttribute("data-i"), 10);
-      brancherCommentaire(bloc, i);
-      // Demande d'option : la case part tout de suite, cochée ou décochée
-      var opt = bloc.querySelector("[data-opt] input");
-      if (opt) opt.addEventListener("change", function(){
+      var save = bloc.querySelector(".avis-save");
+      Array.prototype.forEach.call(bloc.querySelectorAll(".avis-ico"), function(btn){
+        btn.addEventListener("click", function(){
+          var actuel = (etatAvis[String(i)] || {}).choix || "";
+          Array.prototype.forEach.call(bloc.querySelectorAll(".avis-ico"), function(b2){ b2.classList.remove("selected"); });
+          btn.classList.add("selected");
+          var c = btn.getAttribute("data-avis");
+          if (save){
+            if (c === actuel){ save.hidden = true; }
+            else { save.hidden = false; save.disabled = false; save.textContent = "Enregistrer"; }
+          }
+        });
+      });
+      if (save) save.addEventListener("click", function(){
+        if (save.disabled) return;
+        var sel = bloc.querySelector(".avis-ico.selected");
+        if (!sel) return;
+        var choix = sel.getAttribute("data-avis");
+        save.disabled = true; save.textContent = "Enregistrement…";
+        envoyer({ action: "avis", index: i, choix: choix }, "✓ Merci, votre avis a bien été transmis").then(function(ok){
+          if (!ok){ save.disabled = false; save.textContent = "Enregistrer"; return; }
+          etatAvis[String(i)] = etatAvis[String(i)] || {};
+          etatAvis[String(i)].choix = choix;
+          majProgression();
+          save.hidden = true;
+          if (choix === "interesse"){ rdvContexte = biens[i] && biens[i].titre ? biens[i].titre : "Bien " + (i + 1); }
+          majRdvUI(d);
+        });
+      });
+    });
+
+    // Demande d'option : la case part tout de suite, cochée ou décochée
+    Array.prototype.forEach.call(document.querySelectorAll("[data-opt] input"), function(opt){
+      var label = opt.closest("[data-opt]");
+      var i = parseInt(label.getAttribute("data-opt"), 10);
+      opt.addEventListener("change", function(){
         var veut = !!opt.checked;
-        opt.parentNode.className = "opt" + (veut ? " on" : "");
+        label.className = "opt" + (veut ? " on" : "");
         envoyer({ action: "avis", index: i, option: veut }, veut ? "✓ Bien noté, votre conseiller revient vers vous pour poser l'option" : "Demande d'option retirée").then(function(ok){
-          if (!ok){ opt.checked = !veut; opt.parentNode.className = "opt" + (!veut ? " on" : ""); return; }
+          if (!ok){ opt.checked = !veut; label.className = "opt" + (!veut ? " on" : ""); return; }
           etatAvis[String(i)] = etatAvis[String(i)] || {};
           etatAvis[String(i)].option = veut;
         });
       });
-      Array.prototype.forEach.call(bloc.querySelectorAll(".ab"), function(btn){
-        btn.addEventListener("click", function(){
-          Array.prototype.forEach.call(bloc.querySelectorAll(".ab"), function(b2){ b2.classList.remove("on"); });
-          btn.classList.add("on");
+    });
+
+    // Commentaire libre sous un lot : une ligne toujours visible
+    Array.prototype.forEach.call(document.querySelectorAll("[data-com]"), function(zone){
+      var i = parseInt(zone.getAttribute("data-com"), 10);
+      var inp = zone.querySelector("input");
+      var btn = zone.querySelector("button");
+      var envoyerCom = function(){
+        var texte = (inp.value || "").trim().slice(0, 1000);
+        var actuel = ((etatAvis[String(i)] || {}).commentaire || "").trim();
+        if (texte === actuel) return;
+        btn.disabled = true;
+        envoyer({ action: "avis", index: i, commentaire: texte }, texte ? "✓ Merci, votre commentaire a bien été transmis" : "Commentaire retiré").then(function(ok){
+          btn.disabled = false;
+          if (!ok) return;
           etatAvis[String(i)] = etatAvis[String(i)] || {};
-          etatAvis[String(i)].choix = btn.getAttribute("data-c");
-          majProgression();
-          var interesse = btn.getAttribute("data-c") === "interesse";
-          envoyer({ action: "avis", index: i, choix: btn.getAttribute("data-c") }, "✓ Merci, votre avis a bien été transmis");
-          // La carte de rendez-vous se met à jour en bas de page, sans rien imposer.
-          // Nom distinct de `bloc` : un var de même nom serait remonté en tête de
-          // cette fonction et écraserait le bloc d'avis utilisé juste au-dessus.
-          var blocRdv = document.getElementById("bloc-rdv");
-          if (blocRdv){
-            if (interesse) rdvContexte = biens[i] && biens[i].titre ? biens[i].titre : "Bien " + (i + 1);
-            blocRdv.innerHTML = htmlRdv(d);
-            brancherRdv(d);
-          }
+          etatAvis[String(i)].commentaire = texte;
         });
-      });
-      bloc.querySelector(".cta-rdv").addEventListener("click", function(){
-        rdvContexte = biens[i] && biens[i].titre ? biens[i].titre : "Bien " + (i + 1);
-        var cible = document.getElementById("bloc-rdv");
-        var note = document.getElementById("rdv-contexte");
-        if (note) note.textContent = "Au sujet de : " + rdvContexte;
-        cible.scrollIntoView({ behavior: "smooth", block: "center" });
-        var inp = document.getElementById("rdv-creneau");
-        if (inp) setTimeout(function(){ inp.focus(); }, 500);
-      });
+      };
+      btn.addEventListener("click", envoyerCom);
+      inp.addEventListener("keydown", function(e){ if (e.key === "Enter") envoyerCom(); });
     });
 
+    brancherBarre(d);
     brancherRdv(d);
-
-    // Bloc programme : replier / déplier la liste des lots
-    Array.prototype.forEach.call(document.querySelectorAll(".prog-toggle"), function(t){
-      t.addEventListener("click", function(){
-        var lots = t.closest(".prog") && t.closest(".prog").querySelector(".prog-lots");
-        if (!lots) return;
-        var ouvert = t.getAttribute("aria-expanded") !== "false";
-        lots.hidden = ouvert;
-        t.setAttribute("aria-expanded", ouvert ? "false" : "true");
-        var hint = t.querySelector(".pt-hint");
-        if (hint) hint.textContent = ouvert ? "Découvrir" : "Replier";
-      });
-    });
-
-    document.getElementById("btn-rdv").addEventListener("click", function(){
-      var bloc = document.getElementById("bloc-rdv");
-      bloc.scrollIntoView({ behavior: "smooth", block: "center" });
-      var inp = document.getElementById("rdv-creneau");
-      if (inp) setTimeout(function(){ inp.focus(); }, 500);
-    });
 
     // Adresse : ouverture de Maps au clic sur la carte, demande d'adresse sinon
     Array.prototype.forEach.call(document.querySelectorAll(".carte"), function(el){
@@ -1678,12 +1453,12 @@
     Array.prototype.forEach.call(document.querySelectorAll(".adr-demande"), function(btn){
       btn.addEventListener("click", function(){
         var i = parseInt(btn.getAttribute("data-adr"), 10);
-        envoyer({ action: "adresse", index: i }, "\u2713 Demande transmise — votre conseiller vous donne l'adresse très vite").then(function(ok){
+        envoyer({ action: "adresse", index: i }, "✓ Demande transmise — votre conseiller vous donne l'adresse très vite").then(function(ok){
           if (!ok) return;
           etatAvis[String(i)] = etatAvis[String(i)] || {};
           etatAvis[String(i)].adresse_demandee = true;
           btn.disabled = true;
-          btn.textContent = "\u2713 Adresse demandée — votre conseiller revient vers vous";
+          btn.textContent = "✓ Adresse demandée — votre conseiller revient vers vous";
         });
       });
     });
@@ -1780,7 +1555,6 @@
   var CLE_SCROLL = 'glr-sel-scroll';
   var URL_PAGE = location.pathname;
 
-  /* --- 1. Restauration de la position après un rechargement silencieux --- */
   try {
     var brut = sessionStorage.getItem(CLE_SCROLL);
     if (brut) {
@@ -1790,7 +1564,7 @@
         if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
         var essais = 0;
         var rendu = setInterval(function () {
-          if (++essais > 40) { clearInterval(rendu); return; }  // 8 s max
+          if (++essais > 40) { clearInterval(rendu); return; }
           var hauteur = document.documentElement.scrollHeight;
           if (hauteur >= sauve.y + window.innerHeight * 0.5) {
             window.scrollTo(0, sauve.y);
@@ -1801,7 +1575,6 @@
     }
   } catch (e) {}
 
-  /* --- 2. Surveillance de la version en ligne --- */
   var reference = null, candidat = null, prete = false, timer = null;
 
   function empreinte(r) {
