@@ -90,7 +90,6 @@
   .carte .pin { position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-30px 0 0 -11px; opacity:0; }
   .carte.vue .pin { animation:tombe .55s cubic-bezier(.3,1.4,.5,1) .15s forwards; }
   @keyframes tombe { 0% { opacity:0; transform:translateY(-26px) scale(.85); } 60% { opacity:1; transform:translateY(2px) scale(1); } 100% { opacity:1; transform:translateY(0) scale(1); } }
-  .carte-credits { position:absolute; right:0; bottom:0; background:rgba(255,255,255,.82); color:#5a606b; font-size:9.5px; padding:1px 5px; border-radius:5px 0 0 0; }
   .adr-btns { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px; }
   .adr-btn { border:1px solid var(--bordure); background:#fff; color:var(--encre); border-radius:10px; padding:7px 13px; font-size:12.5px; font-weight:600; text-decoration:none; transition:all .15s; }
   .adr-btn:hover { border-color:var(--gold); color:var(--gold-fonce); }
@@ -783,12 +782,12 @@
     if (adresseSure(b)){
       var g = b.geo, txt = adresseTexte(b);
       var q = encodeURIComponent(txt);
-      var carteUrl = "https://staticmap.openstreetmap.de/staticmap.php?center=" + g.lat + "," + g.lon + "&zoom=16&size=640x300&maptype=mapnik";
+      var MAPBOX_TOKEN = "pk.eyJ1IjoiZ2xyaW1tb2JpbGllciIsImEiOiJjbXVtd3E3ajYwNDVuMnlzOXBnNGsxM29sIn0.Y6Z3p6E6o_kiBNpBJ3Tm7Q";
+      var carteUrl = "https://api.mapbox.com/styles/v1/mapbox/light-v11/static/" + g.lon + "," + g.lat + ",16,0/640x300@2x?access_token=" + MAPBOX_TOKEN;
       var h2 = "<div class='adresse-row'><svg width='15' height='15' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='#c8a96e'/><circle cx='12' cy='10' r='2.4' fill='#fff'/></svg><span>" + esc(txt) + "</span><a href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Voir sur Maps ↗</a></div>";
       h2 += "<div class='carte vue' data-q='" + esc(q) + "'>";
       h2 += "<img class='carte-img' src='" + carteUrl + "' alt='' loading='lazy' onerror=\"this.closest('.carte').style.display='none'\">";
-      h2 += "<div class='pin'>" + PIN.replace(/%23/g, "#") + "</div>";
-      h2 += "<div class='carte-credits'>&copy; OpenStreetMap</div></div>";
+      h2 += "<div class='pin'>" + PIN.replace(/%23/g, "#") + "</div></div>";
       h2 += "<div class='adr-btns'>";
       h2 += "<a class='adr-btn' href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Ouvrir dans Maps</a>";
       h2 += "<a class='adr-btn' href='https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + g.lat + "," + g.lon + "' target='_blank' rel='noopener'>Vue de la rue</a>";
