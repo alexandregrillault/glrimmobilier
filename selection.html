@@ -765,16 +765,26 @@
 
   // Panneau qui glisse : plan du lot, ou plan de masse. Un PDF ne s'affiche pas
   // en image : un lien suffit pour l'ouvrir.
-  function htmlPlanSlide(id, titre, url){
+  function htmlPlanSlide(id, titre, urlOuUrls){
+    // Plusieurs vues (duplex, maison à étages) : une image par vue, chacune
+    // avec son propre bouton de téléchargement — même mécanique qu'une seule
+    // image, juste répétée (30/09/2026).
+    var urls = Array.isArray(urlOuUrls) ? urlOuUrls.filter(Boolean) : (urlOuUrls ? [urlOuUrls] : []);
     var h = "<div class='plan-slide' id='plan-" + id + "'><div class='plan-slide-inner'><div class='plan-panel'>";
     h += "<div class='plan-head'><span>" + esc(titre) + "</span></div>";
-    if (!url){
+    if (!urls.length){
       h += "<div class='ph-pdf'>Document indisponible pour le moment.</div>";
-    } else if (estPdf(url)){
-      h += "<div class='ph-pdf'>Document PDF — <a href='" + esc(url) + "' target='_blank' rel='noopener'>l'ouvrir dans un nouvel onglet</a></div>";
     } else {
-      h += "<div class='ph-img'><img src='" + esc(url) + "' alt='" + esc(titre) + "' loading='lazy'>";
-      h += "<a class='dl-btn' href='" + esc(url) + "' target='_blank' rel='noopener' download>" + ICO_DL + "<span>Télécharger</span></a></div>";
+      urls.forEach(function(url, idx){
+        if (estPdf(url)){
+          h += "<div class='ph-pdf'>Document PDF — <a href='" + esc(url) + "' target='_blank' rel='noopener'>l'ouvrir dans un nouvel onglet</a></div>";
+        } else {
+          h += "<div class='ph-img'>";
+          if (urls.length > 1) h += "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px'>Vue " + (idx + 1) + "</div>";
+          h += "<img src='" + esc(url) + "' alt='" + esc(titre) + "' loading='lazy'>";
+          h += "<a class='dl-btn' href='" + esc(url) + "' target='_blank' rel='noopener' download>" + ICO_DL + "<span>Télécharger</span></a></div>";
+        }
+      });
     }
     return h + "</div></div></div>";
   }
@@ -874,6 +884,17 @@
   }
   function estPdf(u){ return /\.pdf(?:$|\?)/i.test(String(u || "")); }
   function planEntier(b){ return (b.plan && !estPdf(b.plan)) ? b.plan : (b.planImg || ""); }
+  // Toutes les vues du plan d'un lot (duplex, maison à étages) : b.plans si le
+  // serveur en a trouvé plusieurs, sinon la seule image disponible comme avant
+  // (30/09/2026 — demande d'Alex : « s'il existe plusieurs images, les afficher »).
+  function planUrlsDe(b){
+    if (Array.isArray(b.plans) && b.plans.length > 1){
+      var v = b.plans.filter(function(u){ return u && !estPdf(u); });
+      if (v.length) return v;
+    }
+    var u = planEntier(b);
+    return u ? [u] : [];
+  }
   function imagesDe(b){
     var v = visuelDe(b), pl = planEntier(b), ph = photoDe(b), l = [];
     if (v.plan && pl) l.push(pl);
@@ -967,9 +988,14 @@
       }).join("") + "</div>";
     }
     var visu = visuelDe(b);
-    var planUrl = visu.plan ? (planEntier(b) || visu.url) : "";
+    var planUrls = visu.plan ? planUrlsDe(b) : [];
+    if (visu.plan && !planUrls.length && visu.url) planUrls = [visu.url];
+    var planUrl = planUrls[0] || "";
     var docsMulti = (!b.lien && Array.isArray(b.docs)) ? b.docs.filter(function(x){ return x && x.url; }) : [];
-    if (docsMulti.length) docsMulti = docsMulti.filter(function(x){ return !(b.plaquette && x.url === b.plaquette) && !(b.masse && x.url === b.masse); });
+    // Le plan du lot (une ou plusieurs vues) est déjà montré dans le panneau
+    // "Voir le plan du lot" ci-dessous : pas la peine de le lister une seconde
+    // fois comme document séparé (30/09/2026).
+    if (docsMulti.length) docsMulti = docsMulti.filter(function(x){ return !(b.plaquette && x.url === b.plaquette) && !(b.masse && x.url === b.masse) && !/^plan du lot/i.test(x.nom || ""); });
     // Lien Otaree dont on a pu identifier au moins un document (plan, plan de
     // masse ou plaquette) : ceux-ci sont déjà proposés ailleurs (bouton "Voir
     // le plan du lot", case plaquette/plan de masse au niveau du programme) —
@@ -986,7 +1012,7 @@
     }
     h += htmlAvisMini(i);
     h += "</div>";
-    if (planUrl) h += htmlPlanSlide(idPlanLot, "Plan du lot" + (nomLot(b) ? " — " + nomLot(b) : ""), planUrl);
+    if (planUrl) h += htmlPlanSlide(idPlanLot, "Plan du lot" + (nomLot(b) ? " — " + nomLot(b) : ""), planUrls);
     h += htmlOption(i, a);
     h += htmlLotComment(i, a.commentaire);
     h += "</div>";
