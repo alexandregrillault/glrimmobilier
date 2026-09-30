@@ -808,6 +808,7 @@
   var ICO_CHEV = "<svg class='chev' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>";
   var ICO_DL = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/><polyline points='7 10 12 15 17 10'/><line x1='12' y1='15' x2='12' y2='3'/></svg>";
   var ICO_DOC = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/><polyline points='14 2 14 8 20 8'/></svg>";
+  var ICO_3D = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z'/><polyline points='3.27 6.96 12 12.01 20.73 6.96'/><line x1='12' y1='22.08' x2='12' y2='12'/></svg>";
   var ICO_ENVOYER = "<svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><line x1='22' y1='2' x2='11' y2='13'/><polygon points='22 2 15 22 11 13 2 9 22 2'/></svg>";
 
   // Panneau qui glisse : plan du lot, ou plan de masse. Un PDF ne s'affiche pas
@@ -1033,13 +1034,11 @@
     h += "<div style='flex:1;min-width:0'><div class='lot-nom'>" + esc(nl) + (b.nouveau ? " <span class='lot-nouveau'>· Nouveau</span>" : "") + "</div>";
     if (faits) h += "<div class='lot-faits'>" + esc(faits) + "</div>";
     h += "</div>";
-    h += "<div class='lot-prix'>" + htmlPrixResume(b) + "</div>";
     h += "</div>";
-    // Le détail des régimes de TVA n'est réaffiché sous le prix que s'il y a
-    // vraiment plusieurs régimes à comparer — sinon on répéterait le même prix
-    // deux fois (déjà visible en tête de ligne).
-    var optsTva = Array.isArray(b.prixOptions) ? b.prixOptions.filter(function(o){ return o && o.prixTexte; }) : [];
-    if (optsTva.length > 1) h += htmlPrix(b);
+    // Le prix n'est affiché que dans les cases ci-dessous — une par régime de TVA,
+    // toujours visibles même s'il n'y en a qu'un seul — plus de prix résumé en tête
+    // de ligne, qui faisait doublon avec la case (30/09/2026, demande d'Alex).
+    h += htmlPrix(b);
     h += htmlRemises(b);
     h += htmlNote(b, d);
     h += htmlSimulationLot(b, d);
@@ -1103,11 +1102,16 @@
   }
   function htmlDocsProgramme(items){
     var plaquette = premier(items, "plaquette"), masse = premier(items, "masse");
-    if (!plaquette && !masse) return "";
+    // Maquette 3D interactive du promoteur (30/09/2026) : simple lien saisi sur la carte des
+    // programmes, ouvert dans un nouvel onglet — affiché seulement quand il existe.
+    var maquette3d = premier(items, "maquette3d");
+    if (maquette3d && !/^https?:\/\//i.test(maquette3d)) maquette3d = "";
+    if (!plaquette && !masse && !maquette3d) return "";
     var idMasse = "masse-" + items[0].i;
     var h = "<div class='docs-row'>";
     if (plaquette) h += "<a class='doc-pill' href='" + esc(plaquette) + "' target='_blank' rel='noopener'>" + ICO_DOC + "Plaquette du programme</a>";
     if (masse) h += "<button type='button' class='doc-pill' data-plan-toggle='" + idMasse + "'>" + ICO_DOC + "<span class='lbl' data-open='Plan de masse' data-close='Masquer le plan de masse'>Plan de masse</span>" + ICO_CHEV + "</button>";
+    if (maquette3d) h += "<a class='doc-pill' href='" + esc(maquette3d) + "' target='_blank' rel='noopener'>" + ICO_3D + "Maquette 3D</a>";
     h += "</div>";
     if (masse) h += htmlPlanSlide(idMasse, "Plan de masse", masse);
     return h;
