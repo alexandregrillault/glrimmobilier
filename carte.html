@@ -1369,6 +1369,8 @@ const byP = {}; L0.forEach(l => (byP[l.programme_id] = byP[l.programme_id] || []
 P.forEach(p => { p.lots = byP[p.id] || []; p.logs = p.lots.filter(l => l.type === 'Appartement' || l.type === 'Maison'); });
 const fmt = n => n == null ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €';
 const fmtk = n => n == null ? '—' : (n >= 1e6 ? (n / 1e6).toFixed(2).replace('.', ',') + ' M€' : Math.round(n / 1000) + ' k€');
+// Prix TVA 20 % réellement publié par le promoteur : null quand le lot n'est vendu qu'en TVA 5,5 %
+const p20 = l => l.prix20 != null ? l.prix20 : (l.prix55 ? null : (l.prix != null ? l.prix : null));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
@@ -1425,7 +1427,7 @@ function lotOK(l) {
   if (F.maison && l.type !== 'Maison') return false;
   if (!F.maison && l.type !== 'Appartement' && l.type !== 'Maison') return false;
   if (F.typos.size && !F.typos.has(l.typo)) return false;
-  if (F.budget && !((l.prix20 || l.prix) && (l.prix20 || l.prix) <= +F.budget) && !(l.prix55 && l.prix55 <= +F.budget)) return false;
+  if (F.budget && !(p20(l) && p20(l) <= +F.budget) && !(l.prix55 && l.prix55 <= +F.budget)) return false;
   if (F.pm2 && (!l.prix_m2 || l.prix_m2 > +F.pm2)) return false;
   if (F.etage && !etageOK(l)) return false;
   if (F.renta && (!l.renta || l.renta < +F.renta)) return false;
@@ -1915,7 +1917,7 @@ function renderList() {
   const z = map.getZoom();
   if (z >= 12 && !F.ville) { const b = map.getBounds(); const inb = items.filter(p => p.lat && b.contains([p.lat, p.lng])); if (inb.length) items = inb; }
   if (!items.length) { el.innerHTML = '<div class="empty">Aucun programme ne correspond aux filtres.</div>' + concHtml(); bindConc(el); return; }
-  const pmin = p => { const ls = p.logs.filter(lotOK).map(l => l.prix20 || l.prix).filter(Boolean); return ls.length ? Math.min(...ls) : Infinity; };
+  const pmin = p => { const ls = p.logs.filter(lotOK).map(l => p20(l) != null ? p20(l) : l.prix55).filter(Boolean); return ls.length ? Math.min(...ls) : Infinity; };
   const SORTS = { prix: (a, b) => pmin(a) - pmin(b), pm2: (a, b) => (a.prix_m2_moy || Infinity) - (b.prix_m2_moy || Infinity), liv: (a, b) => (a.livraison_key || 9999) - (b.livraison_key || 9999), tt: (a, b) => ((F.tt && F.tt.times[a.id]) ?? 1e9) - ((F.tt && F.tt.times[b.id]) ?? 1e9), new: (a, b) => ((b.nouveau ? 2 : 0) + (b.nb_nouveaux_lots ? 1 : 0) + (b.nb_baisses ? 1 : 0)) - ((a.nouveau ? 2 : 0) + (a.nb_nouveaux_lots ? 1 : 0) + (a.nb_baisses ? 1 : 0)) };
   const flat = F.sort !== 'ville' && SORTS[F.sort];
   const g = {}; if (flat) g['__'] = items.slice().sort(SORTS[F.sort]); else items.forEach(p => (g[p.ville || '—'] = g[p.ville || '—'] || []).push(p));
@@ -2172,7 +2174,7 @@ function renderLots(p) {
   ls.forEach(l => {
     const extra = [l.annexes, l.parkings, l.loyer ? 'loyer ' + fmt(l.loyer) : null, l.renta ? 'renta ' + l.renta + ' %' : null, l.dpe ? 'DPE ' + l.dpe : null, l.livraison ? 'livr. ' + l.livraison : null, l.option_fin ? 'option jusqu’au ' + String(l.option_fin).slice(0, 10) : null, (l.fisc || []).join(', ')].filter(Boolean).join(' · ');
     const planUrl = planLot(p, l);
-    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (planUrl ? '<a class="plan-a" href="' + esc(planUrl) + '" target="_blank" data-n="' + esc(l.n) + '">PDF</a>' : '') + '</td><td>' + (planUrl ? '<button class="btn o xs" data-lien="' + esc(l.id) + '">Copier</button>' : '<button class="btn xs" data-ajouter="' + esc(l.id) + '">+ Plan</button>') + '</td></tr>';
+    h += '<tr class="' + (l.st !== 'libre' ? 'opt' : '') + '" title="' + esc(extra) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(l.n) + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.bat ? ' <small style="color:#6b7280">bât. ' + esc(l.bat) + '</small>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.type === 'Appartement' ? 'Appt' : l.type) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf ? l.surf.toLocaleString('fr-FR') + ' m²' : '') + '</td><td>' + (l.etage == null ? esc(l.etage_raw || '') : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td>' + esc(l.expo || '') + '</td><td style="white-space:normal;max-width:150px;font-size:11px">' + esc([l.annexes, l.parkings].filter(Boolean).join(' · ')) + '</td><td class="r"><b>' + fmt(p20(l)) + '</b>' + (l.prix_prev ? ' <span class="tag dn" title="ancien prix ' + fmt(l.prix_prev) + '">−' + Math.round((1 - l.prix / l.prix_prev) * 100) + ' %</span>' : '') + '</td><td class="r">' + (l.prix55 ? '<b style="color:#166534">' + fmt(l.prix55) + '</b>' : '<span style="color:#9ca3af">—</span>') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td><span class="st ' + l.st + '">' + ({ libre: 'Libre', option: 'Option', reserve: 'Réservé', bloque: 'Bloqué' }[l.st] || l.st) + '</span></td><td>' + (planUrl ? '<a class="plan-a" href="' + esc(planUrl) + '" target="_blank" data-n="' + esc(l.n) + '">PDF</a>' : '') + '</td><td>' + (planUrl ? '<button class="btn o xs" data-lien="' + esc(l.id) + '">Copier</button>' : '<button class="btn xs" data-ajouter="' + esc(l.id) + '">+ Plan</button>') + '</td></tr>';
   });
   h += '</tbody></table>';
   const t = panel.querySelector('#lotsTbl'); t.innerHTML = h;
@@ -2253,7 +2255,7 @@ function renderCart() {
   bd.querySelectorAll('[data-rm]').forEach(a => a.onclick = () => { toggleCart(a.dataset.rm, false); renderCart(); if (SEL) renderLots(SEL); });
   bd.querySelectorAll('.grp').forEach(g => g.onclick = () => { cart.classList.remove('open'); select(PI[g.dataset.p], true); });
 }
-function lotRow(p, l) { return [p.promoteur, p.nom, p.adresse || '', p.cp || '', p.ville || '', p.livraison || '', (p.fisc || []).join(' / '), p.commission_pct != null ? p.commission_pct : '', l.n, l.type, l.typo || '', l.surf || '', l.etage == null ? (l.etage_raw || '') : l.etage, l.expo || '', l.annexes || '', l.parkings || '', l.prix20 || l.prix || '', l.prix55 || '', l.prix_m2 || '', l.st, l.loyer || '', l.renta || '', p.gare || '', p.gare_dist || '', planLot(p, l), p.url || '']; }
+function lotRow(p, l) { return [p.promoteur, p.nom, p.adresse || '', p.cp || '', p.ville || '', p.livraison || '', (p.fisc || []).join(' / '), p.commission_pct != null ? p.commission_pct : '', l.n, l.type, l.typo || '', l.surf || '', l.etage == null ? (l.etage_raw || '') : l.etage, l.expo || '', l.annexes || '', l.parkings || '', p20(l) != null ? p20(l) : '', l.prix55 || '', l.prix_m2 || '', l.st, l.loyer || '', l.renta || '', p.gare || '', p.gare_dist || '', planLot(p, l), p.url || '']; }
 const CSVH = ['Promoteur','Programme','Adresse','CP','Ville','Livraison','Fiscalité','Commission %','Lot','Type','Typo','Surface','Étage','Expo','Annexes','Parkings','Prix TVA 20 %','Prix TVA 5,5 %','€/m²','Statut','Loyer','Renta','Gare','Distance gare (m)','Plan','Extranet'];
 function dlCsv(rows, name) { const csv = '﻿' + rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';')).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = name + '-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); }
 document.getElementById('cartCsv').onclick = () => dlCsv([CSVH, ...cartRows().map(({ l, p }) => lotRow(p, l))], 'selection-lots');
@@ -2268,7 +2270,7 @@ function fichePdf(doc, p, l) {
   doc.text([p.promoteur, p.adresse, (p.cp || '') + ' ' + (p.ville || '')].filter(Boolean).join(' · '), M, y); y += 9;
   doc.setDrawColor(15, 124, 140); doc.setLineWidth(.6); doc.line(M, y, W - M, y); y += 9;
   doc.setFontSize(22); doc.setTextColor(15, 124, 140); doc.setFont('helvetica', 'bold'); doc.text('Lot n° ' + l.n + (l.bat ? '  (bât. ' + l.bat + ')' : ''), M, y);
-  doc.setFontSize(20); doc.text(fmt(l.prix20 || l.prix) + '  TVA 20 %', W - M, y, { align: 'right' }); y += 8; if (l.prix55) { doc.setFontSize(13); doc.text(fmt(l.prix55) + '  TVA 5,5 % (sous conditions)', W - M, y, { align: 'right' }); y += 6; } y += 2;
+  if (p20(l) != null) { doc.setFontSize(20); doc.text(fmt(p20(l)) + '  TVA 20 %', W - M, y, { align: 'right' }); y += 8; if (l.prix55) { doc.setFontSize(13); doc.text(fmt(l.prix55) + '  TVA 5,5 % (sous conditions)', W - M, y, { align: 'right' }); y += 6; } } else { doc.setFontSize(20); doc.text(fmt(l.prix55) + '  TVA 5,5 % (sous conditions)', W - M, y, { align: 'right' }); y += 8; } y += 2;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30);
   const rows = [['Typologie', (l.typo || '') + (l.type === 'Maison' ? ' · Maison' : '') + (l.pieces ? ' · ' + l.pieces + ' pièces' : '')], ['Surface', l.surf ? String(l.surf).replace('.', ',') + ' m²' : ''], ['Étage', l.etage == null ? (l.etage_raw || '') : (l.etage === 0 ? 'Rez-de-chaussée' : l.etage + (l.top ? ' (dernier étage)' : ''))], ['Exposition', l.expo || ''],
     ['Extérieur', l.annexes || ''], ['Parking', l.parkings || ''], ['Prix au m²', l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') + ' €/m²' : ''], ['Autres régimes', l.prix_regimes || ''], ['Loyer estimé', l.loyer ? fmt(l.loyer) + ' /mois' : ''], ['Rentabilité', l.renta ? String(l.renta).replace('.', ',') + ' %' : ''],
@@ -2340,7 +2342,7 @@ function carteMatchLot(l, p) {
     if (!ok) { if (!souple.ville) return null; ecarts.push('secteur : ' + (p.ville || '?')); }
   }
   if (bmax) {
-    const prix = l.prix20 || l.prix || null;
+    const prix = p20(l) != null ? p20(l) : (l.prix55 || null);
     if (prix != null) {
       if (prix > bmax * (1 + CARTE_MARGE_BUDGET)) return null;
       if (prix > bmax) { if (!souple.budget) return null; ecarts.push('budget +' + Math.round((prix / bmax - 1) * 100) + ' %'); }
@@ -2411,7 +2413,7 @@ function carteBadgeMatch(m) {
       titre: (p.nom || 'Programme') + (l.n ? ' — Lot ' + l.n : ''),
       ville: p.ville || '', commune: p.ville || '', adresse: p.adresse || '', adresseBrute: p.adresse || '', codePostal: p.cp || '',
       promoteur: p.promoteur || '',
-      prix: fmt(l.prix20 || l.prix),
+      prix: p20(l) != null ? fmt(p20(l)) : (l.prix55 ? fmt(l.prix55) + ' (TVA 5,5 %)' : '—'),
       surface: l.surf ? String(l.surf).replace('.', ',') + ' m²' : '',
       etage: l.etage == null ? (l.etage_raw || '') : (l.etage === 0 ? 'RDC' : String(l.etage)),
       typologies: l.typo ? [l.typo] : [],
@@ -2491,12 +2493,12 @@ function renderLotsView() {
   const all = visibleLots(); document.getElementById('tabLN').textContent = '(' + all.length.toLocaleString('fr-FR') + ')';
   if (VIEW !== 'l') return;
   const el = document.getElementById('lotsview');
-  const key = { ville: x => x.p.ville, prog: x => x.p.nom, n: x => x.l.n, typo: x => x.l.typo, surf: x => x.l.surf, etage: x => x.l.etage, prix: x => x.l.prix20 || x.l.prix, prix55: x => x.l.prix55, prix_m2: x => x.l.prix_m2, renta: x => x.l.renta, com: x => x.p.commission_pct, liv: x => x.p.livraison_key, gare: x => x.p.gare_dist };
+  const key = { ville: x => x.p.ville, prog: x => x.p.nom, n: x => x.l.n, typo: x => x.l.typo, surf: x => x.l.surf, etage: x => x.l.etage, prix: x => p20(x.l), prix55: x => x.l.prix55, prix_m2: x => x.l.prix_m2, renta: x => x.l.renta, com: x => x.p.commission_pct, liv: x => x.p.livraison_key, gare: x => x.p.gare_dist };
   const g = key[lvK] || key.prix_m2;
   all.sort((a, b) => { const x = g(a), y = g(b); if (x == null) return 1; if (y == null) return -1; return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { numeric: true })) * lvD; });
   const cols = [['ville', 'Ville'], ['prog', 'Programme'], ['n', 'Lot'], ['typo', 'Typo'], ['surf', 'm²'], ['etage', 'Ét.'], ['prix', 'Prix 20 %'], ['prix55', '5,5 %'], ['prix_m2', '€/m²'], ['renta', 'Renta'], ['com', 'Com.'], ['liv', 'Livr.'], ['gare', 'Gare']];
   let h = '<table><thead><tr><th></th>' + cols.map(([k, t]) => '<th data-k="' + k + '">' + t + (lvK === k ? (lvD > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
-  all.slice(0, lvMax).forEach(({ l, p }) => { h += '<tr data-p="' + esc(p.id) + '" data-l="' + esc(l.id) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(p.ville) + '</td><td title="' + esc(p.promoteur) + '">' + esc(p.nom).slice(0, 22) + '</td><td>' + esc(l.n) + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf || '') + '</td><td>' + (l.etage == null ? '' : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td class="r"><b>' + fmtk(l.prix20 || l.prix) + '</b>' + (l.prix_prev ? ' <span class="tag dn">↓</span>' : '') + '</td><td class="r" style="color:#166534">' + (l.prix55 ? fmtk(l.prix55) : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td class="r">' + (l.renta ? l.renta + ' %' : '') + '</td><td class="r">' + (p.commission_pct ? String(p.commission_pct).replace('.', ',') + ' %' : '') + '</td><td>' + esc(p.livraison || '') + '</td><td class="r">' + (p.gare_dist ? (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') : '') + '</td></tr>'; });
+  all.slice(0, lvMax).forEach(({ l, p }) => { h += '<tr data-p="' + esc(p.id) + '" data-l="' + esc(l.id) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(p.ville) + '</td><td title="' + esc(p.promoteur) + '">' + esc(p.nom).slice(0, 22) + '</td><td>' + esc(l.n) + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf || '') + '</td><td>' + (l.etage == null ? '' : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td class="r"><b>' + fmtk(p20(l)) + '</b>' + (l.prix_prev ? ' <span class="tag dn">↓</span>' : '') + '</td><td class="r" style="color:#166534">' + (l.prix55 ? fmtk(l.prix55) : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td class="r">' + (l.renta ? l.renta + ' %' : '') + '</td><td class="r">' + (p.commission_pct ? String(p.commission_pct).replace('.', ',') + ' %' : '') + '</td><td>' + esc(p.livraison || '') + '</td><td class="r">' + (p.gare_dist ? (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') : '') + '</td></tr>'; });
   h += '</tbody></table>' + (all.length > lvMax ? '<div class="more" id="lvMore">Afficher ' + Math.min(300, all.length - lvMax) + ' lots de plus (' + all.length + ' au total)</div>' : '');
   el.innerHTML = h;
   el.querySelectorAll('th[data-k]').forEach(th => th.onclick = () => { if (lvK === th.dataset.k) lvD = -lvD; else { lvK = th.dataset.k; lvD = 1; } renderLotsView(); });
