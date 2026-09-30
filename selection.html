@@ -1024,11 +1024,17 @@
     var idPlanLot = "lot-" + i;
     h += "<div class='lot-actions'>";
     if (planUrl) h += "<button type='button' class='plan-btn' data-plan-toggle='" + idPlanLot + "'>" + ICO_PLAN + "<span class='lbl' data-open='Voir le plan du lot' data-close='Masquer le plan'>Voir le plan du lot</span>" + ICO_CHEV + "</button>";
-    if (docsMulti.length > 1){
+    // Le bouton générique "Fiche et plans du lot" ne doit revenir que si aucun
+    // document du lot n'est déjà proposé ailleurs (plan du lot, plan de masse ou
+    // plaquette du programme) — sinon il fait doublon. Avant le 30/09/2026, il
+    // réapparaissait sur tout lot venu de la carte (b.lien toujours vide pour ces
+    // lots, donc docsOtareeTrouves toujours faux) même quand plan/masse/plaquette
+    // étaient déjà tous affichés — bug remonté par Alex.
+    if (docsMulti.length){
       docsMulti.forEach(function(x){ h += "<a class='doc-pill' href='" + esc(x.url) + "' target='_blank' rel='noopener'>" + ICO_DOC + esc(x.nom || "Document") + "</a>"; });
-    } else if (!docsOtareeTrouves) {
+    } else if (!docsOtareeTrouves && !planUrl && !b.masse && !b.plaquette) {
       var lienDoc = htmlLienDoc(b);
-      if (lienDoc) h += "<a class='doc-pill' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>" + ICO_DOC + esc(docsMulti.length === 1 ? docsMulti[0].nom || "Fiche et plans du lot" : "Fiche et plans du lot") + "</a>";
+      if (lienDoc) h += "<a class='doc-pill' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>" + ICO_DOC + "Fiche et plans du lot</a>";
     }
     h += htmlAvisMini(i);
     h += "</div>";
