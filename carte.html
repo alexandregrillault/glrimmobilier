@@ -1175,6 +1175,10 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .z14 .pin{width:20px;height:20px;margin:-3px}
 .pin.ap{background:#fff;border:2.5px dashed var(--approx);box-shadow:0 2px 6px rgba(0,0,0,.35)}
 .pin.hl{background:#f59e0b;transform:scale(1.35)}
+.pin{transition:transform .12s ease}
+.pin.hov{transform:scale(2);box-shadow:0 0 0 2px var(--teal),0 0 0 5px rgba(255,255,255,.9),0 4px 14px rgba(0,0,0,.5)}
+.pin.hl.hov{transform:scale(2)}
+.it.hov{background:#e6f4f6}
 .pin.pk{background:#fff7ed;border:2.5px dashed #ea580c;box-shadow:0 2px 6px rgba(0,0,0,.35)}
 .pin.nm{background:#fef2f2;border:2.5px dashed #b91c1c;box-shadow:0 2px 6px rgba(0,0,0,.35);opacity:.85}
 .tag.nm{background:#fee2e2;color:#991b1b;font-weight:600}
@@ -1702,7 +1706,17 @@ function pin(p) {
   const nd = p.logs.filter(l => l.st === 'libre').length;
   const m = L.marker([p.lat, p.lng], { icon: L.divIcon({ className: 'pinw', html: '<div class="pin' + (p.nomandat ? ' nm' : p.picking ? ' pk' : (p.geo_approx ? ' ap' : '')) + (nd || p.picking ? '' : ' sold') + (SEL === p ? ' hl' : '') + '"></div>', iconSize: [14, 14], iconAnchor: [7, 7] }) });
   m.bindTooltip('<b>' + esc(p.nom) + '</b><br>' + esc(p.promoteur) + ' — ' + esc(p.ville) + '<br>' + (p.nomandat ? '<b style="color:#b91c1c">Sans mandat</b> — à prospecter' : p.picking ? '<b style="color:#ea580c">Picking à demander</b> — pas dans l’extranet' : nd + ' dispo · dès ' + fmtk(p.prix_min20 || p.prix_min) + (p.prix_min55 ? ' (' + fmtk(p.prix_min55) + ' en TVA 5,5 %)' : '')) + (p.geo_approx && !p.picking ? '<br><i>position approximative (centre de la commune)</i>' : ''), { className: 'tt', direction: 'top', offset: [0, -6] });
-  m.on('click', () => select(p, false)); markers[p.id] = m; return m;
+  m.on('click', () => select(p, false)); markers[p.id] = m;
+  m.on('mouseover', () => { const it = document.querySelector('.it[data-id="' + p.id.replace(/"/g, '') + '"]'); if (it) it.classList.add('hov'); });
+  m.on('mouseout', () => { document.querySelectorAll('.it.hov').forEach(x => x.classList.remove('hov')); });
+  return m;
+}
+// Survol d'un programme dans la liste → le pin correspondant grossit sur la carte
+function hoverPin(id, on) {
+  document.querySelectorAll('.pin.hov').forEach(x => { if (on || !id) x.classList.remove('hov'); });
+  const m = markers[id]; if (!m || !m._icon) return;
+  const el = m._icon.querySelector('.pin'); if (!el) return;
+  el.classList.toggle('hov', !!on); m.setZIndexOffset(on ? 1000 : 0);
 }
 
 // ---------- critères masquables ----------
@@ -1936,7 +1950,7 @@ function renderList() {
     });
   });
   el.innerHTML = h; bindConc(el);
-  el.querySelectorAll('.it').forEach(d => d.onclick = () => select(P.find(p => p.id === d.dataset.id), true));
+  el.querySelectorAll('.it').forEach(d => { d.onclick = () => select(P.find(p => p.id === d.dataset.id), true); d.onmouseenter = () => hoverPin(d.dataset.id, true); d.onmouseleave = () => hoverPin(d.dataset.id, false); });
   el.querySelectorAll('.grp').forEach(d => d.onclick = () => zoomVille(d.dataset.v));
   if (F.tt && F.tt.mode !== 'car') setTimeout(fillRealTimes, 50);
 }
