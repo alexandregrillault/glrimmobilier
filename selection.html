@@ -970,12 +970,17 @@
     var planUrl = visu.plan ? (planEntier(b) || visu.url) : "";
     var docsMulti = (!b.lien && Array.isArray(b.docs)) ? b.docs.filter(function(x){ return x && x.url; }) : [];
     if (docsMulti.length) docsMulti = docsMulti.filter(function(x){ return !(b.plaquette && x.url === b.plaquette) && !(b.masse && x.url === b.masse); });
+    // Lien Otaree dont on a pu identifier au moins un document (plan, plan de
+    // masse ou plaquette) : ceux-ci sont déjà proposés ailleurs (bouton "Voir
+    // le plan du lot", case plaquette/plan de masse au niveau du programme) —
+    // plus besoin de renvoyer aussi vers la fiche Otaree brute (29/09/2026).
+    var docsOtareeTrouves = !!(b.lien && (b.plan || b.masse || b.plaquette));
     var idPlanLot = "lot-" + i;
     h += "<div class='lot-actions'>";
     if (planUrl) h += "<button type='button' class='plan-btn' data-plan-toggle='" + idPlanLot + "'>" + ICO_PLAN + "<span class='lbl' data-open='Voir le plan du lot' data-close='Masquer le plan'>Voir le plan du lot</span>" + ICO_CHEV + "</button>";
     if (docsMulti.length > 1){
       docsMulti.forEach(function(x){ h += "<a class='doc-pill' href='" + esc(x.url) + "' target='_blank' rel='noopener'>" + ICO_DOC + esc(x.nom || "Document") + "</a>"; });
-    } else {
+    } else if (!docsOtareeTrouves) {
       var lienDoc = htmlLienDoc(b);
       if (lienDoc) h += "<a class='doc-pill' href='" + esc(lienDoc) + "' target='_blank' rel='noopener'>" + ICO_DOC + esc(docsMulti.length === 1 ? docsMulti[0].nom || "Fiche et plans du lot" : "Fiche et plans du lot") + "</a>";
     }
