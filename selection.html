@@ -194,6 +194,20 @@
   .comp-invite button { border:none; background:var(--gold); color:#fff; border-radius:12px; padding:13px 26px; font-size:14.5px; font-weight:700; cursor:pointer; transition:background .15s; }
   .comp-invite button:hover { background:var(--gold-fonce); }
 
+  /* Gros pavé "prenez un créneau" en fin de page — repris de l'ancien design (30/09/2026, Alex :
+     "j'aimais bien l'ancien gros carré"), en plus de la barre du bas qui reste toujours disponible
+     en scrollant. Les boutons réutilisent la classe .rdv-format : ouvrirBulle()/brancherBarre() les
+     câblent automatiquement (recherche document-wide), aucun code de clic séparé n'est nécessaire. */
+  .cta-rdv { background:var(--vert); border-radius:18px; padding:28px 24px; margin:2px 0 22px; text-align:center; box-shadow:0 4px 18px rgba(30,58,50,.22); }
+  .cta-rdv h3 { font-family:Georgia,serif; font-size:19px; font-weight:600; margin-bottom:7px; color:#fff; }
+  .cta-rdv p { font-size:13.5px; color:rgba(255,255,255,.82); margin:0 auto 18px; max-width:420px; }
+  .cta-rdv .rdv-choix { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .cta-rdv .rdv-format { background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.55); min-width:100px; height:58px; font-size:12px; }
+  .cta-rdv .rdv-format small { opacity:.9; }
+  .cta-rdv .rdv-format:hover { background:rgba(255,255,255,.24); }
+  .cta-rdv .rdv-format.active { background:#fff; color:var(--vert); border-color:#fff; }
+  .cta-rdv .rdv-format-ok { background:#fff; color:var(--vert); border-color:#fff; min-width:140px; }
+
   /* Rubrique Financement : résumé de la simulation, à part, juste après le bandeau .meta */
   .financement { background:var(--carte); border:1px solid var(--gold); border-radius:16px; padding:22px 24px; margin:4px 0 22px; box-shadow:0 2px 12px rgba(200,169,110,.15); }
   .financement-eyebrow { color:var(--gold-fonce); font-size:12px; letter-spacing:1.5px; text-transform:uppercase; font-weight:600; margin-bottom:8px; }
@@ -620,6 +634,31 @@
     return h;
   }
 
+  // Gros pavé "prenez un créneau" en fin de page (voir .cta-rdv) — même logique que htmlBarreRdv()
+  // mais présentation en carte avec message d'invitation, pour rester visible même une fois la
+  // barre du bas passée en revue rapide.
+  function htmlCarteRdv(d){
+    var rdv = etatAvis.rdv || {};
+    var qui = d.vendeur ? esc(d.vendeur) : "votre conseiller";
+    if (rdv.reserve && rdv.debut && !rdv.refuse){
+      var confirme = !!rdv.confirme;
+      var h0 = "<div class='cta-rdv'><h3>" + (confirme ? "Rendez-vous confirmé" : "Votre créneau est réservé") + "</h3>";
+      h0 += "<p>" + esc(fmtJourLong(rdv.debut)) + " à " + esc(fmtHeure(rdv.debut)) + " — " + esc(libelleRdv(rdv)) + (rdv.lieu ? " — " + esc(rdv.lieu) : "") + "</p>";
+      h0 += "<div class='rdv-choix'><button type='button' class='rdv-format rdv-format-ok' data-format='_confirme'>" + (confirme ? "✓ Confirmé" : "✓ Réservé") + "</button></div></div>";
+      return h0;
+    }
+    var bulleOuverte = document.getElementById("rdv-bulle") && document.getElementById("rdv-bulle").classList.contains("open");
+    var h = "<div class='cta-rdv'><h3>Une question sur cette sélection ?</h3>";
+    h += "<p>Prenez un créneau pour qu'on en parle avec " + qui + ", en visio ou par téléphone.</p>";
+    h += "<div class='rdv-choix'>";
+    ["visio", "appel"].forEach(function(k){
+      var f = FORMATS[k];
+      h += "<button type='button' class='rdv-format" + (bulleOuverte && formatChoisi === k ? " active" : "") + "' data-format='" + k + "'><span>" + esc(f.titre) + "</span><small>" + f.duree + " min</small></button>";
+    });
+    h += "</div></div>";
+    return h;
+  }
+
   function majBulle(d){
     var r = htmlRdv(d);
     document.getElementById("rdv-bulle-titre").textContent = r.titre;
@@ -644,6 +683,8 @@
   function majRdvUI(d){
     var choix = document.getElementById("rdv-choix");
     if (choix) choix.innerHTML = htmlBarreRdv();
+    var cta = document.getElementById("cta-rdv-zone");
+    if (cta) cta.innerHTML = htmlCarteRdv(d);
     brancherBarre(d);
     majBulle(d);
   }
@@ -1168,6 +1209,8 @@
       h += "<p>Mettez-les côte à côte : prix, surface, étage, exposition et livraison dans un seul tableau.</p>";
       h += "<button id='comp-ouvrir'>Comparer les " + biens.length + " biens</button></div>";
     }
+
+    h += "<div id='cta-rdv-zone'></div>";
 
     h += "<footer>" + (biens.length === 1 ? "Donnez votre avis sur ce bien" : "Donnez votre avis sur chaque bien") + " : votre conseiller adaptera la prochaine sélection.";
     h += "<div class='partage'><button id='btn-partage'>Partager cette sélection</button></div>";
