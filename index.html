@@ -10647,6 +10647,17 @@ function _eqPropositionsEnAttente() {
   return out.sort((a, b) => b.jours - a.jours);
 }
 
+// Même règle que côté gérant : un RDV « à valider » disparaît de la liste dès
+// que le commercial a déjà agi sur la fiche depuis la réservation (note,
+// statut...) — reposer un rappel ou noter « Sans réponse » seuls ne comptent
+// pas (même logique que le trigger derniere_action_le).
+function _eqRdvDejaTraite(c) {
+  const l = (_eqLeads || []).find(x => x.id === c.contact_id);
+  const depuis = c.reserve_le || c.created_at;
+  if (!l || !l.derniere_action_le || !depuis) return false;
+  return new Date(l.derniere_action_le) > new Date(depuis);
+}
+
 function renderEqNotifs() {
   const liste = document.getElementById('eq-notif-liste');
   const badge = document.getElementById('eq-notif-badge');
@@ -10680,7 +10691,8 @@ function renderEqNotifs() {
   const btnActions = (id) => `<button class="btn btn-sm btn-secondary" onclick="eqActMenu('${id}', event)" style="font-size:11px" title="Reporter, changer le statut ou retirer cette activité">Actions ▾</button>`;
 
   // 1. RDV choisis par un client : à valider (en retard si la date est déjà passée)
-  _eqRdv.filter(c => c.statut === 'reserve').forEach(c => {
+  // — sauf si le commercial a déjà agi sur la fiche depuis la réservation
+  _eqRdv.filter(c => c.statut === 'reserve' && !_eqRdvDejaTraite(c)).forEach(c => {
     const html = item('rdv',
       'Valider le RDV de ' + esc(c.client_nom || 'Client') + rep(c.contact_id),
       esc(_rdvQuand(c)) + ' · ' + esc(_crenLbl(c)) + (c.client_message ? ' · « ' + esc(c.client_message) + ' »' : ''),
@@ -19276,6 +19288,7 @@ let _grCreneaux = [];   // créneaux réservés, proposés, et confirmés du jou
 let _grLots = [];       // liens de RDV + sélections, pour les demandes et les délais
 let _grNoms = {};       // contact_id -> nom du client, quand le lien ne le porte pas
 let _grDelais = {};     // vendeur -> délai moyen de validation (h ouvrées, 30 j)
+let _grActions = {};    // contact_id -> derniere_action_le, pour ignorer un RDV déjà traité autrement
 let _grCharge = 0;      // horodatage du dernier chargement
 
 // Heures ouvrées entre deux instants — un client qui réserve le samedi soir
@@ -19373,6 +19386,19 @@ async function grRdvCharger() {
       });
     } catch (e) { /* on affichera « Client » */ }
   }
+
+  // Dernière action des fiches en attente de validation : si le vendeur a déjà
+  // agi sur la fiche depuis la réservation (note, statut...), le RDV ne doit
+  // plus s'afficher ici — il a traité le client autrement.
+  _grActions = {};
+  const idsAValider = [...new Set(_grCreneaux.filter(c => c.statut === 'reserve' && c.contact_id).map(c => c.contact_id))];
+  if (idsAValider.length) {
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,derniere_action_le&id=in.(' + idsAValider.join(',') + ')', { cache: 'no-store', headers: entetes });
+      if (r.ok) (await r.json()).forEach(c => { _grActions[c.id] = c.derniere_action_le; });
+    } catch (e) { /* en cas d'échec on affiche par prudence, rien de perdu */ }
+  }
+
   _grCharge = Date.now();
 }
 
@@ -19396,14 +19422,26 @@ function grDelaisVendeurs(lots) {
   return out;
 }
 
+// Le vendeur a déjà agi sur la fiche depuis que le client a réservé (note,
+// statut...) : inutile de continuer à réclamer une validation, il a traité
+// le client autrement. Un rappel posé/déplacé seul, ou un « Sans réponse »
+// seul, ne comptent pas comme une action (même règle que derniere_action_le).
+function _grDejaTraite(c) {
+  const action = c.contact_id && _grActions[c.contact_id];
+  const depuis = c.reserve_le || c.created_at;
+  if (!action || !depuis) return false;
+  return new Date(action) > new Date(depuis);
+}
+
 // ---- Tri des données en quatre paquets -------------------------------------
 function grRdvPaquets() {
   const now = Date.now();
   const j0 = new Date(); j0.setHours(0, 0, 0, 0);
   const j1 = new Date(j0); j1.setDate(j1.getDate() + 1);
 
-  // 1. Créneaux réservés par un client, pas encore validés
-  const aValider = _grCreneaux.filter(c => c.statut === 'reserve').map(c => {
+  // 1. Créneaux réservés par un client, pas encore validés (sauf si le
+  // vendeur a déjà traité la fiche autrement depuis la réservation)
+  const aValider = _grCreneaux.filter(c => c.statut === 'reserve' && !_grDejaTraite(c)).map(c => {
     const depuis = c.reserve_le || c.created_at;
     const passe = new Date(c.debut).getTime() < now;
     return { c, depuis, attente: grHeuresOuvrees(depuis, now), passe };
