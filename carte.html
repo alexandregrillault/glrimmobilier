@@ -1379,7 +1379,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---------- filtres ----------
-const F = { promo: '', dept: '', typos: new Set(), extMin: '', etage: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
+const F = { promo: '', dept: '', typos: new Set(), extMin: '', etage: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre', 'option']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
 // ---------- repli manuel du volet des filtres (gagner de la place pour la liste) ----------
 let filtersCollapsed = false;
 function setFiltersCollapsed(on) { filtersCollapsed = on; document.querySelector('.filters').classList.toggle('collapsed', on); }
@@ -1513,7 +1513,7 @@ function activeList() {
   F.flags.forEach(k => add((FLAGS.find(x => x[0] === k) || [k, k])[1], () => { F.flags.delete(k); [...fFl.children].forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); renderExtMin(); }));
   if (F.flags.has('ext') && F.extMin) add('Extérieur ≥ ' + String(F.extMin).replace('.', ',') + ' m²', () => { F.extMin = ''; const i = document.getElementById('fExtMin'); if (i) i.value = ''; });
   if (F.maison) add('Maisons', () => { F.maison = false; document.getElementById('fMaison').checked = false; });
-  if (!(F.st.size === 1 && F.st.has('libre'))) add(F.st.size ? stLabel(F.st) : 'Tous les statuts', () => { setSt('libre'); });
+  if (!(F.st.size === 2 && F.st.has('libre') && F.st.has('option'))) add(F.st.size ? stLabel(F.st) : 'Tous les statuts', () => { setSt('libre,option'); });
   return a;
 }
 function renderActive() {
@@ -1621,7 +1621,7 @@ document.getElementById('fBudget').oninput = e => { const v = e.target.value; F.
 [...document.getElementById('fLivM').children].forEach(c => c.onclick = () => { F.livM = c.dataset.m; [...c.parentElement.children].forEach(x => x.classList.toggle('on', x === c)); apply(); });
 document.getElementById('fSort').onchange = e => { F.sort = e.target.value; renderList(); };
 document.getElementById('fMaison').onchange = e => { F.maison = e.target.checked; apply(); };
-document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', etage: '' }); setSt('libre'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.querySelectorAll('.chip')].forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
+document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', etage: '' }); setSt('libre,option'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.querySelectorAll('.chip')].forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
 
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
