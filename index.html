@@ -12058,6 +12058,9 @@ function _selLotDepuisExtraction(d, lien) {
     // construction, la fonction le dit avec adresseFiable). Lot Otaree : on
     // garde le recoupement BAN + confirmation du vendeur.
     geo: d.geo || null, adresseOk: d.adresseFiable === true || _selAdresseFiable(d),
+    // Lignes de transport à proximité (métro/RER/train/tram, jamais de bus),
+    // calculées côté serveur à partir de la même géolocalisation que geo (30/09/2026).
+    transports: Array.isArray(d.transports) ? d.transports : [],
     surface: d.surface || '', surfacePonderee: d.surfacePonderee || '',
     etage: d.etage || '', terrasse: d.terrasse || '', parking: d.parking || '',
     expo: d.expo || '', livraison: d.livraison || '', promoteur: d.promoteur || '',
