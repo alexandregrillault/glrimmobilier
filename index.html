@@ -12079,6 +12079,9 @@ function _selLotDepuisExtraction(d, lien) {
     etage: d.etage || '', terrasse: d.terrasse || '', parking: d.parking || '',
     expo: d.expo || '', livraison: d.livraison || '', promoteur: d.promoteur || '',
     programme: d.programme || '', plaquette: d.plaquette || '',
+    // Lien vers la maquette 3D du promoteur, saisi sur la carte (30/09/2026) — affiché
+    // sur la feuille sélection quand il existe, relu à chaque ouverture pour les lots carte.
+    maquette3d: d.maquette3d || '',
     nature: d.nature || '', annexes: Array.isArray(d.annexes) ? d.annexes : [],
     prixOptions: Array.isArray(d.prixOptions) ? d.prixOptions : [],
     pitch: '', typologies: Array.isArray(d.typologies) ? d.typologies : [], atouts: []
@@ -12723,6 +12726,8 @@ function _selDocsCarteBadges(b, i) {
   parts.push(b.plaquette ? ok('Plaquette') : manque('Plaquette', 'plaquette', 'programme'));
   parts.push(b.masse ? ok('Plan de masse') : manque('Plan de masse', 'masse', 'programme'));
   parts.push(b.plan ? ok('Plan du lot') : manque('Plan du lot', 'plan', 'lot'));
+  // Maquette 3D : optionnelle (rare), jamais signalée comme manquante — le lien se saisit sur la carte
+  if (b.maquette3d) parts.push(ok('Maquette 3D'));
   return parts.join(' · ');
 }
 function _selDocsCarteRecalculer(b) {
@@ -13135,7 +13140,7 @@ function accordBiens(texte, n) {
 // ============================================================
 const MODELE_MAIL_DEFAUT = {
   sujet: 'Votre sélection de biens personnalisée — GLR Immobilier',
-  corps: 'Bonjour {client},\n\n{message}\n\nJ\'ai regroupé {nb_biens} sur une page dédiée, tout est ici :\n{lien}\n\nVous pouvez me donner votre avis sur chaque bien en un clic directement sur la page — cela m\'aide à affiner la prochaine sélection.\n\nBien à vous,\n{vendeur}\nGLR Immobilier'
+  corps: 'Bonjour {client},\n\n{message}\n\nJ\'ai regroupé {nb_biens} sur une page dédiée :\n{lien}\n\nSur chaque bien, donnez votre avis en un clic — ça m\'aide à affiner la suite :\n✓ Ça m\'intéresse\n~ À discuter\n✕ Pas pour moi\n\nVous pouvez aussi réserver directement un rendez-vous en visio ou par téléphone, depuis la page, pour qu\'on affine cette sélection ensemble ou que je réponde à vos questions.\n\nBien à vous,\n{vendeur}\nGLR Immobilier'
 };
 const ETIQUETTES_MAIL = [
   ['{client}',   'le nom du client tel qu\'il sera salué (« Monsieur Dupont » ou son prénom)'],
