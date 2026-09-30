@@ -7757,7 +7757,8 @@ function eqQualifRemplie(l) {
   if (q.ptz) n++;
   if (q.tva_reduite) n++;
   if (q.livraison_max) n++;
-  return { n, total: 15 };
+  if (q.transport_min || q.transport_max) n++;
+  return { n, total: 16 };
 }
 
 // ---- Récapitulatif horizontal des critères du client (bandeau de la fenêtre de sélection)
@@ -7774,6 +7775,7 @@ function eqCriteresChips(l) {
   if (q.commune_residence) push('Habite ' + esc(q.commune_residence));
   if (q.adresse_travail) push('Travaille près de ' + esc(q.adresse_travail));
   if (q.lignes_transport && q.lignes_transport.length) push('' + q.lignes_transport.map(esc).join(' / '));
+  if (q.transport_min || q.transport_max) push('Transport à pied : ' + (q.transport_min && q.transport_max ? esc(q.transport_min) + '–' + esc(q.transport_max) + ' min' : q.transport_min ? '≥ ' + esc(q.transport_min) + ' min' : '≤ ' + esc(q.transport_max) + ' min'), flexible('importance_transport'));
   if (l.typologie) push('' + esc(l.typologie), flexible('importance_typologie'));
   String(l.lieu || '').split(/\s*,\s*/).filter(Boolean).forEach(v => push('' + esc(v), flexible('importance_ville')));
   if (l.budget) push('' + esc(l.budget) + ({ avec: ' (avec PTZ)', sans: ' (sans PTZ)', a_verifier: ' (PTZ à vérifier)' }[q.ptz] || ''), flexible('importance_budget'));
@@ -8877,6 +8879,16 @@ ${(() => {
         </div>
         <input id="eq-ligne-input" oninput="eqLigneRechercheInput(this.value)" placeholder="Ligne de transport… (ex : RER A, Métro 1)" autocomplete="off" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
         <div id="eq-ligne-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
+      ${carte(titreQ('Temps de trajet à pied jusqu\'au transport') + `<div style="display:flex;gap:8px">
+        <div style="flex:1">
+          <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Minimum (min)</div>
+          ${inputQ('transport_min', q.transport_min, 'Ex : 2')}
+        </div>
+        <div style="flex:1">
+          <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Maximum (min)</div>
+          ${inputQ('transport_max', q.transport_max, 'Ex : 10')}
+        </div>
+      </div>` + importanceQ('importance_transport'))}
       ${carte(titreQ('Typologie — plusieurs choix possibles') + `<div style="display:flex;gap:6px;flex-wrap:wrap">${btnsMulti('eqTypoToggle', [['T1','T1'],['T2','T2'],['T3','T3'],['T4','T4'],['T5+','T5+']], String(l.typologie||'').split(/\s*,\s*/).filter(Boolean))}</div>` + importanceQ('importance_typologie'))}
       ${carte(titreQ('Ville(s) de recherche') + `
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:${villes.length?'8px':'0'}">
@@ -11455,7 +11467,9 @@ function _selOuvrirCarte() {
   const url = 'carte.html?client=' + encodeURIComponent(_selCtx.lead.id)
     + '&nom=' + encodeURIComponent(nomComplet(_selCtx.lead) || '')
     + '&session=' + token
-    + '&criteres=' + encodeURIComponent(JSON.stringify(criteres));
+    + '&criteres=' + encodeURIComponent(JSON.stringify(criteres))
+    + '&email=' + encodeURIComponent(_selCtx.lead.email || '')
+    + '&tel=' + encodeURIComponent(_selCtx.lead.telephone || '');
   window.open(url, '_blank');
 }
 
