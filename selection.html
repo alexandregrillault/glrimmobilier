@@ -71,9 +71,6 @@
   .card.vue { opacity:1; transform:none; }
   @media (prefers-reduced-motion:reduce){ .card { opacity:1; transform:none; transition:none; } }
 
-  .carte-mini { position:relative; height:190px; background-size:cover; background-position:center; cursor:zoom-in; }
-  .badge { position:absolute; top:12px; left:12px; background:rgba(255,255,255,.94); padding:4px 11px; border-radius:8px; font-size:12px; font-weight:700; color:var(--dark); }
-  .badge.badge-neuf { left:auto; right:12px; color:var(--gold-fonce); }
 
   .body-card { padding:22px 24px 4px; }
   .eyebrow { color:var(--gold-fonce); font-size:12px; letter-spacing:1.5px; text-transform:uppercase; font-weight:600; margin-bottom:4px; }
@@ -333,7 +330,6 @@
     .logo { height:84px; }
     .barre-btn { padding:9px 12px; font-size:12.5px; }
     .rdv-format { min-width:56px; font-size:10px; }
-    .carte-mini { height:160px; }
     .body-card { padding:18px 18px 2px; }
     .lots { padding:0 18px; }
   }
@@ -842,12 +838,19 @@
     }
     return h + "</div></div></div>";
   }
+  // Carte statique Mapbox (connectée le 29/09/2026 pour le bloc adresse) — extraite en
+  // fonction commune le 30/09/2026 pour être réutilisée par la mini-vignette de la carte
+  // programme (voir htmlCarte) : un aperçu de carte est toujours juste, jamais flou ni mal
+  // étiqueté, contrairement à une photo extraite chez le promoteur/Otaree (voir plus bas).
+  function urlCarteStatique(g, larg, haut){
+    var MAPBOX_TOKEN = "pk.eyJ1IjoiZ2xyaW1tb2JpbGllciIsImEiOiJjbXVtd3E3ajYwNDVuMnlzOXBnNGsxM29sIn0.Y6Z3p6E6o_kiBNpBJ3Tm7Q";
+    return "https://api.mapbox.com/styles/v1/mapbox/light-v11/static/" + g.lon + "," + g.lat + ",16,0/" + larg + "x" + haut + "@2x?access_token=" + MAPBOX_TOKEN;
+  }
   function htmlAdresse(b, i, a){
     if (adresseSure(b)){
       var g = b.geo, txt = adresseTexte(b);
       var q = encodeURIComponent(txt);
-      var MAPBOX_TOKEN = "pk.eyJ1IjoiZ2xyaW1tb2JpbGllciIsImEiOiJjbXVtd3E3ajYwNDVuMnlzOXBnNGsxM29sIn0.Y6Z3p6E6o_kiBNpBJ3Tm7Q";
-      var carteUrl = "https://api.mapbox.com/styles/v1/mapbox/light-v11/static/" + g.lon + "," + g.lat + ",16,0/640x300@2x?access_token=" + MAPBOX_TOKEN;
+      var carteUrl = urlCarteStatique(g, 640, 300);
       var h2 = "<div class='adresse-row'><svg width='15' height='15' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='#c8a96e'/><circle cx='12' cy='10' r='2.4' fill='#fff'/></svg><span>" + esc(txt) + "</span><a href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Voir sur Maps ↗</a></div>";
       if (Array.isArray(b.transports) && b.transports.length){
         h2 += "<div class='transports-row'>" + b.transports.map(function(t){
@@ -1115,15 +1118,15 @@
     var items = pg.items, b0 = items[0].b, i0 = items[0].i, n = items.length;
     var nom = nomProgramme(b0) || b0.titre || "Bien";
     var h = "<div class='card'>";
-    var photo = "", iPhoto = i0;
-    for (var k = 0; k < n; k++){ var p = photoDe(items[k].b); if (p){ photo = p; iPhoto = items[k].i; break; } }
-    var nbNeufs = items.filter(function(o){ return o.b && o.b.nouveau; }).length;
-    if (photo){
-      h += "<div class='carte-mini' data-gp='" + iPhoto + "' style=\"background-image:url('" + esc(photo).replace(/"/g, "&quot;") + "')\">";
-      h += "<div class='badge'>" + n + " bien" + (n > 1 ? "s" : "") + "</div>";
-      if (nbNeufs) h += "<div class='badge badge-neuf'>" + (nbNeufs === n ? "Nouveau" : nbNeufs + " nouveaux") + "</div>";
-      h += "</div>";
-    }
+    var bAdr = null, iAdr = i0;
+    for (var m = 0; m < n; m++){ if (adresseSure(items[m].b)){ bAdr = items[m].b; iAdr = items[m].i; break; } }
+    // Vignette en tête de carte retirée le 30/09/2026 (demande d'Alex, après le cas Beau
+    // Chemin où Otaree avait renvoyé le plan de masse à la place d'une photo du bâtiment,
+    // puis après un essai de mini-carte Mapbox en remplacement jugé encore trop proche de
+    // l'ancien "gros carré" — Alex : « juste enlever la photo du programme »). La carte va
+    // directement du titre/chips/pitch au bloc adresse (qui garde sa propre petite carte
+    // Mapbox, inchangée) : plus aucune image en tête de carte, jamais de risque d'affichage
+    // faux ou flou. Ne pas réintroduire de vignette ici sans un nouvel arbitrage explicite.
     h += "<div class='body-card'>";
     h += "<div class='eyebrow'>" + esc(b0.ville || "") + "</div>";
     h += "<h2 class='titre-prog'>" + esc(nom) + "</h2>";
@@ -1141,8 +1144,6 @@
     var atouts = premier(items, "atouts");
     if (Array.isArray(atouts) && atouts.length) h += "<ul class='atouts'>" + atouts.slice(0, 5).map(function(x){ return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
 
-    var bAdr = null, iAdr = i0;
-    for (var m = 0; m < n; m++){ if (adresseSure(items[m].b)){ bAdr = items[m].b; iAdr = items[m].i; break; } }
     if (bAdr) h += htmlAdresse(bAdr, iAdr, etatAvis[String(iAdr)] || {});
     else {
       var demandee = items.some(function(o){ return (etatAvis[String(o.i)] || {}).adresse_demandee; });
@@ -1410,14 +1411,6 @@
       finToggle.textContent = ouvert ? "Comment on arrive à ce montant ?" : "Masquer le détail";
     });
 
-    // Mini-photo de la carte : clic → plein écran, sur les images du programme
-    Array.prototype.forEach.call(document.querySelectorAll(".carte-mini[data-gp]"), function(g){
-      var ip = parseInt(g.getAttribute("data-gp"), 10);
-      g.addEventListener("click", function(){
-        var bl = biens[ip] || {}, j = imagesDe(bl).indexOf(photoDe(bl));
-        ouvrirLb(ip, j < 0 ? 0 : j);
-      });
-    });
 
     // Panneaux qui glissent : plan du lot, plan de masse
     Array.prototype.forEach.call(document.querySelectorAll("[data-plan-toggle]"), function(btn){
