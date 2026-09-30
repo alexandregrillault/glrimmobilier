@@ -85,6 +85,11 @@
   .adresse-row span { flex:1; min-width:0; }
   .adresse-row > a { margin-left:auto; color:var(--gold-fonce); font-weight:600; font-size:12.5px; white-space:nowrap; text-decoration:none; }
   .adresse-row > a:hover { text-decoration:underline; }
+  /* Lignes de transport à proximité (métro / RER / train / tram — jamais de bus), 30/09/2026 */
+  .transports-row { display:flex; flex-wrap:wrap; gap:6px; padding:0 0 12px; }
+  .transport-chip { display:inline-flex; align-items:center; gap:5px; background:var(--gold-clair); border:1px solid var(--bordure); border-radius:20px; padding:4px 10px 4px 8px; font-size:12px; color:var(--encre); }
+  .transport-dot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .transport-gare { color:var(--muted); }
   .carte { position:relative; height:150px; border-radius:12px; overflow:hidden; border:1px solid var(--bordure); background:#eceae4; cursor:pointer; margin-bottom:10px; }
   .carte-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border:0; }
   .carte .pin { position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-30px 0 0 -11px; opacity:0; }
@@ -795,6 +800,13 @@
       var MAPBOX_TOKEN = "pk.eyJ1IjoiZ2xyaW1tb2JpbGllciIsImEiOiJjbXVtd3E3ajYwNDVuMnlzOXBnNGsxM29sIn0.Y6Z3p6E6o_kiBNpBJ3Tm7Q";
       var carteUrl = "https://api.mapbox.com/styles/v1/mapbox/light-v11/static/" + g.lon + "," + g.lat + ",16,0/640x300@2x?access_token=" + MAPBOX_TOKEN;
       var h2 = "<div class='adresse-row'><svg width='15' height='15' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='#c8a96e'/><circle cx='12' cy='10' r='2.4' fill='#fff'/></svg><span>" + esc(txt) + "</span><a href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Voir sur Maps ↗</a></div>";
+      if (Array.isArray(b.transports) && b.transports.length){
+        h2 += "<div class='transports-row'>" + b.transports.map(function(t){
+          var coul = t.couleur ? ("#" + String(t.couleur).replace(/^#/, "")) : "#c8a96e";
+          var dist = t.distance ? (t.distance < 1000 ? (t.distance + " m") : ((t.distance / 1000).toFixed(1).replace(".", ",") + " km")) : "";
+          return "<span class='transport-chip'><span class='transport-dot' style='background:" + esc(coul) + "'></span><b>" + esc(t.ligne || "") + "</b> <span class='transport-gare'>· " + esc(t.gare || "") + (dist ? " (" + dist + ")" : "") + "</span></span>";
+        }).join("") + "</div>";
+      }
       h2 += "<div class='carte vue' data-q='" + esc(q) + "'>";
       h2 += "<img class='carte-img' src='" + carteUrl + "' alt='' loading='lazy' onerror=\"this.closest('.carte').style.display='none'\">";
       h2 += "<div class='pin'>" + PIN.replace(/%23/g, "#") + "</div></div>";
