@@ -11909,9 +11909,20 @@ async function selPlanLot(i) {
   const div = document.createElement('div');
   div.id = 'sel-plan-modal';
   div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px';
+  // Rappel visuel à l'ouverture de la fenêtre (30/09/2026, demande d'Alex) :
+  // plan de masse du programme + éventuelles autres vues du lot (duplex,
+  // maison à étages) — simple affichage, le recadrage ne porte que sur la
+  // vue principale ci-dessous, comme avant.
+  const autresVues = Array.isArray(b.plans) ? b.plans.filter(u => u && u !== b.plan) : [];
+  const refsHtml = (b.masse || autresVues.length) ? `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      ${b.masse ? `<div style="text-align:center"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Plan de masse</div><img src="${_vEsc(b.masse)}" style="max-width:180px;max-height:140px;border:1px solid var(--border);border-radius:8px;object-fit:contain;background:#fff"></div>` : ''}
+      ${autresVues.map((u, k) => `<div style="text-align:center"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">Vue ${k + 2}</div><img src="${_vEsc(u)}" style="max-width:180px;max-height:140px;border:1px solid var(--border);border-radius:8px;object-fit:contain;background:#fff"></div>`).join('')}
+    </div>` : '';
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;max-width:1000px;width:100%;max-height:92vh;overflow:auto">
     <div style="font-family:var(--font-head);font-size:17px;font-weight:700;margin-bottom:2px">Plan affiché au client</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${_vEsc(b.titre || '')} — trace un cadre à la souris pour choisir ce que le client verra sur la carte du bien. Le document complet reste accessible d'un clic sur la carte.</div>
+    ${refsHtml}
     <div id="sel-plan-zone" style="position:relative;display:inline-block;max-width:100%;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:crosshair">
       <div style="padding:40px;color:#666;font-size:13px">Chargement du plan…</div>
     </div>
@@ -12039,7 +12050,8 @@ function _selLotDepuisExtraction(d, lien) {
   return {
     titre: d.titre || lien || 'Lot', lien: lienClient,
     ville: d.ville || '', prix: d.prix || '',
-    plan: d.plan || '', masse: d.masse || '', image: d.image || '', images: Array.isArray(d.images) ? d.images : [], pdf: '',
+    plan: d.plan || '', plans: Array.isArray(d.plans) && d.plans.length ? d.plans : (d.plan ? [d.plan] : []),
+    masse: d.masse || '', image: d.image || '', images: Array.isArray(d.images) ? d.images : [], pdf: '',
     docs: Array.isArray(d.docs) ? d.docs.filter(x => x && x.url).map(x => ({ nom: String(x.nom || 'Document'), url: String(x.url) })) : [],
     adresse: d.adresse || '', adresseBrute: d.adresseBrute || '', commune: d.commune || '', codePostal: d.codePostal || '',
     // Lot de la carte : l'adresse vient de l'extranet du promoteur (fiable par
