@@ -9185,7 +9185,7 @@ function eqFicheSelectionsHtml(l) {
       const jugement = a.choix
         ? `<span style="color:${a.choix === 'interesse' ? 'var(--success)' : (a.choix === 'a_discuter' ? 'var(--warning)' : 'var(--muted)')};font-weight:600">${selIc(a.choix === 'interesse' ? 'interesse' : (a.choix === 'a_discuter' ? 'discuter' : 'refus'), 12)} ${SEL_AVIS_LABELS[a.choix] || ''}</span>`
         : '<span style="color:var(--muted)">pas d\'avis</span>';
-      const lienIntranet = (b.promoteur && _promoIntranetMap) ? (_promoIntranetMap[_pnorm(b.promoteur)] || '') : '';
+      const lienIntranet = b.promoteur ? _promoIntranetLookup(b.promoteur) : '';
       return `<div style="padding:6px 0;border-top:1px dashed var(--border)">
         <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
           <span style="flex:1;min-width:140px;font-size:12.5px"><strong>${_vEsc(b.titre || 'Lot ' + (i + 1))}</strong>${(b.ville || b.promoteur) ? ' <span style="color:var(--muted)">— ' + [_vEsc(b.ville || ''), _vEsc(b.promoteur || '')].filter(Boolean).join(' · ') + '</span>' : ''}</span>
@@ -9236,6 +9236,23 @@ const SEL_FN_URL = 'https://www.glrimmobilier.com/selection/?t=';
 const SEL_PAGE_URL = 'https://alexandregrillault.github.io/glrimmobilier/selection.html';
 let _eqSelections = {};      // contact_id → dernière sélection
 let _promoIntranetMap = null; // nom promoteur normalisé → url_intranet (pour le lien sur les lots envoyés)
+function _promoIntranetLookup(nomBien) {
+  // Correspondance nom du lot ↔ fiche Contacts promoteurs : exacte d'abord,
+  // sinon inclusion bidirectionnelle (ex. "Kaufman & Broad" ↔ "KAUFMAN") en
+  // gardant la fiche dont le nom se rapproche le plus (la plus longue correspondance).
+  if (!nomBien || !_promoIntranetMap) return '';
+  const n = _pnorm(nomBien);
+  if (_promoIntranetMap[n]) return _promoIntranetMap[n];
+  let meilleureCle = '', meilleureUrl = '';
+  for (const cle in _promoIntranetMap) {
+    if (cle.length < 3 || n.length < 3) continue;
+    if ((n.includes(cle) || cle.includes(n)) && cle.length > meilleureCle.length) {
+      meilleureCle = cle;
+      meilleureUrl = _promoIntranetMap[cle];
+    }
+  }
+  return meilleureUrl;
+}
 let _eqSelectionsAll = [];   // toutes les sélections du vendeur (flux d'activité)
 
 // ---- Rendez-vous à confirmer ---------------------------------------------
