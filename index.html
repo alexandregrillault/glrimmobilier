@@ -13139,8 +13139,8 @@ function accordBiens(texte, n) {
 //  {nb_biens} {lien} {vendeur}
 // ============================================================
 const MODELE_MAIL_DEFAUT = {
-  sujet: 'Votre sélection de biens personnalisée — GLR Immobilier',
-  corps: 'Bonjour {client},\n\n{message}\n\nJ\'ai regroupé {nb_biens} sur une page dédiée :\n{lien}\n\nSur chaque bien, donnez votre avis en un clic — ça m\'aide à affiner la suite :\n✓ Ça m\'intéresse\n~ À discuter\n✕ Pas pour moi\n\nVous pouvez aussi réserver directement un rendez-vous en visio ou par téléphone, depuis la page, pour qu\'on affine cette sélection ensemble ou que je réponde à vos questions.\n\nBien à vous,\n{vendeur}\nGLR Immobilier'
+  sujet: 'Votre sélection de biens personnalisée / GLR Immobilier',
+  corps: 'Bonjour {client},\n\n{message}\n\nJ\'ai regroupé {nb_biens} sur une page dédiée :\n{lien}\n\nSur chaque bien, donnez votre avis en un clic, ça m\'aide à affiner la suite :\n✓ Ça m\'intéresse\n~ À discuter\n✕ Pas pour moi\n\nVous pouvez aussi réserver directement un rendez-vous en visio ou par téléphone, depuis la page, pour qu\'on affine cette sélection ensemble ou que je réponde à vos questions.\n\nLes prix affichés s\'entendent avant toute éventuelle négociation.\n\nBien à vous,\n{vendeur}\nGLR Immobilier'
 };
 const ETIQUETTES_MAIL = [
   ['{client}',   'le nom du client tel qu\'il sera salué (« Monsieur Dupont » ou son prénom)'],
