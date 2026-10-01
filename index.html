@@ -6706,6 +6706,17 @@ async function renderEquipeLeads() {
         }
       } catch(e) { _promoIntranetMap = {}; }
     }
+    // Fiches programme pigées (carte des programmes) → lien direct sur la bonne
+    // page quand le lot envoyé vient de notre catalogue interne (pas Otaree)
+    if (!_cartePigeUrlMap) {
+      try {
+        const rows = await _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=id,url:data-%3E%3Eurl', {
+          'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER
+        });
+        _cartePigeUrlMap = {};
+        rows.forEach(r => { if (r.url) _cartePigeUrlMap[r.id] = r.url; });
+      } catch(e) { _cartePigeUrlMap = {}; }
+    }
     await eqRdvCharger();
     renderEqNotifs();
     renderEquipeLeadsTable();
@@ -9185,11 +9196,13 @@ function eqFicheSelectionsHtml(l) {
       const jugement = a.choix
         ? `<span style="color:${a.choix === 'interesse' ? 'var(--success)' : (a.choix === 'a_discuter' ? 'var(--warning)' : 'var(--muted)')};font-weight:600">${selIc(a.choix === 'interesse' ? 'interesse' : (a.choix === 'a_discuter' ? 'discuter' : 'refus'), 12)} ${SEL_AVIS_LABELS[a.choix] || ''}</span>`
         : '<span style="color:var(--muted)">pas d\'avis</span>';
-      const lienIntranet = b.promoteur ? _promoIntranetLookup(b.promoteur) : '';
+      const lienFiche = (b._carteProgrammeId && _cartePigeUrlMap) ? (_cartePigeUrlMap[b._carteProgrammeId] || '') : '';
+            const lienIntranet = lienFiche || (b.promoteur ? _promoIntranetLookup(b.promoteur) : '');
+            const libelleLien = lienFiche ? 'Fiche programme' : 'Intranet promoteur';
       return `<div style="padding:6px 0;border-top:1px dashed var(--border)">
         <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
           <span style="flex:1;min-width:140px;font-size:12.5px"><strong>${_vEsc(b.titre || 'Lot ' + (i + 1))}</strong>${(b.ville || b.promoteur) ? ' <span style="color:var(--muted)">— ' + [_vEsc(b.ville || ''), _vEsc(b.promoteur || '')].filter(Boolean).join(' · ') + '</span>' : ''}</span>
-          ${lienIntranet ? `<a href="${_esc(lienIntranet)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px">Intranet promoteur</a>` : ''}
+          ${lienIntranet ? `<a href="${_esc(lienIntranet)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px">${libelleLien}</a>` : ''}
           <span style="font-size:12px">${jugement}</span>
           <span style="font-size:11.5px;color:var(--muted);min-width:62px;text-align:right">${sec ? fmtDuree(sec) : '—'}</span>
         </div>
@@ -9236,6 +9249,7 @@ const SEL_FN_URL = 'https://www.glrimmobilier.com/selection/?t=';
 const SEL_PAGE_URL = 'https://alexandregrillault.github.io/glrimmobilier/selection.html';
 let _eqSelections = {};      // contact_id → dernière sélection
 let _promoIntranetMap = null; // nom promoteur normalisé → url_intranet (pour le lien sur les lots envoyés)
+let _cartePigeUrlMap = null; // _carteProgrammeId → url de la fiche programme (pigée), pour les lots issus de la carte
 function _promoIntranetLookup(nomBien) {
   // Correspondance nom du lot ↔ fiche Contacts promoteurs : exacte d'abord,
   // sinon inclusion bidirectionnelle (ex. "Kaufman & Broad" ↔ "KAUFMAN") en
