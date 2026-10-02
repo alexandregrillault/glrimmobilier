@@ -1076,7 +1076,7 @@ html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Seg
 #clientBar .crit{display:flex;align-items:center;gap:6px;color:#1E3A32}
 #clientBar .crit button{background:#fff;border:1px solid #B0894C;color:#1E3A32;border-radius:5px;padding:2px 9px;font-size:11.5px;cursor:pointer;font-weight:600}
 #clientBar .crit button:hover{background:#f3ece0}
-#fVillesPop input{width:100%;box-sizing:border-box;padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;margin-bottom:6px}
+#fVillesPop #fVillesSearch{width:100%;box-sizing:border-box;padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;margin-bottom:6px}
 /* poignée de redimensionnement du volet des critères (bord droit) */
 aside{position:relative}
 #sideGrip{position:absolute;top:0;bottom:0;right:0;width:7px;cursor:col-resize;z-index:30}
@@ -1127,6 +1127,8 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .dd-pop{position:absolute;z-index:1200;top:calc(100% + 4px);left:0;min-width:210px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);padding:6px 4px;max-height:280px;overflow:auto}
 .dd-pop label{display:flex;align-items:center;gap:7px;padding:4px 8px;font-size:12px;cursor:pointer;border-radius:5px;white-space:nowrap}
 .dd-pop label:hover{background:#f3f6f7}
+.dd-pop label.sel{font-weight:600;color:var(--teal)}
+.dd-pop label.sel-fin{border-bottom:1px solid var(--line);border-radius:5px 5px 0 0;margin-bottom:4px;padding-bottom:6px}
 .dd-pop .cnt{margin-left:auto;color:#999;font-size:11px}
 .dd-pop .all{border-top:1px solid var(--line);margin-top:4px;padding-top:6px;color:var(--teal)}
 .tools{display:flex;gap:8px;align-items:center;width:100%;font-size:11px;color:var(--muted);flex-wrap:wrap}
@@ -2241,9 +2243,16 @@ const fVillesAll = document.createElement('label'); fVillesAll.className = 'all'
 function renderVillesList(filtre) {
   [...fVillesPop.querySelectorAll('label:not(.all)')].forEach(l => l.remove());
   const sv = nv(filtre || '');
-  villesToutes.filter(v => !sv || nv(v.v).includes(sv)).sort((a, b) => a.v.localeCompare(b.v, 'fr')).slice(0, 200).forEach(v => {
+  // Villes cochées d'abord (demande d'Alex, 02/10/2026 : depuis une fiche client, les villes
+  // préremplies sont en tête pour être décochées sans les chercher), puis l'ordre alphabétique.
+  // La liste est redessinée à chaque coche : une ville décochée reprend aussitôt sa place.
+  const liste = villesToutes.filter(v => !sv || nv(v.v).includes(sv))
+    .sort((a, b) => ((F.mVilles.has(a.v) ? 0 : 1) - (F.mVilles.has(b.v) ? 0 : 1)) || a.v.localeCompare(b.v, 'fr')).slice(0, 200);
+  const nbSel = liste.filter(v => F.mVilles.has(v.v)).length;
+  liste.forEach((v, i) => {
     const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = v.v; c.checked = F.mVilles.has(v.v);
-    c.onchange = () => { c.checked ? F.mVilles.add(v.v) : F.mVilles.delete(v.v); villesLabel(); apply(); };
+    if (c.checked) { l.className = 'sel' + (i === nbSel - 1 && nbSel < liste.length ? ' sel-fin' : ''); }
+    c.onchange = () => { c.checked ? F.mVilles.add(v.v) : F.mVilles.delete(v.v); renderVillesMulti(); apply(); };
     l.appendChild(c); l.appendChild(document.createTextNode(v.v));
     fVillesPop.appendChild(l);
   });
