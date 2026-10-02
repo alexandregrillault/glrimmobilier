@@ -577,6 +577,35 @@ function renderAlertes(cl){
   const el=$('alertes'); if(!el) return;
   el.innerHTML = cl.alertes.length ? `<details open><summary>Points d'attention sur ce profil (${cl.alertes.length})</summary>${cl.alertes.map(a=>`<div class="infobox">${a}</div>`).join('')}</details>` : '';
 }
+// Lignes du tableau « Comment on y arrive » du budget — texte brut, partagées entre l'affichage
+// ici et l'enregistrement de la simulation : la feuille sélection du client montre exactement
+// le même tableau, montants des aides et revenus compris (02/10/2026, demande d'Alex).
+function lignesMontageBudget(c,p,cl){
+  const m=c.best; if(!m) return null;
+  const L=[];
+  L.push({l:'Revenus nets retenus par la banque', v:eurM(cl.revenus)});
+  L.push({l:'Mensualité retenue'+(c.plafonne?' (mensualité choisie, sous le maximum)':' ('+Math.round(p.endet*100)+' % − crédits en cours)'), v:eurM(c.Mmax)});
+  L.push({l:'Prêt bancaire principal ('+cl.duree+' ans, '+(c.taux*100).toFixed(2).replace('.',',')+' % + assurance '+(p.ass*100).toFixed(2).replace('.',',')+' %)', v:eur(m.principal)});
+  if(m.ptzM>0) L.push({l:'PTZ (tranche '+m.aPTZ.tranche+', '+Math.round(m.aPTZ.quot*100)+' % de '+eur(m.aPTZ.base)+', différé '+m.aPTZ.differe+' ans, '+m.aPTZ.duree+' ans)'+(m.aPTZ.plancher?' — revenu retenu = coût/9, le RFR étant plus bas':''), v:eur(m.ptzM)});
+  if(m.aPAL.ok) L.push({l:'Prêt Action Logement ('+(m.aPAL.taux*100).toFixed(1).replace('.',',')+' %, '+m.aPAL.duree+' ans)', v:eur(m.palM)});
+  if(m.aPPL.ok) L.push({l:'Prêt Paris Logement'+(m.aPPL.majore?' majoré':'')+' (0 %, 15 ans)', v:eur(m.pplM)});
+  if(m.p0>0) L.push({l:'Prêt complémentaire à 0 % ('+Math.min(cl.pret0Duree,cl.duree)+' ans)', v:eur(m.p0)});
+  L.push({l:'Apport (personnel + famille)', v:eur(m.apport)});
+  L.push({l:'− Frais de notaire ('+(p.fNot*100).toFixed(1).replace('.',',')+' %) et garantie ('+(p.fGar*100).toFixed(1).replace('.',',')+' % du prêt)', v:'− '+eur(m.notaire+m.principal*p.fGar/(1+p.fGar)), c:'sub'});
+  L.push({l:'Prix du logement', v:eur(c.budgetAvec), c:'total'});
+  const note='Le PTZ est calculé sur le coût plafonné de l\'opération dans la zone choisie ('+eur(m.aPTZ.plafOp||0)+' pour '+cl.foyer+' personne'+(cl.foyer>1?'s':'')+'). Mensualité lissée : le client paie la même somme tous les mois, y compris quand le PTZ commence à se rembourser. Reste à vivre attendu par les banques pour ce foyer : '+eurM(cl.rav)+'.';
+  return { lignes:L, note, budgetAvec:Math.round(c.budgetAvec), budgetSans:Math.round(c.budgetSans) };
+}
+// Le même montage que le budget affiché (scénario « mensualité choisie » s'il est actif), pour
+// l'enregistrer avec la simulation — null hors résidence principale (pas de tableau d'aides).
+function montageBudgetActuel(){
+  const cl=client(), p=params();
+  if(cl.projet!=='rp' || cl.revenus<=0) return null;
+  const mv=Math.max(0,num('mensVoulue'));
+  const cMax=capacite(cl,p);
+  const c=(mv>0 && mv<cMax.Mmax-1)?capacite(cl,p,mv):cMax;
+  return lignesMontageBudget(c,p,cl);
+}
 // Un bloc de résultat (budget + kpis + badges + détail), réutilisé pour le scénario "mensualité max"
 // et pour le scénario "mensualité choisie" quand le client en a une en tête.
 function blocBudget(titre,c,p,cl,libMens){
@@ -593,20 +622,10 @@ function blocBudget(titre,c,p,cl,libMens){
     </div>`;
   if(c.budgetQPV) html+=`<div class="infobox"><b>Si le lot est en QPV/ANRU (TVA 5,5 %)</b> : le client est sous les plafonds, il peut viser un lot affiché jusqu'à <b>${eur(c.budgetQPV.prixAffiche)}</b> en TVA 20 %, qu'il paiera ${eur(c.budgetQPV.prixPaye)}.</div>`;
   if(m){
+    const mt=lignesMontageBudget(c,p,cl);
     html+=`<details><summary>Comment on y arrive</summary>
-    <table>
-      <tr><td>Revenus nets retenus par la banque</td><td class="n">${eurM(cl.revenus)}</td></tr>
-      <tr><td>Mensualité retenue${c.plafonne?' (mensualité choisie, sous le maximum)':' ('+Math.round(p.endet*100)+' % − crédits en cours)'}</td><td class="n">${eurM(c.Mmax)}</td></tr>
-      <tr><td>Prêt bancaire principal (${cl.duree} ans, ${(c.taux*100).toFixed(2).replace('.',',')} % + assurance ${(p.ass*100).toFixed(2).replace('.',',')} %)</td><td class="n">${eur(m.principal)}</td></tr>
-      ${m.ptzM>0?`<tr><td>PTZ (tranche ${m.aPTZ.tranche}, ${Math.round(m.aPTZ.quot*100)} % de ${eur(m.aPTZ.base)}, différé ${m.aPTZ.differe} ans, ${m.aPTZ.duree} ans)${m.aPTZ.plancher?' — revenu retenu = coût/9, le RFR étant plus bas':''}</td><td class="n">${eur(m.ptzM)}</td></tr>`:''}
-      ${m.aPAL.ok?`<tr><td>Prêt Action Logement (${(m.aPAL.taux*100).toFixed(1).replace('.',',')} %, ${m.aPAL.duree} ans)</td><td class="n">${eur(m.palM)}</td></tr>`:''}
-      ${m.aPPL.ok?`<tr><td>Prêt Paris Logement${m.aPPL.majore?' majoré':''} (0 %, 15 ans)</td><td class="n">${eur(m.pplM)}</td></tr>`:''}
-      ${m.p0>0?`<tr><td>Prêt complémentaire à 0 % (${Math.min(cl.pret0Duree,cl.duree)} ans)</td><td class="n">${eur(m.p0)}</td></tr>`:''}
-      <tr><td>Apport (personnel + famille)</td><td class="n">${eur(m.apport)}</td></tr>
-      <tr class="sub"><td>− Frais de notaire (${(p.fNot*100).toFixed(1).replace('.',',')} %) et garantie (${(p.fGar*100).toFixed(1).replace('.',',')} % du prêt)</td><td class="n">− ${eur(m.notaire+m.principal*p.fGar/(1+p.fGar))}</td></tr>
-      <tr class="total"><td>Prix du logement</td><td class="n">${eur(c.budgetAvec)}</td></tr>
-    </table>
-    <div class="note">Le PTZ est calculé sur le coût plafonné de l'opération dans la zone choisie (${eur(m.aPTZ.plafOp||0)} pour ${cl.foyer} personne${cl.foyer>1?'s':''}). Mensualité lissée : le client paie la même somme tous les mois, y compris quand le PTZ commence à se rembourser. Reste à vivre attendu par les banques pour ce foyer : ${eurM(cl.rav)}.</div>
+    <table>${mt.lignes.map(r=>`<tr${r.c?' class="'+r.c+'"':''}><td>${r.l}</td><td class="n">${r.v}</td></tr>`).join('')}</table>
+    <div class="note">${mt.note}</div>
     </details>`;
     const raisons=[];
     if(!m.aPTZ.ok) raisons.push('PTZ : '+m.aPTZ.raisons.join(', ')); if(!m.aPAL.ok) raisons.push('Action Logement : '+m.aPAL.raisons.join(', ')); if(!m.aPPL.ok) raisons.push('Paris Logement : '+m.aPPL.raisons.join(', '));
@@ -974,6 +993,8 @@ async function enregistrerSimulation(){
     });
     const payload={ profil:{ projet:$('projet').value, revenus:Math.round(cl.revenus), apport:Math.round(cl.apport), duree:cl.duree }, lots, etat:etatFormulaire() };
     if(budgetMax!=null) payload.budgetMax=Math.round(budgetMax);
+    // Tableau « Comment on y arrive » (lignes + note), montré tel quel sur la feuille sélection
+    const montage=montageBudgetActuel(); if(montage) payload.montage=montage;
 
     if(CTX_TOKEN){
       const r=await fetch(SB_URL+'/functions/v1/selection/'+encodeURIComponent(CTX_TOKEN), {

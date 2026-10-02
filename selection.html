@@ -230,6 +230,13 @@
   .financement-detail ul { list-style:none; margin:0; }
   .financement-detail li { padding-left:19px; position:relative; margin-bottom:6px; font-size:13px; color:var(--encre); line-height:1.4; }
   .financement-detail li::before { content:"✦"; position:absolute; left:1px; top:1px; color:var(--gold); font-size:11px; }
+  /* Tableau « Comment on y arrive » enregistré avec la simulation (02/10/2026) — mêmes lignes que le simulateur */
+  .financement-detail table { width:100%; border-collapse:collapse; font-size:13px; color:var(--encre); margin:4px 0 10px; }
+  .financement-detail td { padding:6px 0; border-bottom:1px solid var(--bordure); vertical-align:top; line-height:1.4; }
+  .financement-detail td.n { text-align:right; white-space:nowrap; padding-left:14px; font-variant-numeric:tabular-nums; }
+  .financement-detail tr.sub td { color:var(--muted); }
+  .financement-detail tr.total td { font-weight:700; color:var(--dark); border-bottom:none; border-top:2px solid var(--gold); padding-top:9px; }
+  .financement-note { font-size:12px; color:var(--muted); line-height:1.5; }
 
   footer { text-align:center; color:var(--muted); font-size:12.5px; margin-top:8px; }
   .partage { margin-top:12px; }
@@ -771,9 +778,24 @@
     var bm = Number(sim.budgetMax);
     if (isFinite(bm) && bm > 0) h += "<div class='financement-montant'>Budget que vous pouvez viser : " + new Intl.NumberFormat('fr-FR').format(Math.round(bm)) + " €</div>";
     if (sim.date) h += "<div class='financement-date'>Simulation réalisée le " + esc(fmtDate(sim.date)) + ".</div>";
-    h += "<a class='financement-cta' href='simulateur.html?t=" + encodeURIComponent(token) + "' target='_blank' rel='noopener'>Refaire ou ajuster ma simulation</a>";
+    // Bouton « Refaire ou ajuster ma simulation » retiré le 02/10/2026 (demande d'Alex) :
+    // la simulation est faite par le conseiller, le client en voit le résultat et le détail.
     h += "<button type='button' class='financement-detail-lien' id='financement-detail-toggle' aria-expanded='false'>Comment on arrive à ce montant ?</button>";
     h += "<div class='financement-detail' id='financement-detail' hidden>";
+    var mt = sim.montage;
+    if (mt && Array.isArray(mt.lignes) && mt.lignes.length){
+      // Tableau enregistré avec la simulation : exactement celui du simulateur (montants des
+      // aides, revenus retenus, apport), décision d'Alex du 02/10/2026.
+      var bs = Number(mt.budgetSans), ba = Number(mt.budgetAvec);
+      if (isFinite(bs) && bs > 0 && isFinite(ba) && ba - bs > 500) h += "<p>Sans les aides, votre budget serait de " + new Intl.NumberFormat('fr-FR').format(Math.round(bs)) + " € — les aides vous font gagner <b>" + new Intl.NumberFormat('fr-FR').format(Math.round(ba - bs)) + " €</b> de budget.</p>";
+      h += "<table>" + mt.lignes.map(function(r){
+        var cls = r.c === "sub" || r.c === "total" ? " class='" + r.c + "'" : "";
+        return "<tr" + cls + "><td>" + esc(r.l || "") + "</td><td class='n'>" + esc(r.v || "") + "</td></tr>";
+      }).join("") + "</table>";
+      if (mt.note) h += "<div class='financement-note'>" + esc(mt.note) + "</div>";
+      h += "</div></div>";
+      return h;
+    }
     h += "<p>Cette estimation tient compte du taux actuel du marché, de la durée choisie, et des aides auxquelles vous pouvez prétendre selon le bien :</p>";
     h += "<ul>";
     h += "<li>Le prêt à taux zéro (PTZ), qui finance une partie du prix sans intérêts</li>";
