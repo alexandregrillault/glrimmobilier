@@ -7989,11 +7989,29 @@ function eqSimulationsHtml(l) {
       </div>`;
     }).join('') + '</div>';
   }
+  // Lots de la sélection active absents de la dernière simulation (ajoutés après
+  // coup) : ils n'ont pas de mensualité sur la feuille du client tant que la
+  // simulation n'est pas refaite — le simulateur reprend alors les paramètres
+  // enregistrés, il ne reste qu'à cliquer Enregistrer (02/10/2026).
+  let manquants = 0;
+  const derniere = simus[0] || null;
+  const selActive = (typeof _eqSelections !== 'undefined' && _eqSelections) ? _eqSelections[l.id] : null;
+  const biensActifs = (selActive && Array.isArray(selActive.biens)) ? selActive.biens : [];
+  if (derniere && biensActifs.length) {
+    const couverts = new Set((Array.isArray(derniere.lots) ? derniere.lots : []).map(x => String((x && x.cle) || '').trim().toLowerCase()).filter(Boolean));
+    manquants = biensActifs.filter(b => { const c = _selCleLot(b); return c && !couverts.has(c); }).length;
+  }
+  const alerte = manquants
+    ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 12px;border-top:1px solid var(--border);font-size:12px">
+        <span style="flex:1;min-width:160px;color:var(--warning)">${manquants} lot${manquants > 1 ? 's' : ''} de la sélection sans mensualité (ajouté${manquants > 1 ? 's' : ''} après la dernière simulation)</span>
+        <button onclick="simOuvrir('${l.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:6px 10px;color:var(--text);font-size:12px;cursor:pointer">Mettre à jour la simulation</button>
+      </div>`
+    : '';
   return `<div id="eq-fiche-simulations" style="margin:0 0 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden">
     <div onclick="eqSimulationsBasculer()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:8px 12px">
       <span style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;flex:1">Simulations — ${_vEsc(compteur)}</span>
       <span style="color:var(--muted);font-size:12px">${_eqSimuOuvert ? 'masquer ▾' : 'afficher ▸'}</span>
-    </div>${corps}</div>`;
+    </div>${alerte}${corps}</div>`;
 }
 
 // Ouvre le simulateur de financement dans un nouvel onglet, pré-rempli avec les
