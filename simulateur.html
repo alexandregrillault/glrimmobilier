@@ -760,6 +760,7 @@ if(location.search.includes('embed=1')) document.body.classList.add('embed');
 // ---- Bon taux national en direct (baromètre Meilleurtaux, via l'edge function taux-marche) ----
 const SB_URL='https://hydqfbxdtpmbuooexekp.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
+let TAUX_EN_LIGNE=false; // true dès que le baromètre du jour a été appliqué (il prime sur des taux repris d'une simulation passée)
 async function chargerTauxMarche(force){
   const el=document.getElementById('taux-statut');
   if(el) el.textContent='Vérification du taux en cours…';
@@ -769,6 +770,7 @@ async function chargerTauxMarche(force){
     const d=await r.json();
     if(d.t15==null||d.t20==null||d.t25==null) throw new Error(d.error||'réponse incomplète');
     $('t15').value=d.t15.toFixed(2); $('t20').value=d.t20.toFixed(2); $('t25').value=d.t25.toFixed(2);
+    TAUX_EN_LIGNE=true;
     recalc();
     if(el) el.textContent=(d.stale?'Bon taux national (dernière valeur connue, site indisponible) — baromètre du ':'Bon taux national — baromètre Meilleurtaux du ')+(d.date_site||'?')+'.';
   }catch(e){
@@ -875,6 +877,74 @@ function budgetMaxActuel(){
   return cMax.budgetAvec;
 }
 
+/* ===================== ÉTAT COMPLET DU FORMULAIRE (02/10/2026) =====================
+   Enregistré avec chaque simulation (champ `etat`), repris à l'ouverture suivante pour
+   le même client : un lot ajouté à la sélection après coup se simule ainsi avec les
+   mêmes paramètres (profil, aides, options par lot), et la feuille sélection affiche
+   une mensualité juste sur tous les lots. Jamais renvoyé à la page publique. */
+const ETAT_CHAMPS = ['projet','foyer','zone','logement','loyerActuel','rfr','credits','apport','donation','pretFam','duree','pret0','pret0Duree','mensVoulue','t15','t20','t25','tAss','endet','fNot','fGar','ageFin','ravAdulte','ravEnfant','pLoyer','tPAL'];
+const ETAT_TAUX = ['t15','t20','t25'];
+let ETAT_REPRIS = null; // {date, etat} de la simulation dont les paramètres ont été repris
+
+function etatFormulaire(){
+  const champs={}; ETAT_CHAMPS.forEach(id=>{ const el=$(id); if(el) champs[id]=el.value; });
+  const lots={};
+  S.lots.forEach(l=>{
+    const cle=l.cle||(l.nom||'').trim().toLowerCase(); if(!cle) return;
+    lots[cle]={ zone:l.zone, qpv:!!l.qpv, type:l.type, loyer:l.loyer, charges:l.charges, tf:l.tf };
+  });
+  return { v:1, nb:S.nb, parisLoc:S.parisLoc, derog:S.derog, caution:S.caution, emp:S.emp.map(e=>Object.assign({},e)), champs, lots };
+}
+function _segAppliquer(id, val){
+  const el=$(id); if(!el) return;
+  el.querySelectorAll('button').forEach(b=>b.classList.toggle('on', String(b.dataset.v)===String(val)));
+}
+function appliquerEtat(etat){
+  if(!etat||typeof etat!=='object') return false;
+  if(Array.isArray(etat.emp)) etat.emp.slice(0,2).forEach((e,i)=>{ if(e&&typeof e==='object') S.emp[i]=Object.assign({},S.emp[i],e); });
+  ['nb','parisLoc','derog','caution'].forEach(k=>{ if(etat[k]!=null) S[k]=+etat[k]||0; });
+  if(!S.nb) S.nb=1;
+  _segAppliquer('segNb',S.nb); _segAppliquer('segParis',S.parisLoc); _segAppliquer('segDerog',S.derog); _segAppliquer('segCaution',S.caution);
+  const champs=(etat.champs&&typeof etat.champs==='object')?etat.champs:{};
+  ETAT_CHAMPS.forEach(id=>{
+    if(TAUX_EN_LIGNE && ETAT_TAUX.includes(id)) return; // le baromètre du jour prime
+    const el=$(id); if(el && champs[id]!=null) el.value=champs[id];
+  });
+  renderEmprunteurs(); recalc();
+  return true;
+}
+function appliquerEtatLots(etat){
+  const lots=(etat&&etat.lots&&typeof etat.lots==='object')?etat.lots:null; if(!lots) return;
+  S.lots.forEach(l=>{
+    const o=lots[l.cle||(l.nom||'').trim().toLowerCase()]; if(!o||typeof o!=='object') return;
+    ['zone','type'].forEach(k=>{ if(typeof o[k]==='string') l[k]=o[k]; });
+    if(o.qpv!=null) l.qpv=!!o.qpv;
+    ['loyer','charges','tf'].forEach(k=>{ if(Number.isFinite(+o[k])) l[k]=+o[k]; });
+  });
+  renderLots();
+}
+async function chargerEtatPrecedent(){
+  if(!CTX_CONTACT) return;
+  try{
+    const bearer=await _jetonVendeur(); if(!bearer) return;
+    const r=await fetch(SB_URL+'/rest/v1/contacts?id=eq.'+encodeURIComponent(CTX_CONTACT)+'&select=simulations',{headers:{apikey:SB_KEY,Authorization:'Bearer '+bearer}});
+    if(!r.ok) return;
+    const rows=await r.json();
+    const liste=Array.isArray(rows[0]&&rows[0].simulations)?rows[0].simulations:[];
+    let s=liste.find(x=>x&&x.etat&&typeof x.etat==='object');
+    if(!s && liste[0] && liste[0].profil && typeof liste[0].profil==='object'){
+      // Simulation faite par le client depuis sa feuille (pas d'état complet) :
+      // on repart au moins de son profil (projet, revenus, apport, durée).
+      const p=liste[0].profil, champs={};
+      if(p.projet) champs.projet=p.projet;
+      if(Number.isFinite(+p.duree)&&+p.duree>0) champs.duree=String(p.duree);
+      if(Number.isFinite(+p.apport)) { champs.apport=String(p.apport); champs.donation='0'; champs.pretFam='0'; }
+      s={ date:liste[0].date, etat:{ v:0, nb:1, champs, emp: Number.isFinite(+p.revenus)?[{rev:+p.revenus}]:[] } };
+    }
+    if(s && appliquerEtat(s.etat)) ETAT_REPRIS={ date:s.date||null, etat:s.etat };
+  }catch(e){ console.error('chargerEtatPrecedent', e); }
+}
+
 function renderSauvegarde(){
   const el=$('simSauvegarde'); if(!el) return;
   if(!CTX_CONTACT && !CTX_TOKEN){ el.innerHTML=''; return; }
@@ -902,7 +972,7 @@ async function enregistrerSimulation(){
       const economie=Math.round(Math.max(0, m.Msans-m.M));
       return { cle, titre:l.nom, prix:l.prix, mensualite:Math.round(m.M), economie, aides, eligible: m.M<=Mmax+0.5 };
     });
-    const payload={ profil:{ projet:$('projet').value, revenus:Math.round(cl.revenus), apport:Math.round(cl.apport), duree:cl.duree }, lots };
+    const payload={ profil:{ projet:$('projet').value, revenus:Math.round(cl.revenus), apport:Math.round(cl.apport), duree:cl.duree }, lots, etat:etatFormulaire() };
     if(budgetMax!=null) payload.budgetMax=Math.round(budgetMax);
 
     if(CTX_TOKEN){
@@ -940,7 +1010,13 @@ async function enregistrerSimulation(){
 // démarrage
 renderEmprunteurs(); recalc();
 (async function(){
+  await chargerEtatPrecedent();
   const r = await chargerLotsReels();
+  if(r.ok && ETAT_REPRIS){
+    appliquerEtatLots(ETAT_REPRIS.etat);
+    const ct=$('lotsContexte');
+    if(ct) ct.innerHTML = '<div class="help">Paramètres repris de la simulation du '+(ETAT_REPRIS.date?new Date(ETAT_REPRIS.date).toLocaleDateString('fr-FR'):'—')+' (profil, aides, options par lot) — modifiables avant d\'enregistrer.</div>' + ct.innerHTML;
+  }
   if(!r.ok && !CTX_CONTACT && !CTX_TOKEN){
     addLot({nom:'Exemple — T2 Saint-Denis', prix:265000, zone:'a', qpv:true, surface:42});
   } else if(!r.ok && (CTX_CONTACT || CTX_TOKEN)){
