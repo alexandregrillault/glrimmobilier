@@ -6750,6 +6750,7 @@ async function _eqLeadPatch(id, body) {
     });
     if (!res.ok) throw await _eqErreurPatch(res);
     if (l) Object.assign(l, body);
+    _findContactEverywhere(id).forEach(inst => { if (inst !== l) Object.assign(inst, body); });
     if (l && typeof _toucheAuRappel === 'function' && _toucheAuRappel(body)) eqCreneauRappelSync(l);
     if (typeof _eqEchecOublie === 'function') _eqEchecOublie(id);
     if (typeof toast === 'function') {
@@ -8594,6 +8595,7 @@ async function _eqTexteEnregistre(champ, valeur, dansQualif, final){
       });
       if (!res.ok) throw await _eqErreurPatch(res);
       Object.assign(l, corpsB);
+      _findContactEverywhere(l.id).forEach(inst => { if (inst !== l) Object.assign(inst, corpsB); });
       _eqEchecOublie(l.id);
       _eqTexteEtat('budget', '✓ Enregistré', 'var(--success)');
       // À la sortie du champ seulement : on réécrit proprement ce qui a été tapé
@@ -8620,6 +8622,7 @@ async function _eqTexteEnregistre(champ, valeur, dansQualif, final){
     });
     if (!res.ok) throw await _eqErreurPatch(res);
     Object.assign(l, corps);
+    _findContactEverywhere(l.id).forEach(inst => { if (inst !== l) Object.assign(inst, corps); });
     _eqEchecOublie(l.id);
     _eqTexteEtat(champ, '✓ Enregistré', 'var(--success)');
     renderEquipeLeadsTable();
@@ -15167,7 +15170,23 @@ function conjointFicheHtml(l) {
 }
 
 // `conjoint` = true : la fenêtre s'ouvre avec le bloc conjoint déplié (bouton « + Conjoint » de la fiche)
-function openEditContact(id, conjoint) {
+async function openEditContact(id, conjoint) {
+  // La fiche et la base commune gardent chacune leur copie du contact : celle de
+  // la base commune date de l'ouverture du dashboard. Si on pré-remplit le
+  // formulaire avec elle, « Enregistrer » renvoie ses vieilles valeurs (budget,
+  // ville…) et efface ce que le vendeur vient de saisir sur la fiche (incident
+  // Anaïs / Camille Sonea, 02/10/2026). On relit donc la fiche en base avant
+  // d'ouvrir le formulaire, et on remet toutes les copies à jour au passage.
+  try {
+    const rf = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + encodeURIComponent(id) + '&select=*', {
+      cache: 'no-store',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (rf.ok) {
+      const rows = await rf.json();
+      if (rows && rows[0]) _findContactEverywhere(id).forEach(inst => Object.assign(inst, rows[0]));
+    }
+  } catch (e) { /* hors ligne : on ouvre avec ce qu'on a */ }
   const c = _findContactEverywhere(id)[0];
   if (!c) { toast('⚠ Contact introuvable', 'var(--warning)'); return; }
   _editContactId = id;
