@@ -1076,6 +1076,7 @@ html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Seg
 #clientBar .crit{display:flex;align-items:center;gap:6px;color:#1E3A32}
 #clientBar .crit button{background:#fff;border:1px solid #B0894C;color:#1E3A32;border-radius:5px;padding:2px 9px;font-size:11.5px;cursor:pointer;font-weight:600}
 #clientBar .crit button:hover{background:#f3ece0}
+#clientBar .crit[hidden]{display:none}
 #fVillesPop #fVillesSearch{width:100%;box-sizing:border-box;padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;margin-bottom:6px}
 /* poignée de redimensionnement du volet des critères (bord droit) */
 aside{position:relative}
@@ -1292,7 +1293,7 @@ table.lots td.r{text-align:right}
   <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
   <button id="sideBtn" title="Afficher / masquer les critères">◧ Critères</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
 </header>
-<div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="crit" id="clientCritInfo" hidden>· filtré selon ses critères : <b id="clientCritResume"></b><button id="clientCritOff" title="Retirer ce filtre et revenir à toute l'Île-de-France">Retirer le filtre</button></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
+<div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="crit" id="clientCritInfo" hidden>· filtré selon ses critères : <b id="clientCritResume"></b><button id="clientCritOff" title="Retirer ce filtre et revenir à toute l'Île-de-France">Retirer le filtre</button></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><span class="crit" id="clientTrajetChoix" hidden>· Afficher sur la feuille le trajet jusqu'à <b id="clientTrajetChoixAdr"></b> ?<button data-modes="transit">En transports</button><button data-modes="car">En voiture</button><button data-modes="transit,car">Les deux</button><button data-modes="">Non, les lignes à proximité</button></span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
 <aside>
   <div class="fbar"><button type="button" id="filtToggle">▾ Filtres</button></div>
   <div class="filters">
@@ -1866,6 +1867,34 @@ async function journeyFor(p) {
   if (res) JCACHE[key] = res;
   return res;
 }
+// ---------- trajet programme -> adresse du filtre, emporté avec les lots d'une sélection ----------
+// Quand le filtre « temps de trajet depuis une adresse » est actif au moment de valider une
+// sélection pour un client, le vendeur choisit si la feuille doit montrer le trajet depuis le
+// programme jusqu'à cette adresse (en transports, en voiture, les deux) à la place des lignes à
+// proximité — ou rien (02/10/2026, demande d'Alex). Calculé dans le sens programme -> adresse
+// (celui que vivra le client ; JCACHE est dans l'autre sens), sans la géométrie des tronçons.
+async function carteTrajetPourLot(p, mode) {
+  if (!F.tt || !p.lat) return null;
+  const tt = F.tt;
+  try {
+    if (mode === 'car') {
+      const r = await fetch(OSRM + '/routed-car/route/v1/driving/' + p.lng + ',' + p.lat + ';' + tt.lng + ',' + tt.lat + '?overview=false');
+      const j = await r.json(); const rt = j.routes && j.routes[0];
+      if (!rt) return null;
+      return { mode: 'car', vers: tt.label, dur: Math.round(rt.duration), dist: Math.round(rt.distance), transfers: 0, segs: [] };
+    }
+    const r = await fetch(ISO_URL + '?from=' + encodeURIComponent(p.lng + ';' + p.lat) + '&to=' + encodeURIComponent(tt.lng + ';' + tt.lat));
+    if (!r.ok) return null;
+    const j = await r.json(); const jn = j.journeys && j.journeys[0];
+    if (!jn) return null;
+    return {
+      mode: 'transit', vers: tt.label, dur: Math.round(jn.dur || 0), transfers: jn.transfers || 0,
+      segs: (jn.segs || []).map(sg => sg.kind === 'pt'
+        ? { kind: 'pt', mode: sg.mode || '', code: sg.code || '', color: sg.color || '', text: sg.text || '', from: sg.from || '', to: sg.to || '', dur: Math.round(sg.dur || 0), stops: sg.stops || 0 }
+        : { kind: sg.kind || 'walk', dur: Math.round(sg.dur || 0) })
+    };
+  } catch (e) { return null; }
+}
 function journeyHtml(j) {
   if (!j) return '<span style="color:#6b7280">itinéraire indisponible</span>';
   if (F.tt.mode === 'car') return '<b>' + Math.round(j.dur / 60) + ' min</b> en voiture · ' + (j.dist / 1000).toFixed(1) + ' km depuis ' + esc(F.tt.label);
@@ -2430,9 +2459,38 @@ function carteBadgeMatch(m) {
   const _renderCartBtnBase = renderCartBtn;
   renderCartBtn = function () { _renderCartBtnBase(); majBarre(); };
   majBarre();
+  // Filtre « temps de trajet » actif : avant d'envoyer, la barre demande si la feuille doit
+  // montrer le trajet jusqu'à l'adresse (transports / voiture / les deux) ou garder les
+  // lignes à proximité. Sans filtre : envoi direct, comme avant.
+  const choix = document.getElementById('clientTrajetChoix');
+  const msg = document.getElementById('clientBarMsg');
   btn.onclick = () => {
     const rows = cartRows();
     if (!rows.length) return;
+    if (F.tt && choix) {
+      document.getElementById('clientTrajetChoixAdr').textContent = F.tt.label;
+      msg.hidden = true; choix.hidden = false; btn.disabled = true;
+      return;
+    }
+    envoyer(rows, []);
+  };
+  if (choix) choix.querySelectorAll('button').forEach(b => { b.onclick = () => { choix.hidden = true; msg.hidden = false; envoyer(cartRows(), (b.dataset.modes || '').split(',').filter(Boolean)); }; });
+  // le filtre est retiré pendant que la question est posée : on la retire aussi
+  const _ttClearBase = ttClear;
+  ttClear = function (re) { if (choix && !choix.hidden) { choix.hidden = true; msg.hidden = false; majBarre(); } return _ttClearBase(re); };
+  async function envoyer(rows, modes) {
+    if (!rows.length) { majBarre(); return; }
+    // un calcul par programme et par mode, pas par lot ; un calcul qui échoue = pas de trajet
+    const trajets = {};
+    if (modes.length && F.tt) {
+      btn.disabled = true;
+      msg.textContent = 'calcul des trajets jusqu\'à ' + F.tt.label + '…';
+      for (const { p } of rows) {
+        if (p.id in trajets) continue;
+        trajets[p.id] = [];
+        for (const mode of modes) { const t = await carteTrajetPourLot(p, mode); if (t) trajets[p.id].push(t); }
+      }
+    }
     const lots = rows.map(({ l, p }) => ({
       titre: (p.nom || 'Programme') + (l.n ? ' — Lot ' + l.n : ''),
       ville: p.ville || '', commune: p.ville || '', adresse: p.adresse || '', adresseBrute: p.adresse || '', codePostal: p.cp || '',
@@ -2443,14 +2501,16 @@ function carteBadgeMatch(m) {
       typologies: l.typo ? [l.typo] : [],
       plan: planLot(p, l), masse: '', lien: '', pdf: '', docs: [], image: '', images: [],
       annexes: [], prixOptions: [], remises: [], atouts: [], pitch: '',
+      // Trajets depuis le programme jusqu'à l'adresse du filtre (vide si pas demandé)
+      trajets: trajets[p.id] || [],
       // Références pour retrouver le même lot / programme plus tard (plans partagés à venir)
       _cartePigeId: l.id, _carteProgrammeId: p.id
     }));
     window.opener.postMessage({ type: 'glr-carte-lots', session: client.session, lots }, location.origin);
-    document.getElementById('clientBarMsg').textContent = 'envoyé — retourne sur l\'onglet du dashboard';
+    msg.textContent = 'envoyé — retourne sur l\'onglet du dashboard';
     document.getElementById('clientBarValiderLabel').textContent = 'Envoyé ✓'; btn.disabled = true;
-    setTimeout(() => { document.getElementById('clientBarValiderLabel').textContent = 'Valider la sélection'; majBarre(); document.getElementById('clientBarMsg').textContent = 'coche des lots dans la carte, puis valide'; }, 2200);
-  };
+    setTimeout(() => { document.getElementById('clientBarValiderLabel').textContent = 'Valider la sélection'; majBarre(); msg.textContent = 'coche des lots dans la carte, puis valide'; }, 2200);
+  }
 })();
 
 // ---------- mode « sélection pour un client » : préremplissage des critères ----------

@@ -87,6 +87,17 @@
   .transport-chip { display:inline-flex; align-items:center; gap:5px; background:var(--gold-clair); border:1px solid var(--bordure); border-radius:20px; padding:4px 10px 4px 8px; font-size:12px; color:var(--encre); }
   .transport-dot { width:8px; height:8px; border-radius:50%; flex:none; }
   .transport-gare { color:var(--muted); }
+  /* Trajet depuis le programme jusqu'à l'adresse du client (travail, école…) — remplace les
+     lignes à proximité quand le vendeur a filtré la carte par temps de trajet (02/10/2026) */
+  .trajets { padding:0 0 12px; display:flex; flex-direction:column; gap:8px; }
+  .trajet { font-size:12.5px; color:var(--encre); line-height:1.5; }
+  .trajet-tete { display:flex; align-items:flex-start; gap:7px; }
+  .trajet-tete svg { flex:none; margin-top:2px; }
+  .trajet-segs { display:flex; flex-wrap:wrap; align-items:center; gap:3px 6px; margin:6px 0 0 22px; line-height:1.7; }
+  .trajet-ligne { display:inline-block; border-radius:5px; padding:0 7px; font-weight:700; font-size:11.5px; line-height:19px; white-space:nowrap; }
+  .trajet-sep { color:#b8b2a7; }
+  .trajet-muted { color:var(--muted); }
+  .trajet-note { color:var(--muted); font-size:11px; margin:3px 0 0 22px; }
   .carte { position:relative; height:150px; border-radius:12px; overflow:hidden; border:1px solid var(--bordure); background:#eceae4; cursor:pointer; margin-bottom:10px; }
   .carte-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; border:0; }
   .carte .pin { position:absolute; left:50%; top:50%; width:22px; height:22px; margin:-30px 0 0 -11px; opacity:0; }
@@ -853,7 +864,10 @@
       var q = encodeURIComponent(txt);
       var carteUrl = urlCarteStatique(g, 640, 300);
       var h2 = "<div class='adresse-row'><svg width='15' height='15' viewBox='0 0 24 24' fill='none'><path d='M12 22s7-6.1 7-12A7 7 0 0 0 5 10c0 5.9 7 12 7 12z' fill='#c8a96e'/><circle cx='12' cy='10' r='2.4' fill='#fff'/></svg><span>" + esc(txt) + "</span><a href='https://www.google.com/maps/search/?api=1&query=" + q + "' target='_blank' rel='noopener'>Voir sur Maps ↗</a></div>";
-      if (Array.isArray(b.transports) && b.transports.length){
+      var trajets = (Array.isArray(b.trajets) ? b.trajets : []).filter(function(t){ return t && t.dur; });
+      if (trajets.length){
+        h2 += "<div class='trajets'>" + trajets.map(htmlTrajet).join("") + "</div>";
+      } else if (Array.isArray(b.transports) && b.transports.length){
         h2 += "<div class='transports-row'>" + b.transports.map(function(t){
           var coul = t.couleur ? ("#" + String(t.couleur).replace(/^#/, "")) : "#c8a96e";
           var dist = t.distance ? (t.distance < 1000 ? (t.distance + " m") : ((t.distance / 1000).toFixed(1).replace(".", ",") + " km")) : "";
@@ -872,6 +886,48 @@
     var demandee = a && a.adresse_demandee;
     return "<div class='adresse-row' style='border-bottom:none'></div><button class='adr-demande' data-adr='" + i + "'" + (demandee ? " disabled" : "") + ">"
       + (demandee ? "✓ Adresse demandée — votre conseiller revient vers vous" : "Demander l'adresse exacte") + "</button>";
+  }
+
+  // Trajet depuis le programme jusqu'à l'adresse du client, calculé par la carte au moment où
+  // le vendeur a validé ses lots avec le filtre « temps de trajet » (02/10/2026). Même rendu que
+  // la fiche programme de la carte : durée, correspondances, puis les tronçons (ligne colorée,
+  // gares, marche). Plusieurs trajets possibles (transports et voiture). Sans trajet, la feuille montre les lignes à proximité comme avant.
+  function minutes(sec){ return Math.max(1, Math.round((sec || 0) / 60)) + " min"; }
+  function couleurSure(c, defaut){
+    var t = String(c || "").trim();
+    return /^#?[0-9a-fA-F]{3,8}$/.test(t) ? ("#" + t.replace(/^#/, "")) : defaut;
+  }
+  function htmlTrajet(tr){
+    var voiture = tr.mode === "car";
+    var icone = voiture
+      ? "<svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='#c8a96e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 17h14M6 17l1.5-5h9L18 17M4 17v2M20 17v2M7 12l1-4h8l1 4'/><circle cx='8' cy='17' r='1'/><circle cx='16' cy='17' r='1'/></svg>"
+      : "<svg width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='#c8a96e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='3' width='14' height='14' rx='3'/><path d='M5 10h14M8 21l2-4M16 21l-2-4'/><circle cx='9' cy='13.5' r='1'/><circle cx='15' cy='13.5' r='1'/></svg>";
+    var tete = "<b>" + minutes(tr.dur) + "</b> " + (voiture ? "en voiture" : "en transports en commun");
+    if (voiture && tr.dist) tete += " · " + (tr.dist / 1000).toFixed(1).replace(".", ",") + " km";
+    if (!voiture) tete += " · " + (tr.transfers ? (tr.transfers + " correspondance" + (tr.transfers > 1 ? "s" : "")) : "direct");
+    tete += " jusqu'à " + esc(tr.vers || "votre adresse");
+    var h = "<div class='trajet'><div class='trajet-tete'>" + icone + "<span>" + tete + "</span></div>";
+    var segs = Array.isArray(tr.segs) ? tr.segs : [];
+    if (!voiture && segs.length){
+      // marches consécutives fusionnées (Google découpe parfois la marche en plusieurs pas)
+      var parts = [];
+      segs.forEach(function(sg){
+        if (sg.kind === "pt"){
+          var fond = couleurSure(sg.color, "#1e3a32"), texte = couleurSure(sg.text, "#ffffff");
+          var detail = sg.dur ? (minutes(sg.dur) + (sg.stops > 0 ? ", " + sg.stops + " arrêt" + (sg.stops > 1 ? "s" : "") : "")) : "";
+          parts.push("<span class='trajet-ligne' style='background:" + fond + ";color:" + texte + "'>" + esc(((sg.mode || "") + " " + (sg.code || "")).trim()) + "</span> " + esc(sg.from || "") + " → " + esc(sg.to || "") + (detail ? " <span class='trajet-muted'>(" + detail + ")</span>" : ""));
+        } else if (sg.kind === "walk" && sg.dur){
+          var prev = parts.length ? parts[parts.length - 1] : null;
+          if (prev && prev.walk != null){ prev.walk += sg.dur; prev.html = "<span class='trajet-muted'>à pied " + minutes(prev.walk) + "</span>"; }
+          else parts.push({ walk: sg.dur, html: "<span class='trajet-muted'>à pied " + minutes(sg.dur) + "</span>" });
+        }
+      });
+      h += "<div class='trajet-segs'>" + parts.map(function(x){ return "<span>" + (typeof x === "string" ? x : x.html) + "</span>"; }).join("<span class='trajet-sep'>›</span>") + "</div>";
+      h += "<div class='trajet-note'>Horaires théoriques, départ un mardi à 8 h 30.</div>";
+    } else if (voiture){
+      h += "<div class='trajet-note'>Trafic fluide, hors heures de pointe.</div>";
+    }
+    return h + "</div>";
   }
 
   function villeEnDeux(v){

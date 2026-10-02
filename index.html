@@ -3802,7 +3802,9 @@ window.addEventListener('message', async function (e) {
     let lot = brut;
     if (brut._cartePigeId) {
       const riche = await _selLotDepuisLienInterne(brut._cartePigeId);
-      if (riche) lot = Object.assign(riche, { _cartePigeId: brut._cartePigeId, _carteProgrammeId: brut._carteProgrammeId || '' });
+      // Les trajets programme -> adresse du client (filtre « temps de trajet » de la carte, 02/10/2026)
+      // n'existent que dans la version envoyée par la carte : on les garde sur le lot recomplété.
+      if (riche) lot = Object.assign(riche, { _cartePigeId: brut._cartePigeId, _carteProgrammeId: brut._carteProgrammeId || '', trajets: Array.isArray(brut.trajets) ? brut.trajets : [] });
     }
     if (_selCtx !== ctx) return; // la sélection a été fermée entre-temps : on n'ajoute rien nulle part
     ctx.libres.push(lot);
@@ -12830,6 +12832,9 @@ function _selDocsCarteBadges(b, i) {
   parts.push(b.plan ? ok('Plan du lot') : manque('Plan du lot', 'plan', 'lot'));
   // Maquette 3D : optionnelle (rare), jamais signalée comme manquante — le lien se saisit sur la carte
   if (b.maquette3d) parts.push(ok('Maquette 3D'));
+  // Trajet jusqu'à l'adresse du client (filtre « temps de trajet » actif sur la carte à la
+  // validation) : affiché sur la feuille à la place des lignes à proximité (02/10/2026)
+  (Array.isArray(b.trajets) ? b.trajets : []).forEach(t => { if (t && t.dur) parts.push(ok('Trajet ' + Math.round(t.dur / 60) + ' min ' + (t.mode === 'car' ? 'en voiture' : 'en transports') + ' jusqu\'à ' + _vEsc(t.vers || ''))); });
   return parts.join(' · ');
 }
 function _selDocsCarteRecalculer(b) {
