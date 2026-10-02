@@ -6860,8 +6860,17 @@ async function eqVenteLotValider() {
     };
   }
   const ecarts = venteEcarts(l, lot);
+  // Programme / lot / promoteur explicites quand on les connaît (lot venu d'une
+  // sélection) : la vente créée automatiquement en base (trigger
+  // trg_contacts_vente_auto, 02/10/2026) s'en sert, sinon elle découpe le titre.
+  const titreLot = String(lot.titre || '');
+  const programmeLot = String(lot.programme || '').trim()
+    || (titreLot.match(/^(.*?)\s[—–-]\s/) || [, ''])[1].trim();
+  const numeroLot = String(lot.lot || '').trim()
+    || (programmeLot && titreLot.indexOf(programmeLot) === 0 ? titreLot.slice(programmeLot.length).replace(/^\s[—–-]\s*(Lot\s*)?/i, '').trim() : '');
   const venteLot = {
-    titre: lot.titre || '', ville: lot.ville || '', prix: lot.prix || '',
+    titre: titreLot, ville: lot.ville || '', prix: lot.prix || '',
+    programme: programmeLot, lot: numeroLot, promoteur: String(lot.promoteur || '').trim(),
     typologie: (Array.isArray(lot.typologies) && lot.typologies[0]) || '', surface: lot.surface || '',
     source, token: token || null, ecarts, enregistre_le: new Date().toISOString()
   };
