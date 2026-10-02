@@ -7799,6 +7799,7 @@ function eqCriteresChips(l) {
   if (q.projet) push('' + ({ residence_principale: 'Résidence principale', residence_secondaire: 'Résidence secondaire', investissement: 'Investissement' }[q.projet] || esc(q.projet)));
   if (q.commune_residence) push('Habite ' + esc(q.commune_residence));
   if (q.adresse_travail) push('Travaille près de ' + esc(q.adresse_travail));
+  if (q.trajet_travail_max) push('≤ ' + esc(q.trajet_travail_max) + ' min jusqu\'au travail');
   if (q.lignes_transport && q.lignes_transport.length) push('' + q.lignes_transport.map(esc).join(' / '));
   if (q.transport_min || q.transport_max) push('Transport à pied : ' + (q.transport_min && q.transport_max ? esc(q.transport_min) + '–' + esc(q.transport_max) + ' min' : q.transport_min ? '≥ ' + esc(q.transport_min) + ' min' : '≤ ' + esc(q.transport_max) + ' min'), flexible('importance_transport'));
   if (l.typologie) push('' + esc(l.typologie), flexible('importance_typologie'));
@@ -8950,7 +8951,9 @@ ${(() => {
           ${(q.lignes_transport||[]).map(v => `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--accent)18;border:1px solid var(--accent);border-radius:20px;padding:5px 7px 5px 12px;font-size:12px;font-weight:600;color:var(--text)">${esc(v)}<button onclick="eqLigneRetire(this.dataset.v)" data-v="${esc(v).replace(/"/g,'&quot;')}" title="Retirer" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:0 3px">✕</button></span>`).join('')}
         </div>
         <input id="eq-ligne-input" oninput="eqLigneRechercheInput(this.value)" placeholder="Ligne de transport… (ex : RER A, Métro 1)" autocomplete="off" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
-        <div id="eq-ligne-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>`)}
+        <div id="eq-ligne-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>
+        <div style="font-size:10.5px;color:var(--muted);margin:10px 0 4px">Temps de trajet maximum jusqu'au travail (min, porte à porte)</div>
+        ${inputQ('trajet_travail_max', q.trajet_travail_max, 'Ex : 45')}`)}
       ${carte(titreQ('Temps de trajet à pied jusqu\'au transport') + `<div style="display:flex;gap:8px">
         <div style="flex:1">
           <div style="font-size:10.5px;color:var(--muted);margin-bottom:4px">Minimum (min)</div>
