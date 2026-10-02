@@ -8038,6 +8038,8 @@ window.addEventListener('message', async (e) => {
       l.simulations = rows[0].simulations;
       const el = document.getElementById('eq-fiche-simulations');
       if (el) el.outerHTML = eqSimulationsHtml(l);
+      const bs = document.getElementById('eq-budget-simu');
+      if (bs) bs.outerHTML = eqBudgetSimuHtml(l);
     }
   } catch (err) { /* tant pis, la fiche sera a jour au prochain chargement */ }
 });
@@ -8526,6 +8528,33 @@ function _eqTexteEtat(champ, texte, couleur){
   if (el){ el.textContent = texte || ''; el.style.color = couleur || 'var(--muted)'; }
 }
 // Aperçu du budget pendant la frappe : ce que le CRM a compris
+// Budget visé par la dernière simulation de financement du client, proposé en
+// un clic comme budget de la fiche (02/10/2026, demande d'Alex). Toujours
+// rendu dans un conteneur à id fixe pour être rafraîchi quand une nouvelle
+// simulation arrive (postMessage du simulateur) sans re-rendre la fiche.
+function _eqBudgetSimu(l) {
+  const s = (l && Array.isArray(l.simulations) ? l.simulations : [])[0];
+  const v = s ? Number(s.budgetMax) : NaN;
+  return (s && Number.isFinite(v) && v > 0) ? { montant: Math.round(v), date: s.date || null } : null;
+}
+function eqBudgetSimuHtml(l) {
+  const sim = _eqBudgetSimu(l);
+  const dedans = sim
+    ? `<span style="flex:1;min-width:150px">Dernière simulation : <strong style="color:var(--text)">${_vEsc(budgetFmt(sim.montant))}</strong>${sim.date ? ' <span>(' + _vEsc(new Date(sim.date).toLocaleDateString('fr-FR')) + ')</span>' : ''}</span>
+       <button onclick="eqBudgetDepuisSimulation()" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:5px 10px;color:var(--text);font-size:12px;cursor:pointer">Utiliser comme budget</button>`
+    : '';
+  return `<div id="eq-budget-simu" style="${sim ? 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;font-size:12px;color:var(--muted)' : 'display:none'}">${dedans}</div>`;
+}
+function eqBudgetDepuisSimulation() {
+  const l = _eqLeads.find(x => x.id === _eqFicheId);
+  const sim = _eqBudgetSimu(l);
+  if (!sim) return;
+  const texte = budgetFmt(sim.montant);   // « 354 744 € » : même écriture que partout
+  const inp = document.getElementById('eq-champ-budget');
+  if (inp) inp.value = texte;
+  eqBudgetApercu(texte);
+  eqTexteFlush('budget', texte, false);
+}
 function eqBudgetApercu(v){
   const el = document.getElementById('eq-apercu-budget');
   if (el) el.innerHTML = budgetApercuHtml(v);
@@ -8939,7 +8968,7 @@ ${(() => {
         </div>
         <input id="eq-ville-input" oninput="eqVilleRechercheInput(this.value)" onkeydown="if(event.key==='Enter'&&this.value.trim())eqVilleAjoute(this.value)" placeholder="Rechercher une ville… (ex : Asnières)" autocomplete="off" style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
         <div id="eq-ville-sugg" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:4px;max-height:230px;overflow-y:auto"></div>` + importanceQ('importance_ville'))}
-      ${carte(titreQ('Budget') + champBudget(l.budget) + `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('ptz', [['avec','Avec PTZ'],['sans','Sans PTZ'],['a_verifier','À vérifier']], q.ptz)}</div>` + importanceQ('importance_budget') + (l.reference_annonce || l.prix_annonce ? `
+      ${carte(titreQ('Budget') + champBudget(l.budget) + eqBudgetSimuHtml(l) + `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${btns('ptz', [['avec','Avec PTZ'],['sans','Sans PTZ'],['a_verifier','À vérifier']], q.ptz)}</div>` + importanceQ('importance_budget') + (l.reference_annonce || l.prix_annonce ? `
         <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
           <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Annonce cliquée <span style="text-transform:none;letter-spacing:0">— prix du bien, pas le budget du client</span></div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
