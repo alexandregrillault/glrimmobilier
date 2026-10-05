@@ -212,10 +212,13 @@ summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--navy)}
       <div class="f">
         <label>Mensualité souhaitée (optionnel)</label>
         <div class="unit"><input type="number" id="mensVoulue" value="" step="50" placeholder="laisser vide = maximum"><span>€ / mois</span></div>
-        <div class="help">Si le client vise une mensualité précise plutôt que le maximum d'endettement (35 %), le budget est recalculé pour cette mensualité (plafonnée au maximum si elle le dépasse).</div>
       </div>
-      <div class="f"></div>
+      <div class="f">
+        <label>ou budget visé (optionnel)</label>
+        <div class="unit"><input type="number" id="prixVise" value="" step="5000" placeholder="laisser vide = maximum"><span>€</span></div>
+      </div>
     </div>
+    <div class="help" style="margin:-6px 0 14px">Le budget maximum du client reste toujours calculé et affiché en premier. S'il vise une mensualité ou un prix précis, cet objectif apparaît en dessous, avec la part de sa capacité d'emprunt qu'il représente — et il est montré de la même façon sur sa feuille sélection. Si les deux sont renseignés, la mensualité prime.</div>
 
     <div id="blocRP">
       <div class="row">
@@ -601,10 +604,50 @@ function lignesMontageBudget(c,p,cl){
 function montageBudgetActuel(){
   const cl=client(), p=params();
   if(cl.projet!=='rp' || cl.revenus<=0) return null;
-  const mv=Math.max(0,num('mensVoulue'));
-  const cMax=capacite(cl,p);
-  const c=(mv>0 && mv<cMax.Mmax-1)?capacite(cl,p,mv):cMax;
-  return lignesMontageBudget(c,p,cl);
+  return lignesMontageBudget(capacite(cl,p),p,cl);
+}
+// Objectif du client sous son maximum (mensualité souhaitée OU budget visé), avec la part de sa
+// capacité d'emprunt qu'il représente. Le maximum reste toujours le chiffre principal, y compris
+// sur la feuille sélection : l'objectif s'affiche en dessous, quand il y en a un (06/10/2026).
+// null = pas d'objectif sous le maximum. depasse=true = budget visé au-delà de la capacité.
+function objectifActuel(cl,p){
+  if(cl.revenus<=0) return null;
+  const mv=Math.max(0,num('mensVoulue')), pv=Math.max(0,num('prixVise'));
+  const Mmax=Math.max(0,cl.revenus*p.endet-cl.credits); if(Mmax<=0) return null;
+  const rp=cl.projet==='rp', taux=p.t[cl.duree];
+  if(mv>0){
+    if(mv>=Mmax-1) return null;
+    let budget, c=null;
+    if(rp){ c=capacite(cl,p,mv); budget=c.budgetAvec; }
+    else { const C=capitalLisse(mv,taux,cl.duree,p.ass,[]); budget=(C/(1+p.fGar)+cl.apport)/(1+p.fNot); }
+    return {type:'mensualite', budget, mensualite:mv, mensualiteMax:Mmax, pct:Math.round(mv/Mmax*100), depasse:false, c};
+  }
+  if(pv>0){
+    let M;
+    if(rp){ const m=montage(cl,{zone:cl.zone,type:'coll',qpv:false,prix:pv},p); M=m.M; }
+    else { const principal=Math.max(0,(pv*(1+p.fNot)-cl.apport)*(1+p.fGar)); M=mensLisse(principal,taux,cl.duree,p.ass,[]); }
+    return {type:'prix', budget:pv, mensualite:M, mensualiteMax:Mmax, pct:Math.round(M/Mmax*100), depasse: M>Mmax+0.5, c:null};
+  }
+  return null;
+}
+function htmlObjectif(o,cl,p){
+  if(!o) return '';
+  const sep=`<div style="margin:26px 0 16px;border-top:1px dashed var(--line)"></div>`;
+  if(o.depasse) return sep+`<div class="warnbox">Un budget de ${eur(o.budget)} dépasse la capacité d'emprunt : la mensualité serait de ${eurM(o.mensualite)}, pour un maximum de ${eurM(o.mensualiteMax)}. Il n'est pas enregistré — le budget maximum ci-dessus reste celui montré au client.</div>`;
+  const titre = o.type==='prix' ? 'Budget visé' : `Budget pour une mensualité choisie de ${eurM(o.mensualite)}`;
+  return sep+`<div class="big"><div class="k">${titre}</div><div class="v">${eur(o.budget)}</div>
+    <div class="s">Représente <b>${o.pct} %</b> de la capacité d'emprunt maximale du client (${eurM(o.mensualite)} sur ${eurM(o.mensualiteMax)} de mensualité maximale).</div></div>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Mensualité</div><div class="v">${eurM(o.mensualite)}</div></div>
+      <div class="kpi"><div class="k">Capacité utilisée</div><div class="v">${o.pct} %</div></div>
+      <div class="kpi"><div class="k">Marge sous le maximum</div><div class="v">${eurM(Math.max(0,o.mensualiteMax-o.mensualite))}</div></div>
+    </div>`;
+}
+// Objectif tel qu'enregistré avec la simulation (null si absent ou au-delà de la capacité)
+function objectifPourSauvegarde(){
+  const cl=client(), p=params(); const o=objectifActuel(cl,p);
+  if(!o || o.depasse) return null;
+  return { type:o.type, budget:Math.round(o.budget), mensualite:Math.round(o.mensualite), mensualiteMax:Math.round(o.mensualiteMax), pct:o.pct };
 }
 // Un bloc de résultat (budget + kpis + badges + détail), réutilisé pour le scénario "mensualité max"
 // et pour le scénario "mensualité choisie" quand le client en a une en tête.
@@ -637,32 +680,36 @@ function renderCapa(){
   const cl=client(), p=params(); renderAlertes(cl);
   const fl=$('fLoyer'); if(fl) fl.style.display = cl.logement==='heberge'?'none':'';
   if(cl.revenus<=0){ $('resCapa').innerHTML=`<div class="warnbox">Aucun revenu retenu par la banque avec ce profil : pas de capacité d'emprunt en propre. Voir les points d'attention ci-dessus pour les montages possibles.</div>`; return; }
-  const mv=Math.max(0,num('mensVoulue'));
+  const mv=Math.max(0,num('mensVoulue')), pv=Math.max(0,num('prixVise'));
+  const o=objectifActuel(cl,p);
+  const noteDouble = (mv>0 && pv>0) ? `<div class="note">Mensualité souhaitée et budget visé sont tous deux renseignés : c'est la mensualité qui est retenue. Vide-la pour utiliser le budget visé.</div>` : '';
   if(cl.projet!=='rp'){
     const Mmax=Math.max(0,cl.revenus*p.endet-cl.credits);
-    const MRet = (mv>0)? Math.min(mv,Mmax) : Mmax;
-    const Cmax=capitalLisse(MRet,p.t[cl.duree],cl.duree,p.ass,[]);
+    const Cmax=capitalLisse(Mmax,p.t[cl.duree],cl.duree,p.ass,[]);
     const budget=(Cmax/(1+p.fGar)+cl.apport)/(1+p.fNot);
     const lib = cl.projet==='inv' ? 'hors loyer futur' : cl.projet==='rs' ? 'résidence secondaire' : 'logement pour un proche';
-    const titre = mv>0 ? `Budget d'achat pour une mensualité de ${eurM(mv)}` : `Budget d'achat maximum (${lib})`;
-    $('resCapa').innerHTML=`
-      <div class="big"><div class="k">${titre}</div><div class="v">${eur(budget)}</div>
-      <div class="s">Mensualité retenue ${eurM(MRet)} sur ${cl.duree} ans à ${(p.t[cl.duree]*100).toFixed(2).replace('.',',')} %.${cl.projet==='inv'?` La banque ajoutera ${Math.round(p.pLoyer*100)} % du loyer attendu aux revenus : le budget réel se calcule lot par lot à l'étape 2.`:''}</div></div>
-      <div class="kpis"><div class="kpi"><div class="k">Mensualité retenue</div><div class="v">${eurM(MRet)}</div></div><div class="kpi"><div class="k">Capital empruntable</div><div class="v">${eur(Cmax)}</div></div><div class="kpi"><div class="k">Apport total</div><div class="v">${eur(cl.apport)}</div></div></div>
-      ${mv>0 && mv>=Mmax-1?`<div class="note">La mensualité indiquée atteint déjà le maximum d'endettement (${eurM(Mmax)}) : le budget ci-dessus est le plafond.</div>`:''}
-      ${mv>0 && mv<Mmax-1?`<div class="note">À titre de comparaison, le maximum d'endettement (${Math.round(p.endet*100)} %) autoriserait une mensualité de ${eurM(Mmax)}.</div>`:''}
-      <div class="note">Aucune aide (PTZ, Action Logement, Paris Logement, TVA 5,5 %) hors résidence principale.</div>`;
+    let h=`
+      <div class="big"><div class="k">Budget d'achat maximum (${lib})</div><div class="v">${eur(budget)}</div>
+      <div class="s">Mensualité maximale ${eurM(Mmax)} (${Math.round(p.endet*100)} % d'endettement) sur ${cl.duree} ans à ${(p.t[cl.duree]*100).toFixed(2).replace('.',',')} %.${cl.projet==='inv'?` La banque ajoutera ${Math.round(p.pLoyer*100)} % du loyer attendu aux revenus : le budget réel se calcule lot par lot à l'étape 2.`:''}</div></div>
+      <div class="kpis"><div class="kpi"><div class="k">Mensualité maximale</div><div class="v">${eurM(Mmax)}</div></div><div class="kpi"><div class="k">Capital empruntable</div><div class="v">${eur(Cmax)}</div></div><div class="kpi"><div class="k">Apport total</div><div class="v">${eur(cl.apport)}</div></div></div>`;
+    h += htmlObjectif(o,cl,p);
+    if(mv>0 && mv>=Mmax-1) h += `<div class="note">La mensualité indiquée atteint déjà le maximum d'endettement (${eurM(Mmax)}) : le budget ci-dessus est le plafond.</div>`;
+    h += noteDouble + `<div class="note">Aucune aide (PTZ, Action Logement, Paris Logement, TVA 5,5 %) hors résidence principale.</div>`;
+    $('resCapa').innerHTML=h;
     return;
   }
   const cMax=capacite(cl,p);
-  let html=blocBudget(mv>0?'Budget maximum, aides comprises (mensualité '+Math.round(p.endet*100)+' % d\'endettement)':'Budget d\'achat maximum, aides comprises', cMax, p, cl);
-  if(mv>0 && mv<cMax.Mmax-1){
-    const cCh=capacite(cl,p,mv);
+  let html=blocBudget('Budget d\'achat maximum, aides comprises', cMax, p, cl);
+  if(o && o.type==='mensualite' && o.c){
     html += `<div style="margin:26px 0 16px;border-top:1px dashed var(--line)"></div>`;
-    html += blocBudget(`Budget pour une mensualité choisie de ${eurM(mv)}`, cCh, p, cl, 'Mensualité choisie');
+    html += blocBudget(`Budget pour une mensualité choisie de ${eurM(mv)}`, o.c, p, cl, 'Mensualité choisie');
+    html += `<div class="note">Cette mensualité représente <b>${o.pct} %</b> de la capacité d'emprunt maximale du client (${eurM(o.mensualite)} sur ${eurM(o.mensualiteMax)}).</div>`;
+  } else if(o){
+    html += htmlObjectif(o,cl,p);
   } else if(mv>0){
     html += `<div class="note">La mensualité indiquée (${eurM(mv)}) atteint ou dépasse le maximum d'endettement : le budget ci-dessus est déjà le plafond.</div>`;
   }
+  html += noteDouble;
   $('resCapa').innerHTML=html;
 }
 
@@ -882,18 +929,16 @@ async function chargerLotsReels(){
 }
 
 function budgetMaxActuel(){
+  // Toujours le budget MAXIMUM du client (capacité pleine) : c'est le chiffre principal de sa
+  // feuille sélection. L'objectif éventuel (mensualité / budget visé) est enregistré à part.
   const cl=client(), p=params();
   if(cl.revenus<=0) return null;
-  const mv=Math.max(0,num('mensVoulue'));
   if(cl.projet!=='rp'){
     const Mmax=Math.max(0,cl.revenus*p.endet-cl.credits);
-    const MRet=(mv>0)?Math.min(mv,Mmax):Mmax;
-    const Cmax=capitalLisse(MRet,p.t[cl.duree],cl.duree,p.ass,[]);
+    const Cmax=capitalLisse(Mmax,p.t[cl.duree],cl.duree,p.ass,[]);
     return (Cmax/(1+p.fGar)+cl.apport)/(1+p.fNot);
   }
-  const cMax=capacite(cl,p);
-  if(mv>0 && mv<cMax.Mmax-1) return capacite(cl,p,mv).budgetAvec;
-  return cMax.budgetAvec;
+  return capacite(cl,p).budgetAvec;
 }
 
 /* ===================== ÉTAT COMPLET DU FORMULAIRE (02/10/2026) =====================
@@ -901,7 +946,7 @@ function budgetMaxActuel(){
    le même client : un lot ajouté à la sélection après coup se simule ainsi avec les
    mêmes paramètres (profil, aides, options par lot), et la feuille sélection affiche
    une mensualité juste sur tous les lots. Jamais renvoyé à la page publique. */
-const ETAT_CHAMPS = ['projet','foyer','zone','logement','loyerActuel','rfr','credits','apport','donation','pretFam','duree','pret0','pret0Duree','mensVoulue','t15','t20','t25','tAss','endet','fNot','fGar','ageFin','ravAdulte','ravEnfant','pLoyer','tPAL'];
+const ETAT_CHAMPS = ['projet','foyer','zone','logement','loyerActuel','rfr','credits','apport','donation','pretFam','duree','pret0','pret0Duree','mensVoulue','prixVise','t15','t20','t25','tAss','endet','fNot','fGar','ageFin','ravAdulte','ravEnfant','pLoyer','tPAL'];
 const ETAT_TAUX = ['t15','t20','t25'];
 let ETAT_REPRIS = null; // {date, etat} de la simulation dont les paramètres ont été repris
 
@@ -995,6 +1040,7 @@ async function enregistrerSimulation(){
     if(budgetMax!=null) payload.budgetMax=Math.round(budgetMax);
     // Tableau « Comment on y arrive » (lignes + note), montré tel quel sur la feuille sélection
     const montageBudget=montageBudgetActuel(); if(montageBudget) payload.montage=montageBudget;
+    const objectif=objectifPourSauvegarde(); if(objectif) payload.objectif=objectif;
 
     if(CTX_TOKEN){
       const r=await fetch(SB_URL+'/functions/v1/selection/'+encodeURIComponent(CTX_TOKEN), {

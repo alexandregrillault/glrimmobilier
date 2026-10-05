@@ -237,6 +237,11 @@
   .financement-detail tr.sub td { color:var(--muted); }
   .financement-detail tr.total td { font-weight:700; color:var(--dark); border-bottom:none; border-top:2px solid var(--gold); padding-top:9px; }
   .financement-note { font-size:12px; color:var(--muted); line-height:1.5; }
+  /* Budget visé par le client (mensualité ou prix), sous son budget maximum (06/10/2026) */
+  .financement-objectif { margin:2px 0 14px; padding:12px 16px; background:var(--gold-clair); border-radius:12px; }
+  .financement-objectif-titre { font-size:12px; color:var(--gold-fonce); letter-spacing:.5px; text-transform:uppercase; font-weight:600; margin-bottom:3px; }
+  .financement-objectif-montant { font-family:Georgia,serif; font-size:19px; font-weight:700; color:var(--dark); }
+  .financement-objectif-txt { font-size:13px; color:var(--encre); line-height:1.5; margin-top:4px; }
 
   footer { text-align:center; color:var(--muted); font-size:12.5px; margin-top:8px; }
   .partage { margin-top:12px; }
@@ -777,6 +782,19 @@
     h += "<div class='financement-eyebrow'>Votre simulation de financement</div>";
     var bm = Number(sim.budgetMax);
     if (isFinite(bm) && bm > 0) h += "<div class='financement-montant'>Budget que vous pouvez viser : " + new Intl.NumberFormat('fr-FR').format(Math.round(bm)) + " €</div>";
+    // Budget visé par le client (mensualité souhaitée ou prix), sous son maximum : ce qu'il représente
+    // sur sa capacité d'emprunt maximale (06/10/2026, demande d'Alex). Absent = rien à montrer.
+    var ob = sim.objectif;
+    if (ob && isFinite(Number(ob.budget)) && Number(ob.budget) > 0 && isFinite(bm) && Number(ob.budget) < bm && isFinite(Number(ob.mensualite)) && isFinite(Number(ob.mensualiteMax)) && Number(ob.mensualiteMax) > 0){
+      var nf = new Intl.NumberFormat('fr-FR');
+      var marge = Math.max(0, Math.round(Number(ob.mensualiteMax) - Number(ob.mensualite)));
+      var pct = isFinite(Number(ob.pct)) ? Math.round(Number(ob.pct)) : Math.round(Number(ob.mensualite) / Number(ob.mensualiteMax) * 100);
+      h += "<div class='financement-objectif'>";
+      h += "<div class='financement-objectif-titre'>" + (ob.type === "mensualite" ? "Pour une mensualité de " + nf.format(Math.round(Number(ob.mensualite))) + " €/mois" : "Votre budget visé") + "</div>";
+      h += "<div class='financement-objectif-montant'>" + nf.format(Math.round(Number(ob.budget))) + " €</div>";
+      h += "<div class='financement-objectif-txt'>Mensualité estimée de " + nf.format(Math.round(Number(ob.mensualite))) + " €/mois, soit " + pct + " % de votre capacité d'emprunt maximale (" + nf.format(Math.round(Number(ob.mensualiteMax))) + " €/mois)" + (marge > 0 ? " : il vous reste " + nf.format(marge) + " €/mois de marge." : ".") + "</div>";
+      h += "</div>";
+    }
     if (sim.date) h += "<div class='financement-date'>Simulation réalisée le " + esc(fmtDate(sim.date)) + ".</div>";
     // Bouton « Refaire ou ajuster ma simulation » retiré le 02/10/2026 (demande d'Alex) :
     // la simulation est faite par le conseiller, le client en voit le résultat et le détail.
