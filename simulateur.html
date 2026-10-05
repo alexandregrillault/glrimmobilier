@@ -994,7 +994,7 @@ async function enregistrerSimulation(){
     const payload={ profil:{ projet:$('projet').value, revenus:Math.round(cl.revenus), apport:Math.round(cl.apport), duree:cl.duree }, lots, etat:etatFormulaire() };
     if(budgetMax!=null) payload.budgetMax=Math.round(budgetMax);
     // Tableau « Comment on y arrive » (lignes + note), montré tel quel sur la feuille sélection
-    const montage=montageBudgetActuel(); if(montage) payload.montage=montage;
+    const montageBudget=montageBudgetActuel(); if(montageBudget) payload.montage=montageBudget;
 
     if(CTX_TOKEN){
       const r=await fetch(SB_URL+'/functions/v1/selection/'+encodeURIComponent(CTX_TOKEN), {
