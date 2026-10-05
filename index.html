@@ -3813,7 +3813,7 @@ window.addEventListener('message', async function (e) {
   selAjouterLibreRefresh();
   if (typeof toast === 'function') toast('✓ ' + nouveaux.length + ' lot' + (nouveaux.length > 1 ? 's' : '') + ' ajouté' + (nouveaux.length > 1 ? 's' : '') + ' depuis la carte — prix, surface, étage et documents récupérés');
   // Vignette de plan en tâche de fond, pour les lots qui en ont un
-  planPreparerLots(nouveaux).then(r => { if (r.faits && _selCtx === ctx) selAjouterLibreRefresh(); });
+  _selPlansSuivre(planPreparerLots(nouveaux)).then(r => { if (r.faits && _selCtx === ctx) selAjouterLibreRefresh(); });
 });
 
 // Le simulateur de financement vit dans simulateur.html, à côté d'index.html
@@ -7998,7 +7998,7 @@ function eqSimulationsHtml(l) {
       return `<div style="display:grid;grid-template-columns:118px 90px 1fr;gap:10px;align-items:baseline;padding:7px 12px;border-top:1px solid var(--border);font-size:12.5px">
         <span style="color:var(--muted);white-space:nowrap">${_vEsc(fmtD(s.date))}</span>
         <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.origine === 'vendeur' ? 'Vendeur' : 'Client'}</span>
-        <span>Budget visé ${_vEsc(eur(s.budgetMax))}${n ? ' · ' + n + ' lot' + (n > 1 ? 's' : '') + ' simulés' : ''}</span>
+        <span>${s.objectif && Number(s.objectif.budget) > 0 ? 'Budget max ' + _vEsc(eur(s.budgetMax)) + ' · visé ' + _vEsc(eur(s.objectif.budget)) : 'Budget visé ' + _vEsc(eur(s.budgetMax))}${n ? ' · ' + n + ' lot' + (n > 1 ? 's' : '') + ' simulés' : ''}</span>
       </div>`;
     }).join('') + '</div>';
   }
@@ -8547,7 +8547,9 @@ function _eqTexteEtat(champ, texte, couleur){
 // simulation arrive (postMessage du simulateur) sans re-rendre la fiche.
 function _eqBudgetSimu(l) {
   const s = (l && Array.isArray(l.simulations) ? l.simulations : [])[0];
-  const v = s ? Number(s.budgetMax) : NaN;
+  // Objectif du client (mensualité souhaitée / budget visé) s'il y en a un, sinon son maximum
+  const vo = (s && s.objectif) ? Number(s.objectif.budget) : NaN;
+  const v = (Number.isFinite(vo) && vo > 0) ? vo : (s ? Number(s.budgetMax) : NaN);
   return (s && Number.isFinite(v) && v > 0) ? { montant: Math.round(v), date: s.date || null } : null;
 }
 function eqBudgetSimuHtml(l) {
@@ -11334,6 +11336,36 @@ async function _propRefermerPasses(token) {
 
 let _selProgrammes = null;   // cache table programmes
 let _selCtx = null;          // création en cours { lead, libres: [] }
+// Préparations de plans lancées en arrière-plan (lots venus de la carte, sélection
+// rouverte…). « Créer la sélection » et « Enregistrer » attendent qu'elles soient
+// finies : avant le 05/10/2026, un clic rapide envoyait les lots sans plan préparé.
+let _selPlansEnCours = [];
+function _selPlansSuivre(p) {
+  _selPlansEnCours.push(p);
+  p.finally(() => { const i = _selPlansEnCours.indexOf(p); if (i >= 0) _selPlansEnCours.splice(i, 1); });
+  return p;
+}
+// Bloque le bouton tant que des plans de la sélection en cours ne sont pas prêts,
+// en prévenant le conseiller. Rend la main quand tout est prêt (ou définitivement raté).
+async function _selAttendrePlans(btn) {
+  const enAttente = () => ((_selCtx && _selCtx.libres) || []).filter(b => b && b.plan && !b.planImg);
+  if (!enAttente().length) return;
+  const texte = btn ? btn.textContent : '';
+  if (btn) btn.disabled = true;
+  if (typeof toast === 'function') toast('Les plans sont encore en préparation — patiente, la sélection partira dès que c\'est terminé', 'var(--warning)');
+  const majTexte = () => { if (btn) { const n = enAttente().length; btn.textContent = 'Préparation des plans — ' + n + ' restant' + (n > 1 ? 's' : '') + '…'; } };
+  majTexte();
+  const tick = setInterval(majTexte, 500);
+  try {
+    for (let g = 0; g < 50 && _selPlansEnCours.length; g++) await Promise.allSettled(_selPlansEnCours.slice());
+    const reste = enAttente();
+    if (reste.length) await planPreparerLots(reste, () => majTexte());
+  } finally { clearInterval(tick); }
+  selAjouterLibreRefresh();
+  if (btn) { btn.disabled = false; btn.textContent = texte; }
+  const rates = enAttente().length;
+  if (rates && typeof toast === 'function') toast('⚠ ' + rates + ' plan' + (rates > 1 ? 's' : '') + ' n\'a pas pu être préparé — le client verra le document complet', 'var(--warning)');
+}
 
 const SEL_AVIS_LABELS = { 'interesse': 'Ça m\'intéresse', 'a_discuter': 'À discuter', 'pas_pour_moi': 'Pas pour moi' };
 
@@ -11711,7 +11743,7 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
     selAjouterLibreRefresh();
     // Sélection d'avant la vignette de plan : on la prépare en tâche de fond,
     // le conseiller n'attend pas et les badges se mettent à jour tout seuls.
-    planPreparerLots(_selCtx.libres).then(r => { if (r.faits) selAjouterLibreRefresh(); });
+    _selPlansSuivre(planPreparerLots(_selCtx.libres)).then(r => { if (r.faits) selAjouterLibreRefresh(); });
   }
 }
 
@@ -11755,6 +11787,8 @@ async function selEnregistrerModifs() {
   }
 
   const retires = avant.length + ajoutes - biens.length;
+  await _selAttendrePlans(btn);
+  if (!_selCtx || _selCtx.edition !== ed) return; // sélection fermée pendant l'attente
   if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
   try {
     const r = await fetch(SUPABASE_URL + '/rest/v1/selections?token=eq.' + encodeURIComponent(ed.token), {
@@ -12689,7 +12723,7 @@ async function selAnalyserDocs() {
       + (rates ? ' — ' + rates + ' fichier(s) non envoyé(s)' : '')
       + ' · vérifie avec ✎', rates ? 'var(--warning)' : 'var(--success)');
     // Vignettes de plan en tâche de fond (un plan PDF est rendu en image)
-    planPreparerLots(nouveaux).then(x => { if (x.faits) selAjouterLibreRefresh(); });
+    _selPlansSuivre(planPreparerLots(nouveaux)).then(x => { if (x.faits) selAjouterLibreRefresh(); });
   } finally {
     _selAnalyseEnCours = false;
     const b2 = document.getElementById('sel-docs-analyser');
@@ -12821,7 +12855,7 @@ function selAjouterLibreRefresh() {
         <button onclick="selAdresseLot(${i})" title="Adresse du programme" style="background:none;border:1px dashed ${b.adresseOk ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.adresseOk ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.adresseOk ? 'Adresse ✓' : 'Adresse ?'}</button>
         <button onclick="selRemiseLot(${i})" title="Remise ou avantage négocié" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:1px 9px;color:var(--muted);font-size:11px;cursor:pointer;margin-right:4px">Remise</button>
         <button onclick="selNoteLot(${i})" title="Un mot pour le client, affiché sous ce lot" style="background:none;border:1px ${b.note ? 'solid var(--accent)' : 'dashed var(--border)'};border-radius:20px;padding:1px 9px;color:${b.note ? 'var(--accent)' : 'var(--muted)'};font-size:11px;cursor:pointer;margin-right:4px">Note${b.note ? ' ✓' : ''}</button>
-        ${b.plan ? `<button onclick="selPlanLot(${i})" title="Choisir ce que le client voit du plan" style="background:none;border:1px dashed ${b.planImg ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.planImg ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.planImg ? 'Plan ✓' : 'Plan ?'}</button>` : ''}
+        ${b.plan ? `<button onclick="selPlanLot(${i})" title="Choisir ce que le client voit du plan" style="background:none;border:1px dashed ${b.planImg ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.planImg ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.planImg ? 'Plan ✓' : (_selPlansEnCours.length ? 'Plan en cours…' : 'Plan ?')}</button>` : ''}
         <button onclick="selEditerLot(${i})" title="Modifier / compléter ce lot" style="background:none;border:none;cursor:pointer;font-size:13px">✎</button>
         <button onclick="_selCtx.libres.splice(${i},1);selAjouterLibreRefresh()" title="Retirer" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button>
       </span>
@@ -12900,7 +12934,7 @@ function selDeposerDocCarte(i, cible, champ) {
     });
     selAjouterLibreRefresh();
     if (typeof toast === 'function') toast('✓ ' + libelle + ' enregistré' + (champ === 'plaquette' ? 'e' : '') + ' — visible sur la carte et sur la feuille du client');
-    if (cible === 'lot') planPreparerLots([b]).then(r => { if (r.faits && _selCtx === ctx) selAjouterLibreRefresh(); });
+    if (cible === 'lot') _selPlansSuivre(planPreparerLots([b])).then(r => { if (r.faits && _selCtx === ctx) selAjouterLibreRefresh(); });
   };
   inp.click();
 }
@@ -13116,6 +13150,8 @@ async function selCreer() {
   const l = _selCtx.lead;
   const biens = _selCtx.libres.slice();
   if (!biens.length) { if (typeof toast === 'function') toast('⚠ Sélectionne au moins un bien', 'var(--warning)'); return; }
+  await _selAttendrePlans(document.getElementById('sel-btn-valider'));
+  if (!_selCtx || _selCtx.lead !== l) return; // sélection fermée pendant l'attente
   // Lots du même programme : on réutilise la belle photo déjà trouvée sur un autre lot
   biens.forEach(b => {
     if (!b.image) {
