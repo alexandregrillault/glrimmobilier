@@ -2018,11 +2018,16 @@ function planLot(p, l) { const d = DOCS[p.id]; return (d && d.lots && d.lots[l.i
 // « Ouvrir dans un nouvel onglet » et le clic milieu / Ctrl+clic restent disponibles en secours
 // (utile si l'extranet du promoteur exige une session que l'aperçu ne peut pas porter).
 const docModal = document.getElementById('docModal'), docModalFrame = document.getElementById('docModalFrame'), docModalTitre = document.getElementById('docModalTitre'), docModalOuvrir = document.getElementById('docModalOuvrir');
+// Les images stockées chez nous portent « ?download=<nom> » (utile au bouton Télécharger de la
+// feuille sélection) : dans l'aperçu, ce paramètre ferait télécharger le fichier au lieu de
+// l'afficher (constaté sur les plans Link-App/NACA, 06/10/2026) — on l'enlève pour l'affichage.
+function sansDownload(u) { return String(u || '').replace(/([?&])download=[^&]*(&?)/, (m, sep, amp) => amp ? sep : ''); }
 function apercuDoc(url, titre) {
   if (!url) return;
+  const vue = sansDownload(url);
   docModalTitre.textContent = titre || 'Document';
-  docModalOuvrir.href = url;
-  docModalFrame.src = url;
+  docModalOuvrir.href = vue;
+  docModalFrame.src = vue;
   docModal.classList.add('on');
 }
 function fermerDocModal() { docModal.classList.remove('on'); docModalFrame.src = ''; }
