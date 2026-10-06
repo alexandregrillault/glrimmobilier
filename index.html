@@ -291,6 +291,9 @@
   .btn-sm { padding: 5px 12px; font-size: 12px; }
 
   /* ---- RAPPORT MARCHÉ ---- */
+  .rm-px { color: inherit; text-decoration: none; border-bottom: 1px solid var(--border); }
+  .rm-px:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  .rm-px.gen { border-bottom-style: dotted; }
   .rm-kpi-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
   .rm-kpi { flex: 1 1 140px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
   .rm-kpi b { display: block; font-family: var(--font-head); font-size: 22px; font-weight: 700; color: var(--text); }
@@ -3426,6 +3429,63 @@ function loadMailsGuide() {
 // ============================================================
 let _rmData = null;
 
+// ------------------------------------------------------------
+//  Lien vers l'extranet du promoteur pour chaque programme cité (06/10/2026,
+//  demande d'Alex). L'URL vient de la pige (pige_programmes.data.url) : fiche
+//  exacte chez la plupart des promoteurs, page générique (accueil / liste) chez
+//  ceux dont le scraper ne relève pas d'adresse par programme — Immo-Lead et
+//  Unlatch sont reconstruits depuis l'identifiant. Chargé à la demande, en
+//  cache pour la session ; le rapport s'affiche d'abord, les liens s'ajoutent.
+// ------------------------------------------------------------
+const _rmLiens = {};          // programme_id -> { url, exact } | null (connu sans lien)
+let _rmLiensEnCours = null;
+const _RM_URL_GEN = /\/recherche-lots\/?$|\/admin\/explorer\/program\/?$|\/estate\/search\/programs|vos-interlocuteurs-prescription|bouygues-immobilier-partenaires\.fr\/?$|\/extranet\/?$|stock\?tab=|\/recherche\?|PROGRAMMEDETAIL\.ASP\?p=$/i;
+function _rmLienDepuis(id, source, url, idp) {
+  id = String(id || ''); source = String(source || id.split(':')[0]); url = String(url || '');
+  idp = String(idp || (id.indexOf(':') !== -1 ? id.split(':').slice(1).join(':') : ''));
+  if (source.indexOf('immolead') === 0 && idp) return { url: 'https://immo-lead.com/appli/detail-programme-' + idp, exact: true };
+  if (source.indexOf('unlatch') === 0 && idp && url) return { url: url.replace(/\/+$/, '') + '/' + idp + '/', exact: true };
+  if (!url) return null;
+  return { url: url, exact: !_RM_URL_GEN.test(url) };
+}
+async function _rmLiensAssurer(ids, apres) {
+  const manquants = Array.from(new Set((ids || []).filter(id => id && !(id in _rmLiens))));
+  if (!manquants.length || _rmLiensEnCours) return;
+  _rmLiensEnCours = true;
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    const trouves = {};
+    for (let i = 0; i < manquants.length; i += 120) {
+      const tranche = manquants.slice(i, i + 120);
+      const r = await fetch(SUPABASE_URL + '/rest/v1/pige_programmes?select=id,source,url:data->>url,idp:data->>idp&id=in.(' + tranche.map(encodeURIComponent).join(',') + ')', { headers: h });
+      if (r.ok) (await r.json()).forEach(p => { trouves[p.id] = p; });
+    }
+    // une URL partagée par plusieurs programmes est une page générique, pas une fiche
+    const nbParUrl = {};
+    Object.values(trouves).forEach(p => { if (p.url) nbParUrl[p.url] = (nbParUrl[p.url] || 0) + 1; });
+    manquants.forEach(id => {
+      const p = trouves[id];
+      const l = p ? _rmLienDepuis(id, p.source, p.url, p.idp) : _rmLienDepuis(id, '', '', '');
+      if (l && p && p.url && nbParUrl[p.url] > 1 && l.url === p.url) l.exact = false;
+      _rmLiens[id] = l;
+    });
+  } catch (e) { manquants.forEach(id => { if (!(id in _rmLiens)) _rmLiens[id] = null; }); }
+  _rmLiensEnCours = null;
+  if (typeof apres === 'function') apres();
+}
+function _rmNomLien(id, nom) {
+  const t = _esc(nom || ''); const l = id ? _rmLiens[id] : null;
+  if (!l || !l.url) return t;
+  return '<a class="rm-px' + (l.exact ? '' : ' gen') + '" href="' + _esc(l.url) + '" target="_blank" rel="noopener" title="' +
+    (l.exact ? 'Fiche du programme sur l’extranet du promoteur' : 'Extranet du promoteur (accueil ou liste des programmes : la fiche n’est pas relevée par la pige)') + '">' + t + '</a>';
+}
+function _rmIdsDans(obj, acc) {
+  acc = acc || [];
+  if (Array.isArray(obj)) obj.forEach(x => _rmIdsDans(x, acc));
+  else if (obj && typeof obj === 'object') { if (typeof obj.id === 'string' && obj.id.indexOf(':') !== -1 && ('nom' in obj)) acc.push(obj.id); Object.values(obj).forEach(v => { if (v && typeof v === 'object') _rmIdsDans(v, acc); }); }
+  return acc;
+}
+
 async function loadRapportMarche(force) {
   const body = document.getElementById('rm-body');
   if (_rmData && !force) { renderRapportMarche(); return; }
@@ -3548,13 +3608,14 @@ function renderRapportMensuel() {
   if (!box || !_rmMois) return;
   const row = _rmMois.find(m => m.mois === _rmMoisSel) || _rmMois[0];
   const D = row.data || {}, G = D.global || {}, N = D.nouveautes || {}, V = D.ventes || {}, PX = D.prix || {}, ST = D.stock || {}, PR = D.par_promoteur || [];
+  _rmLiensAssurer(_rmIdsDans([N, V]), renderRapportMensuel);
   const nouveaux = N.nouveaux || [], resolus = N.picking_resolus || [], tranches = N.tranches || [], termines = (N.termines || []).filter(r => r.nom), absents = (N.absents || []).filter(r => r.nom), averif = N.a_verifier || [], anciens = N.anciens || [], pickAj = N.picking_ajoutes || [];
   // nouveaux / tranches par promoteur : comptés depuis les listes ci-dessus (toujours cohérents avec la rubrique Nouveautés, même pour les mois relus)
   const nvP = {}, trP = {};
   nouveaux.forEach(r => { nvP[r.promoteur] = (nvP[r.promoteur] || 0) + 1; });
   tranches.forEach(r => { trP[r.promoteur] = (trP[r.promoteur] || 0) + 1; });
   const dLib = G.libres_fin - G.libres_debut;
-  const nomCol = { l: 'Programme', f: r => '<b>' + _esc(r.nom || '') + '</b>' + (r.present === false ? '<span class="rm-tag">plus sur l’extranet</span>' : '') };
+  const nomCol = { l: 'Programme', f: r => '<b>' + _rmNomLien(r.id, r.nom) + '</b>' + (r.present === false ? '<span class="rm-tag">plus sur l’extranet</span>' : '') };
   const baseCols = [{ l: 'Vu le', f: r => _rmDj(r.date) }, { l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }];
   const sel = '<select onchange="rmMoisChoisir(this.value)" style="width:auto;margin:0;padding:7px 10px">' + _rmMois.map(m => '<option value="' + m.mois + '"' + (m.mois === row.mois ? ' selected' : '') + '>' + _rmMoisLabel(m.mois) + '</option>').join('') + '</select>';
   const villes = (ST.par_ville || []).filter(v => v.ville);
@@ -3588,7 +3649,7 @@ function renderRapportMensuel() {
     '</div>' +
     '<div class="card"><div class="card-header"><div class="card-title">Ça se vend</div></div>' +
       '<div style="padding:10px 24px 0;color:var(--muted);font-size:12.5px">' + _rmNum(V.sortis) + ' lots sortis du stock, ' + _rmNum(V.options) + ' passés en option, ' + _rmNum(V.liberations) + ' redevenus libres, ' + _rmNum(V.nouveaux_lots) + ' nouveaux lots.' + (ventesDept ? ' Sorties par département — ' + _esc(ventesDept) + '.' : '') + '</div>' +
-      _rmTable([{ l: 'Programme', f: r => '<b>' + _esc(r.nom || '') + '</b>' }, { l: 'Ville', f: r => _esc(r.ville || '') }, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }, { l: 'Lots sortis', r: 1, f: r => _rmNum(r.n) }, { l: 'Reste libre', r: 1, f: r => _rmNum(r.libres) }], V.top_programmes) +
+      _rmTable([{ l: 'Programme', f: r => '<b>' + _rmNomLien(r.id, r.nom) + '</b>' }, { l: 'Ville', f: r => _esc(r.ville || '') }, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }, { l: 'Lots sortis', r: 1, f: r => _rmNum(r.n) }, { l: 'Reste libre', r: 1, f: r => _rmNum(r.libres) }], V.top_programmes) +
     '</div>' +
     '<div class="card"><div class="card-header"><div class="card-title">Prix</div></div>' +
       '<div style="padding:10px 24px 0;color:var(--muted);font-size:12.5px">' + _rmNum(PX.baisses) + ' baisses' + (PX.baisse_moy_pct ? ' (−' + String(PX.baisse_moy_pct).replace('.', ',') + ' % en moyenne)' : '') + ' et ' + _rmNum(PX.hausses) + ' hausses de prix sur le mois.</div>' +
@@ -3651,6 +3712,7 @@ function renderRapportMarche() {
   const prevMaj = historique[1] || null;
   const d = (champ) => prevMaj ? _rmDelta(maj[champ], prevMaj[champ]) : '';
 
+  _rmLiensAssurer(evenements.map(e => e.programme_id).concat(bientotLivres.rows.map(p => p.id)), renderRapportMarche);
   const parType = {};
   evenements.forEach(e => { (parType[e.type] = parType[e.type] || []).push(e); });
   const nouveauxProgs = parType.nouveau_programme || [];
@@ -3720,7 +3782,7 @@ function renderRapportMarche() {
   // caché derrière "Voir le détail") car c'est la matière la plus actionnable de la page.
   const cardBientotLivres = bientotLivres.rows.length ? '<div class="card"><div class="card-header"><div class="card-title">Bientôt livrés</div></div>' +
     '<table><thead><tr><th>Programme</th><th>Ville</th><th>Promoteur</th><th>Livraison</th><th>Lots libres</th><th>Prix dès</th></tr></thead><tbody>' +
-    bientotLivres.rows.map(p => '<tr><td>' + _esc(p.nom) + '</td><td>' + _esc(p.ville || '—') + '</td><td>' + _esc(p.promoteur) +
+    bientotLivres.rows.map(p => '<tr><td>' + _rmNomLien(p.id, p.nom) + '</td><td>' + _esc(p.ville || '—') + '</td><td>' + _esc(p.promoteur) +
       '</td><td>' + _esc(p.livraison || '—') + '</td><td>' + _rmNum(p.nb_libres) + '</td><td>' + _rmEuro(p.prix_min) + '</td></tr>').join('') +
     '</tbody></table>' +
     (bientotLivres.total > bientotLivres.rows.length ?
@@ -3730,7 +3792,7 @@ function renderRapportMarche() {
     '<table><thead><tr><th>Ville</th><th>Programme</th><th>Typo</th><th>Surface</th><th>Prix</th><th>Statut</th></tr></thead><tbody>' +
     lotsARegarder.slice(0, 30).map(e => {
       const l = lots[e.lot_id] || {};
-      return '<tr><td>' + _esc(e.ville) + '</td><td>' + _esc(e.nom_programme) + '</td><td>' + _esc(l.typo || '—') + '</td><td>' +
+      return '<tr><td>' + _esc(e.ville) + '</td><td>' + _rmNomLien(e.programme_id, e.nom_programme) + '</td><td>' + _esc(l.typo || '—') + '</td><td>' +
         (l.surf ? l.surf + ' m²' : '—') + '</td><td>' + _rmEuro(l.prix) + '</td><td>' + (e.type === 'nouveau_lot' ? 'Nouveau' : 'Redevenu libre') + '</td></tr>';
     }).join('') + '</tbody></table>' +
     (lotsARegarder.length > 30 ? '<div class="rm-empty" style="padding:12px 24px">+ ' + (lotsARegarder.length - 30) + ' autres lots — détail complet sur la carte des programmes.</div>' : '') +
