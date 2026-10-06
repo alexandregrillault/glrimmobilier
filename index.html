@@ -11742,8 +11742,19 @@ function fmtDuree(sec) {
 // 4e colonne : aide à la saisie (06/10/2026, demande d'Alex) — 'ville' propose
 // les communes au fil de la frappe (Base Adresse Nationale), '€' et 'm²'
 // affichent l'unité dans le champ et mettent le nombre en forme en sortant.
+// Titre « Programme — Lot A106 » : la feuille sélection lit le programme avant le tiret (en
+// tête de carte) et « Lot A106 » après (sur la ligne du lot). Le numéro est saisi dans sa
+// propre case et recollé au titre à l'ajout (06/10/2026 — avant, un titre déjà saisi faisait
+// perdre le numéro trouvé dans les documents, et deux lots du même programme s'affichaient
+// chez le client sans numéro).
+const SEL_RE_LOT = /^(.*?)\s*[-–—]\s*lot\b\s*(?:n°|no|num[ée]ro)?\s*(.*)$/i;
+function _selTitreLot(titre) {
+  const m = String(titre || '').trim().match(SEL_RE_LOT);
+  return m ? { programme: m[1].trim(), num: m[2].trim() } : { programme: String(titre || '').trim(), num: '' };
+}
 const SEL_CHAMPS_LIBRE = [
-  ['titre', 'Titre (ex: Alter Ego — Lot A106) *', true],
+  ['titre', 'Programme (ex: Alter Ego) *', true],
+  ['lot', 'N° de lot (ex: A106)'],
   ['lien', 'Lien Otaree (fiche & plans du lot)', true],
   ['image', 'Lien photo du programme (optionnel — sinon logo GLR)', true],
   ['adresse', 'Adresse du programme (ex: 12 rue de la Paix) — choisis dans la liste', true, 'adresse'],
@@ -13058,6 +13069,11 @@ async function selAnalyserDocs() {
       const c = _selChampsDepuisTexte(docs.map(d => d.texte || '').join('\n'));
       let n = 0;
       Object.keys(c).forEach(k => { if (setSiVide(k, c[k])) n++; });
+      // Numéro de lot lu dans les documents (nom de fichier « A106_plan.pdf » ou texte de la
+      // fiche) : rempli dans « N° de lot » si la case est vide et qu'un seul lot ressort
+      const rg = _selRegrouperDocs(docs);
+      const avecNum = rg.lots.filter(g => g.num);
+      if (avecNum.length === 1 && setSiVide('lot', avecNum[0].num)) n++;
       dire('');
       if (typeof toast === 'function') toast(n ? '✓ ' + n + ' case(s) complétée(s) depuis les documents — vérifie puis « + Ajouter ce lot »' : '⚠ Rien de lisible dans ces documents pour compléter le lot', n ? 'var(--success)' : 'var(--warning)');
       return;
@@ -13182,8 +13198,16 @@ function _selRemiseTexte(r) {
 
 async function selAjouterLibre() {
   const val = (id) => { const el = document.getElementById('sel-l-' + id); return el ? el.value.trim() : ''; };
-  const titre = val('titre');
-  if (!titre) { if (typeof toast === 'function') toast('⚠ Le titre du lot est obligatoire', 'var(--warning)'); return; }
+  const titreSaisi = val('titre');
+  if (!titreSaisi) { if (typeof toast === 'function') toast('⚠ Le titre du lot est obligatoire', 'var(--warning)'); return; }
+  // Numéro de lot saisi à part → « Programme — Lot A106 ». Un lot rouvert avec ✎ dont rien n'a
+  // changé garde son titre d'origine à l'identique (c'est la clé des avis du client).
+  const numLot = val('lot').replace(/^\s*lot\s*(?:n°|no|num[ée]ro)?\s*/i, '').trim();
+  const titreOrigine = (_selCtx.lotOrigine && typeof _selCtx.lotOrigine === 'object') ? String(_selCtx.lotOrigine.titre || '') : '';
+  const decoupeOrigine = _selTitreLot(titreOrigine);
+  let titre = titreSaisi;
+  if (titreOrigine && decoupeOrigine.programme === titreSaisi && decoupeOrigine.num === numLot) titre = titreOrigine;
+  else if (numLot && !SEL_RE_LOT.test(titreSaisi)) titre = titreSaisi + ' — Lot ' + numLot;
   // Documents du lot : autant de fichiers que voulu, chacun garde son nom.
   // Les documents déjà attachés au lot (quand on le rouvre avec ✎) sont conservés.
   const docs = Array.isArray(_selCtx.docsExistants) ? _selCtx.docsExistants.slice() : [];
@@ -13541,7 +13565,8 @@ function selEditerLot(i) {
   const b = _selCtx.libres[i];
   if (!b) return;
   const setV = (id, v) => { const el = document.getElementById('sel-l-' + id); if (el) el.value = v || ''; };
-  setV('titre', b.titre); setV('ville', b.ville); setV('prix', b.prix); setV('lien', b.lien); setV('image', b.image);
+  const tl = _selTitreLot(b.titre);
+  setV('titre', tl.programme || b.titre); setV('lot', tl.num); setV('ville', b.ville); setV('prix', b.prix); setV('lien', b.lien); setV('image', b.image);
   setV('type', b.typologies && b.typologies[0]); setV('surface', b.surface); setV('etage', b.etage);
   setV('terrasse', b.terrasse); setV('parking', b.parking); setV('livraison', b.livraison);
   setV('plan', b.plan); setV('masse', b.masse);
