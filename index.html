@@ -11708,23 +11708,131 @@ function fmtDuree(sec) {
 }
 
 // Champs du formulaire "ajouter un lot" (id, placeholder, pleine largeur)
+// 4e colonne : aide à la saisie (06/10/2026, demande d'Alex) — 'ville' propose
+// les communes au fil de la frappe (Base Adresse Nationale), '€' et 'm²'
+// affichent l'unité dans le champ et mettent le nombre en forme en sortant.
 const SEL_CHAMPS_LIBRE = [
   ['titre', 'Titre (ex: Alter Ego — Lot A106) *', true],
   ['lien', 'Lien Otaree (fiche & plans du lot)', true],
   ['image', 'Lien photo du programme (optionnel — sinon logo GLR)', true],
-  ['ville', 'Ville (ex: Asnières-sur-Seine 92600)'],
-  ['prix', 'Prix (ex: 515 000 €)'],
+  ['adresse', 'Adresse du programme (ex: 12 rue de la Paix) — choisis dans la liste', true, 'adresse'],
+  ['ville', 'Ville (ex: Asnières-sur-Seine 92600)', false, 'ville'],
+  ['prix', 'Prix (ex: 515 000)', false, '€'],
   ['type', 'Type (ex: T4)'],
-  ['surface', 'Surface (ex: 80,19 m²)'],
+  ['surface', 'Surface (ex: 80,19)', false, 'm²'],
   ['etage', 'Étage (ex: 1)'],
-  ['terrasse', 'Terrasse / balcon (ex: 15,68 m²)'],
+  ['terrasse', 'Terrasse / balcon (ex: 15,68)', false, 'm²'],
   ['parking', 'Parking (ex: P33)'],
   ['livraison', 'Livraison (ex: 2028-T4)'],
   ['plan', 'Lien plan seul (optionnel)'],
   ['masse', 'Lien plan de masse seul (optionnel)'],
   ['remise', 'Remise / avantage négocié (ex: Remise promoteur)'],
-  ['remiseMontant', 'Montant de la remise en € (optionnel)']
+  ['remiseMontant', 'Montant de la remise (optionnel)', false, '€']
 ];
+// Un champ du formulaire de lot, avec son aide éventuelle
+function _selChampLibreHtml(c) {
+  const base = 'background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:13px;width:100%;box-sizing:border-box';
+  const aide = c[3] || '';
+  if (!aide) return `<input id="sel-l-${c[0]}" placeholder="${c[1]}" style="${base}${c[2] ? ';grid-column:1 / -1' : ''}">`;
+  if (aide === 'ville' || aide === 'adresse') {
+    const fn = aide === 'ville' ? 'selVilleInput' : 'selAdresseInput';
+    return `<div style="position:relative${c[2] ? ';grid-column:1 / -1' : ''}">
+      <input id="sel-l-${c[0]}" placeholder="${c[1]}" autocomplete="off" oninput="${fn}(this.value)" onblur="setTimeout(() => { const b = document.getElementById('sel-l-${c[0]}-sugg'); if (b) b.style.display = 'none'; }, 200)" style="${base}">
+      <div id="sel-l-${c[0]}-sugg" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--surface);border:1px solid var(--border);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.15);overflow:hidden;max-height:220px;overflow-y:auto"></div>
+    </div>`;
+  }
+  return `<div style="position:relative${c[2] ? ';grid-column:1 / -1' : ''}">
+    <input id="sel-l-${c[0]}" placeholder="${c[1]}" onblur="selFormatUnite(this, '${aide}')" style="${base};padding-right:38px">
+    <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted);pointer-events:none">${aide}</span>
+  </div>`;
+}
+// « 515000 » → « 515 000 € », « 80.19 » → « 80,19 m² » ; une valeur qui porte déjà son unité est laissée telle quelle
+function selFormatUnite(inp, unite) {
+  const v = String(inp.value || '').trim();
+  if (!v || /€|m²|m2/i.test(v)) return;
+  const m = v.replace(/\s/g, '').replace(',', '.').match(/^(\d+(?:\.\d+)?)$/);
+  if (!m) return;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n)) return;
+  const txt = unite === '€'
+    ? n.toLocaleString('fr-FR', { maximumFractionDigits: 0 })
+    : n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  inp.value = txt + ' ' + unite;
+}
+// Communes proposées au fil de la frappe (Base Adresse Nationale, type commune)
+let _selVilleTimer = null, _selVilleDerniere = '';
+function selVilleInput(q) {
+  q = String(q || '').trim();
+  _selVilleDerniere = q;
+  clearTimeout(_selVilleTimer);
+  const box = document.getElementById('sel-l-ville-sugg');
+  if (!box) return;
+  if (q.length < 2) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  _selVilleTimer = setTimeout(async () => {
+    let items = [];
+    try {
+      const r = await fetch('https://api-adresse.data.gouv.fr/search/?type=municipality&limit=6&q=' + encodeURIComponent(q));
+      const d = r.ok ? await r.json() : null;
+      items = ((d && d.features) || []).map(f => f.properties || {}).filter(p => p.name).map(p => p.name + (p.postcode ? ' ' + p.postcode : ''));
+    } catch (e) { items = []; }
+    if (q !== _selVilleDerniere) return;
+    const b = document.getElementById('sel-l-ville-sugg');
+    if (!b) return;
+    if (!items.length) { b.innerHTML = ''; b.style.display = 'none'; return; }
+    b.innerHTML = items.map(v => `<button type="button" onmousedown="event.preventDefault()" onclick="selVilleChoisie(this.dataset.v)" data-v="${_vEsc(v).replace(/"/g, '&quot;')}" style="display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer;font-family:var(--font-body)">${_vEsc(v)}</button>`).join('');
+    b.style.display = 'block';
+  }, 250);
+}
+function selVilleChoisie(v) {
+  const inp = document.getElementById('sel-l-ville');
+  if (inp) inp.value = v;
+  const b = document.getElementById('sel-l-ville-sugg');
+  if (b) { b.innerHTML = ''; b.style.display = 'none'; }
+}
+// Adresse complète du programme : numéro et voie proposés au fil de la frappe
+// (Base Adresse Nationale). Choisir une ligne remplit aussi la ville, et garde
+// le point géographique : l'adresse est alors validée d'office (le client voit
+// la carte), comme après « Vérifier l'adresse ». Un texte tapé sans choisir
+// reste une adresse à vérifier.
+let _selAdresseTimer = null, _selAdresseDerniere = '', _selAdresseChoisie = null;
+function selAdresseInput(q) {
+  q = String(q || '').trim();
+  _selAdresseDerniere = q;
+  if (_selAdresseChoisie && _selAdresseChoisie.label !== q) _selAdresseChoisie = null;
+  clearTimeout(_selAdresseTimer);
+  const box = document.getElementById('sel-l-adresse-sugg');
+  if (!box) return;
+  if (q.length < 4) { box.innerHTML = ''; box.style.display = 'none'; return; }
+  _selAdresseTimer = setTimeout(async () => {
+    let items = [];
+    try {
+      const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=6&q=' + encodeURIComponent(q));
+      const d = r.ok ? await r.json() : null;
+      items = ((d && d.features) || []).filter(f => f.properties && f.properties.label && f.geometry).map(f => ({
+        label: f.properties.label, rue: f.properties.name || '', cp: f.properties.postcode || '', commune: f.properties.city || '',
+        lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], precision: f.properties.type || '', score: f.properties.score
+      }));
+    } catch (e) { items = []; }
+    if (q !== _selAdresseDerniere) return;
+    const b = document.getElementById('sel-l-adresse-sugg');
+    if (!b) return;
+    if (!items.length) { b.innerHTML = ''; b.style.display = 'none'; return; }
+    window._selAdresseItems = items;
+    b.innerHTML = items.map((it, k) => `<button type="button" onmousedown="event.preventDefault()" onclick="selAdresseChoisie(${k})" style="display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--border);padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer;font-family:var(--font-body)">${_vEsc(it.label)}</button>`).join('');
+    b.style.display = 'block';
+  }, 250);
+}
+function selAdresseChoisie(k) {
+  const it = (window._selAdresseItems || [])[k];
+  if (!it) return;
+  _selAdresseChoisie = it;
+  const inp = document.getElementById('sel-l-adresse');
+  if (inp) inp.value = it.label;
+  const ville = document.getElementById('sel-l-ville');
+  if (ville && !ville.value.trim()) ville.value = (it.commune + ' ' + it.cp).trim();
+  const b = document.getElementById('sel-l-adresse-sugg');
+  if (b) { b.innerHTML = ''; b.style.display = 'none'; }
+}
 
 // Clé de programme à partir d'un titre de lot ("Le domaine des Prunais - Lot n°B1 403" → "domaineprunais")
 function _selProgKey(titre) {
@@ -11983,7 +12091,7 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Lots de la sélection <span style="opacity:.7">(✎ pour compléter prix, surface…)</span></div>
     <div id="sel-libres" style="margin-bottom:14px"><div style="font-size:12px;color:var(--muted)">Aucun lot pour le moment</div></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Ajouter / compléter un lot à la main</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">${SEL_CHAMPS_LIBRE.map(c => `<input id="sel-l-${c[0]}" placeholder="${c[1]}" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:13px${c[2]?';grid-column:1 / -1':''}">`).join('')}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">${SEL_CHAMPS_LIBRE.map(_selChampLibreHtml).join('')}
       <label style="grid-column:1 / -1;font-size:12px;color:var(--muted)">Documents du lot — fiche, plan, notice… <span style="opacity:.8">(plusieurs fichiers possibles)</span>
         <input type="file" id="sel-l-pdf" accept="application/pdf,image/*" multiple onchange="selDocsAjouter(this)" style="display:block;margin-top:5px;font-size:12px;color:var(--text)">
         <div id="sel-l-docs" style="font-size:11.5px;color:var(--muted);margin-top:5px"></div>
@@ -12959,7 +13067,8 @@ async function selAnalyserDocs() {
     for (const g of lots) {
       const c = g.champs;
       const propres = g.docs.filter(d => d.url);
-      const plan = propres.find(d => d.type === 'plan');
+      // Pas de plan reconnu mais une fiche PDF : elle sert de plan (voir selAjouterLibre)
+      const plan = propres.find(d => d.type === 'plan') || propres.find(d => d.type === 'fiche' && !_selEstImage(d.f));
       const docsLot = propres.concat(communsOk.filter(d => d.type !== 'photo')).map(d => ({ nom: _selNomDoc(d.f.name), url: d.url }));
       const titre = [programme, g.num ? 'Lot ' + g.num : ''].filter(Boolean).join(' — ')
         || [c.type, c.surface, c.ville].filter(Boolean).join(' · ')
@@ -13048,7 +13157,7 @@ async function selAjouterLibre() {
   // Les documents déjà attachés au lot (quand on le rouvre avec ✎) sont conservés.
   const docs = Array.isArray(_selCtx.docsExistants) ? _selCtx.docsExistants.slice() : [];
   const fichiers = _selFichiersChoisis.slice();
-  let planAuto = '', masseAuto = '';
+  let planAuto = '', masseAuto = '', ficheAuto = '';
   if (fichiers.length) {
     const zone = document.getElementById('sel-l-docs');
     let rates = 0;
@@ -13064,6 +13173,10 @@ async function selAjouterLibre() {
         const typeDoc = _selTypeDoc(fichiers[i], texte);
         if (typeDoc === 'plan' && !planAuto) planAuto = url;
         if (typeDoc === 'masse' && !masseAuto) masseAuto = url;
+        // Une fiche de lot (prix, surface… et le dessin sur la même page) sert de
+        // plan quand il n'y en a pas d'autre : le recadrage isole le dessin et le
+        // document complet reste ouvrable (06/10/2026, demande d'Alex).
+        if (typeDoc === 'fiche' && !_selEstImage(fichiers[i]) && !ficheAuto) ficheAuto = url;
       }
       else rates++;
     }
@@ -13088,9 +13201,16 @@ async function selAjouterLibre() {
     annexes: Array.isArray(_base.annexes) ? _base.annexes : [],
     prixOptions: Array.isArray(_base.prixOptions) ? _base.prixOptions : [],
     surfacePonderee: _base.surfacePonderee || '',
-    plan: val('plan') || planAuto || _base.plan || '', masse: val('masse') || masseAuto || _base.masse || '', pdf: pdfUrl, docs: docs,
-    adresse: _base.adresse || '', adresseBrute: _base.adresseBrute || '', commune: _base.commune || '',
-    codePostal: _base.codePostal || '', geo: _base.geo || null, adresseOk: !!_base.adresseOk,
+    plan: val('plan') || planAuto || _base.plan || ficheAuto || '', masse: val('masse') || masseAuto || _base.masse || '', pdf: pdfUrl, docs: docs,
+    ...(() => {
+      // Adresse saisie dans le formulaire : choisie dans la liste → validée avec son point ;
+      // tapée librement → à vérifier ; vide → ce que le lot avait déjà (Otaree, carte, ✎)
+      const saisie = val('adresse');
+      const ch = _selAdresseChoisie;
+      if (saisie && ch && ch.label === saisie) return { adresse: ch.rue || saisie, adresseBrute: saisie, commune: ch.commune || '', codePostal: ch.cp || '', geo: { lat: ch.lat, lon: ch.lon, precision: ch.precision, label: ch.label, score: ch.score }, adresseOk: true };
+      if (saisie && saisie !== (_base.adresseBrute || _base.adresse || '')) return { adresse: saisie, adresseBrute: saisie, commune: _base.commune || '', codePostal: _base.codePostal || '', geo: null, adresseOk: false };
+      return { adresse: _base.adresse || '', adresseBrute: _base.adresseBrute || '', commune: _base.commune || '', codePostal: _base.codePostal || '', geo: _base.geo || null, adresseOk: !!_base.adresseOk };
+    })(),
     remises: ((val('remise') || _selMontantRemise(val('remiseMontant')))
       ? [{ libelle: val('remise') || 'Remise', montant: _selMontantRemise(val('remiseMontant')) }]
       : []).concat(Array.isArray(_selCtx.remisesExistantes) ? _selCtx.remisesExistantes : []),
@@ -13101,6 +13221,7 @@ async function selAjouterLibre() {
   await planPreparerLot(_selCtx.libres[_selCtx.libres.length - 1]);
   _selCtx.pdfExistant = ''; _selCtx.imageExistante = ''; _selCtx.imagesExistantes = []; _selCtx.docsExistants = []; _selCtx.remisesExistantes = []; _selCtx.lotOrigine = null;
   SEL_CHAMPS_LIBRE.forEach(c => { const el = document.getElementById('sel-l-' + c[0]); if (el) el.value = ''; });
+  _selAdresseChoisie = null;
   _selFichiersChoisisVider();
   selDocsApercu();
   selAjouterLibreRefresh();
@@ -13393,6 +13514,8 @@ function selEditerLot(i) {
   setV('type', b.typologies && b.typologies[0]); setV('surface', b.surface); setV('etage', b.etage);
   setV('terrasse', b.terrasse); setV('parking', b.parking); setV('livraison', b.livraison);
   setV('plan', b.plan); setV('masse', b.masse);
+  setV('adresse', b.adresseBrute || b.adresse || (b.geo && b.geo.label) || '');
+  _selAdresseChoisie = null;
   const r0 = (Array.isArray(b.remises) && b.remises[0]) ? b.remises[0] : null;
   setV('remise', r0 ? r0.libelle : '');
   setV('remiseMontant', r0 && r0.montant ? String(r0.montant) : '');
