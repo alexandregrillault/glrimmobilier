@@ -298,6 +298,13 @@
   .rm-trend { display: block; margin-top: 6px; font-size: 11px; font-weight: 600; }
   .rm-trend-up { color: var(--accent); }
   .rm-trend-down, .rm-trend-flat { color: var(--muted); }
+  .rm-switch { display: inline-flex; gap: 4px; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .rm-switch button { border: none; background: transparent; color: var(--muted); padding: 7px 14px; border-radius: 8px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .rm-switch button.rm-on { background: var(--accent); color: #0d0f14; }
+  .rm-part { font-family: var(--font-head); font-size: 15px; font-weight: 700; margin: 26px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); }
+  .rm-part small { display: block; font-family: var(--font-body); font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+  .rm-sub { font-family: var(--font-head); font-weight: 700; font-size: 13px; margin: 14px 0 6px; }
+  .rm-tag { display: inline-block; font-size: 10.5px; padding: 1px 7px; border-radius: 6px; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); margin-left: 6px; }
   .rm-note { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
   .rm-note:last-child { margin-bottom: 0; }
   .rm-note-tags { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
@@ -1980,9 +1987,13 @@
           <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Rapport marché</div>
           <div class="section-sub">Les mouvements du marché depuis la dernière pige — à partager en interne et à retravailler en angles de contenu.</div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="loadRapportMarche(true)">Actualiser</button>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div class="rm-switch"><button id="rm-vue-pige" class="rm-on" onclick="rmVue('pige')">Dernière pige</button><button id="rm-vue-mois" onclick="rmVue('mois')">Bilan du mois</button></div>
+          <button class="btn btn-ghost btn-sm" onclick="rmActualiser()">Actualiser</button>
+        </div>
       </div>
       <div id="rm-body"><div class="empty"><p>Chargement…</p></div></div>
+      <div id="rm-mensuel" style="display:none"><div class="empty"><p>Chargement…</p></div></div>
     </div>
 
     <div class="page" id="page-simulateur">
@@ -3478,6 +3489,135 @@ async function loadRapportMarche(force) {
 }
 
 function _rmNum(n) { return (n == null ? 0 : n).toLocaleString('fr-FR'); }
+
+// ------------------------------------------------------------
+//  BILAN DU MOIS — table pige_rapports_mensuels (une ligne par mois, calculée
+//  par la RPC rapport_mensuel_maj à la dernière pige du mois ; décision Alex
+//  06/10/2026). Deux parties : interne (ce qui change pour la vente) et marché
+//  (chiffres présentables à l'extérieur). Les nouveautés suivent les règles du
+//  05/10 (nouveau = jamais vu ; SeLoger → extranet, tranches, terminés à part).
+// ------------------------------------------------------------
+let _rmVue = 'pige', _rmMois = null, _rmMoisSel = null;
+function rmVue(v) {
+  _rmVue = v;
+  document.getElementById('rm-vue-pige').classList.toggle('rm-on', v === 'pige');
+  document.getElementById('rm-vue-mois').classList.toggle('rm-on', v === 'mois');
+  document.getElementById('rm-body').style.display = v === 'pige' ? '' : 'none';
+  document.getElementById('rm-mensuel').style.display = v === 'mois' ? '' : 'none';
+  if (v === 'mois') loadRapportMensuel(false); else loadRapportMarche(false);
+}
+function rmActualiser() { if (_rmVue === 'mois') loadRapportMensuel(true); else loadRapportMarche(true); }
+async function loadRapportMensuel(force) {
+  const box = document.getElementById('rm-mensuel');
+  if (_rmMois && !force) { renderRapportMensuel(); return; }
+  if (box) box.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/pige_rapports_mensuels?select=mois,pige_debut,pige_fin,data,created_at&order=mois.desc&limit=24', { headers: h });
+    if (!r.ok) throw new Error();
+    _rmMois = await r.json();
+    if (!_rmMois.length) { if (box) box.innerHTML = '<div class="empty"><p>Aucun bilan mensuel calculé pour le moment.</p></div>'; return; }
+    if (!_rmMoisSel || !_rmMois.some(m => m.mois === _rmMoisSel)) _rmMoisSel = _rmMois[0].mois;
+    renderRapportMensuel();
+  } catch (e) {
+    if (box) box.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><p>Impossible de charger le bilan mensuel.</p></div>';
+  }
+}
+function rmMoisChoisir(m) { _rmMoisSel = m; renderRapportMensuel(); }
+function _rmMoisLabel(m) { const d = new Date(m + 'T12:00:00'); const s = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); return s.charAt(0).toUpperCase() + s.slice(1); }
+function _rmDj(d) { return d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '—'; }
+function _rmPct(a, b) { if (!a || !b) return ''; const p = (b - a) / a * 100; const t = (p > 0 ? '+' : '') + p.toFixed(1).replace('.', ',') + ' %'; return '<span class="rm-trend ' + (p > 0.5 ? 'rm-trend-up' : p < -0.5 ? 'rm-trend-down' : 'rm-trend-flat') + '" style="display:inline;margin-left:6px">' + t + '</span>'; }
+async function rmMensuelRecalculer() {
+  const m = _rmMoisSel || new Date().toISOString().slice(0, 7) + '-01';
+  if (!confirm('Recalculer le bilan de ' + _rmMoisLabel(m) + ' à partir des piges archivées ?')) return;
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/rapport_mensuel_maj', { method: 'POST', headers: h, body: JSON.stringify({ p_mois: m }) });
+    if (!r.ok) throw new Error(await r.text());
+    toast('✓ Bilan recalculé');
+    loadRapportMensuel(true);
+  } catch (e) { toast('Recalcul impossible : ' + String(e).slice(0, 120), 'var(--danger)'); }
+}
+function _rmTable(cols, rows, vide) {
+  if (!rows || !rows.length) return '<div class="rm-empty" style="padding:12px 24px">' + _esc(vide || 'Rien ce mois-ci.') + '</div>';
+  return '<div style="overflow-x:auto"><table><thead><tr>' + cols.map(c => '<th' + (c.r ? ' style="text-align:right"' : '') + '>' + _esc(c.l) + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map(row => '<tr>' + cols.map(c => '<td' + (c.r ? ' style="text-align:right"' : '') + '>' + c.f(row) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+}
+function renderRapportMensuel() {
+  const box = document.getElementById('rm-mensuel');
+  if (!box || !_rmMois) return;
+  const row = _rmMois.find(m => m.mois === _rmMoisSel) || _rmMois[0];
+  const D = row.data || {}, G = D.global || {}, N = D.nouveautes || {}, V = D.ventes || {}, PX = D.prix || {}, ST = D.stock || {}, PR = D.par_promoteur || [];
+  const nouveaux = N.nouveaux || [], resolus = N.picking_resolus || [], tranches = N.tranches || [], termines = (N.termines || []).filter(r => r.nom), absents = (N.absents || []).filter(r => r.nom), averif = N.a_verifier || [], anciens = N.anciens || [], pickAj = N.picking_ajoutes || [];
+  // nouveaux / tranches par promoteur : comptés depuis les listes ci-dessus (toujours cohérents avec la rubrique Nouveautés, même pour les mois relus)
+  const nvP = {}, trP = {};
+  nouveaux.forEach(r => { nvP[r.promoteur] = (nvP[r.promoteur] || 0) + 1; });
+  tranches.forEach(r => { trP[r.promoteur] = (trP[r.promoteur] || 0) + 1; });
+  const dLib = G.libres_fin - G.libres_debut;
+  const nomCol = { l: 'Programme', f: r => '<b>' + _esc(r.nom || '') + '</b>' + (r.present === false ? '<span class="rm-tag">plus sur l’extranet</span>' : '') };
+  const baseCols = [{ l: 'Vu le', f: r => _rmDj(r.date) }, { l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }];
+  const sel = '<select onchange="rmMoisChoisir(this.value)" style="width:auto;margin:0;padding:7px 10px">' + _rmMois.map(m => '<option value="' + m.mois + '"' + (m.mois === row.mois ? ' selected' : '') + '>' + _rmMoisLabel(m.mois) + '</option>').join('') + '</select>';
+  const villes = (ST.par_ville || []).filter(v => v.ville);
+  const topVilles = villes.slice(0, 20);
+  const mouv = villes.filter(v => v.prix_m2_fin && v.prix_m2_debut && v.libres_fin >= 15 && Math.abs(v.prix_m2_fin - v.prix_m2_debut) / v.prix_m2_debut >= 0.02).sort((a, b) => (b.prix_m2_fin / b.prix_m2_debut) - (a.prix_m2_fin / a.prix_m2_debut));
+  const ventesDept = Object.entries(V.par_dept || {}).filter(([k]) => k !== '?').sort((a, b) => b[1] - a[1]).map(([k, n]) => k + ' : ' + n).join(' · ');
+
+  box.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + sel + '<span style="color:var(--muted);font-size:12.5px">Du ' + _rmDj(row.pige_debut) + ' au ' + _rmDj(row.pige_fin) + ' · ' + _rmNum(D.nb_piges) + ' pige' + (D.nb_piges > 1 ? 's' : '') + ' · calculé le ' + new Date(row.created_at).toLocaleDateString('fr-FR') + '</span></div>' +
+      '<button class="btn btn-ghost btn-sm" onclick="rmMensuelRecalculer()">Recalculer ce mois</button>' +
+    '</div>' +
+    (N.source ? '<div style="color:var(--muted);font-size:11.5px;margin-bottom:10px">Nouveautés : ' + _esc(N.source) + '</div>' : '') +
+
+    '<div class="rm-part">Partie interne<small>Ce qui change pour la vente : lancements, stock, prix, promoteurs.</small></div>' +
+    '<div class="rm-kpi-strip">' +
+      rmKpi(nouveaux.length, 'Nouveaux programmes') + rmKpi(resolus.length, 'Passés de SeLoger à l’extranet') + rmKpi(tranches.length, 'Nouvelles tranches') +
+      rmKpi(termines.length || absents.length, termines.length ? 'Programmes terminés' : 'Programmes absents (à confirmer)') +
+      rmKpi(V.sortis, 'Lots sortis du stock') + rmKpi(V.liberations, 'Lots redevenus libres') + rmKpi(PX.baisses, 'Baisses de prix', PX.baisse_moy_pct ? '<span class="rm-trend rm-trend-down">moy. −' + String(PX.baisse_moy_pct).replace('.', ',') + ' %</span>' : '') +
+      rmKpi(G.libres_fin, 'Lots libres fin de mois', _rmDelta(G.libres_fin, G.libres_debut)) +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Nouveautés du mois</div></div>' +
+      '<div class="rm-sub" style="padding:10px 24px 0">Nouveaux programmes (' + nouveaux.length + ')</div>' +
+      _rmTable(baseCols.concat([{ l: 'Livraison', f: r => _esc(r.livraison || '—') }, { l: 'Dès', r: 1, f: r => _rmEuro(r.prix_min) }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), nouveaux, 'Aucun nouveau programme ce mois-ci.') +
+      (resolus.length ? '<div class="rm-sub" style="padding:10px 24px 0">Passés de SeLoger à l’extranet du promoteur (' + resolus.length + ')</div>' + _rmTable(baseCols.concat([{ l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), resolus) : '') +
+      (tranches.length ? '<div class="rm-sub" style="padding:10px 24px 0">Nouvelles tranches de programmes connus (' + tranches.length + ')</div>' + _rmTable(baseCols.concat([{ l: 'Programme d’origine', f: r => _esc(r.origine || '') }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), tranches) : '') +
+      (termines.length ? '<div class="rm-sub" style="padding:10px 24px 0">Programmes terminés (' + termines.length + ')</div>' + _rmTable([{ l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }], termines) + (N.termines_note ? '<div class="rm-empty" style="padding:6px 24px 12px;font-size:11.5px">' + _esc(N.termines_note) + '</div>' : '') : '') +
+      (absents.length ? '<div class="rm-sub" style="padding:10px 24px 0">Absents des extranets en fin de mois, à confirmer (' + absents.length + ')</div>' + _rmTable([{ l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }], absents) : '') +
+      (averif.length ? '<div class="rm-sub" style="padding:10px 24px 0">Absents de l’extranet mais toujours sur SeLoger — à vérifier (' + averif.length + ')</div>' + _rmTable(baseCols, averif) : '') +
+      (anciens.length ? '<div class="rm-empty" style="padding:10px 24px 14px">+ ' + anciens.length + ' programmes anciens ou résiduels apparus dans la pige (livrés, livraison ≤ 2026 ou sans lot) — pas des nouveautés.</div>' : '') +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Ça se vend</div></div>' +
+      '<div style="padding:10px 24px 0;color:var(--muted);font-size:12.5px">' + _rmNum(V.sortis) + ' lots sortis du stock, ' + _rmNum(V.options) + ' passés en option, ' + _rmNum(V.liberations) + ' redevenus libres, ' + _rmNum(V.nouveaux_lots) + ' nouveaux lots.' + (ventesDept ? ' Sorties par département — ' + _esc(ventesDept) + '.' : '') + '</div>' +
+      _rmTable([{ l: 'Programme', f: r => '<b>' + _esc(r.nom || '') + '</b>' }, { l: 'Ville', f: r => _esc(r.ville || '') }, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }, { l: 'Lots sortis', r: 1, f: r => _rmNum(r.n) }, { l: 'Reste libre', r: 1, f: r => _rmNum(r.libres) }], V.top_programmes) +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Prix</div></div>' +
+      '<div style="padding:10px 24px 0;color:var(--muted);font-size:12.5px">' + _rmNum(PX.baisses) + ' baisses' + (PX.baisse_moy_pct ? ' (−' + String(PX.baisse_moy_pct).replace('.', ',') + ' % en moyenne)' : '') + ' et ' + _rmNum(PX.hausses) + ' hausses de prix sur le mois.</div>' +
+      _rmTable([{ l: 'Le', f: r => _rmDj(r.date) }, { l: 'Programme', f: r => '<b>' + _esc(r.programme || '') + '</b>' }, { l: 'Ville', f: r => _esc(r.ville || '') }, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }, { l: 'Avant', r: 1, f: r => _rmEuro(r.avant) }, { l: 'Après', r: 1, f: r => _rmEuro(r.apres) }, { l: 'Écart', r: 1, f: r => '−' + _rmEuro(r.avant - r.apres) + ' (' + Math.round((1 - r.apres / r.avant) * 100) + ' %)' }], PX.top_baisses, 'Aucune baisse de prix.') +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Par promoteur</div></div>' +
+      _rmTable([{ l: 'Promoteur', f: r => _esc(r.promoteur || '') }, { l: 'Programmes', r: 1, f: r => _rmNum(r.programmes) }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres_fin) + (r.libres_fin !== r.libres_debut ? ' <small style="color:var(--muted)">(' + (r.libres_fin > r.libres_debut ? '+' : '') + (r.libres_fin - r.libres_debut) + ')</small>' : '') }, { l: 'Nouveaux', r: 1, f: r => nvP[r.promoteur] || '—' }, { l: 'Tranches', r: 1, f: r => trP[r.promoteur] || '—' }, { l: 'Sortis', r: 1, f: r => r.vendus || '—' }, { l: 'Baisses', r: 1, f: r => r.baisses || '—' }, { l: 'Libérés', r: 1, f: r => r.liberations || '—' }, { l: 'Picking', r: 1, f: r => r.picking || '—' }], PR.filter(p => p.programmes > 0)) +
+      (pickAj.length ? '<div class="rm-empty" style="padding:10px 24px 14px">' + pickAj.length + ' programme' + (pickAj.length > 1 ? 's' : '') + ' ajouté' + (pickAj.length > 1 ? 's' : '') + ' en picking ce mois (diffusés sur SeLoger, absents des extranets) : ' + _esc(pickAj.slice(0, 8).map(p => p.nom + ' (' + p.promoteur + ')').join(', ')) + (pickAj.length > 8 ? '…' : '') + '</div>' : '') +
+    '</div>' +
+
+    '<div class="rm-part">Partie marché<small>L’offre neuve en Île-de-France vue par nos piges : chiffres présentables à l’extérieur, sans donnée commerciale interne.</small></div>' +
+    '<div class="rm-kpi-strip">' +
+      rmKpi(G.programmes_fin, 'Programmes suivis', _rmDelta(G.programmes_fin, G.programmes_debut)) + rmKpi(G.logements_fin, 'Logements pigés', _rmDelta(G.logements_fin, G.logements_debut)) +
+      rmKpi(G.libres_fin, 'Logements disponibles', _rmDelta(G.libres_fin, G.libres_debut)) +
+      '<div class="rm-kpi"><b>' + (G.prix_m2_median_fin ? _rmNum(G.prix_m2_median_fin) + ' €/m²' : '—') + '</b><span>Prix médian des lots libres</span>' + _rmPct(G.prix_m2_median_debut, G.prix_m2_median_fin) + '</div>' +
+      rmKpi(nouveaux.length + tranches.length, 'Lancements du mois') + rmKpi(G.picking_fin, 'Programmes vus seulement sur SeLoger') +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Par département</div></div>' +
+      _rmTable([{ l: 'Département', f: r => _esc(r.dept) }, { l: 'Programmes', r: 1, f: r => _rmNum(r.programmes) }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres_fin) + ' <small style="color:var(--muted)">(' + (r.libres_fin >= r.libres_debut ? '+' : '') + (r.libres_fin - r.libres_debut) + ')</small>' }, { l: 'Prix médian €/m²', r: 1, f: r => (r.prix_m2_fin ? _rmNum(r.prix_m2_fin) : '—') + _rmPct(r.prix_m2_debut, r.prix_m2_fin) }], ST.par_dept) +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Communes — les 20 plus fournies</div></div>' +
+      _rmTable([{ l: 'Commune', f: r => _esc(r.ville) + ' <small style="color:var(--muted)">' + _esc(r.dept) + '</small>' }, { l: 'Programmes', r: 1, f: r => _rmNum(r.programmes) }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres_fin) + ' <small style="color:var(--muted)">(' + (r.libres_fin >= r.libres_debut ? '+' : '') + (r.libres_fin - r.libres_debut) + ')</small>' }, { l: 'Sortis', r: 1, f: r => r.vendus || '—' }, { l: 'Prix médian €/m²', r: 1, f: r => (r.prix_m2_fin ? _rmNum(r.prix_m2_fin) : '—') + _rmPct(r.prix_m2_debut, r.prix_m2_fin) }], topVilles) +
+    '</div>' +
+    '<div class="card"><div class="card-header"><div class="card-title">Communes où le prix médian bouge (≥ 2 %, au moins 15 lots libres)</div></div>' +
+      _rmTable([{ l: 'Commune', f: r => _esc(r.ville) + ' <small style="color:var(--muted)">' + _esc(r.dept) + '</small>' }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres_fin) }, { l: 'Début de mois', r: 1, f: r => _rmNum(r.prix_m2_debut) + ' €/m²' }, { l: 'Fin de mois', r: 1, f: r => _rmNum(r.prix_m2_fin) + ' €/m²' + _rmPct(r.prix_m2_debut, r.prix_m2_fin) }], mouv, 'Pas de mouvement de prix significatif par commune.') +
+      '<div class="rm-empty" style="padding:8px 24px 14px;font-size:11.5px">Le prix médian d’une commune bouge aussi quand sa composition change (lots vendus, nouveaux lots) : à lire avec le nombre de lots.</div>' +
+    '</div>' +
+    '<div style="color:var(--muted);font-size:11.5px;margin-top:4px">Bilan calculé à partir des piges archivées (pige_archives) et des événements (pige_evenements) entre le ' + _rmDj(row.pige_debut) + ' et le ' + _rmDj(row.pige_fin) + '.</div>';
+}
 function _rmEuro(n) { return (n == null || n === '') ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €'; }
 function _rmDate(d) { return d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—'; }
 
