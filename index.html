@@ -3609,13 +3609,13 @@ function renderRapportMensuel() {
   const row = _rmMois.find(m => m.mois === _rmMoisSel) || _rmMois[0];
   const D = row.data || {}, G = D.global || {}, N = D.nouveautes || {}, V = D.ventes || {}, PX = D.prix || {}, ST = D.stock || {}, PR = D.par_promoteur || [];
   _rmLiensAssurer(_rmIdsDans([N, V]), renderRapportMensuel);
-  const nouveaux = N.nouveaux || [], resolus = N.picking_resolus || [], tranches = N.tranches || [], termines = (N.termines || []).filter(r => r.nom), absents = (N.absents || []).filter(r => r.nom), averif = N.a_verifier || [], anciens = N.anciens || [], pickAj = N.picking_ajoutes || [];
+  const nouveaux = N.nouveaux || [], resolus = N.picking_resolus || [], tranches = N.tranches || [], termines = (N.termines || []).filter(r => r.nom), absents = (N.absents || []).filter(r => r.nom), averif = N.a_verifier || [], anciens = N.anciens || [], aTrancher = N.a_trancher || [], pickAj = N.picking_ajoutes || [];
   // nouveaux / tranches par promoteur : comptés depuis les listes ci-dessus (toujours cohérents avec la rubrique Nouveautés, même pour les mois relus)
   const nvP = {}, trP = {};
   nouveaux.forEach(r => { nvP[r.promoteur] = (nvP[r.promoteur] || 0) + 1; });
   tranches.forEach(r => { trP[r.promoteur] = (trP[r.promoteur] || 0) + 1; });
   const dLib = G.libres_fin - G.libres_debut;
-  const nomCol = { l: 'Programme', f: r => '<b>' + _rmNomLien(r.id, r.nom) + '</b>' + (r.present === false ? '<span class="rm-tag">plus sur l’extranet</span>' : '') };
+  const nomCol = { l: 'Programme', f: r => '<b>' + _rmNomLien(r.id, r.nom) + '</b>' + (r.avp ? '<span class="rm-tag">avant-première</span>' : '') + (r.present === false ? '<span class="rm-tag">plus sur l’extranet</span>' : '') };
   const baseCols = [{ l: 'Vu le', f: r => _rmDj(r.date) }, { l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }];
   const sel = '<select onchange="rmMoisChoisir(this.value)" style="width:auto;margin:0;padding:7px 10px">' + _rmMois.map(m => '<option value="' + m.mois + '"' + (m.mois === row.mois ? ' selected' : '') + '>' + _rmMoisLabel(m.mois) + '</option>').join('') + '</select>';
   const villes = (ST.par_ville || []).filter(v => v.ville);
@@ -3645,7 +3645,8 @@ function renderRapportMensuel() {
       (termines.length ? '<div class="rm-sub" style="padding:10px 24px 0">Programmes terminés (' + termines.length + ')</div>' + _rmTable([{ l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }], termines) + (N.termines_note ? '<div class="rm-empty" style="padding:6px 24px 12px;font-size:11.5px">' + _esc(N.termines_note) + '</div>' : '') : '') +
       (absents.length ? '<div class="rm-sub" style="padding:10px 24px 0">Absents des extranets en fin de mois, à confirmer (' + absents.length + ')</div>' + _rmTable([{ l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }], absents) : '') +
       (averif.length ? '<div class="rm-sub" style="padding:10px 24px 0">Absents de l’extranet mais toujours sur SeLoger — à vérifier (' + averif.length + ')</div>' + _rmTable(baseCols, averif) : '') +
-      (anciens.length ? '<div class="rm-empty" style="padding:10px 24px 14px">+ ' + anciens.length + ' programmes anciens ou résiduels apparus dans la pige (livrés, livraison ≤ 2026 ou sans lot) — pas des nouveautés.</div>' : '') +
+      (anciens.length ? '<div class="rm-sub" style="padding:10px 24px 0">Programmes anciens ou résiduels apparus dans la pige (' + anciens.length + ')</div><div class="rm-empty" style="padding:4px 24px 0;font-size:11.5px">Jamais vus avant, mais livraison à moins d’un an ou déjà livrée : du stock résiduel, pas des lancements.</div>' + _rmTable(baseCols.concat([{ l: 'Livraison', f: r => _esc(r.livraison || '—') }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), anciens) : '') +
+      (aTrancher.length ? '<div class="rm-sub" style="padding:10px 24px 0">À trancher (' + aTrancher.length + ')</div><div class="rm-empty" style="padding:4px 24px 0;font-size:11.5px">Jamais vus avant, livraison inconnue et moins de 5 lots, ou nom de lot / commerces : lancement ou résidu, à vérifier sur la fiche.</div>' + _rmTable(baseCols.concat([{ l: 'Raison', f: r => _esc(r.raison || '') }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), aTrancher) : '') +
     '</div>' +
     '<div class="card"><div class="card-header"><div class="card-title">Ça se vend</div></div>' +
       '<div style="padding:10px 24px 0;color:var(--muted);font-size:12.5px">' + _rmNum(V.sortis) + ' lots sortis du stock, ' + _rmNum(V.options) + ' passés en option, ' + _rmNum(V.liberations) + ' redevenus libres, ' + _rmNum(V.nouveaux_lots) + ' nouveaux lots.' + (ventesDept ? ' Sorties par département — ' + _esc(ventesDept) + '.' : '') + '</div>' +
