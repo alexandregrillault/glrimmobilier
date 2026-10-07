@@ -126,6 +126,7 @@
   .plan-panel .plan-head { display:flex; align-items:center; justify-content:space-between; background:var(--gold-clair); padding:9px 14px; font-size:11.5px; font-weight:700; letter-spacing:.3px; text-transform:uppercase; color:var(--gold-fonce); }
   .plan-panel .ph-img { position:relative; background:#fff; padding:14px; text-align:center; }
   .plan-panel .ph-img img { max-width:100%; max-height:420px; object-fit:contain; }
+  .plan-panel .ph-img a.plan-zoom { display:inline-block; cursor:zoom-in; }
   .plan-panel .ph-pdf { position:relative; padding:14px; background:#fff; }
   /* PDF affiché en direct dans un cadre intégré, comme sur la carte (apercuDoc) : le
      document se voit tout de suite, il n'ouvre jamais un nouvel onglet ni ne dépend du
@@ -188,6 +189,12 @@
   .opt.on { border-color:var(--gold); background:#fbf6ec; }
   .opt small { display:block; color:var(--muted); font-size:11.5px; margin-top:2px; }
 
+  /* Fil de discussion sous un lot : commentaires du client et réponses du conseiller (06/10/2026) */
+  .lot-fil { display:flex; flex-direction:column; gap:6px; margin:6px 0 4px; }
+  .lot-fil .msg { max-width:88%; padding:8px 12px; border-radius:14px; font-size:12.5px; line-height:1.45; color:var(--dark); white-space:pre-wrap; word-break:break-word; }
+  .lot-fil .msg.client { align-self:flex-end; background:var(--gold-clair); border-bottom-right-radius:4px; }
+  .lot-fil .msg.conseiller { align-self:flex-start; background:#eef3f0; border:1px solid #d9e4de; border-bottom-left-radius:4px; }
+  .lot-fil .msg small { display:block; margin-top:3px; font-size:10.5px; color:var(--muted); }
   .lot-comment { display:flex; gap:8px; align-items:center; margin-top:2px; }
   .lot-comment input { flex:1; min-width:0; border:1px solid var(--bordure); background:#fbfaf8; border-radius:20px; padding:9px 14px; font-size:12.5px; font-family:inherit; color:var(--dark); outline:none; }
   .lot-comment input:focus { border-color:var(--gold); }
@@ -865,7 +872,9 @@
 
   // Panneau qui glisse : plan du lot, ou plan de masse. Un PDF ne s'affiche pas
   // en image : un lien suffit pour l'ouvrir.
-  function htmlPlanSlide(id, titre, urlOuUrls, docComplet){
+  // hd (07/10/2026, demande d'Alex) : version précise du plan, ouverte dans un nouvel onglet quand le
+  // client clique sur l'image — la vignette légère reste celle du panneau.
+  function htmlPlanSlide(id, titre, urlOuUrls, docComplet, hd){
     // Plusieurs vues (duplex, maison à étages) : une image par vue, chacune
     // avec son propre bouton de téléchargement — même mécanique qu'une seule
     // image, juste répétée (30/09/2026).
@@ -884,8 +893,10 @@
         } else {
           h += "<div class='ph-img'>";
           if (urls.length > 1) h += "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px'>Vue " + (idx + 1) + "</div>";
-          h += "<img src='" + esc(url) + "' alt='" + esc(titre) + "' loading='lazy'>";
-          h += "<a class='dl-btn' href='" + esc(url) + "' target='_blank' rel='noopener' download>" + ICO_DL + "<span>Télécharger</span></a></div>";
+          var grand = (idx === 0 && hd) ? hd : "";
+          if (grand) h += "<a class='plan-zoom' href='" + esc(grand) + "' target='_blank' rel='noopener' title='Ouvrir le plan en grand dans un nouvel onglet'><img src='" + esc(url) + "' alt='" + esc(titre) + "' loading='lazy'></a>";
+          else h += "<img src='" + esc(url) + "' alt='" + esc(titre) + "' loading='lazy'>";
+          h += "<a class='dl-btn' href='" + esc(grand || url) + "' target='_blank' rel='noopener'" + (grand ? "" : " download") + ">" + ICO_DL + "<span>" + (grand ? "Ouvrir en grand" : "Télécharger") + "</span></a></div>";
         }
       });
       // L'image est un recadrage d'un document PDF (fiche du lot, plan multi-pages) : le
@@ -1120,8 +1131,28 @@
   function htmlOption(i, a){
     return "<label class='opt" + (a.option ? " on" : "") + "' data-opt='" + i + "'><input type='checkbox'" + (a.option ? " checked" : "") + "><span>Je souhaite que vous posiez une option sur ce lot<small>Sans engagement : le lot est bloqué pour vous quelques jours, le temps d'en parler.</small></span></label>";
   }
-  function htmlLotComment(i, texte){
-    return "<div class='lot-comment' data-com='" + i + "'><input type='text' maxlength='1000' placeholder='Un commentaire pour votre conseiller ?' value=\"" + esc(texte || "") + "\"><button type='button' aria-label='Envoyer'>" + ICO_ENVOYER + "</button></div>";
+  function fmtMsgDate(d){
+    var dt = new Date(d);
+    if (isNaN(dt)) return "";
+    return dt.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " à " + dt.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+  }
+  // Fil de discussion d'un lot : le commentaire du client et les réponses du
+  // conseiller, dans l'ordre. Tant que le conseiller n'a pas répondu, la ligne de
+  // commentaire reste modifiable comme avant ; dès qu'il a répondu, chaque envoi
+  // s'ajoute au fil.
+  function htmlLotFil(i, a){
+    var fil = Array.isArray(a.fil) ? a.fil : [];
+    if (!fil.length) return "";
+    var h = "<div class='lot-fil' data-fil='" + i + "'>";
+    fil.forEach(function(m){
+      if (!m || !m.texte) return;
+      var cons = m.de === "conseiller";
+      h += "<div class='msg " + (cons ? "conseiller" : "client") + "'>" + esc(m.texte) + "<small>" + (cons ? esc(m.par || "Votre conseiller") : "Vous") + (m.le ? " · " + esc(fmtMsgDate(m.le)) : "") + "</small></div>";
+    });
+    return h + "</div>";
+  }
+  function htmlLotComment(i, texte, enFil){
+    return "<div class='lot-comment' data-com='" + i + "'><input type='text' maxlength='1000' placeholder='" + (enFil ? "Répondre à votre conseiller…" : "Un commentaire pour votre conseiller ?") + "' value=\"" + esc(enFil ? "" : (texte || "")) + "\"><button type='button' aria-label='Envoyer'>" + ICO_ENVOYER + "</button></div>";
   }
 
   // ---------- Rendu d'un lot, en ligne compacte, dans une carte ----------
@@ -1186,9 +1217,11 @@
     }
     h += htmlAvisMini(i);
     h += "</div>";
-    if (planUrl) h += htmlPlanSlide(idPlanLot, "Plan du lot" + (nomLot(b) ? " — " + nomLot(b) : ""), planUrls, docComplet);
+    var planHd = b.planImgHd || (b.plan && !estPdf(b.plan) && b.plan !== planUrl ? b.plan : "") || docComplet || "";
+    if (planUrl) h += htmlPlanSlide(idPlanLot, "Plan du lot" + (nomLot(b) ? " — " + nomLot(b) : ""), planUrls, docComplet, planHd);
     h += htmlOption(i, a);
-    h += htmlLotComment(i, a.commentaire);
+    h += htmlLotFil(i, a);
+    h += htmlLotComment(i, a.commentaire, Array.isArray(a.fil) && a.fil.length > 0);
     h += "</div>";
     return h;
   }
@@ -1591,14 +1624,26 @@
       var btn = zone.querySelector("button");
       var envoyerCom = function(){
         var texte = (inp.value || "").trim().slice(0, 1000);
-        var actuel = ((etatAvis[String(i)] || {}).commentaire || "").trim();
-        if (texte === actuel) return;
+        var av = etatAvis[String(i)] || {};
+        var enFil = Array.isArray(av.fil) && av.fil.length > 0;
+        if (enFil){
+          if (!texte) return;
+        } else {
+          var actuel = (av.commentaire || "").trim();
+          if (texte === actuel) return;
+        }
         btn.disabled = true;
-        envoyer({ action: "avis", index: i, commentaire: texte }, texte ? "✓ Merci, votre commentaire a bien été transmis" : "Commentaire retiré").then(function(ok){
+        envoyer({ action: "avis", index: i, commentaire: texte }, texte ? (enFil ? "✓ Réponse transmise à votre conseiller" : "✓ Merci, votre commentaire a bien été transmis") : "Commentaire retiré").then(function(ok){
           btn.disabled = false;
           if (!ok) return;
           etatAvis[String(i)] = etatAvis[String(i)] || {};
           etatAvis[String(i)].commentaire = texte;
+          if (enFil){
+            etatAvis[String(i)].fil = (etatAvis[String(i)].fil || []).concat([{ de: "client", texte: texte, le: new Date().toISOString() }]);
+            var filEl = zone.parentNode.querySelector("[data-fil='" + i + "']");
+            if (filEl) filEl.insertAdjacentHTML("beforeend", "<div class='msg client'>" + esc(texte) + "<small>Vous · " + esc(fmtMsgDate(new Date().toISOString())) + "</small></div>");
+            inp.value = "";
+          }
         });
       };
       btn.addEventListener("click", envoyerCom);
