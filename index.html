@@ -9449,6 +9449,8 @@ function eqFicheSelectionsHtml(l) {
     <button class="btn btn-sm btn-primary" onclick="eqOuvrirSelection('${l.id}')" style="font-size:11px;margin-left:8px">Envoyer une sélection</button>
   </div>`;
   const fmtD = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : '—';
+  // Date et heure (« 06/10/2026 à 17h53 ») pour l'envoi et l'ouverture (06/10/2026, demande d'Alex)
+  const fmtDH = (d) => { if (!d) return '—'; const dt = new Date(d); return isNaN(dt) ? '—' : dt.toLocaleDateString('fr-FR') + ' à ' + dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h'); };
   const lignes = sels.map(s => {
     const avis = s.avis || {};
     const rdv = avis.rdv || {};
@@ -9506,7 +9508,7 @@ function eqFicheSelectionsHtml(l) {
           <span style="font-size:11.5px;color:var(--muted);min-width:62px;text-align:right">${sec ? fmtDuree(sec) : '—'}</span>
         </div>
         ${sec ? `<div style="height:3px;border-radius:2px;background:var(--surface2);margin-top:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div>` : ''}
-        ${a.commentaire ? `<div title="Commentaire laissé par le client sur sa sélection${a.commentaire_date ? ' le ' + fmtD(a.commentaire_date) : ''}" style="font-size:12px;color:var(--text);font-style:italic;margin-top:3px;padding-left:8px;border-left:2px solid var(--accent)">« ${_vEsc(a.commentaire)} »</div>` : ''}
+        ${eqFilCommentaireHtml(s.token, i, a, fmtDH)}
         ${a.option ? `<div style="font-size:11.5px;color:var(--success);margin-top:3px;font-weight:700">Souhaite qu\'on pose une option sur ce lot${a.option_date ? ' <span style="font-weight:400;color:var(--muted)">(' + fmtD(a.option_date) + ')</span>' : ''}</div>` : ''}
         ${a.infos ? `<div style="font-size:11.5px;color:var(--accent);margin-top:3px;font-weight:600">${selIc('infos', 12)} a demandé plus d\'infos</div>` : ''}
         ${a.adresse_demandee ? `<div style="font-size:11.5px;color:var(--warning);margin-top:3px;font-weight:600">A demandé l\'adresse exacte du programme</div>` : ''}
@@ -9530,14 +9532,14 @@ function eqFicheSelectionsHtml(l) {
 
     return `<div style="border:1px solid var(--border);border-left:3px solid ${couleur};border-radius:11px;padding:11px 13px;margin-bottom:8px">
       <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:4px">
-        <span style="font-size:12.5px;font-weight:700">Envoyée le ${fmtD(s.created_at)}</span>
+        <span style="font-size:12.5px;font-weight:700">Envoyée le ${fmtDH(s.created_at)}</span>
         <span style="font-size:12px;color:${couleur};flex:1">${_vEsc(etat)}</span>
         <a href="${lienApercu}" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px">Aperçu</a>
         <button onclick="eqCopy(this.dataset.v,'Lien client')" data-v="${lienClient}" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px">Lien client</button>
         <button onclick="eqModifierSelection('${s.token}')" title="Retirer ou ajouter des lots, sans changer le lien" style="background:none;border:1px solid var(--border);border-radius:20px;padding:1px 10px;color:var(--text);font-size:11px;cursor:pointer">Modifier</button>
       </div>
       <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px">
-        ${biens.length} lot(s) · ${s.opened_at ? 'ouverte le ' + fmtD(s.opened_at) : 'jamais ouverte'}${s.maj_at ? ' · <span style="color:var(--accent)">modifiée le ' + fmtD(s.maj_at) + '</span>' : ''}${total ? ' · ' + fmtDuree(total) + ' de lecture' + (Number(s.visites) > 1 ? ' sur ' + s.visites + ' visites' : '') : ''}
+        ${biens.length} lot(s) · ${s.opened_at ? 'ouverte le ' + fmtDH(s.opened_at) : 'jamais ouverte'}${s.maj_at ? ' · <span style="color:var(--accent)">modifiée le ' + fmtD(s.maj_at) + '</span>' : ''}${total ? ' · ' + fmtDuree(total) + ' de lecture' + (Number(s.visites) > 1 ? ' sur ' + s.visites + ' visites' : '') : ''}
       </div>
       ${lots}
     </div>`;
@@ -9550,6 +9552,72 @@ function eqFicheSelectionsHtml(l) {
     </div>
     ${lignes}
   </div>`;
+}
+
+// Fil de discussion sous un lot d'une sélection envoyée (06/10/2026, demande
+// d'Alex, option B) : le commentaire du client, les réponses du conseiller, et
+// un bouton « Répondre ». La réponse part en base (selection_repondre), s'affiche
+// sur la page du client sous le lot, et un mail court le prévient (rdv-notif,
+// type reponse). Le client peut répondre à son tour depuis sa page.
+function eqFilCommentaireHtml(token, i, a, fmtDH) {
+  const fil = Array.isArray(a.fil) && a.fil.length ? a.fil : (a.commentaire ? [{ de: 'client', texte: a.commentaire, le: a.commentaire_date }] : []);
+  if (!fil.length) return '';
+  const lignes = fil.map(m => {
+    const cons = m && m.de === 'conseiller';
+    return `<div style="font-size:12px;margin-top:3px;padding-left:8px;border-left:2px solid ${cons ? 'var(--success)' : 'var(--accent)'};${cons ? '' : 'font-style:italic;'}color:var(--text)">${cons ? '<span style="font-weight:700;font-style:normal">' + _vEsc(m.par || 'Conseiller') + ' :</span> ' : '« '}${_vEsc(m.texte || '')}${cons ? '' : ' »'}<span style="color:var(--muted);font-size:11px"> — ${m.le ? fmtDH(m.le) : ''}</span></div>`;
+  }).join('');
+  return lignes + `<div style="margin-top:4px;padding-left:8px"><button onclick="eqRepondreOuvrir('${token}', ${i})" style="background:none;border:1px solid var(--border);border-radius:20px;padding:1px 10px;color:var(--text);font-size:11px;cursor:pointer">Répondre</button></div>`;
+}
+function eqRepondreOuvrir(token, i) {
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  const b = s && Array.isArray(s.biens) ? s.biens[i] : null;
+  if (!s || !b) { toast('Sélection introuvable — recharge la page', 'var(--warning)'); return; }
+  const a = (s.avis || {})[String(i)] || {};
+  const dernier = (Array.isArray(a.fil) && a.fil.length ? [...a.fil].reverse().find(m => m.de === 'client') : null) || (a.commentaire ? { texte: a.commentaire } : null);
+  document.getElementById('eq-rep-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'eq-rep-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:520px;max-width:95vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Répondre — ${_vEsc(b.titre || 'Lot ' + (i + 1))}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Ta réponse s'affiche sous le lot sur la page du client, qui reçoit un mail court pour la lire et peut te répondre à son tour.</div>
+    ${dernier && dernier.texte ? `<div style="font-size:12.5px;font-style:italic;color:var(--text);padding:8px 12px;border-left:2px solid var(--accent);background:var(--surface2);border-radius:0 8px 8px 0;margin-bottom:10px">« ${_vEsc(dernier.texte)} »</div>` : ''}
+    <textarea id="eq-rep-texte" rows="5" placeholder="Votre réponse…" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+    <div id="eq-rep-etat" style="font-size:12px;color:var(--muted);margin:8px 0 0;min-height:16px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px">
+      <button onclick="document.getElementById('eq-rep-modal').remove()" class="btn btn-secondary">Annuler</button>
+      <button id="eq-rep-btn" onclick="eqRepondreEnvoyer('${token}', ${i})" class="btn btn-primary">Envoyer la réponse</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+  setTimeout(() => document.getElementById('eq-rep-texte')?.focus(), 50);
+}
+async function eqRepondreEnvoyer(token, i) {
+  const texte = (document.getElementById('eq-rep-texte')?.value || '').trim();
+  const etat = document.getElementById('eq-rep-etat');
+  const btn = document.getElementById('eq-rep-btn');
+  if (!texte) { if (etat) etat.textContent = 'Écris ta réponse avant d\'envoyer.'; return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
+  let fil = null;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/selection_repondre', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_token: token, p_index: i, p_texte: texte })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    fil = await r.json();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Envoyer la réponse'; }
+    if (etat) etat.textContent = 'La réponse n\'a pas pu être enregistrée — réessaie.';
+    return;
+  }
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  if (s) { s.avis = s.avis || {}; s.avis[String(i)] = Object.assign({}, s.avis[String(i)] || {}, { fil, reponse_date: new Date().toISOString() }); }
+  const res = await rdvNotifierClient(token, 'reponse', { index: i });
+  document.getElementById('eq-rep-modal')?.remove();
+  toast(res && res.ok ? '✓ Réponse enregistrée — le client est prévenu par mail' : '✓ Réponse enregistrée sur sa page' + _rdvNotifMot(res), res && res.ok ? 'var(--success)' : 'var(--warning)');
+  eqMajVue(true);
 }
 
 // ============================================================
