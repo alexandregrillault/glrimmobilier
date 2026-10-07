@@ -872,8 +872,10 @@
 
   // Panneau qui glisse : plan du lot, ou plan de masse. Un PDF ne s'affiche pas
   // en image : un lien suffit pour l'ouvrir.
-  // hd (07/10/2026, demande d'Alex) : version précise du plan, ouverte dans un nouvel onglet quand le
-  // client clique sur l'image — la vignette légère reste celle du panneau.
+  // hd (07/10/2026, demande d'Alex) : le plan « en grand » est le document source du promoteur — le PDF
+  // complet, non recadré, avec la légende et les surfaces, que le client peut aussi enregistrer — ouvert
+  // dans un nouvel onglet quand il clique sur l'image ou sur « Ouvrir en grand ». La vignette recadrée,
+  // légère, reste celle du panneau. Pour un plan dont la source est une image, c'est l'image d'origine.
   function htmlPlanSlide(id, titre, urlOuUrls, docComplet, hd){
     // Plusieurs vues (duplex, maison à étages) : une image par vue, chacune
     // avec son propre bouton de téléchargement — même mécanique qu'une seule
@@ -901,7 +903,7 @@
       });
       // L'image est un recadrage d'un document PDF (fiche du lot, plan multi-pages) : le
       // document complet reste ouvrable d'ici, sans pastille séparée (06/10/2026)
-      if (docComplet) h += "<div class='plan-doc-complet'><a class='dl-btn' href='" + esc(docComplet) + "' target='_blank' rel='noopener'>" + ICO_DL + "<span>Ouvrir le document complet</span></a></div>";
+      if (docComplet && docComplet !== hd) h += "<div class='plan-doc-complet'><a class='dl-btn' href='" + esc(docComplet) + "' target='_blank' rel='noopener'>" + ICO_DL + "<span>Ouvrir le document complet</span></a></div>";
     }
     return h + "</div></div></div>";
   }
@@ -1217,7 +1219,7 @@
     }
     h += htmlAvisMini(i);
     h += "</div>";
-    var planHd = b.planImgHd || (b.plan && !estPdf(b.plan) && b.plan !== planUrl ? b.plan : "") || docComplet || "";
+    var planHd = b.plan || "";
     if (planUrl) h += htmlPlanSlide(idPlanLot, "Plan du lot" + (nomLot(b) ? " — " + nomLot(b) : ""), planUrls, docComplet, planHd);
     h += htmlOption(i, a);
     h += htmlLotFil(i, a);

@@ -12412,9 +12412,7 @@ async function _planImagePdf(url) {
   const doc = await pdfjs.getDocument({ url }).promise;
   const page = await doc.getPage(1);
   const v0 = page.getViewport({ scale: 1 });
-  // 3 600 px sur le grand côté (2 000 avant le 07/10/2026) : nécessaire à la version HD du
-  // plan, qui doit rester lisible une fois ouverte en grand (légende, surfaces des pièces)
-  const vp = page.getViewport({ scale: Math.min(6, 3600 / Math.max(v0.width, v0.height)) });
+  const vp = page.getViewport({ scale: Math.min(4, 2000 / Math.max(v0.width, v0.height)) });
   const c = document.createElement('canvas');
   c.width = Math.round(vp.width); c.height = Math.round(vp.height);
   const x = c.getContext('2d');
@@ -12528,12 +12526,10 @@ function _planCadre(img) {
   const Y0 = Math.max(0, ya - my), Y1 = Math.min(A.AH - 1, yb + my);
   return { x: X0 / A.AW, y: Y0 / A.AH, w: (X1 - X0 + 1) / A.AW, h: (Y1 - Y0 + 1) / A.AH };
 }
-// Deux images WebP du même recadrage, fond blanc (07/10/2026, demande d'Alex) :
-//  · la vignette, 1200 px sur le grand côté, légère — c'est elle qui s'affiche dans le
-//    panneau « Voir le plan du lot » de la feuille sélection ;
-//  · la version HD, jusqu'à 3200 px (jamais agrandie au-delà de la source), ouverte dans un
-//    nouvel onglet quand le client clique sur le plan — légende et surfaces lisibles.
-// Un plan serré sur un lot ne dépasse pas la définition de la source : son HD reste petit.
+// Vignette WebP du recadrage, fond blanc, 1200 px sur le grand côté : c'est elle qui s'affiche
+// dans le panneau « Voir le plan du lot » de la feuille sélection. Le plan « en grand » est le
+// document source lui-même (PDF du promoteur, légende et surfaces incluses — décision d'Alex,
+// 07/10/2026), ouvert par la feuille dans un nouvel onglet : aucune seconde image à fabriquer.
 function _planDessiner(img, f, maxPx, qualite) {
   const sx = Math.round(f.x * img.naturalWidth), sy = Math.round(f.y * img.naturalHeight);
   const sw = Math.max(1, Math.round(f.w * img.naturalWidth)), sh = Math.max(1, Math.round(f.h * img.naturalHeight));
@@ -12549,8 +12545,7 @@ function _planDessiner(img, f, maxPx, qualite) {
 async function _planVignette(img, cadreImpose) {
   const f = cadreImpose || _planCadre(img);
   const v = await _planDessiner(img, f, 1200, 0.82);
-  const hd = await _planDessiner(img, f, 3200, 0.9);
-  return { blob: v.blob, blobHd: hd.blob, cadre: f, w: v.w, h: v.h };
+  return { blob: v.blob, cadre: f, w: v.w, h: v.h };
 }
 
 // Prépare la vignette d'un lot. Sans cadre imposé, une vignette déjà en ligne
@@ -12562,18 +12557,14 @@ async function planPreparerLot(b, cadreImpose) {
   try {
     if (!cadreImpose) {
       const url = _planUrlPublique(cle);
-      if (b.planImg === url && b.planImgHd) return true;
-      // Vignette déjà en ligne ET sa version HD : réutilisées telles quelles. Une vignette
-      // d'avant le 07/10/2026 (sans HD) est refaite, pour que le client ait les deux.
-      if (await _planDejaLa(cle) && await _planDejaLa(cle + '-hd')) { b.planImg = url; b.planImgHd = _planUrlPublique(cle + '-hd'); return true; }
+      if (b.planImg === url) return true;
+      if (await _planDejaLa(cle)) { b.planImg = url; return true; }
     }
     const img = await _planImage(b.plan);
     const v = await _planVignette(img, cadreImpose);
     const nom = cadreImpose ? cle + '-' + Date.now().toString(36) : cle;
     if (!await _planEnvoyer(nom, v.blob)) return false;
     b.planImg = _planUrlPublique(nom);
-    // La HD n'est pas bloquante : sans elle, la feuille ouvre le document source en grand
-    b.planImgHd = (v.blobHd && await _planEnvoyer(nom + '-hd', v.blobHd)) ? _planUrlPublique(nom + '-hd') : null;
     b.planCadre = { x: +v.cadre.x.toFixed(4), y: +v.cadre.y.toFixed(4), w: +v.cadre.w.toFixed(4), h: +v.cadre.h.toFixed(4) };
     return true;
   } catch (e) { return false; }
@@ -13549,7 +13540,7 @@ function selDeposerDocCarte(i, cible, champ) {
     if (!ctx) return;
     ctx.libres.forEach(x => {
       if (cible === 'programme' && x._carteProgrammeId === id) { x[champ] = j.url; _selDocsCarteRecalculer(x); }
-      if (cible === 'lot' && x._cartePigeId === id) { x.plan = j.url; x.planImg = null; x.planImgHd = null; x.planCadre = null; _selDocsCarteRecalculer(x); }
+      if (cible === 'lot' && x._cartePigeId === id) { x.plan = j.url; x.planImg = null; x.planCadre = null; _selDocsCarteRecalculer(x); }
     });
     selAjouterLibreRefresh();
     if (typeof toast === 'function') toast('✓ ' + libelle + ' enregistré' + (champ === 'plaquette' ? 'e' : '') + ' — visible sur la carte et sur la feuille du client');
