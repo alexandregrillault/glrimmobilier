@@ -1094,6 +1094,7 @@ body.resizing{cursor:col-resize;user-select:none}body.resizing iframe,body.resiz
 .tt-box .ttmax input{width:52px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font-size:12px;text-align:right;background:#fff}
 #ttSugg{position:relative}#ttSugg div{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--line);border-radius:6px;z-index:20;box-shadow:0 6px 18px rgba(0,0,0,.12);max-height:180px;overflow:auto}
 #ttSugg div a{display:block;padding:5px 8px;font-size:11.5px;cursor:pointer;border-bottom:1px solid #f0f1f3}#ttSugg div a:hover{background:#f3f4f6}
+.ttArret{display:inline-block;font-size:9.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:#0f7c8c;border:1px solid #0f7c8c;border-radius:4px;padding:0 4px;margin-right:6px;vertical-align:1px}
 .tt-box .msg{font-size:11px;color:#9a3412}
 .tag.tt{background:#e0f2fe;color:#075985;font-weight:600}
 .walk-lbl{background:#fff;border:1.5px solid #0f7c8c;color:#0f7c8c;border-radius:10px;padding:1px 6px;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.25)}
@@ -1331,7 +1332,7 @@ table.lots td.r{text-align:right}
     </div>
     <div class="tt-box" id="ttBox">
       <span class="t">Temps de trajet depuis une adresse (lieu de travail, école, famille…)</span>
-      <div id="ttSugg"><input id="ttAddr" placeholder="Adresse de départ…" autocomplete="off"><div id="ttList" hidden></div></div>
+      <div id="ttSugg"><input id="ttAddr" placeholder="Adresse de départ ou arrêt (ex : Nation)…" autocomplete="off"><div id="ttList" hidden></div></div>
       <div class="rowi">
         <select id="ttMode"><option value="car">🚗 Voiture</option><option value="transit">🚇 Transports en commun</option></select>
         <label class="ttmax" title="Temps de trajet maximal, en minutes">≤ <input type="number" id="ttMax" min="5" max="180" step="1" value="30" inputmode="numeric"> min</label>
@@ -1761,13 +1762,43 @@ let ttPick = null, ttTimer = null, HOME = null;
 const ISO = L.layerGroup().addTo(map);
 const JR = L.layerGroup().addTo(map); const JCACHE = {};
 const WALK = L.layerGroup().addTo(map);
-ttAddr.oninput = () => { ttPick = null; clearTimeout(ttTimer); const q = ttAddr.value.trim(); if (q.length < 4) { ttList.hidden = true; return; } ttTimer = setTimeout(async () => { try { const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=6&q=' + encodeURIComponent(q)); const j = await r.json(); ttList.innerHTML = (j.features || []).map((f, i) => '<a data-i="' + i + '">' + esc(f.properties.label) + '</a>').join(''); ttList.hidden = !j.features.length; ttList.querySelectorAll('a').forEach(a => a.onclick = () => { const f = j.features[+a.dataset.i]; ttPick = { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: f.properties.label }; ttAddr.value = f.properties.label; ttList.hidden = true; }); } catch (e) { ttList.hidden = true; } }, 250); };
+// Arrêts et gares (métro, RER, tram, train) reconnus dans le champ d'adresse, à partir des
+// gares de la carte : un arrêt tapé est proposé au-dessus des adresses (07/10/2026, demande d'Alex).
+const _garesIdx = (() => {
+  const norm = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\bste\b/g, 'sainte').replace(/\bst\b/g, 'saint').trim();
+  const lib = l => { const m = String(l || '').match(/^(METRO|RER|TRAM|TRAIN|CABLE)\s+(.+)$/); if (!m) return l === 'FUNICULAIRE MONTMARTRE' ? 'Funiculaire' : (l === 'GL' ? '' : String(l || '')); return { METRO: 'Métro ', RER: 'RER ', TRAM: 'Tramway T', TRAIN: 'Transilien ', CABLE: 'Câble ' }[m[1]] + m[2]; };
+  const out = [];
+  ((GEO.transports && GEO.transports.gares) || []).forEach(g => {
+    const L = lib(g.ligne || g.mode); if (!L) return;
+    let e = out.find(x => x.nom === g.nom && dist(x.lat, x.lng, g.lat, g.lng) < 900);
+    if (!e) { e = { nom: g.nom, lat: g.lat, lng: g.lng, lignes: [], n: norm(g.nom) }; out.push(e); }
+    if (!e.lignes.includes(L)) e.lignes.push(L);
+  });
+  const rang = L => L.startsWith('Métro') ? 0 : L.startsWith('RER') ? 1 : L.startsWith('Tramway') ? 2 : L.startsWith('Transilien') ? 3 : 9;
+  const num = L => parseInt(L.replace(/\D/g, ''), 10) || 99;
+  out.forEach(e => {
+    e.lignes.sort((a, b) => rang(a) - rang(b) || num(a) - num(b) || a.localeCompare(b));
+    const fam = {}; e.lignes.forEach(L => { const m = L.match(/^(Métro|RER|Tramway|Transilien|Câble) (.*)$/); if (m) (fam[m[1]] = fam[m[1]] || []).push(m[2]); else fam[L] = []; });
+    e.lignes = Object.keys(fam).map(f => fam[f].length ? f + ' ' + fam[f].join(', ') : f).join(' · ');
+  });
+  return { norm, liste: out };
+})();
+function garesChercher(q, n) {
+  const c = _garesIdx.norm(q); if (c.length < 2) return [];
+  const mots = c.split(' ');
+  const score = e => e.n === c ? 0 : e.n.startsWith(c) ? 1 : mots.every(m => e.n.split(' ').some(w => w.startsWith(m))) ? 2 : e.n.includes(c) ? 3 : -1;
+  return _garesIdx.liste.map(e => ({ e, s: score(e) })).filter(x => x.s >= 0).sort((a, b) => a.s - b.s || a.e.nom.length - b.e.nom.length).slice(0, n || 4).map(x => x.e);
+}
+const gareLabel = e => 'Station ' + e.nom + ' — ' + e.lignes;
+function ttGaresHtml(q) { return garesChercher(q, 4).map((e, k) => '<a data-g="' + k + '"><span class="ttArret">Arrêt</span>' + esc(e.nom) + ' <span style="color:#6b7280">— ' + esc(e.lignes) + '</span></a>').join(''); }
+function ttBrancherGares(q) { const gs = garesChercher(q, 4); ttList.querySelectorAll('a[data-g]').forEach(a => a.onclick = () => { const e = gs[+a.dataset.g]; ttPick = { lat: e.lat, lng: e.lng, label: gareLabel(e) }; ttAddr.value = ttPick.label; ttList.hidden = true; }); }
+ttAddr.oninput = () => { ttPick = null; clearTimeout(ttTimer); const q = ttAddr.value.trim(); const gh = q.length >= 3 ? ttGaresHtml(q) : ''; if (q.length < 4) { ttList.innerHTML = gh; ttList.hidden = !gh; ttBrancherGares(q); return; } ttList.innerHTML = gh; ttList.hidden = !gh; ttBrancherGares(q); ttTimer = setTimeout(async () => { try { const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=6&q=' + encodeURIComponent(q)); const j = await r.json(); if (ttAddr.value.trim() !== q) return; ttList.innerHTML = gh + (j.features || []).map((f, i) => '<a data-i="' + i + '">' + esc(f.properties.label) + '</a>').join(''); ttList.hidden = !(gh || j.features.length); ttBrancherGares(q); ttList.querySelectorAll('a[data-i]').forEach(a => a.onclick = () => { const f = j.features[+a.dataset.i]; ttPick = { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: f.properties.label }; ttAddr.value = f.properties.label; ttList.hidden = true; }); } catch (e) { ttList.hidden = !gh; } }, 250); };
 ttAddr.onkeydown = e => { if (e.key === 'Enter') { const a = ttList.querySelector('a'); if (a && !ttPick) a.click(); setTimeout(ttRun, 50); } };
 document.getElementById('ttMax').onkeydown = e => { if (e.key === 'Enter') ttRun(); };
 document.addEventListener('click', e => { if (!e.target.closest('#ttSugg')) ttList.hidden = true; });
 function ttClear(re) { F.tt = null; ttOff.hidden = true; ttMsg.textContent = ''; ISO.clearLayers(); JR.clearLayers(); if (HOME) { map.removeLayer(HOME); HOME = null; } if (re !== false) apply(); }
 ttOff.onclick = () => ttClear();
-async function geocode(q) { const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=1&q=' + encodeURIComponent(q)); const j = await r.json(); const f = (j.features || [])[0]; return f ? { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: f.properties.label } : null; }
+async function geocode(q) { const ga = garesChercher(String(q || '').replace(/^Station\s+/i, '').split(' — ')[0], 1); if (ga.length && (_garesIdx.norm(ga[0].nom) === _garesIdx.norm(String(q || '').replace(/^Station\s+/i, '').split(' — ')[0]))) return { lat: ga[0].lat, lng: ga[0].lng, label: gareLabel(ga[0]) }; const r = await fetch('https://api-adresse.data.gouv.fr/search/?limit=1&q=' + encodeURIComponent(q)); const j = await r.json(); const f = (j.features || [])[0]; return f ? { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: f.properties.label } : null; }
 // Zone isochrone transports en commun : Google Routes API ne fournit pas de polygone, donc on en reconstruit
 // une approximation à partir des points atteignables déjà obtenus (aucun appel API supplémentaire) : chaque point
 // est "gonflé" d'un petit rayon (marche à pied), puis on trace l'enveloppe convexe de l'ensemble.
