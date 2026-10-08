@@ -6596,10 +6596,14 @@ function veilleMatch(l, p, zone) {
   const c = veilleCriteres(l);
   const marges = [], exacts = [];
 
-  // 1. Le secteur
-  const villes = (c.villes || []).map(normLieu).filter(Boolean);
+  // 1. Le secteur — une ville, ou un département entier (« Hauts-de-Seine (92) »)
+  const depts = (c.villes || []).map(lieuDeptCode).filter(Boolean);
+  const villesBrutes = (c.villes || []).filter(v => !lieuDeptCode(v));
+  const villes = villesBrutes.map(normLieu).filter(Boolean);
   const villeProg = normLieu(p.ville);
-  if (!villes.length) marges.push('aucune ville renseignée');
+  const deptProg = p.dept ? String(p.dept).toUpperCase() : null;
+  if (!villes.length && !depts.length) marges.push('aucune ville renseignée');
+  else if (deptProg && depts.indexOf(deptProg) !== -1) exacts.push(DEPT_NOMS[deptProg] || p.ville);
   else if (villeProg) {
     const i = villes.indexOf(villeProg);
     if (i !== -1) exacts.push(p.ville);
@@ -6607,9 +6611,9 @@ function veilleMatch(l, p, zone) {
       // Sans la liste des communes alentours, on ne devine pas la proximité
       const j = zone ? villes.findIndex(v => zone.has(v)) : -1;
       if (j === -1) return null;
-      marges.push(p.ville + ' — limitrophe de ' + (c.villes[j] || ''));
+      marges.push(p.ville + ' — limitrophe de ' + (villesBrutes[j] || ''));
     }
-  }
+  } else if (depts.length && !villes.length) return null;
 
   // 2. Le budget, élargi de 15 %
   const typos = (c.typologies || []).map(veilleTypoCode).filter(Boolean);
@@ -6651,8 +6655,11 @@ function venteEcarts(l, lot) {
   const c = veilleCriteres(l);
   const ecarts = [];
 
-  const villes = (c.villes || []).map(normLieu).filter(Boolean);
-  if (villes.length && lot.ville && villes.indexOf(normLieu(lot.ville)) === -1) {
+  const depts = (c.villes || []).map(lieuDeptCode).filter(Boolean);
+  const villes = (c.villes || []).filter(v => !lieuDeptCode(v)).map(normLieu).filter(Boolean);
+  const deptLot = deptDeCP(lot.codePostal || lot.ville);
+  const okDept = !!(deptLot && depts.indexOf(deptLot) !== -1);
+  if ((villes.length || depts.length) && lot.ville && !okDept && villes.indexOf(normLieu(lot.ville)) === -1) {
     ecarts.push({ critere: 'ville', demande: (c.villes || []).join(', '), obtenu: lot.ville, negociable: c.importance_ville === 'flexible' });
   }
 
@@ -8595,6 +8602,28 @@ function eqVilleRechercheInput(q, mode) {
           </button>`;
         }).join('');
   }, 250);
+}
+// Un « lieu » de la fiche peut être un département entier (« Hauts-de-Seine (92) », choisi dans
+// les suggestions, ou juste « 92 » / « Essonne » tapé à la main). Ces deux aides le reconnaissent,
+// pour la veille, les écarts d'une sélection et les critères envoyés à la carte (08/10/2026).
+function lieuDeptCode(v) {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  const m = s.match(/\((\d{2}|2A|2B|97\d)\)\s*$/i) || s.match(/^(\d{2}|2A|2B|97\d)$/i);
+  if (m) return m[1].toUpperCase();
+  const plat = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+  if (/\d/.test(s)) return null; // « Paris 75014 », « Massy 91300 » : une ville, pas un département
+  const n = plat(s);
+  if (n.length < 4) return null;
+  for (const code of Object.keys(DEPT_NOMS)) if (plat(DEPT_NOMS[code]) === n) return code;
+  return null;
+}
+function deptDeCP(txt) {
+  const m = String(txt || '').match(/\b(\d{5})\b/);
+  if (!m) return null;
+  const c = m[1];
+  if (c.startsWith('20')) return parseInt(c, 10) < 20200 ? '2A' : '2B';
+  return c.startsWith('97') ? c.slice(0, 3) : c.slice(0, 2);
 }
 // Départements dont le code ou le nom correspond à la saisie (DEPT_NOMS, sans appel réseau)
 function _eqDeptsCorrespondants(q) {
