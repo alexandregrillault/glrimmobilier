@@ -379,6 +379,11 @@
   .mk-detail tr:last-child td { border-bottom: none; }
   .mk-detail .r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .mk-detail .mk-actions { margin: 8px 0 2px; }
+  .mk-zone { display: flex; align-items: center; gap: 10px; margin: 14px 20px 2px; padding: 8px 0 6px; border-bottom: 1px solid var(--border); font-family: var(--font-head); font-weight: 700; font-size: 14px; }
+  .mk-zone span { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 24px; padding: 0 6px; border-radius: 7px; background: var(--accent); color: #0d0f14; font-size: 12.5px; }
+  .mk-zone small { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .mk-zone .btn { margin-left: auto; }
+  .mk-rows .mk-zone { margin: 14px 0 4px; }
   .mk-vide { padding: 18px 20px 24px; color: var(--muted); font-size: 13px; font-style: italic; }
   .mk-plus { display: flex; justify-content: center; padding: 4px 0 16px; }
   .mk-bar b.in { left: auto; right: calc(100% - var(--w) + 8px); color: #0d0f14; }
@@ -3655,6 +3660,8 @@ function _rmNum(n) { return (n == null ? 0 : n).toLocaleString('fr-FR'); }
 // ============================================================
 let _mk = null, _mkJours = 30, _mkDept = '', _mkMois = null, _mkKind = '', _mkTri = 'pct', _mkPetites = false, _mkOuverte = null, _mkMax = 20, _mkEnCours = false;
 const MK_DEPTS = ['75', '77', '78', '91', '92', '93', '94', '95'];
+const MK_DEPT_NOMS = { '75': 'Paris', '77': 'Seine-et-Marne', '78': 'Yvelines', '91': 'Essonne', '92': 'Hauts-de-Seine', '93': 'Seine-Saint-Denis', '94': 'Val-de-Marne', '95': 'Val-d’Oise' };
+const MK_PAR_ZONE = 5; // vue Île-de-France : communes affichées par département avant « Voir tout »
 const MK_KINDS = { nouveau: 'Nouveau programme', tranche: 'Nouvelle tranche', extranet: 'Ouvert à la prescription' };
 
 async function loadMarche(force) {
@@ -3762,6 +3769,14 @@ function renderMarche() {
     '</div>';
   };
   const lancA = lanc.filter(l => l.kind !== 'extranet'), lancB = lanc.filter(l => l.kind === 'extranet');
+  // Vue Île-de-France : cartes rangées par département (décision Alex 08/10) ; vue département : une seule grille.
+  const _dOf = l => (l.p && l.p.dept) || '';
+  const grille = liste => {
+    if (_mkDept) return '<div class="mk-grid">' + liste.map(carte).join('') + '</div>';
+    const ordre = MK_DEPTS.concat([...new Set(liste.map(_dOf))].filter(d => !MK_DEPTS.includes(d)));
+    return ordre.map(d => { const g = liste.filter(l => _dOf(l) === d); if (!g.length) return '';
+      return '<div class="mk-zone"><span>' + _esc(d || '—') + '</span>' + _esc(MK_DEPT_NOMS[d] || (d ? '' : 'Plus sur l’extranet')) + ' <small>' + g.length + '</small><button class="btn btn-ghost btn-sm" onclick="mkDept(\'' + d + '\')">Voir le ' + _esc(d) + '</button></div><div class="mk-grid">' + g.map(carte).join('') + '</div>'; }).join('');
+  };
   const nbA = m => _mk.lancements.filter(l => l.mois === m && l.kind !== 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
   const nbB = m => _mk.lancements.filter(l => l.mois === m && l.kind === 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
   const moisChips = '<div class="mk-chips">' + [M.mois, M.mois_prev].map(m => '<button class="' + (_mkMois === m ? 'on' : '') + '" onclick="mkMois(\'' + m + '\')">' + _esc(_mkMoisLabel(m)) + '</button>').join('') + '</div>';
@@ -3770,11 +3785,11 @@ function renderMarche() {
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + moisChips +
         '<div class="mk-chips">' + ['nouveau', 'tranche'].map(k => '<button class="' + (_mkKind === k ? 'on' : '') + '" onclick="mkKind(\'' + k + '\')">' + MK_KINDS[k] + '</button>').join('') + '</div>' +
       '</div></div>' +
-    (lancA.length ? '<div class="mk-grid">' + lancA.map(carte).join('') + '</div>' : '<div class="mk-vide">Aucun lancement sur cette sélection.</div>') +
+    (lancA.length ? grille(lancA) : '<div class="mk-vide">Aucun lancement sur cette sélection.</div>') +
   '</div>' +
   '<div class="card">' +
     '<div class="mk-titre"><div><h3>Ouverts à la prescription <span style="color:var(--muted);font-weight:500">(' + lancB.length + ')</span></h3><small>Programmes qu’on voyait sur SeLoger et qui sont désormais disponibles sur l’extranet d’un promoteur partenaire — ' + _esc(_mkMoisLabel(_mkMois)) + '.</small></div></div>' +
-    (lancB.length ? '<div class="mk-grid">' + lancB.map(carte).join('') + '</div>' : '<div class="mk-vide">Aucun programme ouvert à la prescription sur cette sélection.</div>') +
+    (lancB.length ? grille(lancB) : '<div class="mk-vide">Aucun programme ouvert à la prescription sur cette sélection.</div>') +
   '</div>';
 
   // ---- VILLES ----
@@ -3782,9 +3797,12 @@ function renderMarche() {
   let rows = villes.filter(v => v.stock0 >= seuil || (_mkPetites && v.libres > 0));
   const tris = { pct: (a, b) => (b.pct || 0) - (a.pct || 0) || b.vendus - a.vendus, vendus: (a, b) => b.vendus - a.vendus || (b.pct || 0) - (a.pct || 0), pm2: (a, b) => (a.pm2 || 1e9) - (b.pm2 || 1e9), libres: (a, b) => b.libres - a.libres };
   rows.sort(tris[_mkTri] || tris.pct);
-  const maxPct = Math.max(1, ...rows.slice(0, _mkMax).map(v => v.pct || 0));
-  const maxV = Math.max(1, ...rows.slice(0, _mkMax).map(v => v.vendus || 0));
-  const lignes = rows.slice(0, _mkMax).map((v, i) => {
+  // Vue Île-de-France : classement rangé par département (MK_PAR_ZONE premières par zone) ; vue département : liste complète.
+  const zones = _mkDept ? null : MK_DEPTS.map(d => ({ d, rows: rows.filter(v => v.dept === d) })).filter(z => z.rows.length);
+  const visibles = _mkDept ? rows.slice(0, _mkMax) : zones.flatMap(z => z.rows.slice(0, MK_PAR_ZONE));
+  const maxPct = Math.max(1, ...visibles.map(v => v.pct || 0));
+  const maxV = Math.max(1, ...visibles.map(v => v.vendus || 0));
+  const ligne = (v, i) => {
     const w = _mkTri === 'vendus' ? (v.vendus / maxV * 100) : ((v.pct || 0) / maxPct * 100);
     const lab = _mkTri === 'vendus' ? _rmNum(v.vendus) + ' vendus' : (v.pct == null ? '—' : String(v.pct).replace('.', ',') + ' %');
     const open = _mkOuverte === v.ville;
@@ -3798,21 +3816,25 @@ function renderMarche() {
     }
     return '<div class="mk-row' + (open ? ' open' : '') + '" id="mk-row-' + _mkSlug(v.ville) + '" onclick="mkOuvrir(' + JSON.stringify(v.ville).replace(/"/g, '&quot;') + ')">' +
       '<span class="mk-rang">' + (i + 1) + '</span>' +
-      '<span class="mk-ville">' + _esc(v.ville) + '<small>' + _esc(v.dept || '') + '</small></span>' +
+      '<span class="mk-ville">' + _esc(v.ville) + '</span>' +
       '<span class="mk-bar" style="--w:' + w.toFixed(1) + '%"><i style="width:' + w.toFixed(1) + '%"></i><b' + (w >= 62 ? ' class="in"' : '') + '>' + lab + '</b></span>' +
       '<span class="mk-num mk-c4">' + _rmNum(v.vendus) + '<small>vendus</small></span>' +
       '<span class="mk-num mk-c5">' + _rmNum(v.libres) + '<small>libres</small></span>' +
       '<span class="mk-num mk-c6">' + (v.pm2 ? _rmNum(v.pm2) + ' €' : '—') + '<small>€/m²</small></span>' +
       '<span class="mk-num mk-c7">' + _rmNum(v.progs) + '<small>progr.</small></span>' +
     '</div>' + detail;
-  }).join('');
+  };
+  const lignes = _mkDept ? rows.slice(0, _mkMax).map(ligne).join('') :
+    zones.map(z => '<div class="mk-zone"><span>' + _esc(z.d) + '</span>' + _esc(MK_DEPT_NOMS[z.d] || '') + ' <small>' + z.rows.length + ' commune' + (z.rows.length > 1 ? 's' : '') + '</small>' +
+      (z.rows.length > MK_PAR_ZONE ? '<button class="btn btn-ghost btn-sm" onclick="mkDept(\'' + z.d + '\')">Voir les ' + z.rows.length + '</button>' : '') + '</div>' +
+      z.rows.slice(0, MK_PAR_ZONE).map(ligne).join('')).join('');
   const triChips = '<div class="mk-chips">' + [['pct', 'Vitesse de vente'], ['vendus', 'Lots vendus'], ['pm2', 'Prix au m²'], ['libres', 'Stock disponible']].map(t => '<button class="' + (_mkTri === t[0] ? 'on' : '') + '" onclick="mkTri(\'' + t[0] + '\')">' + t[1] + '</button>').join('') + '</div>' +
     '<div class="mk-chips"><button class="' + (_mkPetites ? 'on' : '') + '" onclick="mkPetites()">Petites communes</button></div>';
   const cardVilles = '<div class="card">' +
-    '<div class="mk-titre"><div><h3>Villes qui se vendent le mieux</h3><small>Vitesse de vente = lots vendus depuis le ' + _mkDj(M.debut) + ' ÷ stock disponible à cette date' + (_mkPetites ? '' : ' (communes d’au moins 15 lots au départ)') + '. Cliquer une ville pour voir ses programmes.</small></div>' +
+    '<div class="mk-titre"><div><h3>Villes qui se vendent le mieux</h3><small>Vitesse de vente = lots vendus depuis le ' + _mkDj(M.debut) + ' ÷ stock disponible à cette date' + (_mkPetites ? '' : ' (communes d’au moins 15 lots au départ)') + '. ' + (_mkDept ? '' : 'Rangées par département, les ' + MK_PAR_ZONE + ' meilleures de chacun. ') + 'Cliquer une ville pour voir ses programmes.</small></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + triChips + '</div></div>' +
     (rows.length ? '<div class="mk-rows"><div class="mk-entete"><span></span><span>Commune</span><span>' + (_mkTri === 'vendus' ? 'Lots vendus' : 'Vitesse de vente') + '</span><span class="mk-c4">Vendus</span><span class="mk-c5">Libres</span><span class="mk-c6">€/m² médian</span><span class="mk-c7">Progr.</span></div>' + lignes + '</div>' +
-      (rows.length > _mkMax ? '<div class="mk-plus"><button class="btn btn-ghost btn-sm" onclick="mkPlus()">Voir ' + Math.min(20, rows.length - _mkMax) + ' communes de plus (' + rows.length + ' au total)</button></div>' : '')
+      (_mkDept && rows.length > _mkMax ? '<div class="mk-plus"><button class="btn btn-ghost btn-sm" onclick="mkPlus()">Voir ' + Math.min(20, rows.length - _mkMax) + ' communes de plus (' + rows.length + ' au total)</button></div>' : '')
       : '<div class="mk-vide">Aucune commune sur cette sélection.</div>') +
   '</div>';
 
