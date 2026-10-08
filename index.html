@@ -342,7 +342,10 @@
   .mk-titre small { display: block; font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
   .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; padding: 6px 20px 20px; }
   .mk-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; transition: transform .12s, box-shadow .12s; }
+  .mk-card { border-top: 3px solid var(--border); }
   .mk-card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .mk-dept { border: none; cursor: pointer; font-family: var(--font-head); font-weight: 700; font-size: 11.5px; line-height: 20px; color: #fff; border-radius: 6px; padding: 0 7px; min-width: 30px; text-align: center; }
+  .mk-dept.off { background: var(--surface); border: 1px solid var(--border); color: var(--muted); cursor: default; }
   .mk-kind { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
   .mk-kind i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
   .mk-kind.nouveau { color: var(--accent); } .mk-kind.nouveau i { background: var(--accent); }
@@ -3660,6 +3663,7 @@ function _rmNum(n) { return (n == null ? 0 : n).toLocaleString('fr-FR'); }
 // ============================================================
 let _mk = null, _mkJours = 30, _mkDept = '', _mkMois = null, _mkKind = '', _mkTri = 'pct', _mkPetites = false, _mkOuverte = null, _mkMax = 20, _mkEnCours = false;
 const MK_DEPTS = ['75', '77', '78', '91', '92', '93', '94', '95'];
+const MK_DEPT_COUL = { '75': '#1E3A32', '77': '#B0894C', '78': '#2F6F8F', '91': '#7A5C99', '92': '#C2553A', '93': '#3C8A5A', '94': '#B5832A', '95': '#5A6B7F' };
 const MK_DEPT_NOMS = { '75': 'Paris', '77': 'Seine-et-Marne', '78': 'Yvelines', '91': 'Essonne', '92': 'Hauts-de-Seine', '93': 'Seine-Saint-Denis', '94': 'Val-de-Marne', '95': 'Val-d’Oise' };
 const MK_PAR_ZONE = 5; // vue Île-de-France : communes affichées par département avant « Voir tout »
 const MK_KINDS = { nouveau: 'Nouveau programme', tranche: 'Nouvelle tranche', extranet: 'Ouvert à la prescription' };
@@ -3749,8 +3753,10 @@ function renderMarche() {
     const prixMin = p.prix_min != null ? p.prix_min : l.prix_min_alors;
     const vend = p.stock0 ? ' · ' + p.vendus + ' vendu' + (p.vendus > 1 ? 's' : '') + ' depuis le ' + _mkDj(M.debut) : '';
     const plusSur = !l.p ? '<span class="mk-tag">plus sur l’extranet</span>' : (libres === 0 ? '<span class="mk-tag">plus de stock</span>' : '');
-    return '<div class="mk-card">' +
-      '<div style="display:flex;align-items:center;gap:8px"><span class="mk-kind ' + l.kind + '"><i></i>' + MK_KINDS[l.kind] + '</span><span class="mk-date">vu le ' + _mkDj(l.date) + '</span></div>' +
+    const dep = p.dept || '', coul = MK_DEPT_COUL[dep] || 'var(--border)';
+    const badge = _mkDept ? '' : (dep ? '<button class="mk-dept" style="background:' + coul + '" title="' + _esc(MK_DEPT_NOMS[dep] || dep) + '" onclick="mkDept(\'' + dep + '\')">' + _esc(dep) + '</button>' : '<span class="mk-dept off" title="Plus sur l’extranet">—</span>');
+    return '<div class="mk-card" style="border-top-color:' + coul + '">' +
+      '<div style="display:flex;align-items:center;gap:8px"><span class="mk-kind ' + l.kind + '"><i></i>' + MK_KINDS[l.kind] + '</span><span class="mk-date">vu le ' + _mkDj(l.date) + '</span>' + badge + '</div>' +
       '<div class="mk-nom">' + _rmNomLien(l.id, l.nom) + '</div>' +
       '<div class="mk-lieu">' + _esc(l.ville) + (p.dept ? ' <span style="opacity:.7">(' + _esc(p.dept) + ')</span>' : '') + ' · ' + _esc(l.promoteur || p.promoteur || '') + (l.origine ? '<br>Tranche de ' + _esc(l.origine) : '') + '</div>' +
       '<div class="mk-stats">' +
@@ -3769,13 +3775,13 @@ function renderMarche() {
     '</div>';
   };
   const lancA = lanc.filter(l => l.kind !== 'extranet'), lancB = lanc.filter(l => l.kind === 'extranet');
-  // Vue Île-de-France : cartes rangées par département (décision Alex 08/10) ; vue département : une seule grille.
+  // Vue Île-de-France : une seule grille continue, cartes rangées par département et démarquées
+  // par un liseré + badge de couleur (décision Alex 08/10 : pas de retour à la ligne par département).
   const _dOf = l => (l.p && l.p.dept) || '';
   const grille = liste => {
-    if (_mkDept) return '<div class="mk-grid">' + liste.map(carte).join('') + '</div>';
-    const ordre = MK_DEPTS.concat([...new Set(liste.map(_dOf))].filter(d => !MK_DEPTS.includes(d)));
-    return ordre.map(d => { const g = liste.filter(l => _dOf(l) === d); if (!g.length) return '';
-      return '<div class="mk-zone"><span>' + _esc(d || '—') + '</span>' + _esc(MK_DEPT_NOMS[d] || (d ? '' : 'Plus sur l’extranet')) + ' <small>' + g.length + '</small><button class="btn btn-ghost btn-sm" onclick="mkDept(\'' + d + '\')">Voir le ' + _esc(d) + '</button></div><div class="mk-grid">' + g.map(carte).join('') + '</div>'; }).join('');
+    let tri = liste;
+    if (!_mkDept) { const ordre = MK_DEPTS.concat([...new Set(liste.map(_dOf))].filter(d => !MK_DEPTS.includes(d))); tri = ordre.flatMap(d => liste.filter(l => _dOf(l) === d)); }
+    return '<div class="mk-grid">' + tri.map(carte).join('') + '</div>';
   };
   const nbA = m => _mk.lancements.filter(l => l.mois === m && l.kind !== 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
   const nbB = m => _mk.lancements.filter(l => l.mois === m && l.kind === 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
