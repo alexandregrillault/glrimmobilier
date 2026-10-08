@@ -325,6 +325,75 @@
   .rm-tag-publie { background: rgba(62,207,142,.15); color: var(--success); border-color: rgba(62,207,142,.3); }
   .rm-empty { color: var(--muted); font-size: 12.5px; font-style: italic; }
 
+  /* ---- MARCHÉ (équipe) ---- */
+  .mk-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .mk-filtres { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+  .mk-chips { display: inline-flex; gap: 4px; flex-wrap: wrap; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+  .mk-chips button { border: none; background: transparent; color: var(--muted); padding: 6px 11px; border-radius: 8px; font-family: var(--font-body); font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 30px; }
+  .mk-chips button.on { background: var(--accent); color: #0d0f14; }
+  .mk-chips button:hover:not(.on) { color: var(--text); }
+  .mk-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .mk-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .mk-kpi b { display: block; font-family: var(--font-head); font-size: 24px; font-weight: 700; letter-spacing: -.3px; }
+  .mk-kpi span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .mk-kpi small { display: block; margin-top: 5px; font-size: 11.5px; color: var(--muted); }
+  .mk-titre { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 16px 20px 10px; }
+  .mk-titre h3 { font-family: var(--font-head); font-size: 15px; font-weight: 700; margin: 0; }
+  .mk-titre small { display: block; font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; padding: 6px 20px 20px; }
+  .mk-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; transition: transform .12s, box-shadow .12s; }
+  .mk-card:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .mk-kind { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+  .mk-kind i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .mk-kind.nouveau { color: var(--accent); } .mk-kind.nouveau i { background: var(--accent); }
+  .mk-kind.tranche { color: var(--accent2); } .mk-kind.tranche i { background: var(--accent2); }
+  .mk-card .mk-nom { font-family: var(--font-head); font-size: 15px; font-weight: 700; line-height: 1.25; }
+  .mk-card .mk-lieu { font-size: 12.5px; color: var(--muted); }
+  .mk-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 2px; }
+  .mk-stats div { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; }
+  .mk-stats b { display: block; font-family: var(--font-head); font-size: 15px; font-weight: 700; }
+  .mk-stats span { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+  .mk-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .mk-tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+  .mk-tag.avp { color: var(--accent); border-color: var(--accent); }
+  .mk-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+  .mk-date { font-size: 11.5px; color: var(--muted); margin-left: auto; }
+  .mk-rows { padding: 0 20px 16px; }
+  .mk-row { display: grid; grid-template-columns: 28px minmax(140px, 1.3fr) minmax(160px, 2fr) 70px 70px 90px 60px; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
+  .mk-row:hover { background: var(--surface2); }
+  .mk-row.open { background: var(--surface2); border-color: var(--border); }
+  .mk-row .mk-rang { font-family: var(--font-head); font-weight: 700; color: var(--muted); font-size: 13px; }
+  .mk-row .mk-ville { font-family: var(--font-head); font-weight: 700; font-size: 14px; }
+  .mk-row .mk-ville small { font-weight: 500; color: var(--muted); margin-left: 6px; font-size: 11.5px; }
+  .mk-bar { position: relative; height: 18px; background: var(--surface2); border-radius: 0 4px 4px 0; overflow: visible; }
+  .mk-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 0 4px 4px 0; transition: width .3s; }
+  .mk-bar b { position: absolute; left: calc(var(--w) + 8px); top: 0; line-height: 18px; font-size: 12px; font-family: var(--font-head); font-weight: 700; white-space: nowrap; }
+  .mk-row .mk-num { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+  .mk-row .mk-num small { display: block; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
+  .mk-entete { display: grid; grid-template-columns: 28px minmax(140px, 1.3fr) minmax(160px, 2fr) 70px 70px 90px 60px; gap: 10px; padding: 4px 10px 8px; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .mk-entete span:nth-child(n+4) { text-align: right; }
+  .mk-detail { margin: 2px 10px 10px 38px; border-left: 2px solid var(--accent); padding-left: 14px; }
+  .mk-detail table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .mk-detail th { text-align: left; font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; padding: 6px 8px; border-bottom: 1px solid var(--border); font-weight: 600; }
+  .mk-detail td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .mk-detail tr:last-child td { border-bottom: none; }
+  .mk-detail .r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mk-detail .mk-actions { margin: 8px 0 2px; }
+  .mk-vide { padding: 18px 20px 24px; color: var(--muted); font-size: 13px; font-style: italic; }
+  .mk-plus { display: flex; justify-content: center; padding: 4px 0 16px; }
+  .mk-bar b.in { left: auto; right: calc(100% - var(--w) + 8px); color: #0d0f14; }
+  @media (max-width: 760px) {
+    .mk-entete { display: none; }
+    .mk-row { grid-template-columns: 24px 1fr 64px; grid-template-rows: auto auto; row-gap: 4px; }
+    .mk-row .mk-rang { grid-row: 1 / span 2; }
+    .mk-row .mk-ville { grid-column: 2; grid-row: 1; }
+    .mk-row .mk-bar { grid-column: 2; grid-row: 2; }
+    .mk-row .mk-c4 { grid-column: 3; grid-row: 1 / span 2; }
+    .mk-row .mk-c5, .mk-row .mk-c6, .mk-row .mk-c7 { display: none; }
+    .mk-detail { margin-left: 10px; }
+    .mk-grid { padding: 6px 14px 16px; }
+  }
+
   /* ---- FORM / MODAL ---- */
   .modal-overlay {
     display: none;
@@ -673,6 +742,10 @@
       <div class="nav-item" onclick="goTo(&#39;rapport-marche&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h9l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"></path><path d="M8 13l2.5 2.5L15 11"></path></svg>
         Rapport marché
+      </div>
+      <div class="nav-item" onclick="goTo(&#39;marche&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"></path><path d="M5 20V10l4-3 4 3 4-5 2 1.5V20"></path></svg>
+        Marché
       </div>
       <div class="nav-section">Marketing</div>
       <div class="nav-item active" onclick="goTo(&#39;contacts&#39;, this)">
@@ -1981,6 +2054,27 @@
       <iframe id="carte-cadre" title="Carte des programmes" style="width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--border);border-radius:12px;background:#f5f6f8"></iframe>
     </div>
 
+    <!-- PAGE: MARCHÉ — vue marché pour l'équipe (lancements du mois, villes qui se vendent le mieux),
+         à partir de la RPC marche_donnees (pige_programmes / pige_lots / pige_evenements / pige_rapports_mensuels).
+         Ouverte aux gérants seulement pour l'instant (PAGES_GERANT) : retirer 'marche' de la liste pour l'ouvrir à l'équipe. -->
+    <div class="page" id="page-marche">
+      <div class="mk-head">
+        <div>
+          <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Marché</div>
+          <div class="section-sub" id="mk-sub">Chargement de la dernière pige…</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadMarche(true)">Actualiser</button>
+      </div>
+      <div class="mk-filtres">
+        <div class="mk-chips" id="mk-depts"></div>
+        <div class="mk-chips" id="mk-periode">
+          <button data-j="30" class="on" onclick="mkPeriode(30)">30 jours</button>
+          <button data-j="60" onclick="mkPeriode(60)">60 jours</button>
+          <button data-j="90" onclick="mkPeriode(90)">90 jours</button>
+        </div>
+      </div>
+      <div id="mk-body"><div class="empty"><p>Chargement…</p></div></div>
+    </div>
     <!-- PAGE: RAPPORT MARCHÉ — synthèse de chaque pige (Supabase pige_maj / pige_evenements),
          réservée aux gérants. Angles de contenu éditables (pige_notes), à reprendre pour les
          réseaux/newsletter ou pour briefer l'équipe. -->
@@ -3104,7 +3198,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev', 'rapport-marche',
+const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev', 'rapport-marche', 'marche',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage'];
 
 function appliquerRole() {
@@ -3387,7 +3481,7 @@ const pages = {
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'pilotage': 'Pilotage commercial',
-  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché'
+  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'marche': 'Marché'
 };
 
 let currentSpace = 'gerant';
@@ -3551,6 +3645,181 @@ async function loadRapportMarche(force) {
 }
 
 function _rmNum(n) { return (n == null ? 0 : n).toLocaleString('fr-FR'); }
+
+// ============================================================
+//  MARCHÉ (équipe) — lancements du mois + villes qui se vendent le mieux.
+//  Décision Alex 08/10/2026 : un outil « propre » avant de l'ouvrir à l'équipe
+//  (page réservée aux gérants tant que 'marche' est dans PAGES_GERANT).
+//  Une seule RPC (marche_donnees) renvoie tout ; les filtres sont appliqués
+//  côté page, sans nouvel appel (sauf la période, qui change la fenêtre).
+// ============================================================
+let _mk = null, _mkJours = 30, _mkDept = '', _mkMois = null, _mkKind = '', _mkTri = 'pct', _mkPetites = false, _mkOuverte = null, _mkMax = 20, _mkEnCours = false;
+const MK_DEPTS = ['75', '77', '78', '91', '92', '93', '94', '95'];
+const MK_KINDS = { nouveau: 'Nouveau programme', tranche: 'Nouvelle tranche', extranet: 'Ouvert à la prescription' };
+
+async function loadMarche(force) {
+  const body = document.getElementById('mk-body');
+  if (_mk && !force && _mk.jours === _mkJours) { renderMarche(); return; }
+  if (_mkEnCours) return;
+  _mkEnCours = true;
+  if (body && !_mk) body.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/marche_donnees', {
+      method: 'POST', cache: 'no-store',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_jours: _mkJours })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    d.jours = _mkJours;
+    d.lancements.forEach(l => { const p = d.programmes.find(x => x.id === l.id); l.p = p || null; });
+    _mk = d;
+    if (!_mkMois) _mkMois = d.meta.mois;
+    _rmLiensAssurer(d.lancements.map(l => l.id), () => renderMarche());
+  } catch (e) {
+    if (body) body.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><p>Impossible de charger les données du marché.</p></div>';
+    _mkEnCours = false;
+    return;
+  }
+  _mkEnCours = false;
+  renderMarche();
+}
+function mkPeriode(j) { _mkJours = j; document.querySelectorAll('#mk-periode button').forEach(b => b.classList.toggle('on', +b.dataset.j === j)); loadMarche(true); }
+function mkDept(d) { _mkDept = d; _mkOuverte = null; renderMarche(); }
+function mkMois(m) { _mkMois = m; renderMarche(); }
+function mkKind(k) { _mkKind = (_mkKind === k ? '' : k); renderMarche(); }
+function mkTri(t) { _mkTri = t; renderMarche(); }
+function mkPetites() { _mkPetites = !_mkPetites; renderMarche(); }
+function mkOuvrir(v) { _mkOuverte = (_mkOuverte === v ? null : v); _mkMax = Math.max(_mkMax, 20); renderMarche(); const el = document.getElementById('mk-row-' + _mkSlug(v)); if (el && _mkOuverte) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+function mkPlus() { _mkMax += 20; renderMarche(); }
+function _mkSlug(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
+function _mkDj(d) { return d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'; }
+function _mkMoisLabel(m) { return m ? new Date(m + 'T12:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase()) : ''; }
+function _mkEuro(n) { return (n == null || n === '' || isNaN(n)) ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €'; }
+function _mkK(n) { return (n == null || isNaN(n)) ? '—' : (n >= 1000000 ? (n / 1000000).toFixed(2).replace('.', ',') + ' M€' : Math.round(n / 1000) + ' k€'); }
+// Ouvre la carte des programmes centrée sur une ville (même mécanisme que la fiche client : ?criteres=).
+function mkCarte(ville) {
+  const f = document.getElementById('carte-cadre');
+  if (f) f.src = 'carte.html?embed=1&criteres=' + encodeURIComponent(JSON.stringify({ villes: [ville] }));
+  goToPage('carte');
+}
+function _mkFiscTags(fisc) {
+  const ok = ['PTZ', 'TVA réduite', 'LLI', 'LMNP', 'Nue-propriété', 'Jeanbrun', 'Accession maîtrisée / BRS'];
+  return (fisc || []).filter(f => ok.includes(f)).map(f => '<span class="mk-tag">' + _esc(f === 'Accession maîtrisée / BRS' ? 'BRS' : f) + '</span>').join('');
+}
+
+function renderMarche() {
+  const body = document.getElementById('mk-body');
+  if (!body || !_mk) return;
+  const M = _mk.meta;
+  const sub = document.getElementById('mk-sub');
+  if (sub) sub.textContent = 'Pigé le ' + _rmDate(M.fin) + ' · ' + _rmNum(M.nb_programmes) + ' programmes · ' + _rmNum(M.nb_libres) + ' logements disponibles · fenêtre du ' + _mkDj(M.debut) + ' au ' + _mkDj(M.fin) + ' (' + M.nb_piges + ' piges)';
+  const dz = document.getElementById('mk-depts');
+  if (dz) dz.innerHTML = '<button class="' + (_mkDept ? '' : 'on') + '" onclick="mkDept(\'\')">Île-de-France</button>' +
+    MK_DEPTS.map(d => '<button class="' + (_mkDept === d ? 'on' : '') + '" onclick="mkDept(\'' + d + '\')">' + d + '</button>').join('');
+
+  const progs = _mk.programmes.filter(p => !_mkDept || p.dept === _mkDept);
+  const villes = _mk.villes.filter(v => !_mkDept || v.dept === _mkDept);
+  const lanc = _mk.lancements.filter(l => (!_mkDept || (l.p ? l.p.dept === _mkDept : false)) && l.mois === _mkMois && (!_mkKind || l.kind === _mkKind || l.kind === 'extranet'));
+  const nbLancMois = m => _mk.lancements.filter(l => l.mois === m && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
+  const vendus = progs.reduce((s, p) => s + p.vendus, 0), libres = progs.reduce((s, p) => s + p.libres, 0);
+  const villesActives = villes.filter(v => v.vendus > 0).length;
+
+  // ---- KPI ----
+  const kpis = '<div class="mk-kpis">' +
+    '<div class="mk-kpi"><b>' + _rmNum(progs.length) + '</b><span>Programmes suivis</span><small>' + _rmNum(villes.length) + ' communes</small></div>' +
+    '<div class="mk-kpi"><b>' + _rmNum(libres) + '</b><span>Logements disponibles</span><small>libres ou optionnés</small></div>' +
+    '<div class="mk-kpi"><b>' + _rmNum(vendus) + '</b><span>Lots vendus</span><small>en ' + M.jours + ' jours, ' + _rmNum(villesActives) + ' communes actives</small></div>' +
+    '<div class="mk-kpi"><b>' + _rmNum(_mk.lancements.filter(l => l.mois === M.mois && l.kind !== 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length) + '</b><span>Lancements · ' + _esc(_mkMoisLabel(M.mois)) + '</span><small>' + ['nouveau', 'tranche'].map(k => { const n = _mk.lancements.filter(l => l.mois === M.mois && l.kind === k && (!_mkDept || (l.p && l.p.dept === _mkDept))).length; return n + ' ' + (k === 'nouveau' ? 'nouveau' + (n > 1 ? 'x' : '') : 'tranche' + (n > 1 ? 's' : '')); }).join(' · ') + ' · ' + _mk.lancements.filter(l => l.mois === M.mois && l.kind === 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length + ' ouverts à la prescription</small></div>' +
+  '</div>';
+
+  // ---- LANCEMENTS / OUVERTS À LA PRESCRIPTION ----
+  // Décision Alex 08/10 : deux rubriques distinctes — un lancement (nouveau programme, nouvelle tranche)
+  // et un programme qu'on voyait sur SeLoger et qui est désormais vendable sur l'extranet (ouvert à la prescription).
+  const carte = l => {
+    const p = l.p || {};
+    const libres = p.libres != null ? p.libres : l.libres_alors;
+    const prixMin = p.prix_min != null ? p.prix_min : l.prix_min_alors;
+    const vend = p.stock0 ? ' · ' + p.vendus + ' vendu' + (p.vendus > 1 ? 's' : '') + ' depuis le ' + _mkDj(M.debut) : '';
+    const plusSur = !l.p ? '<span class="mk-tag">plus sur l’extranet</span>' : (libres === 0 ? '<span class="mk-tag">plus de stock</span>' : '');
+    return '<div class="mk-card">' +
+      '<div style="display:flex;align-items:center;gap:8px"><span class="mk-kind ' + l.kind + '"><i></i>' + MK_KINDS[l.kind] + '</span><span class="mk-date">vu le ' + _mkDj(l.date) + '</span></div>' +
+      '<div class="mk-nom">' + _rmNomLien(l.id, l.nom) + '</div>' +
+      '<div class="mk-lieu">' + _esc(l.ville) + (p.dept ? ' <span style="opacity:.7">(' + _esc(p.dept) + ')</span>' : '') + ' · ' + _esc(l.promoteur || p.promoteur || '') + (l.origine ? '<br>Tranche de ' + _esc(l.origine) : '') + '</div>' +
+      '<div class="mk-stats">' +
+        '<div><b>' + _rmNum(libres) + '</b><span>Lots libres</span></div>' +
+        '<div><b>' + _mkK(prixMin) + '</b><span>Prix dès</span></div>' +
+        '<div><b>' + (p.pm2 ? _rmNum(p.pm2) + ' €' : '—') + '</b><span>€/m² médian</span></div>' +
+      '</div>' +
+      '<div class="mk-tags">' + (l.avp ? '<span class="mk-tag avp">avant-première</span>' : '') + plusSur +
+        (p.livraison || l.livraison ? '<span class="mk-tag">Livraison ' + _esc(p.livraison || l.livraison) + '</span>' : '') + _mkFiscTags(p.fisc) +
+        (p.typos ? '<span class="mk-tag">' + _esc(p.typos) + '</span>' : '') +
+        (p.gare && p.gare_dist ? '<span class="mk-tag">' + _esc(p.gare) + ' à ' + (p.gare_dist >= 1000 ? (p.gare_dist / 1000).toFixed(1).replace('.', ',') + ' km' : p.gare_dist + ' m') + '</span>' : '') +
+      '</div>' +
+      (vend ? '<div class="mk-lieu" style="font-size:12px">Stock au ' + _mkDj(M.debut) + ' : ' + _rmNum(p.stock0) + vend + '</div>' : '') +
+      '<div class="mk-actions"><button class="btn btn-ghost btn-sm" onclick="mkCarte(' + JSON.stringify(l.ville).replace(/"/g, '&quot;') + ')">Voir sur la carte</button>' +
+        (_rmLiens[l.id] && _rmLiens[l.id].url ? '<a class="btn btn-ghost btn-sm" href="' + _esc(_rmLiens[l.id].url) + '" target="_blank" rel="noopener">Fiche promoteur</a>' : '') + '</div>' +
+    '</div>';
+  };
+  const lancA = lanc.filter(l => l.kind !== 'extranet'), lancB = lanc.filter(l => l.kind === 'extranet');
+  const nbA = m => _mk.lancements.filter(l => l.mois === m && l.kind !== 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
+  const nbB = m => _mk.lancements.filter(l => l.mois === m && l.kind === 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
+  const moisChips = '<div class="mk-chips">' + [M.mois, M.mois_prev].map(m => '<button class="' + (_mkMois === m ? 'on' : '') + '" onclick="mkMois(\'' + m + '\')">' + _esc(_mkMoisLabel(m)) + '</button>').join('') + '</div>';
+  const cardLanc = '<div class="card">' +
+    '<div class="mk-titre"><div><h3>Lancements <span style="color:var(--muted);font-weight:500">(' + lancA.length + ')</span></h3><small>Nouveaux programmes et nouvelles tranches, jamais vus avant — relus avec les règles du 05/10.</small></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + moisChips +
+        '<div class="mk-chips">' + ['nouveau', 'tranche'].map(k => '<button class="' + (_mkKind === k ? 'on' : '') + '" onclick="mkKind(\'' + k + '\')">' + MK_KINDS[k] + '</button>').join('') + '</div>' +
+      '</div></div>' +
+    (lancA.length ? '<div class="mk-grid">' + lancA.map(carte).join('') + '</div>' : '<div class="mk-vide">Aucun lancement sur cette sélection.</div>') +
+  '</div>' +
+  '<div class="card">' +
+    '<div class="mk-titre"><div><h3>Ouverts à la prescription <span style="color:var(--muted);font-weight:500">(' + lancB.length + ')</span></h3><small>Programmes qu’on voyait sur SeLoger et qui sont désormais disponibles sur l’extranet d’un promoteur partenaire — ' + _esc(_mkMoisLabel(_mkMois)) + '.</small></div></div>' +
+    (lancB.length ? '<div class="mk-grid">' + lancB.map(carte).join('') + '</div>' : '<div class="mk-vide">Aucun programme ouvert à la prescription sur cette sélection.</div>') +
+  '</div>';
+
+  // ---- VILLES ----
+  const seuil = _mkPetites ? 1 : 15;
+  let rows = villes.filter(v => v.stock0 >= seuil || (_mkPetites && v.libres > 0));
+  const tris = { pct: (a, b) => (b.pct || 0) - (a.pct || 0) || b.vendus - a.vendus, vendus: (a, b) => b.vendus - a.vendus || (b.pct || 0) - (a.pct || 0), pm2: (a, b) => (a.pm2 || 1e9) - (b.pm2 || 1e9), libres: (a, b) => b.libres - a.libres };
+  rows.sort(tris[_mkTri] || tris.pct);
+  const maxPct = Math.max(1, ...rows.slice(0, _mkMax).map(v => v.pct || 0));
+  const maxV = Math.max(1, ...rows.slice(0, _mkMax).map(v => v.vendus || 0));
+  const lignes = rows.slice(0, _mkMax).map((v, i) => {
+    const w = _mkTri === 'vendus' ? (v.vendus / maxV * 100) : ((v.pct || 0) / maxPct * 100);
+    const lab = _mkTri === 'vendus' ? _rmNum(v.vendus) + ' vendus' : (v.pct == null ? '—' : String(v.pct).replace('.', ',') + ' %');
+    const open = _mkOuverte === v.ville;
+    let detail = '';
+    if (open) {
+      const pv = progs.filter(p => p.ville === v.ville).sort((a, b) => b.vendus - a.vendus || b.libres - a.libres);
+      detail = '<div class="mk-detail"><table><thead><tr><th>Programme</th><th>Promoteur</th><th class="r">Vendus</th><th class="r">Libres</th><th class="r">Dès</th><th class="r">€/m²</th><th>Livraison</th></tr></thead><tbody>' +
+        pv.map(p => '<tr><td><b>' + _rmNomLien(p.id, p.nom) + '</b>' + (p.typos ? '<br><small style="color:var(--muted)">' + _esc(p.typos) + '</small>' : '') + '</td><td>' + _esc(p.promoteur || '') + '</td><td class="r">' + (p.vendus || '—') + (p.stock0 ? '<br><small style="color:var(--muted)">sur ' + p.stock0 + '</small>' : '') + '</td><td class="r">' + _rmNum(p.libres) + '</td><td class="r">' + _mkK(p.prix_min) + '</td><td class="r">' + (p.pm2 ? _rmNum(p.pm2) : '—') + '</td><td>' + _esc(p.livraison || '—') + '</td></tr>').join('') +
+        '</tbody></table><div class="mk-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();mkCarte(' + JSON.stringify(v.ville).replace(/"/g, '&quot;') + ')">Voir sur la carte</button></div></div>';
+      _rmLiensAssurer(pv.map(p => p.id), () => renderMarche());
+    }
+    return '<div class="mk-row' + (open ? ' open' : '') + '" id="mk-row-' + _mkSlug(v.ville) + '" onclick="mkOuvrir(' + JSON.stringify(v.ville).replace(/"/g, '&quot;') + ')">' +
+      '<span class="mk-rang">' + (i + 1) + '</span>' +
+      '<span class="mk-ville">' + _esc(v.ville) + '<small>' + _esc(v.dept || '') + '</small></span>' +
+      '<span class="mk-bar" style="--w:' + w.toFixed(1) + '%"><i style="width:' + w.toFixed(1) + '%"></i><b' + (w >= 62 ? ' class="in"' : '') + '>' + lab + '</b></span>' +
+      '<span class="mk-num mk-c4">' + _rmNum(v.vendus) + '<small>vendus</small></span>' +
+      '<span class="mk-num mk-c5">' + _rmNum(v.libres) + '<small>libres</small></span>' +
+      '<span class="mk-num mk-c6">' + (v.pm2 ? _rmNum(v.pm2) + ' €' : '—') + '<small>€/m²</small></span>' +
+      '<span class="mk-num mk-c7">' + _rmNum(v.progs) + '<small>progr.</small></span>' +
+    '</div>' + detail;
+  }).join('');
+  const triChips = '<div class="mk-chips">' + [['pct', 'Vitesse de vente'], ['vendus', 'Lots vendus'], ['pm2', 'Prix au m²'], ['libres', 'Stock disponible']].map(t => '<button class="' + (_mkTri === t[0] ? 'on' : '') + '" onclick="mkTri(\'' + t[0] + '\')">' + t[1] + '</button>').join('') + '</div>' +
+    '<div class="mk-chips"><button class="' + (_mkPetites ? 'on' : '') + '" onclick="mkPetites()">Petites communes</button></div>';
+  const cardVilles = '<div class="card">' +
+    '<div class="mk-titre"><div><h3>Villes qui se vendent le mieux</h3><small>Vitesse de vente = lots vendus depuis le ' + _mkDj(M.debut) + ' ÷ stock disponible à cette date' + (_mkPetites ? '' : ' (communes d’au moins 15 lots au départ)') + '. Cliquer une ville pour voir ses programmes.</small></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + triChips + '</div></div>' +
+    (rows.length ? '<div class="mk-rows"><div class="mk-entete"><span></span><span>Commune</span><span>' + (_mkTri === 'vendus' ? 'Lots vendus' : 'Vitesse de vente') + '</span><span class="mk-c4">Vendus</span><span class="mk-c5">Libres</span><span class="mk-c6">€/m² médian</span><span class="mk-c7">Progr.</span></div>' + lignes + '</div>' +
+      (rows.length > _mkMax ? '<div class="mk-plus"><button class="btn btn-ghost btn-sm" onclick="mkPlus()">Voir ' + Math.min(20, rows.length - _mkMax) + ' communes de plus (' + rows.length + ' au total)</button></div>' : '')
+      : '<div class="mk-vide">Aucune commune sur cette sélection.</div>') +
+  '</div>';
+
+  body.innerHTML = kpis + cardLanc + cardVilles +
+    '<div style="color:var(--muted);font-size:11.5px;margin-top:4px">Données des piges du ' + _mkDj(M.debut) + ' au ' + _mkDj(M.fin) + ' (' + M.nb_piges + ' piges). Les ventes sont déduites des lots sortis du stock d’une pige à l’autre ; parkings et caves exclus.</div>';
+}
+
 
 // ------------------------------------------------------------
 //  BILAN DU MOIS — table pige_rapports_mensuels (une ligne par mois, calculée
@@ -4058,6 +4327,7 @@ function goTo(id, el) {
   else if (id === 'mails') loadMailsGuide();
   else if (id === 'carte') loadCarte();
   else if (id === 'rapport-marche') loadRapportMarche();
+  else if (id === 'marche') loadMarche();
   else if (id === 'simulateur') loadSimulateur();
   else if (id === 'journal') loadJournal();
   else if (id === 'pilotage') pilInit();
