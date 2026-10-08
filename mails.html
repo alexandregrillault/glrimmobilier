@@ -48,7 +48,8 @@ body.embed nav{display:none}
 <div class="regles"><h3>Ce qui vaut pour tous</h3>
 <p>Un mail envoyé par le CRM n'apparaît pas dans les « envoyés » de votre boîte : la trace est dans les notes de la fiche du client, et le détail complet dans Brevo (Transactionnel → Logs).</p>
 <p>Le client ne voit jamais d'adresse technique : les liens sont sur www.glrimmobilier.com (rdv/ et selection/). Chaque client a son propre lien de rendez-vous, qui le reconnaît et fait atterrir le rendez-vous sur sa fiche.</p>
-<p>Pour que les visios partent avec un lien, chaque vendeur doit avoir sa salle Google Meet permanente dans sa fiche vendeur (à donner à Alex ou Théophile).</p></div>
+<p>Pour que les visios partent avec un lien, chaque vendeur doit avoir sa salle Google Meet permanente dans sa fiche vendeur (à donner à Alex ou Théophile).</p>
+<p>Avis Google (depuis le 08/10/2026) : à partir du mail de sélection, une petite phrase cliquable sous la signature — « Votre avis compte : laissez-nous un mot sur Google », précédée de cinq étoiles — mène à la fiche Google de GLR. Elle figure dans le mail de sélection, puis dans tous les mails envoyés à un client qui a déjà reçu une sélection (rendez-vous, réponse à un commentaire, mail écrit depuis la fiche). Jamais dans l'accusé de réception, ni avant la première sélection. Lien et phrase se modifient dans la table <code>reglages_mail</code> (avis_google_url, avis_google_texte). Pour un client qu'on veut relancer à la main, le bouton « Demander un avis » de la fiche copie un court message avec le lien.</p></div>
 <section id="accuse"><div class="sechead"><span class="num">1</span><h2>Accusé de réception automatique</h2></div><div class="fiche"><div class="k">Quand</div><div class="v">Automatique, dès qu'une nouvelle demande arrive d'un portail (SeLoger, Bien'ici, Leboncoin, Logic-Immo, Figaro, SuperimmoNeuf, TULN, Neufimmo) ou du formulaire du site. Personne n'a rien à faire. Les anciens leads réimportés ne déclenchent rien.</div><div class="k">Envoyé par</div><div class="v">Le vendeur qui a reçu le lead, depuis son adresse pro (expéditeur et réponse). Si le même client refait une demande, le même vendeur ne lui réécrit pas avant 3 jours ; un autre vendeur qui le reçoit peut se présenter une fois.</div><div class="k">Destinataire</div><div class="v">Le client, à l'adresse de sa demande.</div><div class="k">Objet</div><div class="v">Selon ce qu'on a compris de la demande : <code>Appartement 3 pièces à Clichy — on en parle quand vous voulez ?</code>, <code>TOPAZE à Clichy — on en parle quand vous voulez ?</code> pour une demande de documentation sur un programme, ou <code>Votre demande bien reçue — on en parle quand vous voulez ?</code> quand rien n'est identifiable.</div><div class="k">Ce que contient le mail</div><div class="v">Bonjour Madame / Monsieur + nom quand on est sûr du prénom, sinon le prénom. Le vendeur se présente, une carte rappelle le bien ou le programme cliqué (typologie, ville, prix, portail), puis deux cartes : <strong>Réserver ma visio de 30 min</strong> (mise en avant) et <strong>Choisir un créneau d'appel</strong> (10 min). Chaque bouton ouvre la page de disponibilités du vendeur avec le format déjà choisi. Les textes se modifient dans la table <code>reglages_mail</code> sans toucher au code.</div></div><div class="previews"><figure><figcaption>Demande sur un lot précis</figcaption><iframe class="mail" title="Aperçu du mail" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;fr&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;/head&gt;
 &lt;body style=&quot;margin:0;padding:0;background:#f7f5f1;font-family:&#x27;Helvetica Neue&#x27;,Arial,sans-serif;color:#1a1d23&quot;&gt;
 &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; style=&quot;background:#f7f5f1;padding:26px 12px&quot;&gt;
@@ -323,6 +324,7 @@ body.embed nav{display:none}
       Bien à vous,&lt;br&gt;&lt;strong&gt;Anaïs&lt;/strong&gt;&lt;br&gt;
       &lt;span style=&quot;color:#6b7280&quot;&gt;GLR Immobilier — &lt;a href=&quot;https://www.glrimmobilier.com&quot; style=&quot;color:#b3945a;text-decoration:none&quot;&gt;glrimmobilier.com&lt;/a&gt;&lt;/span&gt;
     &lt;/div&gt;
+    &lt;div style=&quot;margin-top:14px;font-size:12.5px;color:#6b7280&quot;&gt;&lt;span style=&quot;color:#c8a96e;letter-spacing:1px&quot;&gt;★★★★★&lt;/span&gt;&amp;nbsp; &lt;a href=&quot;https://g.page/r/CW4l4LQfNxLdEBM/review&quot; style=&quot;color:#b3945a;text-decoration:underline&quot;&gt;Votre avis compte : laissez-nous un mot sur Google&lt;/a&gt;&lt;/div&gt;
   &lt;/td&gt;&lt;/tr&gt;
 
 &lt;/table&gt;
@@ -372,6 +374,7 @@ body.embed nav{display:none}
       Bien à vous,&lt;br&gt;&lt;strong&gt;Anaïs&lt;/strong&gt;&lt;br&gt;
       &lt;span style=&quot;color:#6b7280&quot;&gt;GLR Immobilier — &lt;a href=&quot;https://www.glrimmobilier.com&quot; style=&quot;color:#b3945a;text-decoration:none&quot;&gt;glrimmobilier.com&lt;/a&gt;&lt;/span&gt;
     &lt;/div&gt;
+    &lt;div style=&quot;margin-top:14px;font-size:12.5px;color:#6b7280&quot;&gt;&lt;span style=&quot;color:#c8a96e;letter-spacing:1px&quot;&gt;★★★★★&lt;/span&gt;&amp;nbsp; &lt;a href=&quot;https://g.page/r/CW4l4LQfNxLdEBM/review&quot; style=&quot;color:#b3945a;text-decoration:underline&quot;&gt;Votre avis compte : laissez-nous un mot sur Google&lt;/a&gt;&lt;/div&gt;
   &lt;/td&gt;&lt;/tr&gt;
 
 &lt;/table&gt;
@@ -414,6 +417,7 @@ body.embed nav{display:none}
       À très vite,&lt;br&gt;&lt;strong&gt;Anaïs&lt;/strong&gt;&lt;br&gt;
       &lt;span style=&quot;color:#6b7280&quot;&gt;GLR Immobilier — &lt;a href=&quot;https://www.glrimmobilier.com&quot; style=&quot;color:#b3945a;text-decoration:none&quot;&gt;glrimmobilier.com&lt;/a&gt;&lt;/span&gt;
     &lt;/div&gt;
+    &lt;div style=&quot;margin-top:14px;font-size:12.5px;color:#6b7280&quot;&gt;&lt;span style=&quot;color:#c8a96e;letter-spacing:1px&quot;&gt;★★★★★&lt;/span&gt;&amp;nbsp; &lt;a href=&quot;https://g.page/r/CW4l4LQfNxLdEBM/review&quot; style=&quot;color:#b3945a;text-decoration:underline&quot;&gt;Votre avis compte : laissez-nous un mot sur Google&lt;/a&gt;&lt;/div&gt;
   &lt;/td&gt;&lt;/tr&gt;
 
 &lt;/table&gt;
@@ -454,6 +458,7 @@ body.embed nav{display:none}
       À très vite,&lt;br&gt;&lt;strong&gt;Anaïs&lt;/strong&gt;&lt;br&gt;
       &lt;span style=&quot;color:#6b7280&quot;&gt;GLR Immobilier — &lt;a href=&quot;https://www.glrimmobilier.com&quot; style=&quot;color:#b3945a;text-decoration:none&quot;&gt;glrimmobilier.com&lt;/a&gt;&lt;/span&gt;
     &lt;/div&gt;
+    &lt;div style=&quot;margin-top:14px;font-size:12.5px;color:#6b7280&quot;&gt;&lt;span style=&quot;color:#c8a96e;letter-spacing:1px&quot;&gt;★★★★★&lt;/span&gt;&amp;nbsp; &lt;a href=&quot;https://g.page/r/CW4l4LQfNxLdEBM/review&quot; style=&quot;color:#b3945a;text-decoration:underline&quot;&gt;Votre avis compte : laissez-nous un mot sur Google&lt;/a&gt;&lt;/div&gt;
   &lt;/td&gt;&lt;/tr&gt;
 
 &lt;/table&gt;
@@ -497,6 +502,7 @@ body.embed nav{display:none}
       À très vite,&lt;br&gt;&lt;strong&gt;Anaïs&lt;/strong&gt;&lt;br&gt;
       &lt;span style=&quot;color:#6b7280&quot;&gt;GLR Immobilier — &lt;a href=&quot;https://www.glrimmobilier.com&quot; style=&quot;color:#b3945a;text-decoration:none&quot;&gt;glrimmobilier.com&lt;/a&gt;&lt;/span&gt;
     &lt;/div&gt;
+    &lt;div style=&quot;margin-top:14px;font-size:12.5px;color:#6b7280&quot;&gt;&lt;span style=&quot;color:#c8a96e;letter-spacing:1px&quot;&gt;★★★★★&lt;/span&gt;&amp;nbsp; &lt;a href=&quot;https://g.page/r/CW4l4LQfNxLdEBM/review&quot; style=&quot;color:#b3945a;text-decoration:underline&quot;&gt;Votre avis compte : laissez-nous un mot sur Google&lt;/a&gt;&lt;/div&gt;
   &lt;/td&gt;&lt;/tr&gt;
 
 &lt;/table&gt;
@@ -530,6 +536,7 @@ body.embed nav{display:none}
       À très vite,&lt;br&gt;&lt;strong&gt;Anaïs&lt;/strong&gt;&lt;br&gt;
       &lt;span style=&quot;color:#6b7280&quot;&gt;GLR Immobilier — &lt;a href=&quot;https://www.glrimmobilier.com&quot; style=&quot;color:#b3945a;text-decoration:none&quot;&gt;glrimmobilier.com&lt;/a&gt;&lt;/span&gt;
     &lt;/div&gt;
+    &lt;div style=&quot;margin-top:14px;font-size:12.5px;color:#6b7280&quot;&gt;&lt;span style=&quot;color:#c8a96e;letter-spacing:1px&quot;&gt;★★★★★&lt;/span&gt;&amp;nbsp; &lt;a href=&quot;https://g.page/r/CW4l4LQfNxLdEBM/review&quot; style=&quot;color:#b3945a;text-decoration:underline&quot;&gt;Votre avis compte : laissez-nous un mot sur Google&lt;/a&gt;&lt;/div&gt;
   &lt;/td&gt;&lt;/tr&gt;
 
 &lt;/table&gt;
