@@ -3503,8 +3503,11 @@ async function loadRapportMarche(force) {
     const t0 = new Date(maj.created_at).getTime();
     const lo = new Date(t0 - 10 * 60000).toISOString();
     const hi = new Date(t0 + 10 * 60000).toISOString();
+    // Plus de 1 000 événements par pige (1 561 le 08/10) : Supabase plafonne chaque
+    // réponse à 1 000 lignes, d'où une lecture par paquets (_sbTout) — sinon les
+    // vendus, picking et absents (types en fin d'ordre alphabétique) disparaissaient.
     const qEv = SUPABASE_URL + '/rest/v1/pige_evenements?select=*&pige_date=eq.' + maj.pige_date +
-      '&created_at=gte.' + encodeURIComponent(lo) + '&created_at=lte.' + encodeURIComponent(hi) + '&order=type.asc&limit=3000';
+      '&created_at=gte.' + encodeURIComponent(lo) + '&created_at=lte.' + encodeURIComponent(hi) + '&order=type.asc,id.asc';
     const qNotes = SUPABASE_URL + '/rest/v1/pige_notes?select=*&pige_maj_id=eq.' + maj.id + '&order=ordre.asc';
     // "Bientôt livrés" : programmes encore pourvus de lots libres, dont la livraison
     // n'est pas déjà passée, triés du plus proche au plus lointain. livraison_key
@@ -3515,11 +3518,10 @@ async function loadRapportMarche(force) {
     const nowKey = now.getFullYear() + (Math.floor(now.getMonth() / 3) + 1) / 10;
     const qLivres = SUPABASE_URL + '/rest/v1/pige_programmes?select=id,nom,promoteur,ville,livraison,livraison_key,nb_libres,prix_min' +
       '&nb_libres=gt.0&livraison_key=gte.' + nowKey + '&order=livraison_key.asc&limit=12';
-    const [rEv, rNotes, rLivres] = await Promise.all([
-      fetch(qEv, { headers: h }), fetch(qNotes, { headers: h }),
+    const [evenements, rNotes, rLivres] = await Promise.all([
+      _sbTout(qEv, h).catch(() => []), fetch(qNotes, { headers: h }),
       fetch(qLivres, { headers: Object.assign({}, h, { 'Prefer': 'count=exact' }) })
     ]);
-    const evenements = rEv.ok ? await rEv.json() : [];
     const notes = rNotes.ok ? await rNotes.json() : [];
     let bientotLivres = { rows: [], total: 0 };
     if (rLivres.ok) {
