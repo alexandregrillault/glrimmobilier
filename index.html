@@ -755,6 +755,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"></path><path d="M5 20V10l4-3 4 3 4-5 2 1.5V20"></path></svg>
         Marché
       </div>
+      <div class="nav-item" onclick="goTo(&#39;veille&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+        Réveil veille <span id="nav-veille-badge" style="display:none;margin-left:auto;background:var(--accent);color:#fff;border-radius:20px;padding:0 7px;font-size:10.5px;font-weight:700"></span>
+      </div>
       <div class="nav-section">Marketing</div>
       <div class="nav-item active" onclick="goTo(&#39;contacts&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 00-3-3.87"></path><path d="M16 3.13a4 4 0 010 7.75"></path></svg>
@@ -2222,6 +2226,14 @@
       </div>
     </div>
 
+    <div class="page" id="page-veille">
+      <div style="margin-bottom:14px">
+        <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Réveil veille</div>
+        <div style="color:var(--muted);font-size:13px;max-width:720px">Les clients en veille que peut réveiller un lancement, une nouvelle tranche ou un lot revenu de la dernière pige.</div>
+      </div>
+      <div id="veille-page-corps"><div class="empty"><p>Chargement…</p></div></div>
+    </div>
+
     <div class="page" id="page-journal">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:12px">
         <div>
@@ -3488,7 +3500,7 @@ const pages = {
   dashboard: 'Tableau de bord', ventes: 'Ventes', charges: 'Charges', 'treso-prev': 'Trésorerie prévisionnelle', vendeurs: 'Vendeurs',
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
-  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'pilotage': 'Pilotage commercial',
+  'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'veille': 'Réveil veille', 'pilotage': 'Pilotage commercial',
   'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'marche': 'Marché'
 };
 
@@ -4358,6 +4370,7 @@ function goTo(id, el) {
   else if (id === 'marche') loadMarche();
   else if (id === 'simulateur') loadSimulateur();
   else if (id === 'journal') loadJournal();
+  else if (id === 'veille') renderVeillePage();
   else if (id === 'pilotage') pilInit();
   else if (id === 'factures') renderFactures();
   else refresh();
@@ -6790,8 +6803,11 @@ function leadBudgetMax(l) {
 // prochain lancement qui vient le rechercher — avec une marge, parce qu'un
 // client à 300 000 € prend un lot à 320 000 € et qu'une ville limitrophe se
 // visite.
-const VEILLE_MARGE_BUDGET = 0.15;   // budget élargi de 15 % au lancement
-const VEILLE_RAYON_KM = 12;         // « ville limitrophe » : centre à centre
+const VEILLE_MARGE_BUDGET = 0.10;   // budget élargi de 10 % (décision d'Alex, 09/10/2026 — avant : 15 %)
+// Règle du 09/10/2026 : on ne propose que la ville du client (ou son département entier),
+// plus les villes limitrophes. Un client en veille n'est réveillé que par un lancement, une
+// nouvelle tranche ou un lot revenu (réservation annulée) — pas par tout ce qui est « nouveau ».
+const VEILLE_JOURS = 14;            // fenêtre des événements de pige pris en compte
 const VEILLE_MOTIFS = ['Budget trop juste', 'Secteur non couvert',
                        'Livraison trop lointaine', 'Typologie indisponible', 'Autre'];
 
@@ -6860,30 +6876,6 @@ function veillePrixEntree(p, typos) {
   if (prix.length) return Math.min.apply(null, prix);
   const b = budgetParse(p.prix_min);
   return b ? b.max : null;
-}
-
-// Zones : les communes à moins de VEILLE_RAYON_KM du programme. On passe par
-// l'API officielle des communes, déjà utilisée par le filtre rayon des contacts.
-const _veilleZones = {};        // slug → Set de noms normalisés (null = non calculée)
-let _veilleZonesEchec = false;  // API injoignable : on retombe sur ville + département
-async function veilleZone(p) {
-  const cle = p.slug || p.nom;
-  if (_veilleZones[cle]) return _veilleZones[cle];
-  if (!p.ville || _veilleZonesEchec) return null;
-  try {
-    const r = await fetch('https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(p.ville)
-      + '&fields=centre,nom&boost=population&limit=1');
-    const arr = await r.json();
-    if (!arr[0] || !arr[0].centre) return null;
-    const base = arr[0].centre.coordinates;
-    const toutes = await getAllCommunes();
-    const set = new Set();
-    toutes.forEach(c => {
-      if (c.centre && haversineKm(base, c.centre.coordinates) <= VEILLE_RAYON_KM) set.add(normLieu(c.nom));
-    });
-    _veilleZones[cle] = set;
-    return set;
-  } catch (e) { _veilleZonesEchec = true; return null; }
 }
 
 // Le cœur : ce client en veille correspond-il à ce programme ?
@@ -7572,7 +7564,7 @@ function eqVeilleOuvrir(id) {
     <div style="font-family:var(--font-head);font-size:16px;font-weight:700">Mettre ${esc(nomComplet(l) || 'ce client')} en veille</div>
     <div style="font-size:12.5px;color:var(--muted);margin:4px 0 16px;line-height:1.5">
       Aucune date d'activité ne sera demandée : c'est le prochain lancement qui le fera ressortir,
-      avec une marge de ${Math.round(VEILLE_MARGE_BUDGET * 100)} % sur le budget et les villes limitrophes.
+      avec une marge de ${Math.round(VEILLE_MARGE_BUDGET * 100)} % sur le budget, dans la même ville (ou le même département).
     </div>
     <div style="background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:11px 13px;margin-bottom:14px">
       <div style="font-size:10px;color:var(--accent);letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:6px">Critères figés — ${nq.n}/${nq.total}</div>
@@ -7658,67 +7650,120 @@ async function veilleCharger(force) {
 // sert a composer les selections avec sa fiche marketing) : ici on ne veut
 // que les donnees de matching, pas d'image/pitch/atouts.
 let _veilleCatalogue = null;
+const _veilleIn = (ids) => encodeURIComponent(ids.map(id => '"' + String(id).replace(/"/g, '\\"') + '"').join(','));
+async function _veilleParLots(table, select, champ, ids, extra, entetes) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += 60) {
+    const part = ids.slice(i, i + 60);
+    out.push(...await _sbTout(SUPABASE_URL + '/rest/v1/' + table + '?select=' + select + '&' + champ + '=in.(' + _veilleIn(part) + ')' + (extra || ''), entetes));
+  }
+  return out;
+}
+
+// Ce qui peut réveiller un client (décision d'Alex, 09/10/2026) : un lancement, une
+// nouvelle tranche, un lot revenu (réservation annulée). Les événements viennent de
+// pige_evenements via la fonction veille_evenements (la table n'est lisible que des gérants).
 async function _veilleChargerCatalogue(force) {
   if (_veilleCatalogue && !force) return _veilleCatalogue;
   try {
     const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
-    // Seules les vraies nouveautes depuis la derniere pige declenchent un
-    // reveil : un programme flambant neuf, ou un lot neuf apparu sur un
-    // programme deja connu (champ "nouveau", recalcule a chaque pige par le
-    // pipeline). Matcher tout le catalogue proposable (800+ programmes)
-    // contre tous les clients en veille noierait l'ecran de correspondances
-    // qui existaient deja avant et qu'on n'avait simplement jamais vues :
-    // si on n'avait rien trouve pour un client avant cette connexion a la
-    // carte, ca reste comme ca jusqu'a une vraie nouveaute au marche.
-    const [progsNouveaux, lotsNouveaux] = await Promise.all([
-      _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=id&source=not.in.(picking,nomandat)&nb_libres=gt.0&nouveau=is.true', entetes),
-      _sbTout(SUPABASE_URL + '/rest/v1/pige_lots?select=programme_id&st=eq.libre&nouveau=is.true', entetes)
-    ]);
-    const ids = new Set();
-    progsNouveaux.forEach(p => { if (p.id) ids.add(p.id); });
-    lotsNouveaux.forEach(l => { if (l.programme_id) ids.add(l.programme_id); });
-    if (!ids.size) { _veilleCatalogue = []; return _veilleCatalogue; }
-    const idsList = Array.from(ids).map(id => '"' + String(id).replace(/"/g, '\\"') + '"').join(',');
-    const [progs, lots] = await Promise.all([
-      _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=id,nom,ville,dept,livraison,prix_min&id=in.(' + idsList + ')&source=not.in.(picking,nomandat)&order=nom.asc', entetes),
-      _sbTout(SUPABASE_URL + '/rest/v1/pige_lots?select=programme_id,typo,prix&st=eq.libre&programme_id=in.(' + idsList + ')', entetes)
-    ]);
-    const prixParTypo = {};
-    lots.forEach(x => {
-      if (!x.programme_id || !x.typo) return;
-      const g = prixParTypo[x.programme_id] || (prixParTypo[x.programme_id] = {});
-      const p = Number(x.prix);
-      if (p && (!g[x.typo] || p < g[x.typo])) g[x.typo] = p;
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/veille_evenements', {
+      method: 'POST', cache: 'no-store',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, entetes),
+      body: JSON.stringify({ p_jours: VEILLE_JOURS })
     });
-    _veilleCatalogue = progs.map(p => ({
-      slug: p.id, nom: p.nom, ville: p.ville, dept: p.dept, livraison: p.livraison,
-      prix_min: p.prix_min,
-      typologies: Object.keys(prixParTypo[p.id] || {}).map(type => ({ type: type, prix: prixParTypo[p.id][type] }))
-    }));
+    const evts = r.ok ? await r.json() : [];
+    if (!Array.isArray(evts) || !evts.length) { _veilleCatalogue = []; return _veilleCatalogue; }
+
+    const g = {};   // programme_id → { decl:Set, revenus:[], date }
+    const groupe = (id) => g[id] || (g[id] = { decl: new Set(), revenus: [], date: '' });
+    const dateLot = {};
+    evts.forEach(e => {
+      if (e.type === 'liberation') { if (e.lot_id) dateLot[e.lot_id] = e.pige_date; return; }
+      if (!e.programme_id) return;
+      const x = groupe(e.programme_id);
+      x.decl.add(e.type === 'nouvelle_tranche' ? 'tranche' : 'lancement');
+      if (e.pige_date > x.date) x.date = e.pige_date;
+    });
+    // Lots revenus : encore à vendre (libre ou en option), rattachés à leur programme
+    const idsLots = Object.keys(dateLot);
+    const lotsRev = idsLots.length
+      ? await _veilleParLots('pige_lots', 'id,programme_id,n,typo,prix,st', 'id', idsLots, '&st=in.(libre,option)', entetes) : [];
+    lotsRev.forEach(l => {
+      if (!l.programme_id) return;
+      const x = groupe(l.programme_id);
+      x.revenus.push({ typo: l.typo, prix: Number(l.prix) || null, n: l.n });
+      if (dateLot[l.id] > x.date) x.date = dateLot[l.id];
+    });
+    const ids = Object.keys(g);
+    if (!ids.length) { _veilleCatalogue = []; return _veilleCatalogue; }
+
+    const progs = await _veilleParLots('pige_programmes', 'id,nom,ville,dept,livraison,prix_min', 'id', ids, '&source=not.in.(picking,nomandat)&nb_libres=gt.0', entetes);
+    // Prix d'entrée par typologie : lots libres du programme pour un lancement ou une
+    // tranche ; pour un lot revenu seul, uniquement le lot qui revient.
+    const idsDecl = progs.filter(p => g[p.id].decl.size).map(p => p.id);
+    const lotsLibres = idsDecl.length
+      ? await _veilleParLots('pige_lots', 'programme_id,typo,prix', 'programme_id', idsDecl, '&st=in.(libre,option)', entetes) : [];
+    const prixParTypo = {};
+    const noter = (pid, typo, prix) => {
+      const px = Number(prix);
+      if (!pid || !typo || !px) return;
+      const t = prixParTypo[pid] || (prixParTypo[pid] = {});
+      if (!t[typo] || px < t[typo]) t[typo] = px;
+    };
+    lotsLibres.forEach(x => noter(x.programme_id, x.typo, x.prix));
+    progs.forEach(p => { if (!g[p.id].decl.size) g[p.id].revenus.forEach(x => noter(p.id, x.typo, x.prix)); });
+
+    _veilleCatalogue = progs.map(p => {
+      const x = g[p.id];
+      const prixRev = x.revenus.map(y => y.prix).filter(Boolean);
+      return {
+        slug: p.id, nom: p.nom, ville: p.ville, dept: p.dept, livraison: p.livraison,
+        prix_min: x.decl.size ? p.prix_min : (prixRev.length ? Math.min.apply(null, prixRev) : p.prix_min),
+        typologies: Object.keys(prixParTypo[p.id] || {}).map(type => ({ type: type, prix: prixParTypo[p.id][type] })),
+        declencheurs: Array.from(x.decl), revenus: x.revenus, date: x.date
+      };
+    }).sort((a, b) => String(a.nom).localeCompare(String(b.nom)));
   } catch (e) { _veilleCatalogue = []; }
   return _veilleCatalogue;
 }
 
 async function veilleCalculer(force) {
+  // Réservé aux gérants pour le moment (demande d'Alex, 09/10/2026)
+  if (typeof estGerant !== 'function' || !estGerant()) return null;
   if (_veilleReveils && !force) return _veilleReveils;
   if (_veilleEnCours) return null;
   _veilleEnCours = true;
   try {
     const leads = await veilleCharger(force);
-    // Personne en veille : on ne va pas télécharger les communes de France
     if (!leads.length) { _veilleReveils = []; return _veilleReveils; }
     const progs = await _veilleChargerCatalogue(force);
     const out = [];
     for (const p of (progs || [])) {
-      const zone = await veilleZone(p);
       const items = [];
-      leads.forEach(l => { const m = veilleMatch(l, p, zone); if (m) items.push({ l: l, m: m }); });
+      leads.forEach(l => { const m = veilleMatch(l, p, null); if (m) items.push({ l: l, m: m }); });
       if (items.length) out.push({ p: p, items: items });
     }
-    out.sort((a, b) => b.items.length - a.items.length);
+    // Le plus récent d'abord, puis les programmes qui réveillent le plus de clients
+    out.sort((a, b) => String(b.p.date).localeCompare(String(a.p.date)) || (b.items.length - a.items.length));
     _veilleReveils = out;
     return out;
   } finally { _veilleEnCours = false; }
+}
+
+// Nombre de rapprochements (client ↔ programme) du moment
+function _veilleNbNouveaux(r) { return (r || []).reduce((n, x) => n + x.items.length, 0); }
+// Ce qui déclenche le réveil, en clair
+function veilleDeclencheurs(p) {
+  const t = [];
+  if ((p.declencheurs || []).indexOf('lancement') !== -1) t.push('Lancement');
+  if ((p.declencheurs || []).indexOf('tranche') !== -1) t.push('Nouvelle tranche');
+  const rev = p.revenus || [];
+  if (rev.length) {
+    const det = rev.slice(0, 2).map(y => [y.typo, y.prix ? budgetFmt(y.prix) : ''].filter(Boolean).join(' ')).filter(Boolean).join(', ');
+    t.push(rev.length + ' lot' + (rev.length > 1 ? 's' : '') + ' revenu' + (rev.length > 1 ? 's' : '') + (det ? ' (' + det + (rev.length > 2 ? '…' : '') + ')' : ''));
+  }
+  return t;
 }
 
 function _veilleEsc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -7746,8 +7791,8 @@ function _veilleMajBadge(total) {
 async function renderVeilleBandeau() {
   const r = await veilleCalculer(true);
   if (!r) return;
-  _veilleMajBadge(r.reduce((n, x) => n + x.items.length, 0));
-  const page = document.getElementById('page-equipe-veille');
+  _veilleMajBadge(_veilleNbNouveaux(r));
+  const page = document.getElementById('page-veille');
   if (page && page.classList.contains('active')) renderVeillePage();
 }
 
@@ -7756,7 +7801,7 @@ async function renderVeilleBandeau() {
 async function renderProgVeilleBandeau() {
   const r = await veilleCalculer(true);
   if (!r) return;
-  _veilleMajBadge(r.reduce((n, x) => n + x.items.length, 0));
+  _veilleMajBadge(_veilleNbNouveaux(r));
   renderProgrammes();
 }
 
@@ -7766,27 +7811,26 @@ async function renderVeillePage() {
   const z = document.getElementById('veille-page-corps');
   if (!z) return;
   z.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
-  const enVeille = _eqMiens().filter(estEnVeille);
   const r = await veilleCalculer(true);
   if (!r) return;
+  const enVeille = await veilleCharger();
   const total = r.reduce((n, x) => n + x.items.length, 0);
-  _veilleMajBadge(total);
+  _veilleMajBadge(_veilleNbNouveaux(r));
   if (!enVeille.length && !total) {
     z.innerHTML = '<div class="empty"><p>Aucun client en veille pour le moment.</p></div>';
     return;
   }
   if (!total) {
     z.innerHTML = `<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:11px;padding:14px 16px;font-size:13px;color:var(--muted)">
-      ${enVeille.length} client(s) en veille — aucune nouveauté du catalogue ne leur correspond pour l'instant.
-      <button onclick="eqLeadsSetFilter('statut:${STATUT_VEILLE}'); goToPage('equipe-leads');" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;text-decoration:underline;padding:0 0 0 6px">Les voir</button>
+      ${enVeille.length} client(s) en veille — aucun lancement, nouvelle tranche ou lot revenu ne leur correspond pour l'instant.
     </div>`;
     return;
   }
   z.innerHTML = `
-    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${total} client(s) à rappeler — marge appliquée : budget +${Math.round(VEILLE_MARGE_BUDGET*100)} % et villes limitrophes${_veilleZonesEchec ? ' <span style="color:var(--warning)">(communes alentours indisponibles — correspondance sur la ville exacte seulement)</span>' : ''}</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${total} rapprochement(s) client / programme — lancements, nouvelles tranches et lots revenus des ${VEILLE_JOURS} derniers jours · budget +${Math.round(VEILLE_MARGE_BUDGET*100)} %, même ville ou même département</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
       ${r.map(x => `<button onclick="veilleModale('${_veilleEsc(x.p.slug)}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:13px;cursor:pointer;text-align:left">
-        <strong>${_veilleEsc(x.p.nom)}</strong><br><span style="font-size:11.5px;color:var(--muted)">${_veilleEsc(x.p.ville || '')} · ${x.items.length} client(s)</span>
+        <strong>${_veilleEsc(x.p.nom)}</strong><br><span style="font-size:11.5px;color:var(--muted)">${_veilleEsc(x.p.ville || '')} · ${x.items.length} client(s)</span><br><span style="font-size:11px;color:var(--muted)">${_veilleEsc(veilleDeclencheurs(x.p).join(' · '))}</span>
       </button>`).join('')}
     </div>`;
 }
@@ -7813,7 +7857,7 @@ function veilleModale(slug) {
       </div>
       <button onclick="veilleModaleFermer()" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1">✕</button>
     </div>
-    <div style="font-size:12.5px;color:var(--muted);margin:8px 0 16px">${x.items.length} client(s) en veille correspondent à ce programme.</div>
+    <div style="font-size:12.5px;color:var(--muted);margin:8px 0 16px">${x.items.length} client(s) en veille correspondent à ce programme${veilleDeclencheurs(p).length ? ' — ' + _veilleEsc(veilleDeclencheurs(p).join(' · ')) : ''}.</div>
     <div id="veille-modale-liste">${x.items.map(it => _veilleLigne(it, p)).join('')}</div>
   </div>`;
   div.addEventListener('click', (e) => { if (e.target === div) veilleModaleFermer(); });
@@ -7855,7 +7899,10 @@ function veilleMessage(l, p) {
   return 'Bonjour' + (pre ? ' ' + pre : '') + ',\n\n'
     + 'Nous nous étions parlé' + (l.veille_depuis ? ' le ' + new Date(l.veille_depuis).toLocaleDateString('fr-FR') : '')
     + ' : vous cherchiez ' + (crit || 'un bien') + ', et je n\'avais rien à vous proposer qui corresponde.\n\n'
-    + 'Un nouveau programme vient de sortir : ' + (p.nom || '') + (p.ville ? ' à ' + p.ville : '')
+    + (!(p.declencheurs || []).length && (p.revenus || []).length
+        ? 'Un lot vient de se libérer sur ' + (p.nom || '') + (p.ville ? ' à ' + p.ville : '')
+        : ((p.declencheurs || []).indexOf('tranche') !== -1 && (p.declencheurs || []).indexOf('lancement') === -1
+            ? 'Une nouvelle tranche vient de sortir : ' : 'Un nouveau programme vient de sortir : ') + (p.nom || '') + (p.ville ? ' à ' + p.ville : ''))
     + (p.livraison ? ', livraison ' + p.livraison : '') + (p.prix_min ? ', à partir de ' + progPrixTexte(p) : '') + '.\n\n'
     + 'Est-ce que je vous prépare une sélection ?';
 }
@@ -7996,7 +8043,7 @@ function eqVeilleBandeauFiche(l) {
       <div style="font-weight:800;font-size:13px;margin-bottom:4px">En veille depuis le ${e(depuis)}</div>
       <div style="font-size:12.5px;line-height:1.55;color:var(--muted)">
         ${l.veille_motif ? e(l.veille_motif) + '. ' : ''}Aucune activité à programmer : il ressortira au prochain lancement qui coche ses critères,
-        budget élargi de ${Math.round(VEILLE_MARGE_BUDGET*100)} % et villes limitrophes comprises. La paternité est gelée pendant ce temps.
+        budget élargi de ${Math.round(VEILLE_MARGE_BUDGET*100)} %, même ville ou même département. La paternité est gelée pendant ce temps.
       </div>
     </div>`;
   }
