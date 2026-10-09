@@ -1329,6 +1329,7 @@ table.lots td.r{text-align:right}
     </div>
     <div class="row">
       <div class="dd" id="fFiscDD"><button type="button" id="fFiscBtn">Fiscalité</button><div class="dd-pop" id="fFiscPop" hidden></div></div>
+      <input type="number" id="fSurf" placeholder="Surface min (m²)" min="0" step="1" inputmode="numeric" list="fSurfList" autocomplete="off" title="Surface habitable minimale du lot, en m²"><datalist id="fSurfList"><option value="20"><option value="25"><option value="30"><option value="35"><option value="40"><option value="45"><option value="50"><option value="60"><option value="70"><option value="80"><option value="90"></datalist>
     </div>
     <div class="tt-box" id="ttBox">
       <span class="t">Temps de trajet depuis une adresse (lieu de travail, école, famille…)</span>
@@ -1385,7 +1386,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---------- filtres ----------
-const F = { promo: '', dept: '', typos: new Set(), extMin: '', etage: '', etageMin: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre', 'option']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
+const F = { promo: '', dept: '', typos: new Set(), surf: '', extMin: '', etage: '', etageMin: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre', 'option']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
 // ---------- repli manuel du volet des filtres (gagner de la place pour la liste) ----------
 let filtersCollapsed = false;
 function setFiltersCollapsed(on) { filtersCollapsed = on; document.querySelector('.filters').classList.toggle('collapsed', on); }
@@ -1441,6 +1442,7 @@ function lotOK(l) {
   if (F.typos.size && !F.typos.has(l.typo)) return false;
   if (F.budget && !(p20(l) && p20(l) <= +F.budget) && !(l.prix55 && l.prix55 <= +F.budget)) return false;
   if (F.pm2 && (!l.prix_m2 || l.prix_m2 > +F.pm2)) return false;
+  if (F.surf && !(l.surf && l.surf >= +F.surf)) return false;
   if (F.etage && !etageOK(l)) return false;
   if (F.renta && (!l.renta || l.renta < +F.renta)) return false;
   if (F.flags.has('top') && !l.top) return false;
@@ -1468,8 +1470,8 @@ function progOK(p) {
   if (F.flags.has('pick') && !(p.picking && !p.nomandat)) return false;
   if (F.flags.has('nomandat') && !p.nomandat) return false;
   if (F.flags.has('nopick') && p.picking) return false;
-  if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.etage || F.flags.has('top') || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
-  if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.etage || ['top', 'ext', 'pk', 'new'].some(f => F.flags.has(f)));
+  if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.surf || F.renta || F.extMin || F.etage || F.flags.has('top') || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
+  if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.surf || F.renta || F.extMin || F.etage || ['top', 'ext', 'pk', 'new'].some(f => F.flags.has(f)));
   return p.logs.some(lotOK);
 }
 let VIS = [];
@@ -1512,6 +1514,7 @@ function activeList() {
   F.typos.forEach(t => add(t, () => { F.typos.delete(t); [...fT.children].forEach(c => { if (c.firstChild.textContent === t) c.classList.remove('on'); }); }));
   if (F.budget) add('≤ ' + fmtk(+F.budget), () => { F.budget = ''; document.getElementById('fBudget').value = ''; });
   if (F.pm2) add('≤ ' + (+F.pm2).toLocaleString('fr-FR') + ' €/m²', () => { F.pm2 = ''; document.getElementById('fPm2').value = ''; });
+  if (F.surf) add('≥ ' + String(F.surf).replace('.', ',') + ' m²', () => { F.surf = ''; document.getElementById('fSurf').value = ''; });
   if (F.renta) add('Renta ≥ ' + String(F.renta).replace('.', ',') + ' %', () => { F.renta = ''; document.getElementById('fRenta').value = ''; });
   if (F.etage) { const o = [...document.getElementById('fEtage').options].find(x => x.value === F.etage); const n = +F.etageMin || 1; add(F.etage === 'min' ? ('À partir du ' + n + (n === 1 ? 'er' : 'e') + ' étage') : (o ? o.textContent.replace(/\s*\(\d[\d\s]*\)$/, '') : 'Étage'), () => { F.etage = ''; F.etageMin = ''; document.getElementById('fEtage').value = ''; renderEtageMin(); }); }
   if (F.gare) add('Gare ≤ ' + (F.gare >= 1000 ? (F.gare / 1000).toLocaleString('fr-FR') + ' km' : F.gare + ' m'), () => { F.gare = ''; document.getElementById('fGare').value = ''; });
@@ -1549,6 +1552,7 @@ function concessions() {
   if (F.typos.size) push('Toutes les typologies', { typos: new Set() }, () => { F.typos.clear(); [...fT.children].forEach(c => c.classList.remove('on')); });
   if (F.liv) push('Sans critère de livraison', { liv: '' }, () => { F.liv = ''; F.livS = 2; renderLiv(); });
   if (F.pm2) push('Sans limite de €/m²', { pm2: '' }, () => { F.pm2 = ''; document.getElementById('fPm2').value = ''; });
+  if (F.surf) push('Sans surface minimum', { surf: '' }, () => { F.surf = ''; document.getElementById('fSurf').value = ''; });
   if (F.renta) push('Sans minimum de renta', { renta: '' }, () => { F.renta = ''; document.getElementById('fRenta').value = ''; });
   if (F.gare) push('Sans critère de gare', { gare: '' }, () => { F.gare = ''; document.getElementById('fGare').value = ''; });
   if (F.etage) push('Sans critère d\'étage', { etage: '' }, () => { F.etage = ''; F.etageMin = ''; document.getElementById('fEtage').value = ''; renderEtageMin(); });
@@ -1627,12 +1631,13 @@ document.addEventListener('click', () => { fPop.hidden = true; fDeptsPop.hidden 
 const fT = document.getElementById('fTypo');
 TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = t; c.onclick = () => { F.typos.has(t) ? F.typos.delete(t) : F.typos.add(t); c.classList.toggle('on'); apply(); }; fT.appendChild(c); });
 ['fPromo','fDept','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fEtage') { renderEtageMin(); if (F.etage === 'min') { const i = document.getElementById('fEtageMin'); i.focus(); i.select(); } } if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
+document.getElementById('fSurf').oninput = e => { const v = e.target.value; F.surf = v ? String(Math.max(0, +v)) : ''; apply(); };
 document.getElementById('fBudget').oninput = e => { const v = e.target.value; F.budget = v ? String(Math.round(+v * 1000)) : ''; apply(); };
 [...document.getElementById('fStChips').children].forEach(c => c.onclick = () => { toggleSt(c.dataset.v); apply(); });
 [...document.getElementById('fLivM').children].forEach(c => c.onclick = () => { F.livM = c.dataset.m; [...c.parentElement.children].forEach(x => x.classList.toggle('on', x === c)); apply(); });
 document.getElementById('fSort').onchange = e => { F.sort = e.target.value; renderList(); };
 document.getElementById('fMaison').onchange = e => { F.maison = e.target.checked; apply(); };
-document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', etage: '', etageMin: '' }); renderEtageMin(); setSt('libre,option'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.querySelectorAll('.chip')].forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
+document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', surf: '', renta: '', gare: '', etage: '', etageMin: '' }); renderEtageMin(); setSt('libre,option'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.querySelectorAll('.chip')].forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSurf','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
 
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
