@@ -7752,7 +7752,7 @@ async function veilleCalculer(force) {
 }
 
 // Nombre de rapprochements (client ↔ programme) du moment
-function _veilleNbNouveaux(r) { return (r || []).reduce((n, x) => n + x.items.length, 0); }
+function _veilleNbNouveaux(r) { const ids = new Set(); (r || []).forEach(x => x.items.forEach(it => ids.add(it.l.id))); return ids.size; }
 // Ce qui déclenche le réveil, en clair
 function veilleDeclencheurs(p) {
   const t = [];
@@ -7807,32 +7807,179 @@ async function renderProgVeilleBandeau() {
 
 // Rubrique "Réveil veille" : les nouveautés du catalogue (depuis la dernière
 // pige) qui correspondent à mes clients en veille.
-async function renderVeillePage() {
+// ---- Rubrique « Réveil veille » (gérant) : on part de la catégorie de réveil, on arrive
+// directement aux clients concernés, avec ce qu'on leur a déjà envoyé.
+let _veilleCat = null;      // 'lancement' | 'tranche' | 'revenu'
+let _veilleVend = '';       // filtre vendeur ('' = tous)
+let _veilleSels = {};       // contact_id → sélections envoyées (la plus récente d'abord)
+
+const VEILLE_CATS = [
+  { k: 'lancement', t: 'Lancements', d: 'Nouveaux programmes' },
+  { k: 'tranche',   t: 'Nouvelles tranches', d: 'Tranche ajoutée à un programme' },
+  { k: 'revenu',    t: 'Lots revenus', d: 'Réservation annulée' }
+];
+function _veilleDansCat(p, k) {
+  if (k === 'revenu') return (p.revenus || []).length > 0;
+  return (p.declencheurs || []).indexOf(k) !== -1;
+}
+
+// Sélections déjà envoyées aux clients en veille (tous vendeurs : le gérant voit tout)
+async function _veilleChargerSels(leads) {
+  _veilleSels = {};
+  const ids = (leads || []).map(l => l.id);
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    const lignes = await _veilleParLots('selections', 'token,contact_id,vendeur,created_at,opened_at,avis,biens', 'contact_id', ids, '&order=created_at.desc', entetes);
+    lignes.forEach(x => { if (x.contact_id) (_veilleSels[x.contact_id] || (_veilleSels[x.contact_id] = [])).push(x); });
+    Object.keys(_veilleSels).forEach(k => _veilleSels[k].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+  } catch (e) { _veilleSels = {}; }
+}
+function _veilleFmtJ(d) { return d ? new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : ''; }
+
+// Programmes d'une sélection, lisibles : « Passage de Flore (Annecy) »
+function _veilleProgsDeSel(sel) {
+  const vus = [];
+  (Array.isArray(sel.biens) ? sel.biens : []).forEach(b => {
+    const t = String(b.titre || '');
+    const m = t.match(/^(.*?)\s+[—–-]\s+(.+)$/);
+    const nom = ((b.programme || (m ? m[1] : t)) || '').trim();
+    const ville = String(b.ville || '').replace(/\s*\d{4,5}\s*$/, '').trim();
+    const lib = nom + (ville ? ' (' + ville + ')' : '');
+    if (nom && vus.indexOf(lib) === -1) vus.push(lib);
+  });
+  return vus;
+}
+
+function _veilleHistoriqueHtml(l) {
+  const sels = _veilleSels[l.id] || [];
+  if (!sels.length) return `<div style="font-size:12px;color:var(--muted)">Aucune sélection envoyée à ce client.</div>`;
+  const der = sels[0];
+  const ouvertes = sels.filter(x => x.opened_at).length;
+  const resume = sels.length + ' sélection' + (sels.length > 1 ? 's' : '') + ' envoyée' + (sels.length > 1 ? 's' : '')
+    + ' · dernière le ' + _veilleFmtJ(der.created_at)
+    + (der.opened_at ? ', ouverte le ' + _veilleFmtJ(der.opened_at) : ', pas encore ouverte')
+    + (sels.length > 1 ? ' · ' + ouvertes + '/' + sels.length + ' ouverte' + (ouvertes > 1 ? 's' : '') : '');
+  const detail = sels.map(x => {
+    const avis = x.avis || {};
+    const lots = Object.keys(avis).filter(k => k !== 'rdv').map(k => avis[k] || {});
+    const n = (c) => lots.filter(a => a.choix === c).length;
+    const reps = [n('interesse') ? n('interesse') + ' intéressé' : '', n('a_discuter') ? n('a_discuter') + ' à discuter' : '', n('pas_pour_moi') ? n('pas_pour_moi') + ' « pas pour moi »' : ''].filter(Boolean).join(', ');
+    const progs = _veilleProgsDeSel(x);
+    return `<div style="padding:6px 0;border-top:1px solid var(--border);font-size:12px">
+      <strong>${_veilleFmtJ(x.created_at)}</strong> · ${_veilleEsc(x.vendeur || '')} · ${x.opened_at ? 'ouverte le ' + _veilleFmtJ(x.opened_at) : 'pas ouverte'}${reps ? ' · ' + _veilleEsc(reps) : ''}
+      <div style="color:var(--muted);margin-top:2px">${progs.length ? _veilleEsc(progs.join(' · ')) : 'Aucun lot'}</div>
+      ${x.token ? `<a href="${_veilleEsc(SEL_PAGE_URL + '?t=' + encodeURIComponent(x.token) + '&apercu=1')}" target="_blank" rel="noopener" style="color:var(--accent);font-size:11.5px">Voir la sélection</a>` : ''}
+    </div>`;
+  }).join('');
+  return `<div style="font-size:12px"><span>${_veilleEsc(resume)}</span>
+    <button onclick="veilleSelToggle('${_veilleEsc(l.id)}')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline;padding:0 0 0 6px">Détail</button></div>
+    <div id="veille-sel-${_veilleEsc(l.id)}" style="display:none;margin-top:6px">${detail}</div>`;
+}
+function veilleSelToggle(id) { const el = document.getElementById('veille-sel-' + id); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+
+// La fiche du client, même s'il est chez un autre vendeur (le gérant voit tout)
+async function veilleOuvrirFiche(id) {
+  const l = (_veilleLeads || []).find(x => x.id === id);
+  if (!l) return;
+  if (!(_eqLeads || []).some(x => x.id === id)) {
+    const v = (data.vendeurs || []).find(x => x.prenom === l.vendeur);
+    if (!v) { if (typeof toast === 'function') toast('Vendeur introuvable pour ce client', 'var(--danger)'); return; }
+    selectedVendeurId = v.id;
+    goTo('equipe-leads', null);
+    const sel = document.getElementById('eq-leads-vendeur'); if (sel) sel.value = v.id;
+    await renderEquipeLeads();
+  }
+  eqOuvrirFiche(id);
+}
+
+function veilleChoisirCat(k) { _veilleCat = k; renderVeillePage(true); }
+function veilleChoisirVendeur(v) { _veilleVend = v; renderVeillePage(true); }
+
+function _veilleCarteClient(l, entrees, cat) {
+  const c = veilleCriteres(l);
+  const nom = (typeof nomComplet === 'function' ? nomComplet(l) : l.nom) || '—';
+  const depuis = l.veille_depuis ? new Date(l.veille_depuis).toLocaleDateString('fr-FR') : '';
+  const crit = [(c.typologies || []).join(' / '), (c.villes || []).join(', '), c.budget_max ? (c.budget_approx ? '~' : '') + budgetFmt(c.budget_max) : ''].filter(Boolean).join(' · ');
+  const lignes = entrees.map(({ p, m }) => {
+    const rev = (p.revenus || []).slice(0, 2).map(y => [y.typo, y.prix ? budgetFmt(y.prix) : ''].filter(Boolean).join(' ')).filter(Boolean).join(', ');
+    const puces = m.exacts.map(t => _veillePuce(t, 'var(--success)')).join('') + m.marges.map(t => _veillePuce(t, 'var(--warning)')).join('');
+    const sl = _veilleEsc(p.slug), id = _veilleEsc(l.id);
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-top:7px">
+      <div style="font-size:13px"><strong>${_veilleEsc(p.nom)}</strong> <span style="color:var(--muted);font-size:12px">${_veilleEsc(p.ville || '')}${p.livraison ? ' · livraison ' + _veilleEsc(p.livraison) : ''}${cat === 'revenu' ? (rev ? ' · lot revenu : ' + _veilleEsc(rev) : '') : (p.prix_min ? ' · dès ' + _veilleEsc(progPrixTexte(p)) : '')}</span></div>
+      <div style="margin:5px 0">${puces}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap">
+        <button onclick="veilleCopierMessage('${id}','${sl}')" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:6px 12px;color:var(--text);font-size:12px;cursor:pointer">Copier le message</button>
+        <button onclick="veilleReprendre('${id}','${sl}')" style="background:var(--surface);border:1px solid var(--accent);border-radius:9px;padding:6px 12px;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">Sortir de veille</button>
+        <button onclick="veilleEcarter('${id}','${sl}')" title="Ce programme n'est pas pour lui — on ne le reproposera plus" style="background:none;border:1px solid var(--border);border-radius:9px;padding:6px 12px;color:var(--muted);font-size:12px;cursor:pointer">Pas pour lui</button>
+      </div></div>`;
+  }).join('');
+  return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:baseline">
+      <div style="font-weight:700;font-size:14px">${_veilleEsc(nom)} <span style="font-weight:400;color:var(--muted);font-size:12px">· ${_veilleEsc(l.vendeur || 'sans vendeur')}</span></div>
+      <div style="display:flex;gap:10px;align-items:baseline">
+        <span style="font-size:11.5px;color:var(--muted)">en veille depuis le ${depuis || '—'}</span>
+        <button onclick="veilleOuvrirFiche('${_veilleEsc(l.id)}')" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 11px;color:var(--text);font-size:12px;cursor:pointer">Fiche</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin:4px 0 6px">${_veilleEsc(crit)}${l.veille_motif ? ' — <em>' + _veilleEsc(l.veille_motif) + '</em>' : ''}</div>
+    ${_veilleHistoriqueHtml(l)}
+    ${lignes}
+  </div>`;
+}
+
+async function renderVeillePage(sansRecharger) {
   const z = document.getElementById('veille-page-corps');
   if (!z) return;
-  z.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
-  const r = await veilleCalculer(true);
+  if (!sansRecharger) z.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
+  const r = await veilleCalculer(!sansRecharger);
   if (!r) return;
-  const enVeille = await veilleCharger();
-  const total = r.reduce((n, x) => n + x.items.length, 0);
+  const leads = await veilleCharger();
   _veilleMajBadge(_veilleNbNouveaux(r));
-  if (!enVeille.length && !total) {
-    z.innerHTML = '<div class="empty"><p>Aucun client en veille pour le moment.</p></div>';
-    return;
-  }
-  if (!total) {
-    z.innerHTML = `<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:11px;padding:14px 16px;font-size:13px;color:var(--muted)">
-      ${enVeille.length} client(s) en veille — aucun lancement, nouvelle tranche ou lot revenu ne leur correspond pour l'instant.
-    </div>`;
-    return;
-  }
+  if (!sansRecharger) await _veilleChargerSels(leads);
+  if (!leads.length) { z.innerHTML = '<div class="empty"><p>Aucun client en veille pour le moment.</p></div>'; return; }
+
+  // Par catégorie : programmes concernés et clients (un client compté une fois)
+  const parCat = {};
+  VEILLE_CATS.forEach(cat => {
+    const progs = r.filter(x => _veilleDansCat(x.p, cat.k));
+    const clients = new Set(); progs.forEach(x => x.items.forEach(it => clients.add(it.l.id)));
+    parCat[cat.k] = { progs: progs, nbClients: clients.size };
+  });
+  if (!_veilleCat || !parCat[_veilleCat]) _veilleCat = (VEILLE_CATS.find(c => parCat[c.k].nbClients) || VEILLE_CATS[0]).k;
+
+  // Tuiles de catégorie
+  const tuiles = VEILLE_CATS.map(cat => {
+    const g = parCat[cat.k], actif = cat.k === _veilleCat;
+    return `<button onclick="veilleChoisirCat('${cat.k}')" style="flex:1;min-width:170px;text-align:left;cursor:pointer;background:${actif ? 'var(--accent)14' : 'var(--surface)'};border:1px solid ${actif ? 'var(--accent)' : 'var(--border)'};border-radius:11px;padding:12px 14px;color:var(--text)">
+      <div style="font-size:12px;color:var(--muted)">${cat.t}</div>
+      <div style="font-family:var(--font-head);font-size:24px;font-weight:800;color:${g.nbClients ? 'var(--text)' : 'var(--muted)'}">${g.nbClients} <span style="font-size:12px;font-weight:500;color:var(--muted)">client${g.nbClients > 1 ? 's' : ''}</span></div>
+      <div style="font-size:11.5px;color:var(--muted)">${g.progs.length} programme${g.progs.length > 1 ? 's' : ''} · ${cat.d}</div>
+    </button>`;
+  }).join('');
+
+  // Clients de la catégorie choisie, une ligne par client
+  const cat = _veilleCat;
+  const parClient = new Map();
+  parCat[cat].progs.forEach(x => x.items.forEach(it => {
+    if (!parClient.has(it.l.id)) parClient.set(it.l.id, { l: it.l, entrees: [] });
+    parClient.get(it.l.id).entrees.push({ p: x.p, m: it.m });
+  }));
+  const vendeurs = Array.from(new Set(Array.from(parClient.values()).map(x => x.l.vendeur).filter(Boolean))).sort();
+  if (_veilleVend && vendeurs.indexOf(_veilleVend) === -1) _veilleVend = '';
+  let liste = Array.from(parClient.values());
+  if (_veilleVend) liste = liste.filter(x => x.l.vendeur === _veilleVend);
+  liste.sort((a, b) => b.entrees.length - a.entrees.length || String(a.l.nom || '').localeCompare(String(b.l.nom || '')));
+  const selVend = `<select onchange="veilleChoisirVendeur(this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:7px 12px;color:var(--text);font-size:12.5px">
+    <option value="">Tous les vendeurs</option>${vendeurs.map(v => `<option value="${_veilleEsc(v)}" ${v === _veilleVend ? 'selected' : ''}>${_veilleEsc(v)}</option>`).join('')}</select>`;
+  const titreCat = VEILLE_CATS.find(c => c.k === cat).t;
+
   z.innerHTML = `
-    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">${total} rapprochement(s) client / programme — lancements, nouvelles tranches et lots revenus des ${VEILLE_JOURS} derniers jours · budget +${Math.round(VEILLE_MARGE_BUDGET*100)} %, même ville ou même département</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
-      ${r.map(x => `<button onclick="veilleModale('${_veilleEsc(x.p.slug)}')" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-size:13px;cursor:pointer;text-align:left">
-        <strong>${_veilleEsc(x.p.nom)}</strong><br><span style="font-size:11.5px;color:var(--muted)">${_veilleEsc(x.p.ville || '')} · ${x.items.length} client(s)</span><br><span style="font-size:11px;color:var(--muted)">${_veilleEsc(veilleDeclencheurs(x.p).join(' · '))}</span>
-      </button>`).join('')}
-    </div>`;
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${tuiles}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-size:12.5px;color:var(--muted)">${titreCat} · ${liste.length} client${liste.length > 1 ? 's' : ''} à rappeler — ${leads.length} en veille au total · budget +${Math.round(VEILLE_MARGE_BUDGET*100)} %, même ville ou département · ${VEILLE_JOURS} derniers jours</div>
+      ${vendeurs.length > 1 ? selVend : ''}
+    </div>
+    ${liste.length ? liste.map(x => _veilleCarteClient(x.l, x.entrees, cat)).join('') : `<div style="background:var(--surface2);border:1px dashed var(--border);border-radius:11px;padding:14px 16px;font-size:13px;color:var(--muted)">Aucun client en veille ne correspond à cette catégorie pour l'instant.</div>`}`;
 }
 function veilleNbPour(slug) {
   if (!_veilleReveils) return null;
