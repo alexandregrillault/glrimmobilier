@@ -9897,7 +9897,7 @@ function eqFicheSelectionsHtml(l) {
       const sec = tpsDe(i);
       const pct = total ? Math.round(sec / total * 100) : 0;
       const jugement = a.choix
-        ? `<span style="color:${a.choix === 'interesse' ? 'var(--success)' : (a.choix === 'a_discuter' ? 'var(--warning)' : 'var(--muted)')};font-weight:600">${selIc(a.choix === 'interesse' ? 'interesse' : (a.choix === 'a_discuter' ? 'discuter' : 'refus'), 12)} ${SEL_AVIS_LABELS[a.choix] || ''}</span>`
+        ? `<span style="color:${a.choix === 'interesse' ? 'var(--success)' : (a.choix === 'a_discuter' ? 'var(--warning)' : 'var(--danger)')};font-weight:600">${selIc(a.choix === 'interesse' ? 'interesse' : (a.choix === 'a_discuter' ? 'discuter' : 'refus'), 12)} ${SEL_AVIS_LABELS[a.choix] || ''}</span>`
         : '<span style="color:var(--muted)">pas d\'avis</span>';
       const lienFiche = (b._carteProgrammeId && _cartePigeUrlMap) ? (_cartePigeUrlMap[b._carteProgrammeId] || '') : '';
             const lienIntranet = lienFiche || (b.promoteur ? _promoIntranetLookup(b.promoteur) : '');
@@ -12096,7 +12096,7 @@ const SEL_ICONES = {
   ouvert:      ['\u25C9', 'var(--muted)'],
   interesse:   ['\u2605', 'var(--success)'],
   discuter:    ['\u25D0', 'var(--warning)'],
-  refus:       ['\u2715', 'var(--muted)'],
+  refus:       ['\u2715', 'var(--danger)'],
   commentaire: ['\u275D', 'var(--accent)'],
   infos:       ['\u24D8', 'var(--accent)'],
   rdv:         ['\u25C6', 'var(--accent)'],
@@ -14551,10 +14551,22 @@ function eqSelIcone(l) {
   const s = _eqSelections[l.id];
   if (!s) return '';
   const rdv = s.avis && s.avis.rdv && s.avis.rdv.demande;
-  const nbAvis = Object.keys(s.avis || {}).filter(k => k !== 'rdv').length;
-  const ic = rdv ? selIc('rdv') : (nbAvis ? selIc('commentaire') : (s.opened_at ? selIc('ouvert') : selIc('envoi')));
-  const titre = rdv ? 'Demande de rendez-vous ! Clique pour voir' : (nbAvis ? nbAvis + ' avis reçu(s) — clique pour voir' : (s.opened_at ? 'Sélection ouverte par le client' : 'Sélection envoyée, pas encore ouverte'));
-  return ` <span onclick="eqVoirSelection('${l.id}')" title="${titre}" style="cursor:pointer">${ic}</span>`;
+  const lesAvis = Object.keys(s.avis || {}).filter(k => k !== 'rdv').map(k => s.avis[k] || {});
+  const nbAvis = lesAvis.length;
+  // L'icône dit ce que le client a vraiment fait (09/10/2026) : « ❝ » seulement s'il a écrit un
+  // commentaire ; sinon ★ s'il est intéressé, ◐ s'il veut en discuter, ✕ s'il a juste écarté des lots.
+  const aTexte = lesAvis.some(a => a.commentaire || (Array.isArray(a.fil) && a.fil.some(m => m && m.de === 'client')));
+  const nb = (c) => lesAvis.filter(a => a.choix === c).length;
+  let ic, titre;
+  if (rdv) { ic = selIc('rdv'); titre = 'Demande de rendez-vous ! Clique pour voir'; }
+  else if (nbAvis) {
+    ic = aTexte ? selIc('commentaire') : (nb('interesse') ? selIc('interesse') : (nb('a_discuter') ? selIc('discuter') : (lesAvis.some(a => a.infos || a.option) ? selIc('infos') : selIc('refus'))));
+    const det = [nb('interesse') ? nb('interesse') + ' « Ça m\'intéresse »' : '', nb('a_discuter') ? nb('a_discuter') + ' « À discuter »' : '', nb('pas_pour_moi') ? nb('pas_pour_moi') + ' « Pas pour moi »' : '', aTexte ? 'avec commentaire' : ''].filter(Boolean).join(', ');
+    titre = nbAvis + ' avis reçu' + (nbAvis > 1 ? 's' : '') + (det ? ' (' + det + ')' : '') + ' — clique pour voir';
+  }
+  else if (s.opened_at) { ic = selIc('ouvert'); titre = 'Sélection ouverte par le client'; }
+  else { ic = selIc('envoi'); titre = 'Sélection envoyée, pas encore ouverte'; }
+  return ` <span onclick="eqVoirSelection('${l.id}')" title="${titre.replace(/"/g, '&quot;')}" style="cursor:pointer">${ic}</span>`;
 }
 
 function eqVoirSelection(contactId, token) {
@@ -14594,7 +14606,7 @@ function eqVoirSelection(contactId, token) {
           ${tpsParBien(i) ? `<div style="font-size:11.5px;color:var(--muted);white-space:nowrap">${selIc('temps', 12)} ${fmtDuree(tpsParBien(i))}</div>` : ''}
         </div>
         ${tpsTotal && tpsParBien(i) ? `<div style="height:3px;border-radius:2px;background:var(--surface2);margin-top:6px;overflow:hidden"><div style="height:100%;width:${Math.round(tpsParBien(i) / tpsTotal * 100)}%;background:var(--accent)"></div></div>` : ''}
-        <div style="font-size:13px;margin-top:4px">${a.choix ? selIc(a.choix === 'interesse' ? 'interesse' : (a.choix === 'a_discuter' ? 'discuter' : 'refus')) + ' ' + (SEL_AVIS_LABELS[a.choix] || _vEsc(a.choix)) : '<span style="color:var(--muted)">Pas encore d\'avis</span>'}</div>
+        <div style="font-size:13px;margin-top:4px">${a.choix ? selIc(a.choix === 'interesse' ? 'interesse' : (a.choix === 'a_discuter' ? 'discuter' : 'refus')) + ' ' + (a.choix === 'pas_pour_moi' ? '<span style="color:var(--danger);font-weight:600">' + SEL_AVIS_LABELS[a.choix] + '</span>' : (SEL_AVIS_LABELS[a.choix] || _vEsc(a.choix))) : '<span style="color:var(--muted)">Pas encore d\'avis</span>'}</div>
         ${a.option ? '<div style="font-size:12px;color:var(--success);margin-top:4px;font-weight:700">Souhaite qu\'on pose une option sur ce lot</div>' : ''}
         ${a.infos ? '<div style="font-size:12px;color:var(--accent);margin-top:4px;font-weight:600">' + selIc('infos', 12) + ' A demandé plus d\'infos sur ce lot — à rappeler</div>' : ''}
         ${a.commentaire ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;font-style:italic">« ${_vEsc(a.commentaire)} »</div>` : ''}
