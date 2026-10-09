@@ -8309,7 +8309,7 @@ function renderEquipeLeadsTable() {
         const badgeTr = tr
           ? `<span title="Client transféré${tr.de ? ' par ' + esc(tr.de) : ''} le ${esc(new Date(tr.le).toLocaleDateString('fr-FR'))} — il est à toi depuis">${selIc('transfert', 15)}</span>`
           : '';
-        const badge = f.rappelDue ? '<span title="Rappel dû — activité prévue aujourd\'hui ou dépassée">' + selIc('rappel', 15) + '</span>' : f.alerte48 ? '<span title="Nouveau depuis plus de 48 h — à traiter">' + selIc('alerte', 13) + '</span>' : f.sansReponse ? '<span title="Sans réponse">' + selIc('sansrep', 15) + '</span>' : '';
+        const badge = f.rappelDue ? '<span title="Rappel dû — activité prévue aujourd\'hui ou dépassée">' + selIc('rappel', 15) + '</span>' : f.alerte48 ? '<span title="Nouveau depuis plus de 48 h — à traiter">' + selIc('alerte', 13) + '</span>' : f.sansReponse ? (() => { const n = eqAppelsEnCours(l).length; return '<span title="' + (n ? esc(eqAppelsResume(l)) : 'Sans réponse') + '" style="display:inline-flex;align-items:center;gap:3px">' + selIc('sansrep', 15) + (n ? '<span style="font-size:12px;font-weight:700;color:var(--muted)">' + n + '</span>' : '') + '</span>'; })() : '';
         const nq = eqQualifRemplie(l);
         const qualifBadge = `<br><span style="font-size:10px;color:${nq.n===nq.total?'var(--success)':'var(--muted)'}">${nq.n===nq.total?'✓ Fiche complète':'Fiche '+nq.n+'/'+nq.total}</span>`
           + (estEnVeille(l) ? `<br><span title="En veille — ressortira au prochain lancement" style="display:inline-block;background:var(--surface2);border:1px solid var(--accent2);color:var(--accent2);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">En veille</span>` : '');
@@ -12128,7 +12128,7 @@ function eqReperesLead(l, taille) {
     if (typeof estEnVeille === 'function' && estEnVeille(l))
       h += `<span title="En veille — ressortira au lancement d'un programme">${selIc('veille', t)}</span>`;
     // Nombre de fois où on a essayé de le joindre, tous vendeurs confondus
-    const nbAppels = (typeof eqAppelsListe === 'function') ? eqAppelsListe(l).length : 0;
+    const nbAppels = (typeof eqAppelsEnCours === 'function') ? eqAppelsEnCours(l).length : 0;
     if (nbAppels) h += `<span title="${_vEsc(eqAppelsResume(l))}" style="display:inline-flex;align-items:center;gap:2px">${selIc('sansrep', t)}<span style="font-size:${t - 2}px;font-weight:700;color:var(--muted)">${nbAppels}</span></span>`;
     // eqSelIcone porte déjà son propre libellé au survol et son clic
     const suivi = (typeof eqSelIcone === 'function') ? eqSelIcone(l) : '';
@@ -12146,8 +12146,19 @@ function eqAppelsListe(l) {
   return a.filter(x => x && x.le).sort((x, y) => new Date(x.le) - new Date(y.le));
 }
 
-function eqAppelsHtml(l) {
+// Le compteur repart à zéro dès qu'une vraie action est faite sur la fiche (statut,
+// note, qualification… — ce qui laisse penser qu'on a eu le client au téléphone) :
+// on ne compte que les tentatives postérieures à derniere_action_le, la même date
+// que celle tenue par le trigger côté base (« Sans réponse » seul ou un rappel posé
+// seul ne la font pas bouger). L'historique complet reste dans le journal de la fiche.
+function eqAppelsEnCours(l) {
   const a = eqAppelsListe(l);
+  const t = l && l.derniere_action_le ? new Date(l.derniere_action_le).getTime() : NaN;
+  return isNaN(t) ? a : a.filter(x => new Date(x.le).getTime() > t);
+}
+
+function eqAppelsHtml(l) {
+  const a = eqAppelsEnCours(l);
   if (!a.length) return '';
   const jour = (d) => {
     const t = new Date(d).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -12164,7 +12175,7 @@ function eqAppelsHtml(l) {
 
 // Résumé au survol, pour les repères des listes
 function eqAppelsResume(l) {
-  const a = eqAppelsListe(l);
+  const a = eqAppelsEnCours(l);
   if (!a.length) return '';
   return a.length + ' tentative' + (a.length > 1 ? 's' : '') + ' d\'appel sans réponse : '
     + a.map(x => new Date(x.le).toLocaleDateString('fr-FR') + (x.vendeur ? ' (' + x.vendeur + ')' : '')).join(', ');
