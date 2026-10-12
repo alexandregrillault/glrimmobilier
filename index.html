@@ -12687,7 +12687,11 @@ function _selAdresseInit(l, selEdit) {
   const prenom = _selNomPropre(np.prenom) || _selNomPropre(String((l && l.nom) || '').trim().split(/\s+/)[0] || '');
   const nomFiche = _selNomPropre(np.nom_famille);
   const ref = selEdit || ((typeof _eqSelections !== 'undefined' && _eqSelections && l) ? _eqSelections[l.id] : null);
-  const nomF = (ref && ref.client_nom_famille) ? _selNomPropre(ref.client_nom_famille) : nomFiche;
+  // Un seul mot reçu du portail (« Aury ») : la fiche n'a pas de nom de famille, mais on propose
+  // quand même « Monsieur Aury / Madame Aury » (modifiable) — le vendeur tranche (retour d'Alex, 12/10/2026)
+  const motsNom = String((l && l.nom) || '').trim().split(/\s+/).filter(Boolean);
+  const motSeul = (!nomFiche && motsNom.length === 1) ? _selNomPropre(motsNom[0]) : '';
+  const nomF = (ref && ref.client_nom_famille) ? _selNomPropre(ref.client_nom_famille) : (nomFiche || motSeul);
   const civ = (ref && ref.client_mode_adresse === 'civilite_nom' && ref.client_civilite && nomF) ? ref.client_civilite : '';
   // nomLibre : la fiche n'a pas de nom de famille, le vendeur peut le taper ici (sans l'écrire sur la fiche)
   return { prenom, nomF, civ, nomLibre: !nomFiche };
