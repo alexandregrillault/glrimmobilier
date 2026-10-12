@@ -1378,6 +1378,18 @@ const DEPTS = {'75':'Paris','77':'Seine-et-Marne','78':'Yvelines','91':'Essonne'
 const TYPOS = ['T1','T2','T3','T4','T5+'];
 const byP = {}; L0.forEach(l => (byP[l.programme_id] = byP[l.programme_id] || []).push(l));
 P.forEach(p => { p.lots = byP[p.id] || []; p.logs = p.lots.filter(l => l.type === 'Appartement' || l.type === 'Maison'); });
+// Fiscalité « Droit commun » et « TVA réduite » déduites des lots (12/10/2026, demande d'Alex) : les étiquettes
+// des extranets sont incomplètes (12 extranets seulement écrivent « Droit commun », 260 programmes sans aucune
+// étiquette). Un logement vendu en TVA 20 % = accession en droit commun ; un logement en 5,5 % = TVA réduite.
+// Les étiquettes promoteur (PTZ, LMNP, LLI, Jeanbrun…) sont conservées telles quelles.
+P.forEach(p => {
+  if (p.picking || p.nomandat) return;
+  const f = new Set(p.fisc || []);
+  // TVA 20 % explicite, ou taux inconnu avec un prix (jamais les lots en 10 % LLI, 0 % LMNP ou 5,5 % seul)
+  if (p.logs.some(l => Number(l.tva) === 20 || (l.tva == null && (l.prix20 != null || (l.prix != null && !l.prix55))))) f.add('Droit commun');
+  if (p.logs.some(l => l.prix55)) f.add('TVA réduite');
+  p.fisc = [...f];
+});
 const fmt = n => n == null ? '—' : Math.round(n).toLocaleString('fr-FR') + ' €';
 const fmtk = n => n == null ? '—' : (n >= 1e6 ? (n / 1e6).toFixed(2).replace('.', ',') + ' M€' : Math.round(n / 1000) + ' k€');
 // Prix TVA 20 % réellement publié par le promoteur : null quand le lot n'est vendu qu'en TVA 5,5 %
@@ -2540,7 +2552,15 @@ function carteBadgeMatch(m) {
 // seulement le badge « ✓ correspond ») et on zoome sur la zone où ressortent
 // ses lots. Le vendeur reste libre de modifier ou de retirer ce filtre.
 function carteAppliquerCriteres() {
-  if (!CARTE_CRIT) return;
+  // Recherche pour un client : accession classique, PTZ et TVA réduite cochés d'office (12/10/2026, demande
+  // d'Alex) — les programmes réservés aux investisseurs (LMNP géré, LLI, nue-propriété…) sortent de la liste.
+  // Le vendeur peut toujours décocher dans Fiscalité.
+  if (CARTE_CLIENT.session || CARTE_CRIT) {
+    ['Droit commun', 'PTZ', 'TVA réduite'].forEach(f => { if (fiscs.includes(f)) F.fisc.add(f); });
+    fPop.querySelectorAll('input').forEach(i => { if (F.fisc.has(i.value)) i.checked = true; });
+    fiscLabel();
+  }
+  if (!CARTE_CRIT) { if (F.fisc.size) apply(); return; }
   const villesCrit = (CARTE_CRIT.villes || []).map(v => String(v || '').trim()).filter(Boolean);
   const typosCrit = [...new Set((CARTE_CRIT.typologies || []).map(carteTypoCode).filter(Boolean))];
   const bmax = CARTE_CRIT.budget_max != null && CARTE_CRIT.budget_max !== '' ? Number(CARTE_CRIT.budget_max) : null;
