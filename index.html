@@ -18487,7 +18487,9 @@ function saveFacture(withPdf) {
   const venteId = document.getElementById('fac-vente').value || null;
   if (!numero || !dateF || !promo.nom) { toast('⚠ Numéro, date et promoteur requis', 'var(--warning)'); return; }
   const tva = r2(ht * taux / 100), ttc = r2(ht + tva);
-  const rec = { id: fid || uid(), numero: numero, date: dateF, echeance: ech, venteId: venteId, promoteur: promo, designation: designation, prixBien: prixBien, tauxHono: tauxHono, ht: ht, taux: taux, tva: tva, ttc: ttc, updatedAt: new Date().toISOString() };
+  const venteLiee = venteId ? (data.ventes || []).find(x => x.id === venteId) : null;
+  const dateSignature = (venteLiee && venteLiee.dateSignatureNotaire) || '';
+  const rec = { id: fid || uid(), numero: numero, date: dateF, echeance: ech, venteId: venteId, dateSignature: dateSignature, promoteur: promo, designation: designation, prixBien: prixBien, tauxHono: tauxHono, ht: ht, taux: taux, tva: tva, ttc: ttc, updatedAt: new Date().toISOString() };
   if (fid) {
     const idx = st.emises.findIndex(x => x.id === fid);
     if (idx !== -1) rec.createdAt = st.emises[idx].createdAt, st.emises[idx] = rec;
@@ -18516,7 +18518,10 @@ function regenFacturePDF(fid) {
   if (rec) _ouvrirFacturePDF(_recToFacture(rec));
 }
 function _recToFacture(rec) {
-  return { numero: rec.numero, dateF: rec.date, ech: rec.echeance, promo: rec.promoteur || {}, designation: rec.designation, prixBien: rec.prixBien, tauxHono: rec.tauxHono, ht: rec.ht, taux: rec.taux, tva: rec.tva, ttc: rec.ttc };
+  // Date de signature chez le notaire : lue sur la vente liée (à jour), sinon celle gardée à l'enregistrement
+  const vl = rec.venteId ? (data.ventes || []).find(x => x.id === rec.venteId) : null;
+  const dateSignature = (vl && vl.dateSignatureNotaire) || rec.dateSignature || '';
+  return { dateSignature: dateSignature, numero: rec.numero, dateF: rec.date, ech: rec.echeance, promo: rec.promoteur || {}, designation: rec.designation, prixBien: rec.prixBien, tauxHono: rec.tauxHono, ht: rec.ht, taux: rec.taux, tva: rec.tva, ttc: rec.ttc };
 }
 function renderFactures() {
   const st = _facturationState();
@@ -18591,7 +18596,7 @@ function _ouvrirFacturePDF(f) {
     + '<div class="parties"><div class="card"><h4>Émetteur</h4><strong>' + esc(E.nom) + '</strong><br>' + esc(E.adresse) + '<br>SIREN ' + esc(E.siren) + '<br>TVA ' + esc(E.tva) + '</div>'
     + '<div class="card"><h4>Facturé à</h4><strong>' + esc(f.promo.nom) + '</strong><br>' + esc(f.promo.adresse) + (f.promo.siren ? ('<br>SIREN ' + esc(f.promo.siren)) : '') + (f.promo.tva ? ('<br>TVA ' + esc(f.promo.tva)) : '') + '</div></div>'
     + '<table><thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">P.U. HT</th><th class="num">Montant HT</th></tr></thead>'
-    + '<tbody><tr><td>' + esc(f.designation) + _ligneBaseFacture(f, eur) + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
+    + '<tbody><tr><td>' + esc(f.designation) + _ligneBaseFacture(f, eur) + (f.dateSignature ? '<div class="sub">Acte signé chez le notaire le <b>' + d(f.dateSignature) + '</b></div>' : '') + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
     + '<div class="totes"><div><span>Total HT</span><span>' + eur(f.ht) + '</span></div><div><span>TVA (' + f.taux + ' %)</span><span>' + eur(f.tva) + '</span></div><div class="grand"><span>Total TTC</span><span>' + eur(f.ttc) + '</span></div></div>'
     + '<div class="pay"><strong>Modalités de règlement</strong><br>Paiement à ' + E.delaiJours + ' jours — échéance le ' + d(f.ech) + '.<br>Par virement : IBAN ' + esc(E.iban) + ' — BIC ' + esc(E.bic) + '.</div>'
     + '<div class="legal">' + esc(E.nom) + ' — ' + esc(E.forme) + ' — Siège : ' + esc(E.adresse) + ' — ' + esc(E.rcs) + ' — SIREN ' + esc(E.siren) + ' — TVA intracommunautaire ' + esc(E.tva) + ' — Carte professionnelle Transactions ' + esc(E.cpi) + '.<br>TVA acquittée d\'après les encaissements. Facture émise conformément aux articles 289 et suivants du CGI.</div>'
