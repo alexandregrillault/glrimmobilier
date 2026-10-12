@@ -8229,6 +8229,10 @@ function eqLeadsSetFilter(f) { _eqLeadsFilter = f; renderEquipeLeadsTable(); }
 
 // ---- Tri par date de demande d'information (récent → ancien par défaut)
 let _eqTriDate = 'desc';
+// Dans « Sans réponse » : filtre sur le nombre d'appels passés depuis la dernière vraie action ('tous', '0', '1', '2', '3')
+let _eqSansRepN = 'tous';
+function eqSansRepSet(v) { _eqSansRepN = v; renderEquipeLeadsTable(); }
+function _eqSansRepClasse(l) { const n = eqAppelsEnCours(l).length; return n >= 3 ? '3' : String(n); }
 function eqTriDateToggle() {
   _eqTriDate = _eqTriDate === 'desc' ? 'asc' : 'desc';
   renderEquipeLeadsTable();
@@ -8463,7 +8467,15 @@ function renderEquipeLeadsTable() {
       const active = _eqLeadsFilter === f;
       return `<button onclick="eqLeadsSetFilter('${f}')" style="border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid ${active?'var(--accent)':'var(--border)'};background:${active?'var(--accent)22':'var(--surface)'};color:${active?'var(--accent)':'var(--text)'}">${label}</button>`;
     }).join('') + (_eqLeadsFilter.startsWith('statut:') ? `<button onclick="eqLeadsSetFilter('tous')" style="border-radius:20px;padding:6px 14px;font-size:12px;border:1px solid var(--accent);background:var(--accent)22;color:var(--accent);cursor:pointer">Statut : ${esc(_eqLeadsFilter.slice(7))} ✕</button>` : '') +
-    `<button onclick="eqLegendeToggle()" title="Signification des symboles utilisés dans le tableau et le suivi des sélections" style="margin-left:auto;border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer;border:1px solid ${_eqLegendeOuverte ? 'var(--accent)' : 'var(--border)'};background:var(--surface);color:${_eqLegendeOuverte ? 'var(--accent)' : 'var(--muted)'}">${_eqLegendeOuverte ? 'Masquer la légende ▾' : 'Légende des symboles ▸'}</button>`;
+    `<button onclick="eqLegendeToggle()" title="Signification des symboles utilisés dans le tableau et le suivi des sélections" style="margin-left:auto;border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer;border:1px solid ${_eqLegendeOuverte ? 'var(--accent)' : 'var(--border)'};background:var(--surface);color:${_eqLegendeOuverte ? 'var(--accent)' : 'var(--muted)'}">${_eqLegendeOuverte ? 'Masquer la légende ▾' : 'Légende des symboles ▸'}</button>` + (_eqLeadsFilter === 'sansreponse' ? (() => {
+      const sr = _eqLeads.filter(l => eqLeadStatut(l) === 'Sans réponse');
+      const cnt = (k) => sr.filter(l => _eqSansRepClasse(l) === k).length;
+      const opts = [['tous', 'Tous les appels (' + sr.length + ')'], ['0', 'Jamais appelé (' + cnt('0') + ')'], ['1', '1 appel (' + cnt('1') + ')'], ['2', '2 appels (' + cnt('2') + ')'], ['3', '3 appels et plus (' + cnt('3') + ')']];
+      return '<div style="flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px"><span style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px">Appels passés</span>' + opts.map(([k, label]) => {
+        const a = _eqSansRepN === k;
+        return `<button onclick="eqSansRepSet('${k}')" style="border-radius:20px;padding:4px 12px;font-size:11.5px;font-weight:600;cursor:pointer;border:1px solid ${a ? 'var(--accent)' : 'var(--border)'};background:${a ? 'var(--accent)22' : 'var(--surface)'};color:${a ? 'var(--accent)' : 'var(--text)'}">${label}</button>`;
+      }).join('') + '</div>';
+    })() : '');
   }
   const legEl = document.getElementById('eq-leads-legende');
   if (legEl) legEl.innerHTML = _eqLegendeOuverte ? _eqLegendeHtml() : '';
@@ -8474,7 +8486,7 @@ function renderEquipeLeadsTable() {
   const dueToday = (l) => l.rappel_le && l.rappel_le <= now.toISOString().slice(0,10);
   if (_eqLeadsFilter === 'alerte') leads = leads.filter(l => _eqLeadFlags(l).alerte48);
   else if (_eqLeadsFilter === 'rappels') leads = leads.filter(l => _eqLeadFlags(l).rappelDue);
-  else if (_eqLeadsFilter === 'sansreponse') leads = leads.filter(l => eqLeadStatut(l) === 'Sans réponse');
+  else if (_eqLeadsFilter === 'sansreponse') leads = leads.filter(l => eqLeadStatut(l) === 'Sans réponse' && (_eqSansRepN === 'tous' || _eqSansRepClasse(l) === _eqSansRepN));
   else if (_eqLeadsFilter === 'nouveaux') leads = leads.filter(l => eqLeadStatut(l) === 'Nouveau');
   else if (_eqLeadsFilter === 'veille') leads = leads.filter(estEnVeille);
   else if (_eqLeadsFilter.startsWith('statut:')) leads = leads.filter(l => eqLeadStatut(l) === _eqLeadsFilter.slice(7));
@@ -8506,6 +8518,7 @@ function renderEquipeLeadsTable() {
         const badge = f.rappelDue ? '<span title="Rappel dû — activité prévue aujourd\'hui ou dépassée">' + selIc('rappel', 15) + '</span>' : f.alerte48 ? '<span title="Nouveau depuis plus de 48 h — à traiter">' + selIc('alerte', 13) + '</span>' : f.sansReponse ? (() => { const n = eqAppelsEnCours(l).length; return '<span title="' + (n ? esc(eqAppelsResume(l)) : 'Sans réponse') + '" style="display:inline-flex;align-items:center;gap:3px">' + selIc('sansrep', 15) + (n ? '<span style="font-size:12px;font-weight:700;color:var(--muted)">' + n + '</span>' : '') + '</span>'; })() : '';
         const nq = eqQualifRemplie(l);
         const qualifBadge = `<br><span style="font-size:10px;color:${nq.n===nq.total?'var(--success)':'var(--muted)'}">${nq.n===nq.total?'✓ Fiche complète':'Fiche '+nq.n+'/'+nq.total}</span>`
+          + (f.sansReponse && eqAppelsEnCours(l).some(x => new Date(x.le).toDateString() === new Date().toDateString()) ? `<br><span title="Au moins une tentative d'appel aujourd'hui" style="display:inline-block;background:var(--surface2);border:1px solid var(--accent);color:var(--accent);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">Appelé aujourd'hui</span>` : '')
           + (estEnVeille(l) ? `<br><span title="En veille — ressortira au prochain lancement" style="display:inline-block;background:var(--surface2);border:1px solid var(--accent2);color:var(--accent2);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">En veille</span>` : '');
         return `<tr onclick="eqOuvrirFiche('${l.id}')" style="cursor:pointer${tr ? ';background:var(--accent2)12' : f.rappelDue||f.alerte48 ? ';background:var(--accent)08' : ''}">
         <td onclick="event.stopPropagation()"><input type="checkbox" ${_eqSelected.has(l.id)?'checked':''} onchange="eqToggleSelect('${l.id}', this.checked)" style="cursor:pointer;accent-color:var(--accent)"></td>
