@@ -113,14 +113,18 @@
   .lots-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:20px 22px 14px;border-bottom:1px solid var(--line)}
   .lots-head h3{font-family:var(--serif);font-weight:500;font-size:26px;color:var(--green)}
   .lots-head span{font-size:13px;color:var(--muted)}
-  .lots-cols,.lot{display:grid;grid-template-columns:.7fr 1fr .85fr .9fr .85fr .8fr 1.1fr 128px;gap:10px;align-items:center;padding:0 22px}
+  .lots-cols,.lot{display:grid;grid-template-columns:.65fr .95fr .8fr .85fr .8fr .75fr 1fr 236px;gap:10px;align-items:center;padding:0 22px}
   .lots-cols{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding-top:12px;padding-bottom:10px}
   .lots-list{max-height:430px;overflow-y:auto}
   .lot{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--line);padding-top:14px;padding-bottom:14px;cursor:pointer;font-size:14.5px;transition:background .15s ease}
   .lot:hover{background:var(--cream)}
   .lot .ref{font-weight:600;color:var(--green)}
   .lot .px{font-family:var(--serif);font-size:22px;color:var(--green);text-align:right;white-space:nowrap}
-  .lot .sel{justify-self:end;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--green);color:var(--green);background:var(--card);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap;transition:background .15s ease,color .15s ease}
+  .lot .acts{justify-self:end;display:flex;gap:8px;align-items:center}
+  .lot .plan-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);color:var(--green);background:var(--card);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap;transition:border-color .15s ease,background .15s ease}
+  .lot .plan-btn:hover{border-color:var(--green);background:var(--cream)}
+  .lot .plan-btn svg{width:14px;height:14px}
+  .lot .sel{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--green);color:var(--green);background:var(--card);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap;transition:background .15s ease,color .15s ease}
   .lot .sel:hover{background:var(--green);color:#fff}
   .lot.in .sel{background:var(--brass);border-color:var(--brass);color:#fff}
   .lot .sel::before{content:'+'}
@@ -271,7 +275,7 @@
     .lots-cols{display:none}
     .lot{grid-template-columns:1fr auto;gap:2px 12px;padding-left:18px;padding-right:18px}
     .lot .c-et,.lot .c-surf,.lot .c-ext,.lot .c-expo,.lot .c-pk{display:none}
-    .lot .sel{grid-column:2;grid-row:3;justify-self:end;margin-top:4px}
+    .lot .acts{grid-column:1/-1;grid-row:3;justify-self:stretch;justify-content:flex-end;margin-top:6px}
     .panier-bar{padding:12px 14px;gap:10px}
     .panier-txt strong{font-size:16px;line-height:1.2}
     .panier.vide .panier-txt span{display:none}
@@ -607,7 +611,7 @@ function ouvrirTypo(t, btn){
       <span class="c-expo">${esc(EXPO[l.expo] || l.expo || '—')}</span>
       <span class="c-pk">${l.nb_pk > 1 ? l.nb_pk + ' places' : l.nb_pk ? '1 place' : '—'}</span>
       <span class="px">${euro(l.prix)} €</span>
-      <span class="sel" role="button" aria-label="Sélectionner le lot ${esc(l.n)}"></span>
+      <span class="acts"><span class="plan-btn" role="button" aria-label="Voir le plan du lot ${esc(l.n)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 4h11v6h7v10H3z"/><path d="M9 10v10M3 15h6"/></svg>Voir le plan</span><span class="sel" role="button" aria-label="Sélectionner le lot ${esc(l.n)}"></span></span>
       <span class="meta">${etageCourt(l.etage)} · ${m2(l.surf)}${l.ext ? ' + ' + m2(l.ext) + ' ext.' : ''} · ${esc(EXPO[l.expo] || l.expo || '')}${l.nb_pk ? ' · ' + (l.nb_pk > 1 ? l.nb_pk + ' pk' : '1 pk') : ''}</span>
     </button>`).join('');
   document.querySelectorAll('#lots-list .lot').forEach(b => { b.onclick = e => { if(e.target.closest('.sel')){ selToggle(b.dataset.n); return; } ouvrirLot(b.dataset.n); }; b.onmouseenter = () => { const l = LOTS.find(x => x.n === b.dataset.n); if(l && l.plan && !_planCache[l.n]) planImage(l).catch(() => {}); }; });
