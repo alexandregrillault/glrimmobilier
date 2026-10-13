@@ -18497,7 +18497,8 @@ async function deleteProgramme(slug) {
 }
 
 function copyVisioLink(slug) {
-  const url = new URL(VISIO_FILE + '?prog=' + encodeURIComponent(slug), location.href).href;
+  // La page programme est servie par le site de la maison (dépôt glr-site), jamais par l'adresse GitHub du CRM
+  const url = 'https://www.glrimmobilier.com/' + VISIO_FILE + '?prog=' + encodeURIComponent(slug);
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(url).then(() => toast('Lien copié !')).catch(() => prompt('Copiez le lien :', url));
   } else {
