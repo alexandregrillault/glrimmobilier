@@ -1973,7 +1973,10 @@
       <!-- Filtres -->
       <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
         <input type="text" id="filter-nom" placeholder="Nom, email ou téléphone..." oninput="renderContacts()" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;min-width:200px">
-        <input type="text" id="filter-lieu" placeholder="Code postal ou ville..." oninput="onLieuInput()" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:170px">
+        <div style="position:relative;display:inline-block">
+                <input type="text" id="filter-lieu" oninput="onLieuInput()" autocomplete="off" placeholder="Ville, code postal ou département..." style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:170px">
+          <div id="filter-lieu-sugg" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:40;min-width:300px;background:var(--surface);border:1px solid var(--border);border-radius:9px;max-height:260px;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,.12)"></div>
+        </div>
         <select id="filter-rayon" onchange="updateRayonFilter()" title="Inclure les communes alentours" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;cursor:pointer">
           <option value="0">+ 0 km</option>
           <option value="5">+ 5 km</option>
@@ -9130,8 +9133,9 @@ function eqVilleRechercheInput(q, mode) {
   clearTimeout(_eqVilleTimer);
   const residence = mode === 'residence';
   const nouveau = mode === 'nouveau';   // fenêtre « Nouveau lead » : mêmes suggestions, choix rangé en pastille
-  const idBox = residence ? 'eq-commune-sugg' : (nouveau ? 'cn-ville-sugg' : 'eq-ville-sugg');
-  const fnChoix = residence ? 'eqCommuneChoisie' : (nouveau ? 'cnVilleChoisie' : 'eqVilleChoisie');
+  const filtre = mode === 'filtre';     // filtre « lieu » de l'onglet Contacts : le choix remplit le champ et relance le rayon
+  const idBox = residence ? 'eq-commune-sugg' : (nouveau ? 'cn-ville-sugg' : (filtre ? 'filter-lieu-sugg' : 'eq-ville-sugg'));
+  const fnChoix = residence ? 'eqCommuneChoisie' : (nouveau ? 'cnVilleChoisie' : (filtre ? 'filtreLieuChoisi' : 'eqVilleChoisie'));
   const box = document.getElementById(idBox);
   if (!box) return;
   if (q.length < 2) { box.innerHTML = ''; box.style.display = 'none'; return; }
@@ -17177,12 +17181,8 @@ function exportContacts() {
 
     rows = contacts.filter(c => {
       const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel) || _conjointNom(c.conjoint).toLowerCase().includes(filterNom) || (c.conjoint && telContient(c.conjoint.telephone, filterNomTel));
-      let matchLieu = !filterLieu || (c.lieu||'').toLowerCase().includes(filterLieu);
-      if (!matchLieu && typeof rayonNames !== 'undefined' && rayonNames) {
-        const cp = extractCP(c.lieu);
-        const nomCommune = normLieu((c.lieu||'').replace(/\d/g, ''));
-        matchLieu = (cp && rayonCPs.has(cp)) || (nomCommune && rayonNames.has(nomCommune));
-      }
+      let matchLieu = lieuCorrespond(c, filterLieu);
+      if (!matchLieu && typeof rayonNames !== 'undefined' && rayonNames) matchLieu = lieuDansRayon(c);
       const matchBudget = !filterBudget || (c.budget||'').toLowerCase().includes(filterBudget);
       const matchStatut = filtreSituationOk(c, filterStatut);
       const matchVendeur = filtreVendeurOk(c, filterVendeur);
@@ -17409,13 +17409,9 @@ function renderContacts() {
 
   const filtered = contacts.filter(c => {
     const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel) || _conjointNom(c.conjoint).toLowerCase().includes(filterNom) || (c.conjoint && telContient(c.conjoint.telephone, filterNomTel));
-    let matchLieu = !filterLieu || (c.lieu||'').toLowerCase().includes(filterLieu);
+    let matchLieu = lieuCorrespond(c, filterLieu);
     // Élargissement aux communes alentours si un rayon est actif
-    if (!matchLieu && rayonNames) {
-      const cp = extractCP(c.lieu);
-      const nomCommune = normLieu((c.lieu||'').replace(/\d/g, ''));
-      matchLieu = (cp && rayonCPs.has(cp)) || (nomCommune && rayonNames.has(nomCommune));
-    }
+    if (!matchLieu && rayonNames) matchLieu = lieuDansRayon(c);
     const matchBudget = !filterBudget || (c.budget||'').toLowerCase().includes(filterBudget);
     const matchStatut = filtreSituationOk(c, filterStatut);
     const matchVendeur = filtreVendeurOk(c, filterVendeur);
@@ -17798,9 +17794,49 @@ let rayonToken = 0;
 let lieuInputTimer = null;
 
 function onLieuInput() {
+  const v = document.getElementById('filter-lieu')?.value || '';
+  eqVilleRechercheInput(v, 'filtre');   // suggestions geo.api.gouv.fr (villes, arrondissements, départements)
   renderContacts();
   clearTimeout(lieuInputTimer);
   lieuInputTimer = setTimeout(updateRayonFilter, 450);
+}
+// Choix dans les suggestions : « Le Plessis-Robinson 92350 » ou « Hauts-de-Seine (92) »
+function filtreLieuChoisi(val) {
+  const inp = document.getElementById('filter-lieu'); if (!inp) return;
+  inp.value = val;
+  const box = document.getElementById('filter-lieu-sugg'); if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+  clearTimeout(lieuInputTimer);
+  renderContacts();
+  updateRayonFilter();
+}
+document.addEventListener('click', e => {
+  const box = document.getElementById('filter-lieu-sugg'), inp = document.getElementById('filter-lieu');
+  if (box && box.style.display !== 'none' && e.target !== inp && !box.contains(e.target)) box.style.display = 'none';
+});
+// Le lieu d'un contact peut porter plusieurs villes (« Antony 92160, Sceaux 92330 ») ou un département :
+// on le découpe et on compare ville par ville (nom normalisé + code postal + département).
+function _lieuMorceaux(lieu) {
+  return String(lieu || '').split(/[,;\/|]+/).map(t => t.trim()).filter(Boolean).map(t => ({
+    cp: extractCP(t), nom: normLieu(t.replace(/\(?\b\d{2,5}\b\)?/g, '')), dept: (typeof lieuDeptCode === 'function' ? lieuDeptCode(t) : null)
+  }));
+}
+// Correspondance texte : ce que l'utilisateur a tapé ou choisi, sans rayon
+function lieuCorrespond(c, filtre) {
+  if (!filtre) return true;
+  const morceaux = _lieuMorceaux(c.lieu);
+  const fDept = (typeof lieuDeptCode === 'function' ? lieuDeptCode(filtre) : null);
+  const fCP = extractCP(filtre);
+  const fNom = normLieu(filtre.replace(/\(?\b\d{2,5}\b\)?/g, ''));
+  return morceaux.some(m =>
+    (fDept && ((m.cp && m.cp.slice(0, 2) === fDept) || m.dept === fDept)) ||
+    (fCP && m.cp === fCP) ||
+    (fNom && m.nom && (m.nom === fNom || m.nom.includes(fNom)))
+  );
+}
+// Correspondance rayon : une des villes du contact est dans le cercle
+function lieuDansRayon(c) {
+  if (!rayonNames || !rayonCPs) return false;
+  return _lieuMorceaux(c.lieu).some(m => (m.cp && rayonCPs.has(m.cp)) || (m.nom && rayonNames.has(m.nom)));
 }
 
 let _allCommunes = null; // cache : toutes les communes de France (chargées une fois par session)
@@ -17827,9 +17863,11 @@ async function updateRayonFilter() {
   if (filteredEl) filteredEl.textContent = 'recherche des communes à moins de ' + rayon + ' km…';
 
   try {
-    // Géocoder la saisie : code postal (5 chiffres) ou nom de ville
-    const isCP = /^\d{5}$/.test(lieuVal);
-    const q = isCP ? 'codePostal=' + lieuVal : 'nom=' + encodeURIComponent(lieuVal) + '&boost=population';
+    // Géocoder la saisie : code postal (dans « Le Plessis-Robinson 92350 » comme dans « 92350 ») ou nom de ville
+    const cpSaisi = extractCP(lieuVal);
+    const nomSaisi = lieuVal.replace(/\b\d{5}\b/g, '').replace(/\(\d{2}\)/g, '').trim();
+    if (!cpSaisi && lieuDeptCode(lieuVal) && !nomSaisi) { rayonNames = null; rayonCPs = null; renderContacts(); return; } // un département : pas de rayon
+    const q = cpSaisi ? 'codePostal=' + cpSaisi : 'nom=' + encodeURIComponent(nomSaisi) + '&boost=population';
     const r = await fetch('https://geo.api.gouv.fr/communes?' + q + '&fields=centre,nom&limit=1');
     const arr = await r.json();
     if (token !== rayonToken) return;
