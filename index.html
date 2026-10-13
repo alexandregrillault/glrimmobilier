@@ -18698,8 +18698,14 @@ async function facComLoad() {
 }
 function _facAujourdhui() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' }); }
 function facComDeVente(id) { return _facCom.find(f => f.vente_id === id && f.statut !== 'annulee') || null; }
+// Les gérants (Alexandre, Théophile) sont rémunérés en salaire : pas de facture de commission
+function facComGerant(vendeurId) {
+  if (vendeurId === 'alex001' || vendeurId === 'theo001') return true;
+  const vd = (data.vendeurs || []).find(x => x.id === vendeurId);
+  return !!(vd && vd.role === 'Associé gérant');
+}
 function facComEligible(v) {
-  if (!v || facComDeVente(v.id)) return false;
+  if (!v || facComDeVente(v.id) || facComGerant(v.vendeurId)) return false;
   if (!v.vendeurId || !(r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100) > 0)) return false;
   if (v.statut === 'facture-payee') return true;
   return !!(v.avanceAccordee && v.dateSignatureNotaire && v.dateSignatureNotaire <= _facAujourdhui());
@@ -18736,6 +18742,7 @@ function facComCelluleVente(v) {
   const sty = 'display:block;margin-top:5px;font-size:11px';
   if (f) return '<a href="#" onclick="facComVoir(\'' + f.id + '\');return false" style="' + sty + ';color:var(--accent);font-weight:600" title="Voir la facture de commission">Facture ' + _esc(f.numero) + (f.statut === 'payee' ? ' · payée' : '') + '</a>';
   if (facComEligible(v)) return '<button class="btn btn-ghost btn-sm" style="margin-top:5px;font-size:11px" onclick="facComEmettre(\'' + v.id + '\')">' + (v.statut === 'facture-payee' ? 'Facture de commission' : 'Facture d\'avance') + '</button>';
+  if (facComGerant(v.vendeurId)) return '';
   if (v.avanceAccordee && v.statut !== 'facture-payee') return '<span style="' + sty + ';color:var(--muted)">Avance accordée' + (v.dateSignatureNotaire ? ' · signature le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR') : ' · date de signature à saisir') + '</span>';
   return '';
 }
