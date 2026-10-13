@@ -1977,19 +1977,10 @@
                 <input type="text" id="filter-lieu" oninput="onLieuInput()" autocomplete="off" placeholder="Ville, code postal ou département..." style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:170px">
           <div id="filter-lieu-sugg" style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:40;min-width:300px;background:var(--surface);border:1px solid var(--border);border-radius:9px;max-height:260px;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,.12)"></div>
         </div>
-        <select id="filter-rayon" onchange="updateRayonFilter()" title="Inclure les communes alentours" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 10px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;cursor:pointer">
-          <option value="0">+ 0 km</option>
-          <option value="5">+ 5 km</option>
-          <option value="10">+ 10 km</option>
-          <option value="15">+ 15 km</option>
-          <option value="20">+ 20 km</option>
-          <option value="25">+ 25 km</option>
-          <option value="30">+ 30 km</option>
-          <option value="35">+ 35 km</option>
-          <option value="40">+ 40 km</option>
-          <option value="45">+ 45 km</option>
-          <option value="50">+ 50 km</option>
-        </select>
+        <div style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:0 10px 0 0" title="Communes alentours : rayon en km autour de la ville choisie (0 = la ville seule)">
+          <input type="number" id="filter-rayon" min="0" max="200" step="1" value="0" oninput="onRayonInput()" style="width:64px;background:transparent;border:none;padding:8px 6px 8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;text-align:right">
+          <span style="font-size:12px;color:var(--muted)">km autour</span>
+        </div>
         <input type="text" id="filter-budget" placeholder="Budget..." oninput="renderContacts()" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:150px">
         <div id="filter-statut-box" style="position:relative;display:inline-block">
           <button type="button" id="filter-statut-btn" onclick="toggleFiltreStatuts(event)" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px">Situation <span style="font-size:10px;opacity:.7">▼</span></button>
@@ -17793,6 +17784,12 @@ let rayonCPs = null;     // codes postaux des communes dans le rayon
 let rayonToken = 0;
 let lieuInputTimer = null;
 
+// Rayon tapé au km près : on attend la fin de la frappe avant de recalculer les communes
+let rayonInputTimer = null;
+function onRayonInput() {
+  clearTimeout(rayonInputTimer);
+  rayonInputTimer = setTimeout(updateRayonFilter, 450);
+}
 function onLieuInput() {
   const v = document.getElementById('filter-lieu')?.value || '';
   eqVilleRechercheInput(v, 'filtre');   // suggestions geo.api.gouv.fr (villes, arrondissements, départements)
@@ -17850,7 +17847,7 @@ async function getAllCommunes() {
 
 async function updateRayonFilter() {
   const lieuVal = (document.getElementById('filter-lieu')?.value || '').trim();
-  const rayon = parseInt(document.getElementById('filter-rayon')?.value || '0');
+  const rayon = Math.min(200, Math.max(0, parseFloat(String(document.getElementById('filter-rayon')?.value || '0').replace(',', '.')) || 0));
   const token = ++rayonToken;
 
   if (!lieuVal || !rayon) {
