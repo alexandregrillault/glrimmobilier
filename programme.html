@@ -420,9 +420,9 @@
         <div class="modal-price"><div class="v" id="m-prix"></div><small id="m-prix-note"></small></div>
         <p class="modal-note">Plan indicatif. Les cotes exactes et les conditions de réservation vous sont présentées en visio.</p>
         <div class="modal-actions">
-          <button class="btn" id="m-interet">Ce logement m'intéresse — réserver ma visio</button>
-          <button class="btn btn-ghost" id="m-panier">Ajouter à ma sélection</button>
-          <button class="btn btn-ghost" id="m-autres" style="border:none">Voir les autres logements</button>
+          <button class="btn" id="m-panier">Ajouter à ma sélection</button>
+          <button class="btn btn-ghost" id="m-autres">Voir les autres logements</button>
+          <button class="btn btn-ghost" id="m-interet" style="border:none;font-size:13px">Ou réserver ma visio tout de suite →</button>
         </div>
       </div>
     </div>
@@ -854,7 +854,7 @@ function renderEmplacement(pub){
   document.getElementById('m-close').onclick = fermerLot;
   document.getElementById('m-autres').onclick = fermerLot;
   document.getElementById('m-interet').onclick = interetLot;
-  document.getElementById('m-panier').onclick = () => { if(LOT_CHOISI) selToggle(LOT_CHOISI.n); };
+  document.getElementById('m-panier').onclick = () => { if(!LOT_CHOISI) return; const ajout = !SEL.has(LOT_CHOISI.n); selToggle(LOT_CHOISI.n); if(ajout) fermerLot(); };
   document.getElementById('zoomed').onclick = () => document.getElementById('zoomed').classList.remove('open');
   selCharger(); selRender();
   // la barre de sélection s'efface quand la zone de réservation est à l'écran (la sélection y est déjà listée)
