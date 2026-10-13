@@ -459,6 +459,10 @@ const BOOKING_EMBED = "";
 /* Lien de partage Google (mode bouton). Dès que tu remplis BOOKING_EMBED ci-dessus,
    c'est le calendrier intégré (inline) qui prend le dessus automatiquement. */
 const BOOKING_LINK  = "https://calendar.app.google/VFPp8KiMXyifDXPv7";
+/* Lien de rendez-vous du CRM : avec ?v=<prenom> dans l'adresse de la page (programme.html?prog=…&v=theophile),
+   la réservation passe par la page RDV du site au nom de ce conseiller, et la sélection du client
+   part avec (champ « Votre projet » prérempli). Le rendez-vous et la fiche atterrissent dans le CRM. */
+const RDV_PAGE = "https://www.glrimmobilier.com/rdv/";
 
 /* ============================================================
    2) PROGRAMME DE SECOURS — utilisé seulement si Supabase ne répond pas.
@@ -537,6 +541,17 @@ async function fetchPublic(slug){
 }
 
 let P = null, LOTS = [], LOT_CHOISI = null, _lotsVus = false;
+const VENDEUR = (new URLSearchParams(location.search).get('v') || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+// Adresse de prise de rendez-vous, avec la sélection du client dans le champ projet
+function rdvUrl(){
+  if(!VENDEUR) return '#booking';
+  const lots = [...SEL].map(n => LOTS.find(l => l.n === n)).filter(Boolean);
+  const titre = P ? P.nom.split(/\s[–—-]\s/)[0] : '';
+  const projet = lots.length
+    ? `${titre} (${P.ville}) — ma sélection : ` + lots.map(l => `lot ${l.n} ${typoNom(l.typo)} ${euro(l.prix)} €`).join(', ')
+    : `${titre} (${P ? P.ville : ''}) — intéressé(e) par le programme`;
+  return RDV_PAGE + '?v=' + VENDEUR + '&f=visio&p=' + encodeURIComponent(projet.slice(0, 500));
+}
 
 function carousel(photos){
   const track = document.getElementById('car-track'), dots = document.getElementById('car-dots');
@@ -710,6 +725,7 @@ function selSauver(){ try{ localStorage.setItem(selKey(), JSON.stringify([...SEL
 function selToggle(n){ if(SEL.has(n)) SEL.delete(n); else SEL.add(n); selSauver(); selRender(); }
 function selRender(){
   const lots = [...SEL].map(n => LOTS.find(l => l.n === n)).filter(Boolean);
+  if(VENDEUR){ const b = document.getElementById('rdv-btn'); if(b) b.href = rdvUrl(); document.getElementById('panier-cta').href = rdvUrl(); }
   const bar = document.getElementById('panier');
   const vide = lots.length === 0 && LOTS.length > 0 && _lotsVus;
   bar.classList.toggle('on', lots.length > 0);
@@ -738,6 +754,7 @@ function interetLot(){
   const l = LOT_CHOISI; if(!l) return;
   if(!SEL.has(l.n)){ SEL.add(l.n); selSauver(); selRender(); }
   fermerLot();
+  if(VENDEUR){ location.href = rdvUrl(); return; }
   document.getElementById('booking').scrollIntoView({ behavior:'smooth' });
 }
 
@@ -858,7 +875,15 @@ function renderEmplacement(pub){
 
   // réservation
   const shell = document.getElementById('embed-shell');
-  if(BOOKING_EMBED && BOOKING_EMBED.trim()){
+  if(VENDEUR){
+    shell.innerHTML = `
+      <div class="embed-placeholder">
+        <div class="big">Choisissez votre créneau</div>
+        <p style="margin:6px 0 24px">Vous choisissez l'heure qui vous arrange, et vous recevez le lien de visio par email. Rien à installer.</p>
+        <a class="btn" id="rdv-btn" href="${rdvUrl()}">Choisir mon créneau →</a>
+      </div>`;
+    document.getElementById('panier-cta').href = rdvUrl();
+  } else if(BOOKING_EMBED && BOOKING_EMBED.trim()){
     shell.innerHTML = `<iframe src="${BOOKING_EMBED}" title="Réserver un créneau" loading="lazy"></iframe>`;
   } else if(BOOKING_LINK && BOOKING_LINK.trim()){
     shell.innerHTML = `
