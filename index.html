@@ -1961,6 +1961,9 @@
           <button class="btn btn-ghost" onclick="exportContacts()">
             Exporter CSV
           </button>
+          <button class="btn btn-ghost" onclick="exportContacts('brevo')" title="Email, nom, ville — un contact par ligne, sans doublon, prêt à importer dans Brevo">
+            Exporter pour Brevo
+          </button>
           <button class="btn btn-ghost" onclick="openModal('import-stop')" title="Importer l'export des désinscrits/blocklistés Brevo pour les passer en Stop">
             MAJ désinscrits
           </button>
@@ -17151,7 +17154,8 @@ async function parseAndImportCSV(text) {
   await loadContacts();
 }
 
-function exportContacts() {
+function exportContacts(mode) {
+  const brevo = mode === 'brevo';   // export minimal pour une campagne : EMAIL;NOM;VILLE_RECHERCHE, un contact par ligne, sans doublon
   const contacts = window._contacts || [];
   if (!contacts.length) { toast('⚠ Aucun contact à exporter', 'var(--warning)'); return; }
 
@@ -17188,14 +17192,27 @@ function exportContacts() {
   const field = { Nom:'nom', Email:'email', Telephone:'telephone', Lieu:'lieu', Prix:'budget', Surface:'surface', ReferenceAnnonce:'reference_annonce', Message:'message', Intention:'intention', Date:'date_lead', Statut:'statut' };
 
   const esc = (v) => {
-    let s = (v == null ? '' : String(v));
-    if (/[";\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    // Une ligne par contact : les retours à la ligne des messages deviennent des espaces
+    let s = (v == null ? '' : String(v)).replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (/[";]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
 
   const sep = ';';
-  const lines = [headers.join(sep)];
-  rows.forEach(c => lines.push(headers.map(h => esc(c[field[h]])).join(sep)));
+  let lines;
+  if (brevo) {
+    const vus = new Set();
+    rows = rows.filter(c => {
+      const e = String(c.email || '').trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) || vus.has(e)) return false;
+      vus.add(e); return true;
+    });
+    lines = ['EMAIL;NOM;VILLE_RECHERCHE'];
+    rows.forEach(c => lines.push([String(c.email || '').trim().toLowerCase(), c.nom, c.lieu].map(esc).join(sep)));
+  } else {
+    lines = [headers.join(sep)];
+    rows.forEach(c => lines.push(headers.map(h => esc(c[field[h]])).join(sep)));
+  }
 
   const csv = '\uFEFF' + lines.join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -17204,7 +17221,7 @@ function exportContacts() {
   const d = new Date();
   const stamp = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   a.href = url;
-  a.download = 'contacts-glr-' + stamp + '.csv';
+  a.download = (brevo ? 'liste-brevo-' : 'contacts-glr-') + stamp + '.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
