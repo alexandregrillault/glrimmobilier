@@ -416,6 +416,8 @@
   }
   .modal-overlay.open { display: flex; }
   .modal.modal-wide { width: 940px; }
+  .modal.modal-large { width: 880px; padding: 36px 40px; }
+  .modal.modal-large .form-grid { gap: 18px 22px; }
   .modal {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -2378,7 +2380,7 @@
 </div>
 
 <div class="modal-overlay" id="modal-vente">
-  <div class="modal">
+  <div class="modal modal-large">
     <div class="modal-title">Nouvelle vente</div>
     <div class="form-grid">
       <div class="form-group full">
@@ -2470,8 +2472,17 @@
         </select>
       </div>
       <div class="form-group full">
-        <label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="v-avance" style="width:auto"> Avance accordée au commercial</label>
-        <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Sa facture de commission part à la date de signature chez le notaire, sans attendre le paiement du promoteur.</div>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="v-avance" onchange="venteAvanceChange()" style="width:auto"> Avance accordée au commercial</label>
+        <div id="v-avance-detail" style="display:none;margin-top:8px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="number" id="v-avance-montant" step="0.01" min="0" placeholder="Montant (€)" oninput="venteAvanceSaisie('montant')" style="width:140px">
+            <span style="color:var(--muted);font-size:12px">ou</span>
+            <input type="number" id="v-avance-pct" step="0.01" min="0" max="100" placeholder="%" oninput="venteAvanceSaisie('pct')" style="width:90px">
+            <span style="color:var(--muted);font-size:12px">% de sa commission</span>
+          </div>
+          <div id="v-avance-hint" style="font-size:11.5px;color:var(--accent);margin-top:5px"></div>
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:4px">Sa facture d'avance part à la date de signature chez le notaire, sans attendre le paiement du promoteur. Le reste est facturé quand la vente est payée.</div>
       </div>
       <div class="form-group full">
         <label>Notes (optionnel)</label>
@@ -2921,7 +2932,7 @@ Nous avons le plaisir de vous annoncer le lancement de..."></textarea>
 
 <!-- MODAL: FACTURE -->
 <div class="modal-overlay" id="modal-facture">
-  <div class="modal" style="width:640px">
+  <div class="modal modal-large">
     <div class="modal-title">Nouvelle facture</div>
     <input type="hidden" id="fac-id">
     <div class="form-grid">
@@ -4458,7 +4469,7 @@ function openModal(type) {
     setChargeType('fixe');
   }
   if (type === 'vendeur') { window._editingVendeurId = null; vdFactRemplir(null); }
-  if (type === 'vente') { const av = document.getElementById('v-avance'); if (av) av.checked = false; }
+  if (type === 'vente') { const av = document.getElementById('v-avance'); if (av) av.checked = false; venteAvanceChange(); }
   document.getElementById('modal-' + type).classList.add('open');
 }
 
@@ -4538,6 +4549,13 @@ function saveVente() {
     return;
   }
 
+  const avanceOn = !!(document.getElementById('v-avance') && document.getElementById('v-avance').checked);
+  const _comForm = venteCommissionForm();
+  let avanceMt = avanceOn ? (parseFloat(document.getElementById('v-avance-montant').value) || null) : null;
+  if (avanceMt != null && _comForm > 0 && avanceMt > _comForm + 0.004) { toast('⚠ L\'avance ne peut pas dépasser la commission (' + fmtEur2(_comForm) + ')', 'var(--warning)'); return; }
+  if (avanceMt != null && _comForm > 0 && avanceMt >= _comForm - 0.004) avanceMt = null;   // toute la commission = pas de montant à retenir
+  if (avanceMt != null) avanceMt = r2(avanceMt);
+
   const venteData = {
     id: editingVenteId || uid(),
     programme,
@@ -4559,7 +4577,8 @@ function saveVente() {
     date,
     dateActe: document.getElementById('v-date-acte').value || '',
     dateSignatureNotaire: document.getElementById('v-date-signature').value || '',
-    avanceAccordee: !!(document.getElementById('v-avance') && document.getElementById('v-avance').checked),
+    avanceAccordee: avanceOn,
+    avanceMontant: avanceMt,
     statut,
     notes: document.getElementById('v-notes').value.trim()
   };
@@ -4766,6 +4785,10 @@ function openEditVente(id) {
   document.getElementById('v-statut').value = v.statut || 'reservation';
   document.getElementById('v-notes').value = v.notes || '';
   const avEl = document.getElementById('v-avance'); if (avEl) avEl.checked = !!v.avanceAccordee;
+  const avM = document.getElementById('v-avance-montant'), avP = document.getElementById('v-avance-pct');
+  if (avM) avM.value = v.avanceMontant ? Number(v.avanceMontant) : '';
+  if (avP) { const c0 = r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100); avP.value = (v.avanceMontant && c0 > 0) ? r2(Number(v.avanceMontant) / c0 * 100) : ''; }
+  venteAvanceChange();
 
   // Changer le titre du modal
   document.querySelector('#modal-vente .modal-title').textContent = '✎ Modifier la vente';
@@ -18697,19 +18720,60 @@ async function facComLoad() {
   } catch (e) { console.error('facComLoad', e); }
 }
 function _facAujourdhui() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' }); }
-function facComDeVente(id) { return _facCom.find(f => f.vente_id === id && f.statut !== 'annulee') || null; }
+function facComActives(id) { return _facCom.filter(f => f.vente_id === id && f.statut !== 'annulee'); }
+function facComDeVente(id) { return facComActives(id)[0] || null; }
+function _venteCommission(v) { return r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100); }
+function _pctTxt(x) { return String(r2(x)).replace('.', ','); }
+// Formulaire de vente : commission calculée avec les champs saisis
+function venteCommissionForm() { return r2((parseFloat(document.getElementById('v-honoraires').value) || 0) * (parseFloat(document.getElementById('v-taux').value) || 0) / 100); }
+function venteAvanceChange() {
+  const on = document.getElementById('v-avance').checked;
+  document.getElementById('v-avance-detail').style.display = on ? '' : 'none';
+  if (!on) { document.getElementById('v-avance-montant').value = ''; document.getElementById('v-avance-pct').value = ''; }
+  venteAvanceHint();
+}
+function venteAvanceSaisie(src) {
+  const com = venteCommissionForm();
+  const m = document.getElementById('v-avance-montant'), p = document.getElementById('v-avance-pct');
+  if (src === 'montant') p.value = (com > 0 && m.value !== '') ? r2(parseFloat(m.value) / com * 100) : '';
+  else m.value = (com > 0 && p.value !== '') ? r2(com * parseFloat(p.value) / 100) : '';
+  venteAvanceHint();
+}
+function venteAvanceHint() {
+  const h = document.getElementById('v-avance-hint'); if (!h) return;
+  if (!document.getElementById('v-avance').checked) { h.textContent = ''; return; }
+  const com = venteCommissionForm(), m = parseFloat(document.getElementById('v-avance-montant').value) || 0;
+  if (!(com > 0)) { h.textContent = 'Renseigne les honoraires et le taux de commission pour voir le calcul.'; return; }
+  if (m <= 0 || m >= com - 0.004) h.textContent = 'Toute la commission (' + fmtEur2(com) + ') est avancée à la signature.';
+  else h.textContent = 'Avance de ' + fmtEur2(m) + ' (' + _pctTxt(m / com * 100) + ' %) à la signature — reste ' + fmtEur2(r2(com - m)) + ' facturé au paiement du promoteur.';
+}
+// Prochaine facture à émettre pour une vente : { type: 'commission' | 'avance' | 'solde', ht }
+function facComProchaine(v) {
+  if (!v || !v.vendeurId || facComGerant(v.vendeurId)) return null;
+  const com = _venteCommission(v); if (!(com > 0)) return null;
+  const deja = facComActives(v.id).reduce((s, f) => s + (Number(f.ht) || 0), 0);
+  if (v.statut === 'facture-payee') {
+    if (deja <= 0) return { type: 'commission', ht: com };
+    return com - deja > 0.004 ? { type: 'solde', ht: r2(com - deja) } : null;
+  }
+  if (v.avanceAccordee && v.dateSignatureNotaire && v.dateSignatureNotaire <= _facAujourdhui() && deja <= 0)
+    return { type: 'avance', ht: r2(Math.min(Number(v.avanceMontant) || com, com)) };
+  return null;
+}
+function _facTypeLib(f) {
+  const vv = f.vente || {};
+  const tot = Number(vv.commissionTotale) || (Number(vv.honoraires) * Number(vv.taux) / 100) || 0;
+  if (f.type === 'solde') return 'Solde';
+  if (f.type === 'avance') return (tot && Number(f.ht) < tot - 0.004) ? 'Avance' : 'Avance (totalité)';
+  return '';
+}
 // Les gérants (Alexandre, Théophile) sont rémunérés en salaire : pas de facture de commission
 function facComGerant(vendeurId) {
   if (vendeurId === 'alex001' || vendeurId === 'theo001') return true;
   const vd = (data.vendeurs || []).find(x => x.id === vendeurId);
   return !!(vd && vd.role === 'Associé gérant');
 }
-function facComEligible(v) {
-  if (!v || facComDeVente(v.id) || facComGerant(v.vendeurId)) return false;
-  if (!v.vendeurId || !(r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100) > 0)) return false;
-  if (v.statut === 'facture-payee') return true;
-  return !!(v.avanceAccordee && v.dateSignatureNotaire && v.dateSignatureNotaire <= _facAujourdhui());
-}
+function facComEligible(v) { return !!facComProchaine(v); }
 function vdFactStatutChange(depuisStatut) {
   const st = document.getElementById('vd-fact-statut').value;
   if (depuisStatut) document.getElementById('vd-fact-tva').checked = (st === 'societe');
@@ -18738,13 +18802,22 @@ function vdFactLire() {
 }
 // Cellule « facture » de la liste des ventes (gérant)
 function facComCelluleVente(v) {
-  const f = facComDeVente(v.id);
-  const sty = 'display:block;margin-top:5px;font-size:11px';
-  if (f) return '<a href="#" onclick="facComVoir(\'' + f.id + '\');return false" style="' + sty + ';color:var(--accent);font-weight:600" title="Voir la facture de commission">Facture ' + _esc(f.numero) + (f.statut === 'payee' ? ' · payée' : '') + '</a>';
-  if (facComEligible(v)) return '<button class="btn btn-ghost btn-sm" style="margin-top:5px;font-size:11px" onclick="facComEmettre(\'' + v.id + '\')">' + (v.statut === 'facture-payee' ? 'Facture de commission' : 'Facture d\'avance') + '</button>';
   if (facComGerant(v.vendeurId)) return '';
-  if (v.avanceAccordee && v.statut !== 'facture-payee') return '<span style="' + sty + ';color:var(--muted)">Avance accordée' + (v.dateSignatureNotaire ? ' · signature le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR') : ' · date de signature à saisir') + '</span>';
-  return '';
+  const sty = 'display:block;margin-top:5px;font-size:11px';
+  const com = _venteCommission(v);
+  let h = '';
+  if (v.avanceAccordee) {
+    const m = (Number(v.avanceMontant) > 0 && Number(v.avanceMontant) < com - 0.004) ? Number(v.avanceMontant) : com;
+    h += '<span style="' + sty + ';color:var(--muted)">Avance : ' + fmtEur2(m) + (com > 0 ? ' (' + _pctTxt(m / com * 100) + ' %)' : '') + (m < com - 0.004 ? ' · reste ' + fmtEur2(r2(com - m)) : '')
+      + (v.statut !== 'facture-payee' && !v.dateSignatureNotaire ? ' · date de signature à saisir' : (v.statut !== 'facture-payee' && v.dateSignatureNotaire > _facAujourdhui() ? ' · signature le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR') : '')) + '</span>';
+  }
+  facComActives(v.id).forEach(f => {
+    h += '<a href="#" onclick="facComVoir(\'' + f.id + '\');return false" style="' + sty + ';color:var(--accent);font-weight:600" title="Voir la facture de commission">Facture ' + _esc(f.numero) + (_facTypeLib(f) ? ' · ' + _facTypeLib(f).toLowerCase() : '') + (f.statut === 'payee' ? ' · payée' : '') + '</a>';
+  });
+  const pr = facComProchaine(v);
+  if (pr) h += '<button class="btn btn-ghost btn-sm" style="margin-top:5px;font-size:11px" onclick="facComEmettre(\'' + v.id + '\')">'
+    + (pr.type === 'avance' ? 'Facture d\'avance' : pr.type === 'solde' ? 'Facture de solde' : 'Facture de commission') + ' (' + fmtEur2(pr.ht) + ')</button>';
+  return h;
 }
 async function facComEmettre(venteId) {
   const v = (data.ventes || []).find(x => x.id === venteId);
@@ -18754,11 +18827,12 @@ async function facComEmettre(venteId) {
   if (!f.siren || !f.adresse || (f.statut === 'societe' && !f.raison) || (f.tva && !f.tvaNum)) {
     toast('⚠ Complète d\'abord la facturation de ' + vd.prenom + ' sur sa fiche vendeur (Modifier)', 'var(--warning)'); return;
   }
-  const com = r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100);
+  const pr = facComProchaine(v);
+  if (!pr) { toast('Aucune facture à émettre pour cette vente', 'var(--warning)'); return; }
   const taux = f.tva ? 20 : 0;
-  const avance = v.statut !== 'facture-payee';
-  if (!confirm('Émettre la facture de commission de ' + vd.prenom + ' ' + vd.nom + ' ?\n\n' + fmtEur2(com) + ' HT' + (taux ? ' + TVA 20 %' : ' (sans TVA)')
-      + (avance ? '\nAvance : versée à la signature chez le notaire.' : '') + '\n\nLe numéro est attribué maintenant et ne sera jamais réutilisé.')) return;
+  const quoi = pr.type === 'avance' ? 'la facture d\'avance' : pr.type === 'solde' ? 'la facture de solde' : 'la facture de commission';
+  if (!confirm('Émettre ' + quoi + ' de ' + vd.prenom + ' ' + vd.nom + ' ?\n\n' + fmtEur2(pr.ht) + ' HT' + (taux ? ' + TVA 20 %' : ' (sans TVA)')
+      + (pr.type === 'avance' ? '\nAvance : versée à la signature chez le notaire.' : '') + '\n\nLe numéro est attribué maintenant et ne sera jamais réutilisé.')) return;
   const emetteur = { prenom: vd.prenom, nom: vd.nom, statut: f.statut || 'ei', raison: f.raison || '', siren: f.siren, adresse: f.adresse, tva: !!f.tva, tvaNum: f.tvaNum || '' };
   const E = GLR_EMETTEUR;
   const payeur = { nom: E.nom, forme: E.forme, adresse: E.adresse, siren: E.siren, rcs: E.rcs, tva: E.tva };
@@ -18811,16 +18885,16 @@ function renderFacCom() {
   const nomV = id => { const vd = (data.vendeurs || []).find(x => x.id === id); return vd ? vd.prenom + ' ' + vd.nom : '—'; };
   let h = '<div class="card" style="margin-bottom:14px"><div style="font-weight:700;margin-bottom:8px">À émettre (' + aEmettre.length + ')</div>';
   if (!aEmettre.length) h += '<div style="color:var(--muted);font-size:13px">Aucune facture en attente. Une facture devient émissible quand la vente est payée, ou à la date de signature notaire si l\'avance est accordée.</div>';
-  else h += '<table><thead><tr><th>Commercial</th><th>Vente</th><th>Motif</th><th class="num">Commission HT</th><th></th></tr></thead><tbody>'
+  else h += '<table><thead><tr><th>Commercial</th><th>Vente</th><th>Motif</th><th class="num">Montant HT</th><th></th></tr></thead><tbody>'
     + aEmettre.map(v => '<tr><td>' + _esc(nomV(v.vendeurId)) + '</td><td>' + _esc(v.programme || '—') + (v.lot ? ' · lot ' + _esc(v.lot) : '') + '<br><span style="font-size:11px;color:var(--muted)">' + _esc(v.client || '') + '</span></td>'
-      + '<td>' + (v.statut === 'facture-payee' ? 'Vente payée' : 'Avance — signature le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR')) + '</td>'
-      + '<td class="num">' + fmtEur2(r2((v.honoraires || 0) * (v.taux || 0) / 100)) + '</td>'
+      + '<td>' + (() => { const pr = facComProchaine(v); return pr.type === 'avance' ? 'Avance — signature le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR') : pr.type === 'solde' ? 'Solde — vente payée, avance déjà facturée' : 'Vente payée'; })() + '</td>'
+      + '<td class="num">' + fmtEur2(facComProchaine(v).ht) + '</td>'
       + '<td><button class="btn btn-primary btn-sm" onclick="facComEmettre(\'' + v.id + '\')">Émettre la facture</button></td></tr>').join('') + '</tbody></table>';
   h += '</div>';
   h += '<div class="card" style="overflow-x:auto"><div style="font-weight:700;margin-bottom:8px">Factures émises (' + _facCom.length + ')</div>';
   if (!_facCom.length) h += '<div style="color:var(--muted);font-size:13px">Aucune facture de commission pour l\'instant.</div>';
   else h += '<table><thead><tr><th>N°</th><th>Date</th><th>Commercial</th><th>Vente</th><th class="num">HT</th><th class="num">TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
-    + _facCom.map(f => '<tr' + (f.statut === 'annulee' ? ' style="opacity:.55"' : '') + '><td style="font-family:var(--font-head);font-weight:700">' + _esc(f.numero) + (f.avance ? '<br><span style="font-size:10.5px;color:var(--accent)">Avance</span>' : '') + '</td>'
+    + _facCom.map(f => '<tr' + (f.statut === 'annulee' ? ' style="opacity:.55"' : '') + '><td style="font-family:var(--font-head);font-weight:700">' + _esc(f.numero) + (_facTypeLib(f) ? '<br><span style="font-size:10.5px;color:var(--accent)">' + _facTypeLib(f) + '</span>' : '') + '</td>'
       + '<td>' + new Date(f.date_facture).toLocaleDateString('fr-FR') + '</td><td>' + _esc(nomV(f.vendeur_id)) + '</td>'
       + '<td style="font-size:12px">' + _esc((f.vente && f.vente.programme) || '—') + (f.vente && f.vente.lot ? ' · lot ' + _esc(f.vente.lot) : '') + '</td>'
       + '<td class="num">' + fmtEur2(f.ht) + '</td><td class="num">' + fmtEur2(f.ttc) + '</td><td>' + _facStatutBadge(f) + '</td>'
@@ -18837,7 +18911,7 @@ function renderEquipeFacCom(vendeurId) {
   if (!liste.length) { box.innerHTML = ''; return; }
   box.innerHTML = '<div class="card" style="overflow-x:auto"><div style="font-weight:700;margin-bottom:8px">Mes factures de commission</div>'
     + '<table><thead><tr><th>N°</th><th>Date</th><th>Vente</th><th class="num">HT</th><th class="num">TTC</th><th>Statut</th><th></th></tr></thead><tbody>'
-    + liste.map(f => '<tr><td style="font-family:var(--font-head);font-weight:700">' + _esc(f.numero) + (f.avance ? '<br><span style="font-size:10.5px;color:var(--accent)">Avance</span>' : '') + '</td>'
+    + liste.map(f => '<tr><td style="font-family:var(--font-head);font-weight:700">' + _esc(f.numero) + (_facTypeLib(f) ? '<br><span style="font-size:10.5px;color:var(--accent)">' + _facTypeLib(f) + '</span>' : '') + '</td>'
       + '<td>' + new Date(f.date_facture).toLocaleDateString('fr-FR') + '</td>'
       + '<td style="font-size:12px">' + _esc((f.vente && f.vente.programme) || '—') + (f.vente && f.vente.lot ? ' · lot ' + _esc(f.vente.lot) : '') + '</td>'
       + '<td class="num">' + fmtEur2(f.ht) + '</td><td class="num">' + fmtEur2(f.ttc) + '</td><td>' + _facStatutBadge(f) + '</td>'
@@ -18855,6 +18929,13 @@ function _ouvrirFactureComPDF(f) {
   const reglement = f.avance
     ? 'Avance sur commission : règlement par virement à la date de signature de l\'acte chez le notaire' + (V.dateSignatureNotaire ? ' (' + d(V.dateSignatureNotaire) + ')' : '') + '.'
     : 'Règlement par virement par ' + esc(P.nom || 'GLR Immobilier') + ' à réception du paiement du promoteur.';
+  const totalCom = Number(V.commissionTotale) || 0;
+  let recapCommission = '';
+  if (f.type === 'avance' && totalCom && Number(f.ht) < totalCom - 0.004)
+    recapCommission = '<div class="sub">Avance de <b>' + String(Math.round(Number(f.ht) / totalCom * 10000) / 100).replace('.', ',') + ' %</b> sur une commission totale de <b>' + eur(totalCom) + ' HT</b> — le solde sera facturé au paiement de la vente.</div>';
+  else if (f.type === 'solde' && totalCom)
+    recapCommission = '<div class="sub">Commission totale : <b>' + eur(totalCom) + ' HT</b>. Déjà facturé : '
+      + (V.dejaFacture || []).map(x => 'facture ' + esc(x.numero) + ' (' + eur(x.ht) + ')').join(', ') + '. <b>Solde : ' + eur(f.ht) + ' HT</b>.</div>';
   const html = '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Facture ' + esc(f.numero) + '</title><style>'
     + '*{box-sizing:border-box;margin:0;padding:0}'
     + 'body{font-family:Arial,Helvetica,sans-serif;color:#1c2230;font-size:12px;line-height:1.5;padding:34px;max-width:820px;margin:0 auto;background:#fff}'
@@ -18887,6 +18968,7 @@ function _ouvrirFactureComPDF(f) {
     + '<tbody><tr><td>' + esc(f.designation)
     + '<div class="sub">Honoraires de la vente : ' + eur(V.honoraires) + ' HT — commission ' + esc(String(V.taux == null ? '' : V.taux)) + ' %</div>'
     + (V.dateSignatureNotaire ? '<div class="sub">Acte signé chez le notaire le <b>' + d(V.dateSignatureNotaire) + '</b></div>' : '')
+    + recapCommission
     + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
     + '<div class="totes"><div><span>Total HT</span><span>' + eur(f.ht) + '</span></div><div><span>TVA (' + Number(f.taux_tva) + ' %)</span><span>' + eur(f.tva) + '</span></div><div class="grand"><span>Total TTC</span><span>' + eur(f.ttc) + '</span></div></div>'
     + '<div class="pay"><strong>Modalités de règlement</strong><br>' + reglement + '</div>'
