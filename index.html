@@ -350,6 +350,7 @@
   .mk-kind i { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
   .mk-kind.nouveau { color: var(--accent); } .mk-kind.nouveau i { background: var(--accent); }
   .mk-kind.tranche { color: var(--accent2); } .mk-kind.tranche i { background: var(--accent2); }
+  .mk-kind.stock { color: #2F6F8F; } .mk-kind.stock i { background: #2F6F8F; }
   .mk-card .mk-nom { font-family: var(--font-head); font-size: 15px; font-weight: 700; line-height: 1.25; }
   .mk-card .mk-lieu { font-size: 12.5px; color: var(--muted); }
   .mk-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 2px; }
@@ -848,6 +849,10 @@
       <div class="nav-item" onclick="goTo(&#39;carte&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
         Carte des programmes
+      </div>
+      <div class="nav-item" onclick="goTo(&#39;marche&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"></path><path d="M5 20V10l4-3 4 3 4-5 2 1.5V20"></path></svg>
+        Marché
       </div>
       <div class="nav-item" onclick="goTo(&#39;mails&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 7l9 6 9-6"></path></svg>
@@ -2068,7 +2073,7 @@
 
     <!-- PAGE: MARCHÉ — vue marché pour l'équipe (lancements du mois, villes qui se vendent le mieux),
          à partir de la RPC marche_donnees (pige_programmes / pige_lots / pige_evenements / pige_rapports_mensuels).
-         Ouverte aux gérants seulement pour l'instant (PAGES_GERANT) : retirer 'marche' de la liste pour l'ouvrir à l'équipe. -->
+         Ouverte à toute l'équipe depuis le 13/10/2026 (plus dans PAGES_GERANT) ; entrée dans les deux menus. -->
     <div class="page" id="page-marche">
       <div class="mk-head">
         <div>
@@ -3218,7 +3223,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev', 'rapport-marche', 'marche',
+const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev', 'rapport-marche',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage'];
 
 function appliquerRole() {
@@ -3669,7 +3674,7 @@ function _rmNum(n) { return (n == null ? 0 : n).toLocaleString('fr-FR'); }
 // ============================================================
 //  MARCHÉ (équipe) — lancements du mois + villes qui se vendent le mieux.
 //  Décision Alex 08/10/2026 : un outil « propre » avant de l'ouvrir à l'équipe
-//  (page réservée aux gérants tant que 'marche' est dans PAGES_GERANT).
+//  (page ouverte à toute l'équipe depuis le 13/10/2026).
 //  Une seule RPC (marche_donnees) renvoie tout ; les filtres sont appliqués
 //  côté page, sans nouvel appel (sauf la période, qui change la fenêtre).
 // ============================================================
@@ -3678,7 +3683,7 @@ const MK_DEPTS = ['75', '77', '78', '91', '92', '93', '94', '95'];
 const MK_DEPT_COUL = { '75': '#1E3A32', '77': '#B0894C', '78': '#2F6F8F', '91': '#7A5C99', '92': '#C2553A', '93': '#3C8A5A', '94': '#B5832A', '95': '#5A6B7F' };
 const MK_DEPT_NOMS = { '75': 'Paris', '77': 'Seine-et-Marne', '78': 'Yvelines', '91': 'Essonne', '92': 'Hauts-de-Seine', '93': 'Seine-Saint-Denis', '94': 'Val-de-Marne', '95': 'Val-d’Oise' };
 const MK_PAR_ZONE = 5; // vue Île-de-France : communes affichées par département avant « Voir tout »
-const MK_KINDS = { nouveau: 'Nouveau programme', tranche: 'Nouvelle tranche', extranet: 'Ouvert à la prescription' };
+const MK_KINDS = { nouveau: 'Nouveau programme', tranche: 'Nouvelle tranche', stock: 'Lancement du stock', extranet: 'Ouvert à la prescription' };   // stock (13/10) : programme arrivé avec moins de 5 lots dont le stock s'ouvre
 
 async function loadMarche(force) {
   const body = document.getElementById('mk-body');
@@ -3753,7 +3758,7 @@ function renderMarche() {
     '<div class="mk-kpi"><b>' + _rmNum(progs.length) + '</b><span>Programmes suivis</span><small>' + _rmNum(villes.length) + ' communes</small></div>' +
     '<div class="mk-kpi"><b>' + _rmNum(libres) + '</b><span>Logements disponibles</span><small>libres ou optionnés</small></div>' +
     '<div class="mk-kpi"><b>' + _rmNum(vendus) + '</b><span>Lots vendus</span><small>en ' + M.jours + ' jours, ' + _rmNum(villesActives) + ' communes actives</small></div>' +
-    '<div class="mk-kpi"><b>' + _rmNum(_mk.lancements.filter(l => l.mois === M.mois && l.kind !== 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length) + '</b><span>Lancements · ' + _esc(_mkMoisLabel(M.mois)) + '</span><small>' + ['nouveau', 'tranche'].map(k => { const n = _mk.lancements.filter(l => l.mois === M.mois && l.kind === k && (!_mkDept || (l.p && l.p.dept === _mkDept))).length; return n + ' ' + (k === 'nouveau' ? 'nouveau' + (n > 1 ? 'x' : '') : 'tranche' + (n > 1 ? 's' : '')); }).join(' · ') + ' · ' + _mk.lancements.filter(l => l.mois === M.mois && l.kind === 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length + ' ouverts à la prescription</small></div>' +
+    '<div class="mk-kpi"><b>' + _rmNum(_mk.lancements.filter(l => l.mois === M.mois && l.kind !== 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length) + '</b><span>Lancements · ' + _esc(_mkMoisLabel(M.mois)) + '</span><small>' + ['nouveau', 'tranche', 'stock'].map(k => { const n = _mk.lancements.filter(l => l.mois === M.mois && l.kind === k && (!_mkDept || (l.p && l.p.dept === _mkDept))).length; return n + ' ' + (k === 'nouveau' ? 'nouveau' + (n > 1 ? 'x' : '') : k === 'tranche' ? 'tranche' + (n > 1 ? 's' : '') : 'lancement' + (n > 1 ? 's' : '') + ' du stock'); }).join(' · ') + ' · ' + _mk.lancements.filter(l => l.mois === M.mois && l.kind === 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length + ' ouverts à la prescription</small></div>' +
   '</div>';
 
   // ---- LANCEMENTS / OUVERTS À LA PRESCRIPTION ----
@@ -3770,7 +3775,8 @@ function renderMarche() {
     return '<div class="mk-card" style="border-top-color:' + coul + '">' +
       '<div style="display:flex;align-items:center;gap:8px"><span class="mk-kind ' + l.kind + '"><i></i>' + MK_KINDS[l.kind] + '</span><span class="mk-date">vu le ' + _mkDj(l.date) + '</span>' + badge + '</div>' +
       '<div class="mk-nom">' + _rmNomLien(l.id, l.nom) + '</div>' +
-      '<div class="mk-lieu">' + _esc(l.ville) + (p.dept ? ' <span style="opacity:.7">(' + _esc(p.dept) + ')</span>' : '') + ' · ' + _esc(l.promoteur || p.promoteur || '') + (l.origine ? '<br>Tranche de ' + _esc(l.origine) : '') + '</div>' +
+      '<div class="mk-lieu">' + _esc(l.ville) + (p.dept ? ' <span style="opacity:.7">(' + _esc(p.dept) + ')</span>' : '') + ' · ' + _esc(l.promoteur || p.promoteur || '') +
+        (l.kind === 'stock' ? '<br>Arrivé chez nous le ' + _mkDj(l.arrivee) + ' avec moins de 5 lots — stock ouvert le ' + _mkDj(l.date) : l.ouverture ? '<br>Ouverture d’étage / bâtiment : ' + _esc(l.ouverture) + ' d’un coup' : l.origine ? '<br>Tranche de ' + _esc(l.origine) : '') + '</div>' +
       '<div class="mk-stats">' +
         '<div><b>' + _rmNum(libres) + '</b><span>Lots libres</span></div>' +
         '<div><b>' + _mkK(prixMin) + '</b><span>Prix dès</span></div>' +
@@ -3799,9 +3805,9 @@ function renderMarche() {
   const nbB = m => _mk.lancements.filter(l => l.mois === m && l.kind === 'extranet' && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
   const moisChips = '<div class="mk-chips">' + [M.mois, M.mois_prev].map(m => '<button class="' + (_mkMois === m ? 'on' : '') + '" onclick="mkMois(\'' + m + '\')">' + _esc(_mkMoisLabel(m)) + '</button>').join('') + '</div>';
   const cardLanc = '<div class="card">' +
-    '<div class="mk-titre"><div><h3>Lancements <span style="color:var(--muted);font-weight:500">(' + lancA.length + ')</span></h3><small>Nouveaux programmes et nouvelles tranches, jamais vus avant — relus avec les règles du 05/10.</small></div>' +
+    '<div class="mk-titre"><div><h3>Lancements <span style="color:var(--muted);font-weight:500">(' + lancA.length + ')</span></h3><small>Nouveaux programmes et nouvelles tranches, jamais vus avant — relus avec les règles du 05/10 —, et lancements du stock : programmes arrivés avec moins de 5 lots dont le stock vient de s’ouvrir.</small></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + moisChips +
-        '<div class="mk-chips">' + ['nouveau', 'tranche'].map(k => '<button class="' + (_mkKind === k ? 'on' : '') + '" onclick="mkKind(\'' + k + '\')">' + MK_KINDS[k] + '</button>').join('') + '</div>' +
+        '<div class="mk-chips">' + ['nouveau', 'tranche', 'stock'].map(k => '<button class="' + (_mkKind === k ? 'on' : '') + '" onclick="mkKind(\'' + k + '\')">' + MK_KINDS[k] + '</button>').join('') + '</div>' +
       '</div></div>' +
     (lancA.length ? grille(lancA) : '<div class="mk-vide">Aucun lancement sur cette sélection.</div>') +
   '</div>' +
@@ -3920,7 +3926,7 @@ function renderRapportMensuel() {
   const row = _rmMois.find(m => m.mois === _rmMoisSel) || _rmMois[0];
   const D = row.data || {}, G = D.global || {}, N = D.nouveautes || {}, V = D.ventes || {}, PX = D.prix || {}, ST = D.stock || {}, PR = D.par_promoteur || [];
   _rmLiensAssurer(_rmIdsDans([N, V]), renderRapportMensuel);
-  const nouveaux = N.nouveaux || [], resolus = N.picking_resolus || [], tranches = N.tranches || [], termines = (N.termines || []).filter(r => r.nom), absents = (N.absents || []).filter(r => r.nom), averif = N.a_verifier || [], anciens = N.anciens || [], aTrancher = N.a_trancher || [], pickAj = N.picking_ajoutes || [];
+  const nouveaux = N.nouveaux || [], resolus = N.picking_resolus || [], tranches = N.tranches || [], stocks = N.lancements_stock || [], termines = (N.termines || []).filter(r => r.nom), absents = (N.absents || []).filter(r => r.nom), averif = N.a_verifier || [], anciens = N.anciens || [], aTrancher = N.a_trancher || [], pickAj = N.picking_ajoutes || [];
   // nouveaux / tranches par promoteur : comptés depuis les listes ci-dessus (toujours cohérents avec la rubrique Nouveautés, même pour les mois relus)
   const nvP = {}, trP = {};
   nouveaux.forEach(r => { nvP[r.promoteur] = (nvP[r.promoteur] || 0) + 1; });
@@ -3943,7 +3949,7 @@ function renderRapportMensuel() {
 
     '<div class="rm-part">Partie interne<small>Ce qui change pour la vente : lancements, stock, prix, promoteurs.</small></div>' +
     '<div class="rm-kpi-strip">' +
-      rmKpi(nouveaux.length, 'Nouveaux programmes') + rmKpi(resolus.length, 'Passés de SeLoger à l’extranet') + rmKpi(tranches.length, 'Nouvelles tranches') +
+      rmKpi(nouveaux.length, 'Nouveaux programmes') + rmKpi(resolus.length, 'Passés de SeLoger à l’extranet') + rmKpi(tranches.length, 'Nouvelles tranches') + rmKpi(stocks.length, 'Lancements du stock') +
       rmKpi(termines.length || absents.length, termines.length ? 'Programmes terminés' : 'Programmes absents (à confirmer)') +
       rmKpi(V.sortis, 'Lots sortis du stock') + rmKpi(V.liberations, 'Lots redevenus libres') + rmKpi(PX.baisses, 'Baisses de prix', PX.baisse_moy_pct ? '<span class="rm-trend rm-trend-down">moy. −' + String(PX.baisse_moy_pct).replace('.', ',') + ' %</span>' : '') +
       rmKpi(G.libres_fin, 'Lots libres fin de mois', _rmDelta(G.libres_fin, G.libres_debut)) +
@@ -3952,7 +3958,8 @@ function renderRapportMensuel() {
       '<div class="rm-sub" style="padding:10px 24px 0">Nouveaux programmes (' + nouveaux.length + ')</div>' +
       _rmTable(baseCols.concat([{ l: 'Livraison', f: r => _esc(r.livraison || '—') }, { l: 'Dès', r: 1, f: r => _rmEuro(r.prix_min) }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), nouveaux, 'Aucun nouveau programme ce mois-ci.') +
       (resolus.length ? '<div class="rm-sub" style="padding:10px 24px 0">Passés de SeLoger à l’extranet du promoteur (' + resolus.length + ')</div>' + _rmTable(baseCols.concat([{ l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), resolus) : '') +
-      (tranches.length ? '<div class="rm-sub" style="padding:10px 24px 0">Nouvelles tranches de programmes connus (' + tranches.length + ')</div>' + _rmTable(baseCols.concat([{ l: 'Programme d’origine', f: r => _esc(r.origine || '') }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), tranches) : '') +
+      (tranches.length ? '<div class="rm-sub" style="padding:10px 24px 0">Nouvelles tranches de programmes connus (' + tranches.length + ')</div>' + _rmTable(baseCols.concat([{ l: 'Programme d’origine', f: r => r.ouverture ? 'Ouverture d’étage / bâtiment : ' + _esc(r.ouverture) : _esc(r.origine || '') }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), tranches) : '') +
+      (stocks.length ? '<div class="rm-sub" style="padding:10px 24px 0">Lancements du stock (' + stocks.length + ')</div><div class="rm-empty" style="padding:4px 24px 0;font-size:11.5px">Programmes arrivés chez nous avec moins de 5 lots (avant-première, annonce) et dont le stock s’est ouvert ce mois-ci : au moins 10 lots disponibles.</div>' + _rmTable(baseCols.concat([{ l: 'Arrivé chez nous', f: r => _rmDj(r.arrivee) }, { l: 'Livraison', f: r => _esc(r.livraison || '—') }, { l: 'Dès', r: 1, f: r => _rmEuro(r.prix_min) }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres) }]), stocks) : '') +
       (termines.length ? '<div class="rm-sub" style="padding:10px 24px 0">Programmes terminés (' + termines.length + ')</div>' + _rmTable([{ l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }], termines) + (N.termines_note ? '<div class="rm-empty" style="padding:6px 24px 12px;font-size:11.5px">' + _esc(N.termines_note) + '</div>' : '') : '') +
       (absents.length ? '<div class="rm-sub" style="padding:10px 24px 0">Absents des extranets en fin de mois, à confirmer (' + absents.length + ')</div>' + _rmTable([{ l: 'Ville', f: r => _esc(r.ville || '') }, nomCol, { l: 'Promoteur', f: r => _esc(r.promoteur || '') }], absents) : '') +
       (averif.length ? '<div class="rm-sub" style="padding:10px 24px 0">Absents de l’extranet mais toujours sur SeLoger — à vérifier (' + averif.length + ')</div>' + _rmTable(baseCols, averif) : '') +
@@ -3977,7 +3984,7 @@ function renderRapportMensuel() {
       rmKpi(G.programmes_fin, 'Programmes suivis', _rmDelta(G.programmes_fin, G.programmes_debut)) + rmKpi(G.logements_fin, 'Logements pigés', _rmDelta(G.logements_fin, G.logements_debut)) +
       rmKpi(G.libres_fin, 'Logements disponibles', _rmDelta(G.libres_fin, G.libres_debut)) +
       '<div class="rm-kpi"><b>' + (G.prix_m2_median_fin ? _rmNum(G.prix_m2_median_fin) + ' €/m²' : '—') + '</b><span>Prix médian des lots libres</span>' + _rmPct(G.prix_m2_median_debut, G.prix_m2_median_fin) + '</div>' +
-      rmKpi(nouveaux.length + tranches.length, 'Lancements du mois') + rmKpi(G.picking_fin, 'Programmes vus seulement sur SeLoger') +
+      rmKpi(nouveaux.length + tranches.length + stocks.length, 'Lancements du mois') + rmKpi(G.picking_fin, 'Programmes vus seulement sur SeLoger') +
     '</div>' +
     '<div class="card"><div class="card-header"><div class="card-title">Par département</div></div>' +
       _rmTable([{ l: 'Département', f: r => _esc(r.dept) }, { l: 'Programmes', r: 1, f: r => _rmNum(r.programmes) }, { l: 'Lots libres', r: 1, f: r => _rmNum(r.libres_fin) + ' <small style="color:var(--muted)">(' + (r.libres_fin >= r.libres_debut ? '+' : '') + (r.libres_fin - r.libres_debut) + ')</small>' }, { l: 'Prix médian €/m²', r: 1, f: r => (r.prix_m2_fin ? _rmNum(r.prix_m2_fin) : '—') + _rmPct(r.prix_m2_debut, r.prix_m2_fin) }], ST.par_dept) +
