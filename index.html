@@ -1989,7 +1989,7 @@
         </select>
         <input type="text" id="filter-budget" placeholder="Budget..." oninput="renderContacts()" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;width:150px">
         <div id="filter-statut-box" style="position:relative;display:inline-block">
-          <button type="button" id="filter-statut-btn" onclick="toggleFiltreStatuts(event)" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px">Tous les statuts <span style="font-size:10px;opacity:.7">▼</span></button>
+          <button type="button" id="filter-statut-btn" onclick="toggleFiltreStatuts(event)" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px">Situation <span style="font-size:10px;opacity:.7">▼</span></button>
           <div id="filter-statut-menu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:40;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;min-width:220px;box-shadow:0 10px 30px rgba(0,0,0,.12)"></div>
         </div>
         <select id="filter-vendeur" onchange="renderContacts()" title="Vendeur du contact" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 14px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none">
@@ -17184,11 +17184,11 @@ function exportContacts() {
         matchLieu = (cp && rayonCPs.has(cp)) || (nomCommune && rayonNames.has(nomCommune));
       }
       const matchBudget = !filterBudget || (c.budget||'').toLowerCase().includes(filterBudget);
-      const matchStatut = !filterStatut.length || filterStatut.includes(c.statut || '');
+      const matchStatut = filtreSituationOk(c, filterStatut);
       const matchVendeur = filtreVendeurOk(c, filterVendeur);
       return matchNom && matchLieu && matchBudget && matchStatut && matchVendeur;
     });
-    source = (filterNom || filterLieu || filterBudget || filterStatut.length || filterVendeur) ? 'vue filtrée' : 'base complète';
+    source = (filterNom || filterLieu || filterBudget || (filterStatut.length && filterStatut.length < 4) || filterVendeur) ? 'vue filtrée' : 'base complète';
   }
 
   if (!rows.length) { toast('⚠ Aucun contact à exporter', 'var(--warning)'); return; }
@@ -17331,29 +17331,55 @@ function _filtreVendeurRemplir() {
   noms.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); });
   _filtreVendeurPret = true;
 }
-// ---- Filtre statuts de l'onglet Contacts : plusieurs statuts à la fois (13/10/2026) ----
-// Liste = statuts réels du pipeline (STATUTS_LEAD) + « Ne plus contacter » + « Sans statut »
-const _FILTRE_STATUTS = new Set();
+// ---- Filtre « Situation » de l'onglet Contacts (13/10/2026) ----
+// Pour une campagne, ce qui compte n'est pas le statut mais : quelqu'un travaille-t-il ce client ?
+//   libre          : aucun vendeur
+//   echu           : un vendeur, mais ses 14 jours de paternité sont passés
+//   veille         : statut « En veille » (le client est dans le pool, même avec un vendeur)
+//   sous_paternite : un vendeur, paternité en cours — le seul cas « pas libre »
+// « Ne plus contacter » (Stop) est toujours exclu, ce n'est pas une case.
+const _SITUATIONS = [
+  { v: 'libre', l: 'Libres (sans vendeur)' },
+  { v: 'echu', l: 'Échus (paternité passée)' },
+  { v: 'veille', l: 'En veille' },
+  { v: 'sous_paternite', l: 'Sous paternité' }
+];
+const _FILTRE_STATUTS = new Set(['libre', 'echu', 'veille']);   // par défaut : tout ce qui est libre
+function situationContact(c) {
+  if ((c.statut || '') === 'Stop') return 'stop';
+  if (!(c.vendeur || '').trim()) return 'libre';
+  if (c.statut === 'En veille') return 'veille';
+  const fin = c.paternite_jusqu_au ? new Date(c.paternite_jusqu_au).getTime() : NaN;
+  if (!isNaN(fin) && fin < Date.now()) return 'echu';
+  return 'sous_paternite';
+}
 function filtreStatutsActifs() { return [..._FILTRE_STATUTS]; }
-function _filtreStatutsListe() {
-  const base = (typeof STATUTS_LEAD !== 'undefined' ? STATUTS_LEAD : ['Nouveau','Suivi','Sélections','Retour documentation','Finaliser la vente','Sans réponse','En veille','Vendu','Perdu','Non qualifié']).slice();
-  return base.map(v => ({ v, l: v })).concat([{ v: 'Stop', l: 'Ne plus contacter' }, { v: '', l: 'Sans statut' }]);
+function filtreSituationOk(c, actifs) {
+  const sit = situationContact(c);
+  if (sit === 'stop') return false;
+  return !actifs.length || actifs.includes(sit);
 }
 function _filtreStatutsRendre() {
   const menu = document.getElementById('filter-statut-menu'); if (!menu) return;
-  menu.innerHTML = _filtreStatutsListe().map(o => `
+  const contacts = window._contacts || [];
+  const compte = {}; contacts.forEach(c => { const k = situationContact(c); compte[k] = (compte[k] || 0) + 1; });
+  menu.innerHTML = _SITUATIONS.map(o => `
     <label style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--text)" onmouseenter="this.style.background='var(--bg)'" onmouseleave="this.style.background=''">
-      <input type="checkbox" ${_FILTRE_STATUTS.has(o.v) ? 'checked' : ''} onchange="filtreStatutToggle(${JSON.stringify(o.v).replace(/"/g, '&quot;')}, this.checked)" style="accent-color:var(--accent);cursor:pointer">${o.l}</label>`).join('') +
-    `<div style="display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)">
-      <button type="button" class="btn btn-ghost btn-sm" onclick="filtreStatutsVider()">Tout effacer</button>
+      <input type="checkbox" ${_FILTRE_STATUTS.has(o.v) ? 'checked' : ''} onchange="filtreStatutToggle('${o.v}', this.checked)" style="accent-color:var(--accent);cursor:pointer"><span style="flex:1">${o.l}</span><span style="color:var(--muted);font-size:12px">${compte[o.v] || 0}</span></label>`).join('') +
+    `<div style="font-size:11.5px;color:var(--muted);padding:6px 8px 2px;line-height:1.4">« Ne plus contacter » est toujours exclu${compte.stop ? ' (' + compte.stop + ')' : ''}.</div>
+    <div style="display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)">
+      <button type="button" class="btn btn-ghost btn-sm" onclick="filtreStatutsVider()">Tout voir</button>
       <button type="button" class="btn btn-primary btn-sm" onclick="toggleFiltreStatuts()">Fermer</button>
     </div>`;
   const btn = document.getElementById('filter-statut-btn');
   if (btn) {
     const sel = filtreStatutsActifs();
-    const libelles = _filtreStatutsListe().filter(o => sel.includes(o.v)).map(o => o.l);
-    btn.innerHTML = (sel.length ? (libelles.length <= 2 ? libelles.join(', ') : libelles.length + ' statuts') : 'Tous les statuts') + ' <span style="font-size:10px;opacity:.7">▼</span>';
-    btn.style.borderColor = sel.length ? 'var(--accent)' : 'var(--border)';
+    let txt = 'Toutes situations';
+    if (sel.length === 3 && !sel.includes('sous_paternite')) txt = 'Clients libres';
+    else if (sel.length === 1) txt = _SITUATIONS.find(o => o.v === sel[0]).l;
+    else if (sel.length) txt = sel.length + ' situations';
+    btn.innerHTML = txt + ' <span style="font-size:10px;opacity:.7">▼</span>';
+    btn.style.borderColor = sel.length && sel.length < _SITUATIONS.length ? 'var(--accent)' : 'var(--border)';
   }
 }
 function filtreStatutToggle(v, on) { if (on) _FILTRE_STATUTS.add(v); else _FILTRE_STATUTS.delete(v); _filtreStatutsRendre(); renderContacts(); }
@@ -17379,6 +17405,7 @@ function renderContacts() {
   const filterStatut = filtreStatutsActifs();
   const filterVendeur = document.getElementById('filter-vendeur')?.value || '';
   _filtreVendeurRemplir();
+  if (!window._filtreSituationInit) { window._filtreSituationInit = true; _filtreStatutsRendre(); }
 
   const filtered = contacts.filter(c => {
     const matchNom = !filterNom || (c.nom||'').toLowerCase().includes(filterNom) || (c.email||'').toLowerCase().includes(filterNom) || telContient(c.telephone, filterNomTel) || _conjointNom(c.conjoint).toLowerCase().includes(filterNom) || (c.conjoint && telContient(c.conjoint.telephone, filterNomTel));
@@ -17390,7 +17417,7 @@ function renderContacts() {
       matchLieu = (cp && rayonCPs.has(cp)) || (nomCommune && rayonNames.has(nomCommune));
     }
     const matchBudget = !filterBudget || (c.budget||'').toLowerCase().includes(filterBudget);
-    const matchStatut = !filterStatut.length || filterStatut.includes(c.statut || '');
+    const matchStatut = filtreSituationOk(c, filterStatut);
     const matchVendeur = filtreVendeurOk(c, filterVendeur);
     return matchNom && matchLieu && matchBudget && matchStatut && matchVendeur;
   });
