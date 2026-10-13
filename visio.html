@@ -49,11 +49,11 @@
   /* HERO — titre centré, grand */
   .hero{padding:64px 0 40px;text-align:center}
   .hero .eyebrow{display:inline-block}
-  .hero h1{font-family:var(--serif);font-weight:500;font-size:clamp(64px,13vw,150px);line-height:.9;letter-spacing:-.02em;color:var(--green);margin:18px 0 6px}
-  .hero .sub{font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(26px,4.4vw,46px);line-height:1.1;color:var(--brass)}
+  .hero h1{font-family:var(--serif);font-weight:500;font-size:clamp(60px,11.5vw,132px);line-height:1.02;letter-spacing:-.015em;color:var(--green);margin:16px 0 10px}
+  .hero .sub{font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(24px,4vw,42px);line-height:1.2;color:var(--brass);margin-top:4px}
   .hero .loc{margin-top:16px;font-size:12px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
   .hero .rule{width:64px;height:1px;background:var(--brass-soft);margin:26px auto}
-  .hero .pitch{max-width:640px;margin:0 auto;color:#5b5648;font-size:clamp(15px,1.8vw,18px)}
+  .hero .pitch{max-width:680px;margin:0 auto;color:#4a5046;font-family:var(--serif);font-size:clamp(20px,2.4vw,25px);line-height:1.45}
   .hero-facts{display:flex;flex-wrap:wrap;justify-content:center;gap:0;margin:30px auto 30px}
   .hero-facts .f{padding:0 26px;border-right:1px solid var(--line)}
   .hero-facts .f:last-child{border-right:none}
@@ -107,7 +107,7 @@
   .lots-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:20px 22px 14px;border-bottom:1px solid var(--line)}
   .lots-head h3{font-family:var(--serif);font-weight:500;font-size:26px;color:var(--green)}
   .lots-head span{font-size:13px;color:var(--muted)}
-  .lots-cols,.lot{display:grid;grid-template-columns:.8fr 1.1fr 1fr 1fr .9fr 1.3fr 28px;gap:10px;align-items:center;padding:0 22px}
+  .lots-cols,.lot{display:grid;grid-template-columns:.75fr 1.05fr .9fr .95fr .9fr .9fr 1.2fr 28px;gap:10px;align-items:center;padding:0 22px}
   .lots-cols{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding-top:12px;padding-bottom:10px}
   .lots-list{max-height:430px;overflow-y:auto}
   .lot{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--line);padding-top:14px;padding-bottom:14px;cursor:pointer;font-size:14.5px;transition:background .15s ease}
@@ -161,9 +161,6 @@
   .book-list{list-style:none;display:grid;gap:14px}
   .book-list li{display:flex;gap:12px;align-items:flex-start;font-size:15px;color:var(--ink)}
   .book-list .ic{color:var(--brass);font-weight:700;flex:none;margin-top:1px}
-  .lot-choisi{display:none;margin-bottom:20px;background:var(--card);border:1px solid var(--brass-soft);border-radius:12px;padding:12px 16px;font-size:14px}
-  .lot-choisi.on{display:block}
-  .lot-choisi b{color:var(--green)}
   .embed-shell{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:320px;box-shadow:0 20px 50px rgba(22,39,29,.12)}
   .embed-shell iframe{width:100%;height:640px;border:0;display:block}
   .embed-placeholder{padding:46px 34px;text-align:center;color:#6a6457}
@@ -174,9 +171,19 @@
   /* FENÊTRE LOT */
   .modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(35,40,31,.42);backdrop-filter:blur(3px)}
   .modal.open{display:flex}
-  .modal-box{background:var(--card);border-radius:20px;width:min(560px,100%);max-height:calc(100vh - 36px);overflow-y:auto;box-shadow:0 30px 80px rgba(22,39,29,.3);animation:pop .25s ease}
+  .modal-box{background:var(--card);border-radius:20px;width:min(980px,100%);max-height:calc(100vh - 36px);overflow-y:auto;box-shadow:0 30px 80px rgba(22,39,29,.3);animation:pop .25s ease}
   @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
   .modal-top{padding:26px 28px 18px;border-bottom:1px solid var(--line);position:relative}
+  .modal-grid{display:grid;grid-template-columns:1.15fr .85fr;min-height:420px}
+  .plan{background:#fff;border-right:1px solid var(--line);display:flex;align-items:center;justify-content:center;position:relative;padding:18px;min-height:360px}
+  .plan img{max-width:100%;max-height:min(62vh,560px);object-fit:contain;cursor:zoom-in}
+  .plan .ph{color:var(--muted);font-size:14px;text-align:center;max-width:300px;line-height:1.6}
+  .plan .ph .ic{font-size:42px;color:#d6ceb9;line-height:1;margin-bottom:10px}
+  .plan .zoom{position:absolute;right:14px;bottom:14px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--green);cursor:pointer}
+  .plan .zoom:hover{border-color:var(--green)}
+  .zoomed{position:fixed;inset:0;z-index:120;background:rgba(35,40,31,.92);display:none;align-items:center;justify-content:center;cursor:zoom-out;padding:16px}
+  .zoomed.open{display:flex}
+  .zoomed img{max-width:100%;max-height:100%;background:#fff;border-radius:8px}
   .modal-top .eyebrow{display:block;margin-bottom:6px}
   .modal-top h3{font-family:var(--serif);font-weight:500;font-size:34px;line-height:1.05;color:var(--green)}
   .modal-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer;font-size:18px;color:var(--muted)}
@@ -192,6 +199,26 @@
   .modal-note{padding:4px 28px 0;font-size:13px;color:var(--muted)}
   .modal-actions{padding:22px 28px 26px;display:grid;gap:10px}
 
+  /* SÉLECTION (panier) */
+  .panier{position:fixed;left:0;right:0;bottom:0;z-index:60;transform:translateY(110%);visibility:hidden;transition:transform .3s cubic-bezier(.2,.7,.2,1),visibility .3s;pointer-events:none}
+  .panier.on{transform:none;visibility:visible;pointer-events:auto}
+  .panier.on.cache{transform:translateY(110%);visibility:hidden;pointer-events:none}
+  .panier-bar{background:var(--green);color:var(--cream);border-radius:16px 16px 0 0;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:0 -12px 40px rgba(22,39,29,.25)}
+  .panier-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .panier-txt strong{font-family:var(--serif);font-size:20px;font-weight:500}
+  .panier-txt span{font-size:12.5px;color:#CFE0D5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .panier .btn{background:var(--brass);color:#fff;flex:none}
+  .panier .btn:hover{background:var(--brass-soft)}
+  body.panier-on{padding-bottom:90px}
+  .sel-list{list-style:none;display:grid;gap:8px;margin-bottom:22px}
+  .sel-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--brass-soft);border-radius:12px;padding:10px 14px;font-size:14px}
+  .sel-list li b{color:var(--green)}
+  .sel-list li small{color:var(--muted);display:block;font-size:12.5px}
+  .sel-list button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px}
+  .sel-list button:hover{color:var(--green)}
+  .sel-head{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:10px;display:none}
+  .sel-head.on{display:block}
+  .lot.in .ref::after{content:'✓';display:inline-block;margin-left:8px;color:var(--brass);font-weight:700}
   footer{background:#e9e2d1;color:var(--ink);padding:54px 0 60px;border-top:1px solid var(--brass-soft)}
   .foot-grid{display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;align-items:flex-end}
   .foot-brand{font-family:var(--serif);font-size:30px;color:var(--green)}
@@ -201,6 +228,9 @@
   .foot-legal{margin-top:34px;font-size:12px;color:#8a8474;max-width:680px;line-height:1.7}
 
   @media(max-width:880px){
+    .modal-grid{grid-template-columns:1fr}
+    .plan{border-right:none;border-bottom:1px solid var(--line);min-height:240px}
+    .plan img{max-height:46vh}
     .diff-grid,.place-grid{grid-template-columns:1fr;gap:28px}
     .diff-photo{min-height:260px}
     .map{aspect-ratio:4/3}
@@ -218,7 +248,7 @@
     .atout,.atout:nth-child(odd),.atout:nth-child(even){padding:20px 0;border-right:none}
     .lots-cols{display:none}
     .lot{grid-template-columns:1fr auto;gap:2px 12px;padding-left:18px;padding-right:18px}
-    .lot .c-et,.lot .c-surf,.lot .c-ext,.lot .c-expo,.lot .go{display:none}
+    .lot .c-et,.lot .c-surf,.lot .c-ext,.lot .c-expo,.lot .c-pk,.lot .go{display:none}
     .lot .meta{display:block;grid-column:1;font-size:13px;color:var(--muted)}
     .lot .px{grid-column:2;grid-row:1/span 2;align-self:center}
   }
@@ -269,7 +299,7 @@
       <div class="typos" id="s-typos"></div>
       <div class="lots-panel" id="lots-panel">
         <div class="lots-head"><h3 id="lots-titre"></h3><span id="lots-sous"></span></div>
-        <div class="lots-cols"><span>Lot</span><span>Étage</span><span>Surface</span><span>Extérieur</span><span>Expo.</span><span class="r">Prix</span><span></span></div>
+        <div class="lots-cols"><span>Lot</span><span>Étage</span><span>Surface</span><span>Extérieur</span><span>Expo.</span><span>Parking</span><span class="r">Prix</span><span></span></div>
         <div class="lots-list" id="lots-list"></div>
       </div>
       <div class="chips" id="s-chips"></div>
@@ -309,7 +339,8 @@
       <div class="sec-head"><span class="num">04</span><h2>Réservons 15 minutes ensemble</h2></div>
       <div class="book-grid">
         <div class="book-pitch">
-          <div class="lot-choisi" id="lot-choisi"></div>
+          <div class="sel-head" id="sel-head">Votre sélection</div>
+          <ul class="sel-list" id="sel-list"></ul>
           <p>On fait le tour des lots encore disponibles, et je regarde avec vous le plan de financement le plus adapté — sans engagement.</p>
           <ul class="book-list">
             <li><span class="ic">✓</span><span><strong>En visio, par lien Google&nbsp;Meet</strong> — rien à télécharger, vous rejoignez depuis votre navigateur.</span></li>
@@ -344,12 +375,28 @@
       <h3 id="m-titre"></h3>
       <button class="modal-close" id="m-close" aria-label="Fermer">✕</button>
     </div>
-    <div class="specs" id="m-specs"></div>
-    <div class="modal-price"><div class="v" id="m-prix"></div><small id="m-prix-note"></small></div>
-    <p class="modal-note">Le plan détaillé de ce logement vous est présenté en visio, avec les conditions de réservation.</p>
-    <div class="modal-actions">
-      <button class="btn" id="m-interet">Ce logement m'intéresse — réserver ma visio</button>
-      <button class="btn btn-ghost" id="m-autres">Voir les autres logements</button>
+    <div class="modal-grid">
+      <div class="plan" id="m-plan"></div>
+      <div>
+        <div class="specs" id="m-specs"></div>
+        <div class="modal-price"><div class="v" id="m-prix"></div><small id="m-prix-note"></small></div>
+        <p class="modal-note">Plan indicatif. Les cotes exactes et les conditions de réservation vous sont présentées en visio.</p>
+        <div class="modal-actions">
+          <button class="btn" id="m-interet">Ce logement m'intéresse — réserver ma visio</button>
+          <button class="btn btn-ghost" id="m-panier">Ajouter à ma sélection</button>
+          <button class="btn btn-ghost" id="m-autres" style="border:none">Voir les autres logements</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="zoomed" id="zoomed"><img alt="Plan agrandi"></div>
+
+<div class="panier" id="panier" aria-live="polite">
+  <div class="wrap">
+    <div class="panier-bar">
+      <div class="panier-txt"><strong id="panier-n"></strong><span id="panier-liste"></span></div>
+      <a href="#booking" class="btn btn-sm" id="panier-cta">En parler en visio →</a>
     </div>
   </div>
 </div>
@@ -432,7 +479,7 @@ async function fetchProgramme(slug){
     return {
       nom:r.nom, ville:r.ville, dept:r.dept, eyebrow:r.eyebrow, livraison:r.livraison,
       prixMin:r.prix_min, pitch:r.pitch, image:r.image, quartier:r.quartier, adresse:r.adresse,
-      photos:r.photos || [], transports:r.transports || [],
+      photos:r.photos || [], transports:r.transports || [], plans_base:r.plans_base || '',
       dispositifs:r.dispositifs || [], typologies:r.typologies || [], atouts:r.atouts || []
     };
   }catch(e){ return null; }
@@ -517,15 +564,16 @@ function ouvrirTypo(t, btn){
   document.getElementById('lots-titre').textContent = typoNom(t);
   document.getElementById('lots-sous').textContent = `${g.length} logement${g.length > 1 ? 's' : ''} disponible${g.length > 1 ? 's' : ''} · prix parking inclus`;
   document.getElementById('lots-list').innerHTML = g.map(l =>
-    `<button class="lot" data-n="${esc(l.n)}">
+    `<button class="lot${SEL.has(l.n) ? ' in' : ''}" data-n="${esc(l.n)}">
       <span class="ref">Lot ${esc(l.n)}</span>
       <span class="c-et">${etageTxt(l.etage)}</span>
       <span class="c-surf">${m2(l.surf)}</span>
       <span class="c-ext">${l.ext ? '+ ' + m2(l.ext) + ' ext.' : '—'}</span>
       <span class="c-expo">${esc(EXPO[l.expo] || l.expo || '—')}</span>
+      <span class="c-pk">${l.nb_pk > 1 ? l.nb_pk + ' places' : l.nb_pk ? '1 place' : '—'}</span>
       <span class="px">${euro(l.prix)} €</span>
       <span class="go">›</span>
-      <span class="meta">${etageCourt(l.etage)} · ${m2(l.surf)}${l.ext ? ' + ' + m2(l.ext) + ' ext.' : ''} · ${esc(EXPO[l.expo] || l.expo || '')}</span>
+      <span class="meta">${etageCourt(l.etage)} · ${m2(l.surf)}${l.ext ? ' + ' + m2(l.ext) + ' ext.' : ''} · ${esc(EXPO[l.expo] || l.expo || '')}${l.nb_pk ? ' · ' + (l.nb_pk > 1 ? l.nb_pk + ' pk' : '1 pk') : ''}</span>
     </button>`).join('');
   document.querySelectorAll('#lots-list .lot').forEach(b => b.onclick = () => ouvrirLot(b.dataset.n));
   // le panneau s'insère juste sous la rangée de la carte cliquée (une carte par ligne sur mobile)
@@ -537,9 +585,22 @@ function ouvrirTypo(t, btn){
   if(r.top > window.innerHeight * .7 || r.top < 70) btn.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
+function planUrl(l){
+  return (P.plans_base || '') ? P.plans_base.replace(/\/?$/, '/') + encodeURIComponent(l.n) + '.jpg' : '';
+}
 function ouvrirLot(n){
   const l = LOTS.find(x => x.n === n); if(!l) return;
   LOT_CHOISI = l;
+  const plan = document.getElementById('m-plan');
+  const u = planUrl(l);
+  plan.innerHTML = `<div class="ph"><div class="ic">▭</div>Le plan de ce logement vous est présenté en visio.</div>`;
+  if(u){
+    const im = new Image();
+    im.alt = 'Plan du lot ' + l.n;
+    im.onload = () => { plan.innerHTML = ''; plan.appendChild(im); const z = document.createElement('button'); z.className = 'zoom'; z.textContent = 'Agrandir'; plan.appendChild(z); const open = () => { const zz = document.getElementById('zoomed'); zz.querySelector('img').src = u; zz.classList.add('open'); }; im.onclick = open; z.onclick = open; };
+    im.src = u;
+  }
+  document.getElementById('m-panier').textContent = SEL.has(l.n) ? 'Retirer de ma sélection' : 'Ajouter à ma sélection';
   document.getElementById('m-eyebrow').textContent = `${P.nom.split(/\s[–—-]\s/)[0]} · Lot ${l.n}`;
   document.getElementById('m-titre').textContent = `${typoNom(l.typo)} de ${m2(l.surf)}`;
   const specs = [
@@ -559,13 +620,30 @@ function ouvrirLot(n){
 }
 function fermerLot(){ document.getElementById('lot-modal').classList.remove('open'); document.body.classList.remove('modal-open'); }
 
+/* ---- Sélection du client (panier) : vit dans le navigateur, par programme ---- */
+const SEL = new Set();
+const selKey = () => 'glr_sel_' + (P && P.slug || '');
+function selCharger(){ try{ JSON.parse(localStorage.getItem(selKey()) || '[]').forEach(n => { if(LOTS.some(l => l.n === n)) SEL.add(n); }); }catch(e){} }
+function selSauver(){ try{ localStorage.setItem(selKey(), JSON.stringify([...SEL])); }catch(e){} }
+function selToggle(n){ if(SEL.has(n)) SEL.delete(n); else SEL.add(n); selSauver(); selRender(); }
+function selRender(){
+  const lots = [...SEL].map(n => LOTS.find(l => l.n === n)).filter(Boolean);
+  const bar = document.getElementById('panier');
+  bar.classList.toggle('on', lots.length > 0);
+  document.body.classList.toggle('panier-on', lots.length > 0);
+  document.getElementById('panier-n').textContent = lots.length + (lots.length > 1 ? ' logements dans ma sélection' : ' logement dans ma sélection');
+  document.getElementById('panier-liste').textContent = lots.map(l => 'Lot ' + l.n + ' · ' + typoNom(l.typo) + ' · ' + euro(l.prix) + ' €').join('  —  ');
+  document.getElementById('sel-head').classList.toggle('on', lots.length > 0);
+  document.getElementById('sel-list').innerHTML = lots.map(l =>
+    `<li><div><b>Lot ${esc(l.n)}</b> — ${esc(typoNom(l.typo))}, ${m2(l.surf)}, ${etageTxt(l.etage).toLowerCase()}<small>${euro(l.prix)} € parking inclus${l.ext ? ' · ' + m2(l.ext) + ' extérieur' : ''}</small></div><button aria-label="Retirer" data-n="${esc(l.n)}">✕</button></li>`).join('');
+  document.querySelectorAll('#sel-list button').forEach(b => b.onclick = () => selToggle(b.dataset.n));
+  document.querySelectorAll('#lots-list .lot').forEach(b => b.classList.toggle('in', SEL.has(b.dataset.n)));
+  if(LOT_CHOISI) document.getElementById('m-panier').textContent = SEL.has(LOT_CHOISI.n) ? 'Retirer de ma sélection' : 'Ajouter à ma sélection';
+}
 function interetLot(){
   const l = LOT_CHOISI; if(!l) return;
+  if(!SEL.has(l.n)){ SEL.add(l.n); selSauver(); selRender(); }
   fermerLot();
-  const box = document.getElementById('lot-choisi');
-  box.innerHTML = `Logement choisi : <b>Lot ${esc(l.n)}</b> — ${esc(typoNom(l.typo))}, ${m2(l.surf)}, ${etageTxt(l.etage).toLowerCase()}, ${euro(l.prix)} €. On en parle en visio.`;
-  box.classList.add('on');
-  try{ sessionStorage.setItem('glr_lot', JSON.stringify({ prog:P.slug, lot:l.n })); }catch(e){}
   document.getElementById('booking').scrollIntoView({ behavior:'smooth' });
 }
 
@@ -665,8 +743,16 @@ function renderEmplacement(pub){
   document.getElementById('m-close').onclick = fermerLot;
   document.getElementById('m-autres').onclick = fermerLot;
   document.getElementById('m-interet').onclick = interetLot;
+  document.getElementById('m-panier').onclick = () => { if(LOT_CHOISI) selToggle(LOT_CHOISI.n); };
+  document.getElementById('zoomed').onclick = () => document.getElementById('zoomed').classList.remove('open');
+  selCharger(); selRender();
+  // la barre de sélection s'efface quand la zone de réservation est à l'écran (la sélection y est déjà listée)
+  if('IntersectionObserver' in window){
+    new IntersectionObserver(es => es.forEach(e => document.getElementById('panier').classList.toggle('cache', e.isIntersecting)), { threshold:.15 })
+      .observe(document.getElementById('booking'));
+  }
   document.getElementById('lot-modal').addEventListener('click', e => { if(e.target.id === 'lot-modal') fermerLot(); });
-  document.addEventListener('keydown', e => { if(e.key === 'Escape') fermerLot(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape'){ const z = document.getElementById('zoomed'); if(z.classList.contains('open')) z.classList.remove('open'); else fermerLot(); } });
 
   // contact
   const fc = [];
