@@ -61,6 +61,12 @@
   .hero-facts .v{font-family:var(--serif);font-size:28px;line-height:1.2;color:var(--green);margin-top:2px}
   .hero-facts .v small{font-family:var(--sans);font-size:12px;color:var(--muted)}
   .hero-cta{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  .steps{list-style:none;display:flex;justify-content:center;gap:0;margin:0 auto 30px;max-width:900px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .steps li{flex:1;display:flex;gap:12px;align-items:flex-start;text-align:left;padding:18px 20px;border-right:1px solid var(--line)}
+  .steps li:last-child{border-right:none}
+  .steps .n{flex:none;width:30px;height:30px;border-radius:50%;background:var(--green);color:var(--cream);font-family:var(--serif);font-size:17px;display:flex;align-items:center;justify-content:center}
+  .steps b{display:block;font-family:var(--serif);font-weight:600;font-size:19px;color:var(--green);line-height:1.15}
+  .steps div span{display:block;font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
 
   .reveal{opacity:0;transform:translateY(16px);animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards}
   .reveal.d1{animation-delay:.05s}.reveal.d2{animation-delay:.12s}.reveal.d3{animation-delay:.19s}.reveal.d4{animation-delay:.26s}
@@ -107,14 +113,20 @@
   .lots-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:20px 22px 14px;border-bottom:1px solid var(--line)}
   .lots-head h3{font-family:var(--serif);font-weight:500;font-size:26px;color:var(--green)}
   .lots-head span{font-size:13px;color:var(--muted)}
-  .lots-cols,.lot{display:grid;grid-template-columns:.75fr 1.05fr .9fr .95fr .9fr .9fr 1.2fr 28px;gap:10px;align-items:center;padding:0 22px}
+  .lots-cols,.lot{display:grid;grid-template-columns:.7fr 1fr .85fr .9fr .85fr .8fr 1.1fr 128px;gap:10px;align-items:center;padding:0 22px}
   .lots-cols{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding-top:12px;padding-bottom:10px}
   .lots-list{max-height:430px;overflow-y:auto}
   .lot{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--line);padding-top:14px;padding-bottom:14px;cursor:pointer;font-size:14.5px;transition:background .15s ease}
   .lot:hover{background:var(--cream)}
   .lot .ref{font-weight:600;color:var(--green)}
   .lot .px{font-family:var(--serif);font-size:22px;color:var(--green);text-align:right;white-space:nowrap}
-  .lot .go{color:var(--brass);font-weight:700;text-align:right}
+  .lot .sel{justify-self:end;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--green);color:var(--green);background:var(--card);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap;transition:background .15s ease,color .15s ease}
+  .lot .sel:hover{background:var(--green);color:#fff}
+  .lot.in .sel{background:var(--brass);border-color:var(--brass);color:#fff}
+  .lot .sel::before{content:'+'}
+  .lot.in .sel::before{content:'✓'}
+  .lot .sel::after{content:' Sélectionner'}
+  .lot.in .sel::after{content:' Sélectionné'}
   .lot .meta{display:none}
   .r{text-align:right}
 
@@ -203,15 +215,21 @@
 
   /* SÉLECTION (panier) */
   .panier{position:fixed;left:0;right:0;bottom:0;z-index:60;transform:translateY(110%);visibility:hidden;transition:transform .3s cubic-bezier(.2,.7,.2,1),visibility .3s;pointer-events:none}
-  .panier.on{transform:none;visibility:visible;pointer-events:auto}
-  .panier.on.cache{transform:translateY(110%);visibility:hidden;pointer-events:none}
+  .panier.on,.panier.vide{transform:none;visibility:visible;pointer-events:auto}
+  .panier.cache{transform:translateY(110%);visibility:hidden;pointer-events:none}
+  .panier.vide .panier-bar{background:var(--card);color:var(--muted);border:1px solid var(--line);border-bottom:none;box-shadow:0 -8px 30px rgba(22,39,29,.10)}
+  .panier.vide .panier-txt strong{color:var(--green);font-size:16px}
+  .panier.vide .panier-txt span{color:var(--muted)}
+  .panier.vide .btn{background:transparent;color:var(--green);border:1px solid var(--green)}
   .panier-bar{background:var(--green);color:var(--cream);border-radius:16px 16px 0 0;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:0 -12px 40px rgba(22,39,29,.25)}
   .panier-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
   .panier-txt strong{font-family:var(--serif);font-size:20px;font-weight:500}
   .panier-txt span{font-size:12.5px;color:#CFE0D5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .panier .btn{background:var(--brass);color:#fff;flex:none}
   .panier .btn:hover{background:var(--brass-soft)}
-  body.panier-on{padding-bottom:90px}
+  body.panier-on,body.panier-vide{padding-bottom:90px}
+  .sel-vide{background:var(--card);border:1px dashed var(--brass-soft);border-radius:12px;padding:12px 16px;font-size:14px;color:var(--muted);margin-bottom:22px}
+  .sel-vide b{color:var(--green)}
   .sel-list{list-style:none;display:grid;gap:8px;margin-bottom:22px}
   .sel-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--brass-soft);border-radius:12px;padding:10px 14px;font-size:14px}
   .sel-list li b{color:var(--green)}
@@ -220,7 +238,6 @@
   .sel-list button:hover{color:var(--green)}
   .sel-head{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:10px;display:none}
   .sel-head.on{display:block}
-  .lot.in .ref::after{content:'✓';display:inline-block;margin-left:8px;color:var(--brass);font-weight:700}
   footer{background:#e9e2d1;color:var(--ink);padding:54px 0 60px;border-top:1px solid var(--brass-soft)}
   .foot-grid{display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;align-items:flex-end}
   .foot-brand{font-family:var(--serif);font-size:30px;color:var(--green)}
@@ -241,6 +258,9 @@
     .book-grid{grid-template-columns:1fr;gap:30px}
     .topbar .btn{display:none}
     .hero{padding-top:44px}
+    .steps{flex-direction:column;border:none;gap:0}
+    .steps li{border-right:none;border-top:1px solid var(--line);padding:14px 4px}
+    .steps li:last-child{border-bottom:1px solid var(--line)}
     .hero-facts{gap:14px 0}
     .hero-facts .f{padding:0 14px}
     .hero-facts .v{font-size:22px}
@@ -250,9 +270,15 @@
     .atout,.atout:nth-child(odd),.atout:nth-child(even){padding:20px 0;border-right:none}
     .lots-cols{display:none}
     .lot{grid-template-columns:1fr auto;gap:2px 12px;padding-left:18px;padding-right:18px}
-    .lot .c-et,.lot .c-surf,.lot .c-ext,.lot .c-expo,.lot .c-pk,.lot .go{display:none}
+    .lot .c-et,.lot .c-surf,.lot .c-ext,.lot .c-expo,.lot .c-pk{display:none}
+    .lot .sel{grid-column:2;grid-row:3;justify-self:end;margin-top:4px}
+    .panier-bar{padding:12px 14px;gap:10px}
+    .panier-txt strong{font-size:16px;line-height:1.2}
+    .panier.vide .panier-txt span{display:none}
+    .panier .btn{padding:9px 14px;font-size:12.5px}
     .lot .meta{display:block;grid-column:1;font-size:13px;color:var(--muted)}
     .lot .px{grid-column:2;grid-row:1/span 2;align-self:center}
+    .lot .meta{grid-row:2}
   }
   @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}.car-track{scroll-behavior:auto}.reveal{opacity:1;transform:none}}
 </style>
@@ -275,9 +301,14 @@
     <div class="rule reveal d2"></div>
     <p class="pitch reveal d2" id="h-pitch"></p>
     <div class="hero-facts reveal d3" id="h-facts"></div>
+    <ol class="steps reveal d4" aria-label="Comment ça marche">
+      <li><span class="n">1</span><div><b>Choisissez</b><span>les logements qui vous plaisent</span></div></li>
+      <li><span class="n">2</span><div><b>Réservez</b><span>15 minutes en visio, à l'heure qui vous arrange</span></div></li>
+      <li><span class="n">3</span><div><b>On les regarde ensemble</b><span>plans, prix réels et financement</span></div></li>
+    </ol>
     <div class="hero-cta reveal d4">
-      <a href="#logements" class="btn">Voir les logements disponibles</a>
-      <a href="#booking" class="btn btn-ghost">Réserver ma visio</a>
+      <a href="#logements" class="btn">Composer ma sélection</a>
+      <a href="#booking" class="btn btn-ghost">Réserver directement ma visio</a>
     </div>
   </div>
 </header>
@@ -296,7 +327,7 @@
 <main>
   <section id="logements">
     <div class="wrap">
-      <div class="sec-head"><span class="num">01</span><h2>Les logements</h2></div>
+      <div class="sec-head"><span class="num">01</span><h2>Composez votre sélection</h2></div>
       <p class="sec-intro" id="s-intro">Choisissez une typologie pour voir les appartements encore disponibles.</p>
       <div class="typos" id="s-typos"></div>
       <div class="lots-panel" id="lots-panel">
@@ -342,6 +373,7 @@
       <div class="book-grid">
         <div class="book-pitch">
           <div class="sel-head" id="sel-head">Votre sélection</div>
+          <div class="sel-vide" id="sel-vide"><b>Vous n'avez rien sélectionné.</b> Pas de souci : on fera le tour des logements ensemble pendant la visio. Vous pouvez aussi <a href="#logements" style="color:var(--brass)">en cocher quelques-uns</a> avant.</div>
           <ul class="sel-list" id="sel-list"></ul>
           <p>On fait le tour des lots encore disponibles, et je regarde avec vous le plan de financement le plus adapté — sans engagement.</p>
           <ul class="book-list">
@@ -500,7 +532,7 @@ async function fetchPublic(slug){
   }catch(e){ return null; }
 }
 
-let P = null, LOTS = [], LOT_CHOISI = null;
+let P = null, LOTS = [], LOT_CHOISI = null, _lotsVus = false;
 
 function carousel(photos){
   const track = document.getElementById('car-track'), dots = document.getElementById('car-dots');
@@ -547,7 +579,7 @@ function renderTypos(){
         <div class="more"><span>Voir les logements</span><span class="chev">⌄</span></div></button>`;
     }).join('');
     box.querySelectorAll('.typo').forEach(b => b.onclick = () => ouvrirTypo(b.dataset.t, b));
-    document.getElementById('s-intro').textContent = `${LOTS.length} appartements encore disponibles. Choisissez une typologie pour les voir un par un — les prix incluent le stationnement.`;
+    document.getElementById('s-intro').textContent = `${LOTS.length} appartements encore disponibles, prix parking inclus. Ouvrez une typologie, cochez ceux qui vous intéressent : on les passe en revue ensemble en visio.`;
   } else {
     box.innerHTML = (P.typologies || []).map(t =>
       `<a class="typo" href="#booking" style="text-decoration:none"><div class="t">${esc(t.type)}</div><div class="s">${esc(t.surface)}</div>
@@ -562,6 +594,7 @@ function ouvrirTypo(t, btn){
   document.querySelectorAll('.typo').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-expanded', 'false'); });
   if(dejaOuvert){ panel.classList.remove('open'); return; }
   btn.classList.add('on'); btn.setAttribute('aria-expanded', 'true');
+  if(!_lotsVus){ _lotsVus = true; selRender(); }
   const g = LOTS.filter(l => l.typo === t);
   document.getElementById('lots-titre').textContent = typoNom(t);
   document.getElementById('lots-sous').textContent = `${g.length} logement${g.length > 1 ? 's' : ''} disponible${g.length > 1 ? 's' : ''} · prix parking inclus`;
@@ -574,10 +607,10 @@ function ouvrirTypo(t, btn){
       <span class="c-expo">${esc(EXPO[l.expo] || l.expo || '—')}</span>
       <span class="c-pk">${l.nb_pk > 1 ? l.nb_pk + ' places' : l.nb_pk ? '1 place' : '—'}</span>
       <span class="px">${euro(l.prix)} €</span>
-      <span class="go">›</span>
+      <span class="sel" role="button" aria-label="Sélectionner le lot ${esc(l.n)}"></span>
       <span class="meta">${etageCourt(l.etage)} · ${m2(l.surf)}${l.ext ? ' + ' + m2(l.ext) + ' ext.' : ''} · ${esc(EXPO[l.expo] || l.expo || '')}${l.nb_pk ? ' · ' + (l.nb_pk > 1 ? l.nb_pk + ' pk' : '1 pk') : ''}</span>
     </button>`).join('');
-  document.querySelectorAll('#lots-list .lot').forEach(b => { b.onclick = () => ouvrirLot(b.dataset.n); b.onmouseenter = () => { const l = LOTS.find(x => x.n === b.dataset.n); if(l && l.plan && !_planCache[l.n]) planImage(l).catch(() => {}); }; });
+  document.querySelectorAll('#lots-list .lot').forEach(b => { b.onclick = e => { if(e.target.closest('.sel')){ selToggle(b.dataset.n); return; } ouvrirLot(b.dataset.n); }; b.onmouseenter = () => { const l = LOTS.find(x => x.n === b.dataset.n); if(l && l.plan && !_planCache[l.n]) planImage(l).catch(() => {}); }; });
   // le panneau s'insère juste sous la rangée de la carte cliquée (une carte par ligne sur mobile)
   const cartes = [...document.querySelectorAll('#s-typos .typo')];
   const finDeRangee = cartes.filter(c => c.offsetTop === btn.offsetTop).pop() || btn;
@@ -674,11 +707,23 @@ function selToggle(n){ if(SEL.has(n)) SEL.delete(n); else SEL.add(n); selSauver(
 function selRender(){
   const lots = [...SEL].map(n => LOTS.find(l => l.n === n)).filter(Boolean);
   const bar = document.getElementById('panier');
+  const vide = lots.length === 0 && LOTS.length > 0 && _lotsVus;
   bar.classList.toggle('on', lots.length > 0);
+  bar.classList.toggle('vide', vide);
   document.body.classList.toggle('panier-on', lots.length > 0);
-  document.getElementById('panier-n').textContent = lots.length + (lots.length > 1 ? ' logements dans ma sélection' : ' logement dans ma sélection');
-  document.getElementById('panier-liste').textContent = lots.map(l => 'Lot ' + l.n + ' · ' + typoNom(l.typo) + ' · ' + euro(l.prix) + ' €').join('  —  ');
+  document.body.classList.toggle('panier-vide', vide);
+  if(lots.length){
+    document.getElementById('panier-n').textContent = lots.length + (lots.length > 1 ? ' logements dans ma sélection' : ' logement dans ma sélection');
+    document.getElementById('panier-liste').textContent = lots.map(l => 'Lot ' + l.n + ' · ' + typoNom(l.typo) + ' · ' + euro(l.prix) + ' €').join('  —  ');
+    document.getElementById('panier-cta').textContent = 'En parler en visio →';
+  } else {
+    document.getElementById('panier-n').textContent = 'Aucun logement sélectionné';
+    document.getElementById('panier-liste').textContent = 'Cochez ceux qui vous intéressent pour préparer votre visio';
+    document.getElementById('panier-cta').textContent = 'Réserver sans sélection';
+  }
   document.getElementById('sel-head').classList.toggle('on', lots.length > 0);
+  const sv = document.getElementById('sel-vide');
+  sv.style.display = lots.length ? 'none' : '';
   document.getElementById('sel-list').innerHTML = lots.map(l =>
     `<li><div><b>Lot ${esc(l.n)}</b> — ${esc(typoNom(l.typo))}, ${m2(l.surf)}, ${etageTxt(l.etage).toLowerCase()}<small>${euro(l.prix)} € parking inclus${l.ext ? ' · ' + m2(l.ext) + ' extérieur' : ''}</small></div><button aria-label="Retirer" data-n="${esc(l.n)}">✕</button></li>`).join('');
   document.querySelectorAll('#sel-list button').forEach(b => b.onclick = () => selToggle(b.dataset.n));
