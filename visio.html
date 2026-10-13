@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Réserver une visio — programme immobilier neuf</title>
-<meta name="description" content="Découvrez le programme et réservez une courte visio personnalisée. Lien Google Meet, rien à installer.">
+<meta name="description" content="Découvrez le programme, ses logements disponibles, et réservez une courte visio personnalisée. Lien Google Meet, rien à installer.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --cream:#f5f1e8;
@@ -22,101 +22,175 @@
     --line:#e3ddcc;
     --serif:'Cormorant Garamond',Georgia,serif;
     --sans:'Inter',system-ui,sans-serif;
-    --maxw:1100px;
+    --maxw:1140px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html{scroll-behavior:smooth}
   body{background:var(--cream);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  body.modal-open{overflow:hidden}
   a{color:inherit}
   img{max-width:100%;display:block}
+  button{font:inherit;color:inherit}
   .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
   .eyebrow{font-size:11px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:var(--brass)}
 
   /* TOP BAR */
-  .topbar{position:sticky;top:0;z-index:50;background:rgba(245,241,232,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:62px}
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(245,241,232,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:62px;gap:16px}
   .brand{font-size:11px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--green)}
   .brand small{display:block;color:var(--muted);font-weight:500;letter-spacing:.12em;margin-top:2px;font-size:9px}
-  .btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;border:none;border-radius:999px;padding:11px 22px;background:var(--green);color:var(--cream);text-decoration:none;transition:transform .15s ease,box-shadow .15s ease,background .15s ease}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;border:none;border-radius:999px;padding:12px 24px;background:var(--green);color:var(--cream);text-decoration:none;transition:transform .15s ease,box-shadow .15s ease,background .15s ease}
   .btn:hover{background:var(--green2);transform:translateY(-1px);box-shadow:0 10px 26px rgba(22,39,29,.20)}
-  .btn:focus-visible{outline:2px solid var(--brass);outline-offset:3px}
+  .btn:focus-visible,.typo:focus-visible,.lot:focus-visible,.car-btn:focus-visible,.dot:focus-visible{outline:2px solid var(--brass);outline-offset:3px}
   .btn-sm{padding:9px 18px;font-size:13px}
   .btn-ghost{background:transparent;color:var(--green);border:1px solid var(--green)}
   .btn-ghost:hover{background:var(--green);color:var(--cream)}
 
-  /* HERO — split éditorial sur crème */
-  .hero{padding:46px 0 70px}
-  .hero-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
-  .hero h1{font-family:var(--serif);font-weight:500;font-size:clamp(46px,7.4vw,88px);line-height:.98;letter-spacing:-.01em;color:var(--green);margin:14px 0 4px}
-  .hero .loc{font-family:var(--serif);font-style:italic;font-size:clamp(20px,3vw,30px);color:var(--brass)}
-  .hero .pitch{max-width:520px;color:#5b5648;margin:20px 0 26px;font-size:clamp(15px,1.8vw,18px)}
-  .hero-facts{display:flex;flex-wrap:wrap;gap:0;margin-bottom:28px}
-  .hero-facts .f{padding-right:24px;margin-right:24px;border-right:1px solid var(--line)}
-  .hero-facts .f:last-child{border-right:none;margin-right:0}
+  /* HERO — titre centré, grand */
+  .hero{padding:64px 0 40px;text-align:center}
+  .hero .eyebrow{display:inline-block}
+  .hero h1{font-family:var(--serif);font-weight:500;font-size:clamp(64px,13vw,150px);line-height:.9;letter-spacing:-.02em;color:var(--green);margin:18px 0 6px}
+  .hero .sub{font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(26px,4.4vw,46px);line-height:1.1;color:var(--brass)}
+  .hero .loc{margin-top:16px;font-size:12px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+  .hero .rule{width:64px;height:1px;background:var(--brass-soft);margin:26px auto}
+  .hero .pitch{max-width:640px;margin:0 auto;color:#5b5648;font-size:clamp(15px,1.8vw,18px)}
+  .hero-facts{display:flex;flex-wrap:wrap;justify-content:center;gap:0;margin:30px auto 30px}
+  .hero-facts .f{padding:0 26px;border-right:1px solid var(--line)}
+  .hero-facts .f:last-child{border-right:none}
   .hero-facts .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
-  .hero-facts .v{font-family:var(--serif);font-size:26px;color:var(--green);margin-top:2px}
-  .hero-cta{display:flex;gap:12px;flex-wrap:wrap}
-  .hero-figure{position:relative;padding:14px}
-  .hero-figure::before{content:"";position:absolute;inset:0;border:1px solid var(--brass-soft);border-radius:20px}
-  #hero-img{height:clamp(300px,48vw,470px);border-radius:14px;background-position:center;background-size:cover;background-color:var(--cream2);box-shadow:0 22px 50px rgba(22,39,29,.16)}
+  .hero-facts .v{font-family:var(--serif);font-size:28px;line-height:1.2;color:var(--green);margin-top:2px}
+  .hero-facts .v small{font-family:var(--sans);font-size:12px;color:var(--muted)}
+  .hero-cta{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
 
   .reveal{opacity:0;transform:translateY(16px);animation:rise .8s cubic-bezier(.2,.7,.2,1) forwards}
   .reveal.d1{animation-delay:.05s}.reveal.d2{animation-delay:.12s}.reveal.d3{animation-delay:.19s}.reveal.d4{animation-delay:.26s}
   @keyframes rise{to{opacity:1;transform:none}}
 
+  /* CARROUSEL */
+  .gallery{padding:10px 0 20px}
+  .carousel{position:relative;border-radius:18px;overflow:hidden;background:var(--cream2);box-shadow:0 26px 60px rgba(22,39,29,.16)}
+  .car-track{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none}
+  .car-track::-webkit-scrollbar{display:none}
+  .slide{flex:0 0 100%;scroll-snap-align:center;position:relative;aspect-ratio:16/9;max-height:640px}
+  .slide img{width:100%;height:100%;object-fit:cover}
+  .slide figcaption{position:absolute;left:18px;bottom:18px;background:rgba(255,253,248,.92);color:var(--green);font-size:12px;font-weight:600;letter-spacing:.06em;padding:7px 14px;border-radius:999px}
+  .car-btn{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;border:none;background:rgba(255,253,248,.92);color:var(--green);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(22,39,29,.18);transition:background .15s ease}
+  .car-btn:hover{background:#fff}
+  .car-btn.prev{left:16px}.car-btn.next{right:16px}
+  .dots{display:flex;justify-content:center;gap:8px;margin-top:16px}
+  .dot{width:8px;height:8px;border-radius:999px;border:none;background:#d6ceb9;cursor:pointer;padding:0;transition:width .25s ease,background .25s ease}
+  .dot.on{width:26px;background:var(--brass)}
+
   /* SECTIONS */
-  section{padding:74px 0}
-  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:34px}
-  .sec-head h2{font-family:var(--serif);font-weight:500;font-size:clamp(30px,5vw,46px);line-height:1.05;color:var(--green)}
+  section{padding:80px 0}
+  .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:14px}
+  .sec-head h2{font-family:var(--serif);font-weight:500;font-size:clamp(32px,5vw,48px);line-height:1.05;color:var(--green)}
   .sec-head .num{font-size:11px;letter-spacing:.2em;color:var(--brass);padding-top:8px}
+  .sec-intro{color:var(--muted);max-width:640px;margin-bottom:30px}
 
-  .tarif-intro{color:var(--muted);max-width:620px;margin-bottom:28px}
-  .typos{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
-  .typo{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease}
-.typo:hover{border-color:var(--green);background:var(--green);transform:translateY(-3px);box-shadow:0 14px 32px rgba(22,39,29,.14)}
-.typo:hover .t{color:#E9D9B0}
-.typo:hover .s{color:#CFE0D5}
-.typo:hover .p{color:#fff}
-.typo:hover .p small{color:#CFE0D5}
-.typo:hover .book a{background:var(--brass);color:#fff}  .typo .t{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--brass)}
-  .typo .s{color:var(--muted);font-size:14px;margin:10px 0 16px}
-  .typo .p{font-family:var(--serif);font-size:34px;line-height:1;color:var(--green)}
-  .typo .p small{font-size:14px;color:var(--muted);font-family:var(--sans)}/* CTA "Réserver" qui apparaît au survol de chaque typologie */
-.typo .book a{display:inline-block;font-family:var(--sans);font-size:13px;letter-spacing:.02em;color:#fff;background:var(--green);padding:10px 18px;border-radius:9px;text-decoration:none;transition:background .2s ease}
-.typo .book a:hover{background:var(--brass)}
-.typo .book{margin-top:18px}
-/* Sur écran avec souris : caché par défaut, révélé au survol de la carte */
-@media (hover:hover){
-  .typo .book{max-height:0;opacity:0;overflow:hidden;margin-top:0;transform:translateY(6px);transition:max-height .25s ease,opacity .2s ease,transform .25s ease,margin-top .25s ease}
-  .typo:hover .book{max-height:64px;opacity:1;margin-top:18px;transform:translateY(0)}
-}
-  .disclaimer{color:var(--muted);font-size:12px;margin-top:18px;max-width:680px}
-  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  /* TYPOLOGIES + LOTS */
+  .typos{display:grid;scroll-margin-top:80px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .typo{scroll-margin-top:76px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 22px 20px;cursor:pointer;transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease,background .2s ease;position:relative}
+  .typo:hover{border-color:var(--green);transform:translateY(-3px);box-shadow:0 14px 32px rgba(22,39,29,.12)}
+  .typo .t{font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--brass)}
+  .typo .s{color:var(--muted);font-size:14px;margin:8px 0 14px}
+  .typo .p{font-family:var(--serif);font-size:36px;line-height:1;color:var(--green)}
+  .typo .p small{font-size:13px;color:var(--muted);font-family:var(--sans)}
+  .typo .more{margin-top:16px;font-size:13px;font-weight:600;color:var(--green);display:flex;align-items:center;justify-content:space-between}
+  .typo .more .chev{transition:transform .25s ease}
+  .typo.on{background:var(--green);border-color:var(--green)}
+  .typo.on .t{color:#E9D9B0}.typo.on .s,.typo.on .p small{color:#CFE0D5}.typo.on .p,.typo.on .more{color:#fff}
+  .typo.on .more .chev{transform:rotate(180deg)}
+
+  .lots-panel{grid-column:1/-1;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:none}
+  .lots-panel.open{display:block;animation:rise .35s ease forwards}
+  .lots-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:20px 22px 14px;border-bottom:1px solid var(--line)}
+  .lots-head h3{font-family:var(--serif);font-weight:500;font-size:26px;color:var(--green)}
+  .lots-head span{font-size:13px;color:var(--muted)}
+  .lots-cols,.lot{display:grid;grid-template-columns:.8fr 1.1fr 1fr 1fr .9fr 1.3fr 28px;gap:10px;align-items:center;padding:0 22px}
+  .lots-cols{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding-top:12px;padding-bottom:10px}
+  .lots-list{max-height:430px;overflow-y:auto}
+  .lot{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--line);padding-top:14px;padding-bottom:14px;cursor:pointer;font-size:14.5px;transition:background .15s ease}
+  .lot:hover{background:var(--cream)}
+  .lot .ref{font-weight:600;color:var(--green)}
+  .lot .px{font-family:var(--serif);font-size:22px;color:var(--green);text-align:right;white-space:nowrap}
+  .lot .go{color:var(--brass);font-weight:700;text-align:right}
+  .lot .meta{display:none}
+  .r{text-align:right}
+
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
   .chip{border:1px solid var(--brass);color:#8a6a31;border-radius:999px;padding:7px 16px;font-size:13px;font-weight:600}
+  .disclaimer{color:var(--muted);font-size:12px;margin-top:16px;max-width:720px}
 
-  .atouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(248px,1fr));gap:28px 36px}
-  .atout{border-top:1px solid var(--line);padding-top:18px}
-  .atout h3{font-family:var(--serif);font-weight:600;font-size:23px;color:var(--green);margin-bottom:8px}
-  .atout p{color:var(--muted);font-size:15px}
+  /* CE QUI FAIT LA DIFFÉRENCE */
+  .diff{background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .diff-grid{display:grid;grid-template-columns:.85fr 1.3fr;gap:46px;align-items:stretch;margin-top:30px}
+  .diff-photo{border-radius:16px;overflow:hidden;min-height:420px;background:var(--cream2) center/cover no-repeat;box-shadow:0 20px 46px rgba(22,39,29,.14)}
+  .atouts{display:grid;grid-template-columns:repeat(2,1fr);gap:0}
+  .atout{padding:24px 22px 24px 0;border-top:1px solid var(--line)}
+  .atout:nth-child(odd){padding-right:28px;border-right:1px solid var(--line)}
+  .atout:nth-child(even){padding-left:28px}
+  .atout .c{font-family:var(--serif);font-weight:500;font-size:44px;line-height:1;color:var(--brass)}
+  .atout h3{font-family:var(--serif);font-weight:600;font-size:21px;color:var(--green);margin:6px 0 6px;line-height:1.2}
+  .atout p{color:var(--muted);font-size:14.5px}
+  .atouts.plain .atout .c{display:none}
 
-  .quartier{background:var(--cream2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-  .quartier .q-body{max-width:720px;font-family:var(--serif);font-size:clamp(20px,3vw,27px);line-height:1.4;color:#3f4a3f}
+  /* EMPLACEMENT */
+  .place-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start;margin-top:30px}
+  .addr{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:22px}
+  .addr .pin{flex:none;width:38px;height:38px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center}
+  .addr strong{display:block;font-family:var(--serif);font-size:22px;font-weight:600;color:var(--green);line-height:1.2}
+  .addr span{font-size:14px;color:var(--muted)}
+  .addr a{font-size:13px;font-weight:600;color:var(--brass);text-decoration:none}
+  .q-body{font-family:var(--serif);font-size:clamp(19px,2.4vw,23px);line-height:1.45;color:#3f4a3f;margin-bottom:22px}
+  .transports{list-style:none;display:grid;gap:0}
+  .tr{display:grid;grid-template-columns:58px 1fr auto;gap:14px;align-items:center;padding:14px 0;border-top:1px solid var(--line)}
+  .tr:last-child{border-bottom:1px solid var(--line)}
+  .tr .badge{height:34px;border-radius:9px;background:var(--cream2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--green)}
+  .tr .badge.tram{background:#e7efe9}.tr .badge.bus{background:#f2ece0}.tr .badge.rer{background:#e8edf3}
+  .tr b{display:block;font-size:15px;color:var(--ink)}
+  .tr small{font-size:13px;color:var(--muted)}
+  .tr .dist{font-family:var(--serif);font-size:22px;color:var(--brass);white-space:nowrap}
+  .map{border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 20px 46px rgba(22,39,29,.12);background:var(--cream2);aspect-ratio:4/4.2}
+  .map iframe{width:100%;height:100%;border:0;display:block}
 
-  /* BOOKING — clair et chaleureux, carte blanche pour le focus du CTA */
+  /* BOOKING */
   .booking{background:var(--cream2);color:var(--ink);border-top:1px solid var(--brass-soft)}
-  .booking .sec-head h2{color:var(--green)}
-  .booking .sec-head .num{color:var(--brass)}
-  .book-grid{display:grid;grid-template-columns:.9fr 1.3fr;gap:48px;align-items:start}
+  .book-grid{display:grid;grid-template-columns:.9fr 1.3fr;gap:48px;align-items:start;margin-top:30px}
   .book-pitch p{color:#5b5648;margin-bottom:22px;font-size:17px}
   .book-list{list-style:none;display:grid;gap:14px}
   .book-list li{display:flex;gap:12px;align-items:flex-start;font-size:15px;color:var(--ink)}
   .book-list .ic{color:var(--brass);font-weight:700;flex:none;margin-top:1px}
-  .embed-shell{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:520px;box-shadow:0 20px 50px rgba(22,39,29,.12)}
+  .lot-choisi{display:none;margin-bottom:20px;background:var(--card);border:1px solid var(--brass-soft);border-radius:12px;padding:12px 16px;font-size:14px}
+  .lot-choisi.on{display:block}
+  .lot-choisi b{color:var(--green)}
+  .embed-shell{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:320px;box-shadow:0 20px 50px rgba(22,39,29,.12)}
   .embed-shell iframe{width:100%;height:640px;border:0;display:block}
-  .embed-placeholder{padding:40px 34px;text-align:center;color:#6a6457}
-  .embed-placeholder .big{font-family:var(--serif);font-size:28px;color:var(--green);margin-bottom:8px}
+  .embed-placeholder{padding:46px 34px;text-align:center;color:#6a6457}
+  .embed-placeholder .big{font-family:var(--serif);font-size:30px;color:var(--green);margin-bottom:8px}
   .embed-placeholder ol{text-align:left;max-width:430px;margin:22px auto 26px;padding-left:18px;color:#5c574d;font-size:14px;line-height:1.9}
   .embed-placeholder code{background:#efe9dd;border-radius:5px;padding:1px 6px;font-size:13px}
+
+  /* FENÊTRE LOT */
+  .modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(35,40,31,.42);backdrop-filter:blur(3px)}
+  .modal.open{display:flex}
+  .modal-box{background:var(--card);border-radius:20px;width:min(560px,100%);max-height:calc(100vh - 36px);overflow-y:auto;box-shadow:0 30px 80px rgba(22,39,29,.3);animation:pop .25s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+  .modal-top{padding:26px 28px 18px;border-bottom:1px solid var(--line);position:relative}
+  .modal-top .eyebrow{display:block;margin-bottom:6px}
+  .modal-top h3{font-family:var(--serif);font-weight:500;font-size:34px;line-height:1.05;color:var(--green)}
+  .modal-close{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--card);cursor:pointer;font-size:18px;color:var(--muted)}
+  .modal-close:hover{color:var(--green);border-color:var(--green)}
+  .specs{display:grid;grid-template-columns:1fr 1fr;padding:6px 28px}
+  .spec{padding:14px 0;border-bottom:1px solid var(--line)}
+  .spec:nth-child(odd){padding-right:14px}
+  .spec .k{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .spec .v{font-size:16px;font-weight:600;color:var(--ink);margin-top:2px}
+  .modal-price{padding:20px 28px 6px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .modal-price .v{font-family:var(--serif);font-size:44px;line-height:1;color:var(--green)}
+  .modal-price small{font-size:13px;color:var(--muted)}
+  .modal-note{padding:4px 28px 0;font-size:13px;color:var(--muted)}
+  .modal-actions{padding:22px 28px 26px;display:grid;gap:10px}
 
   footer{background:#e9e2d1;color:var(--ink);padding:54px 0 60px;border-top:1px solid var(--brass-soft)}
   .foot-grid{display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;align-items:flex-end}
@@ -124,18 +198,31 @@
   .foot-brand span{color:var(--brass)}
   .foot-contact{font-size:14px;color:var(--muted);line-height:1.9}
   .foot-contact a{color:var(--green);text-decoration:none;border-bottom:1px solid var(--line)}
-  .foot-legal{margin-top:34px;font-size:12px;color:#8a8474;max-width:640px;line-height:1.7}
+  .foot-legal{margin-top:34px;font-size:12px;color:#8a8474;max-width:680px;line-height:1.7}
 
-  @media(max-width:820px){
-    .hero-grid{grid-template-columns:1fr;gap:30px}
-    .hero-figure{order:-1}
+  @media(max-width:880px){
+    .diff-grid,.place-grid{grid-template-columns:1fr;gap:28px}
+    .diff-photo{min-height:260px}
+    .map{aspect-ratio:4/3}
   }
   @media(max-width:760px){
     .book-grid{grid-template-columns:1fr;gap:30px}
     .topbar .btn{display:none}
-    .hero-facts .f{border-right:none;padding-right:0;margin-right:20px}
+    .hero{padding-top:44px}
+    .hero-facts{gap:14px 0}
+    .hero-facts .f{padding:0 14px}
+    .hero-facts .v{font-size:22px}
+    .slide{aspect-ratio:4/3}
+    .car-btn{width:38px;height:38px;font-size:17px}
+    .atouts{grid-template-columns:1fr}
+    .atout,.atout:nth-child(odd),.atout:nth-child(even){padding:20px 0;border-right:none}
+    .lots-cols{display:none}
+    .lot{grid-template-columns:1fr auto;gap:2px 12px;padding-left:18px;padding-right:18px}
+    .lot .c-et,.lot .c-surf,.lot .c-ext,.lot .c-expo,.lot .go{display:none}
+    .lot .meta{display:block;grid-column:1;font-size:13px;color:var(--muted)}
+    .lot .px{grid-column:2;grid-row:1/span 2;align-self:center}
   }
-  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}.reveal{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}.car-track{scroll-behavior:auto}.reveal{opacity:1;transform:none}}
 </style>
 </head>
 <body>
@@ -149,45 +236,71 @@
 
 <header class="hero">
   <div class="wrap">
-    <div class="hero-grid">
-      <div class="hero-text">
-        <div class="eyebrow reveal" id="h-eyebrow">Vente en avant-première</div>
-        <h1 class="reveal d1" id="h-nom">—</h1>
-        <div class="loc reveal d1" id="h-loc">—</div>
-        <p class="pitch reveal d2" id="h-pitch">—</p>
-        <div class="hero-facts reveal d3" id="h-facts"></div>
-        <div class="hero-cta reveal d4">
-          <a href="#booking" class="btn">Réserver ma visio →</a>
-          <a href="#programme" class="btn btn-ghost">Découvrir le programme</a>
-        </div>
-      </div>
-      <div class="hero-figure reveal d2"><div id="hero-img"></div></div>
+    <div class="eyebrow reveal" id="h-eyebrow">Programme neuf</div>
+    <h1 class="reveal d1" id="h-nom">&nbsp;</h1>
+    <div class="sub reveal d1" id="h-sub"></div>
+    <div class="loc reveal d2" id="h-loc"></div>
+    <div class="rule reveal d2"></div>
+    <p class="pitch reveal d2" id="h-pitch"></p>
+    <div class="hero-facts reveal d3" id="h-facts"></div>
+    <div class="hero-cta reveal d4">
+      <a href="#logements" class="btn">Voir les logements disponibles</a>
+      <a href="#booking" class="btn btn-ghost">Réserver ma visio</a>
     </div>
   </div>
 </header>
 
+<div class="gallery reveal d3">
+  <div class="wrap">
+    <div class="carousel" id="carousel" aria-roledescription="carrousel" aria-label="Photos du programme">
+      <div class="car-track" id="car-track"></div>
+      <button class="car-btn prev" id="car-prev" aria-label="Photo précédente">‹</button>
+      <button class="car-btn next" id="car-next" aria-label="Photo suivante">›</button>
+    </div>
+    <div class="dots" id="car-dots"></div>
+  </div>
+</div>
+
 <main>
-  <section id="programme">
+  <section id="logements">
     <div class="wrap">
-      <div class="sec-head"><span class="num">01</span><h2>En bref</h2></div>
-      <p class="tarif-intro" id="s-intro">Les typologies disponibles et leurs prix de lancement.</p>
+      <div class="sec-head"><span class="num">01</span><h2>Les logements</h2></div>
+      <p class="sec-intro" id="s-intro">Choisissez une typologie pour voir les appartements encore disponibles.</p>
       <div class="typos" id="s-typos"></div>
+      <div class="lots-panel" id="lots-panel">
+        <div class="lots-head"><h3 id="lots-titre"></h3><span id="lots-sous"></span></div>
+        <div class="lots-cols"><span>Lot</span><span>Étage</span><span>Surface</span><span>Extérieur</span><span>Expo.</span><span class="r">Prix</span><span></span></div>
+        <div class="lots-list" id="lots-list"></div>
+      </div>
       <div class="chips" id="s-chips"></div>
-      <p class="disclaimer">Prix et disponibilités indicatifs, susceptibles d'évoluer. Les lots précis et leur prix exact vous sont présentés en visio. Mensualités et dispositifs (PTZ, etc.) selon votre situation et sous conditions.</p>
+      <p class="disclaimer" id="s-disclaimer">Prix et disponibilités indicatifs, susceptibles d'évoluer. Mensualités et dispositifs selon votre situation et sous conditions.</p>
     </div>
   </section>
 
-  <section style="padding-top:0">
+  <section class="diff">
     <div class="wrap">
       <div class="sec-head"><span class="num">02</span><h2>Ce qui fait la différence</h2></div>
-      <div class="atouts" id="s-atouts"></div>
+      <div class="diff-grid" id="diff-grid">
+        <div class="diff-photo" id="diff-photo" role="img" aria-label=""></div>
+        <div class="atouts" id="s-atouts"></div>
+      </div>
     </div>
   </section>
 
-  <section class="quartier">
+  <section id="emplacement">
     <div class="wrap">
       <div class="sec-head"><span class="num">03</span><h2>L'emplacement</h2></div>
-      <p class="q-body" id="s-quartier">—</p>
+      <div class="place-grid">
+        <div>
+          <div class="addr" id="s-addr" style="display:none">
+            <div class="pin" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></div>
+            <div><strong id="addr-l1"></strong><span id="addr-l2"></span><br><a id="addr-map" href="#" target="_blank" rel="noopener">Ouvrir dans Google Maps →</a></div>
+          </div>
+          <p class="q-body" id="s-quartier"></p>
+          <ul class="transports" id="s-transports"></ul>
+        </div>
+        <div class="map" id="s-map" style="display:none"></div>
+      </div>
     </div>
   </section>
 
@@ -196,11 +309,12 @@
       <div class="sec-head"><span class="num">04</span><h2>Réservons 15 minutes ensemble</h2></div>
       <div class="book-grid">
         <div class="book-pitch">
+          <div class="lot-choisi" id="lot-choisi"></div>
           <p>On fait le tour des lots encore disponibles, et je regarde avec vous le plan de financement le plus adapté — sans engagement.</p>
           <ul class="book-list">
             <li><span class="ic">✓</span><span><strong>En visio, par lien Google&nbsp;Meet</strong> — rien à télécharger, vous rejoignez depuis votre navigateur.</span></li>
             <li><span class="ic">✓</span><span><strong>15 minutes</strong>, à l'heure qui vous arrange.</span></li>
-            <li><span class="ic">✓</span><span>Les <strong>lots disponibles</strong> et leurs prix réels, en direct.</span></li>
+            <li><span class="ic">✓</span><span>Les <strong>plans des lots</strong> qui vous intéressent et leurs prix réels, en direct.</span></li>
             <li><span class="ic">✓</span><span>Votre <strong>éligibilité PTZ</strong> et les options de financement.</span></li>
           </ul>
         </div>
@@ -218,10 +332,27 @@
     </div>
     <p class="foot-legal">
       Vous recevez ce lien suite à votre intérêt pour un bien immobilier neuf. Pour ne plus être contacté, répondez simplement à notre email.
-      GLR Immobilier — commercialisation de programmes neufs. Document non contractuel : seuls les actes notariés et contrats de réservation font foi.
+      GLR Immobilier — commercialisation de programmes neufs. Document non contractuel : visuels à caractère d'ambiance ; seuls les actes notariés et contrats de réservation font foi.
     </p>
   </div>
 </footer>
+
+<div class="modal" id="lot-modal" role="dialog" aria-modal="true" aria-labelledby="m-titre">
+  <div class="modal-box">
+    <div class="modal-top">
+      <span class="eyebrow" id="m-eyebrow"></span>
+      <h3 id="m-titre"></h3>
+      <button class="modal-close" id="m-close" aria-label="Fermer">✕</button>
+    </div>
+    <div class="specs" id="m-specs"></div>
+    <div class="modal-price"><div class="v" id="m-prix"></div><small id="m-prix-note"></small></div>
+    <p class="modal-note">Le plan détaillé de ce logement vous est présenté en visio, avec les conditions de réservation.</p>
+    <div class="modal-actions">
+      <button class="btn" id="m-interet">Ce logement m'intéresse — réserver ma visio</button>
+      <button class="btn btn-ghost" id="m-autres">Voir les autres logements</button>
+    </div>
+  </div>
+</div>
 
 <script>
 
@@ -245,8 +376,8 @@ const BOOKING_EMBED = "";
 const BOOKING_LINK  = "https://calendar.app.google/VFPp8KiMXyifDXPv7";
 
 /* ============================================================
-   2) TES PROGRAMMES — duplique un bloc pour en ajouter un.
-      L'URL ?prog=villa-aurea affiche celui-ci.
+   2) PROGRAMME DE SECOURS — utilisé seulement si Supabase ne répond pas.
+      L'URL ?prog=<slug> affiche le programme de la table « programmes ».
    ============================================================ */
 const PROGRAMMES = {
   "villa-aurea": {
@@ -255,7 +386,7 @@ const PROGRAMMES = {
     dept:"Yvelines (78)",
     eyebrow:"Vente en avant-première",
     livraison:"1ᵉʳ trim. 2029",
-    prixMin:"234 000 €",
+    prixMin:"234 000",
     pitch:"Des appartements neufs du 2 au 5 pièces — terrasses, balcons et jardins privatifs — au cœur d'un quartier préservé, à quelques minutes des transports et de Versailles.",
     image:"https://media-js.nexity.fr/MDIA_01_000042550_ae8f3f2c-f4a4-4dd5-93af-e689be50f8182_1920x1080.webp",
     dispositifs:["PTZ","Jeanbrun","LMNP","LLI"],
@@ -273,9 +404,6 @@ const PROGRAMMES = {
     ],
     quartier:"Au cœur du quartier de la Sente des Réaux, un cadre préservé près de l'Étang de la Boissière : espaces verts, aménagements paysagers et services à portée de main."
   }
-  /* ,
-  "autre-programme": { nom:"…", ville:"…", dept:"…", … }
-  */
 };
 
 /* ============================================================
@@ -283,88 +411,272 @@ const PROGRAMMES = {
    ============================================================ */
 const SB_URL = "https://hydqfbxdtpmbuooexekp.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g";
+const SB_H = { 'apikey':SB_KEY, 'Authorization':'Bearer ' + SB_KEY };
 
-// Va chercher le programme dans Supabase (table publique « programmes »).
-// Retourne l'objet normalisé au format attendu, ou null.
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const euro = n => Math.round(n).toLocaleString('fr-FR').replace(/ | /g, ' ');
+const m2 = n => (Math.round(n * 100) / 100).toLocaleString('fr-FR') + ' m²';
+const EXPO = {N:'Nord',S:'Sud',E:'Est',O:'Ouest',NE:'Nord-Est',NO:'Nord-Ouest',SE:'Sud-Est',SO:'Sud-Ouest'};
+const etageTxt = e => (e == null || e === '' || e === '0') ? 'Rez-de-chaussée' : (e === '1' || e === 1 ? '1er étage' : e + 'e étage');
+const etageCourt = e => (e == null || e === '' || e === '0') ? 'RDC' : (e === '1' || e === 1 ? '1er' : e + 'e');
+const typoNom = t => ({T1:'Studio / 1 pièce',T2:'2 pièces',T3:'3 pièces',T4:'4 pièces',T5:'5 pièces'}[t] || t);
+
 async function fetchProgramme(slug){
   if(!slug) return null;
   try{
-    const res = await fetch(SB_URL + '/rest/v1/programmes?slug=eq.' + encodeURIComponent(slug) + '&select=*&limit=1',
-      { headers:{ 'apikey':SB_KEY, 'Authorization':'Bearer ' + SB_KEY } });
+    const res = await fetch(SB_URL + '/rest/v1/programmes?slug=eq.' + encodeURIComponent(slug) + '&select=*&limit=1', { headers:SB_H });
     if(!res.ok) return null;
     const arr = await res.json();
     if(!arr || !arr.length) return null;
     const r = arr[0];
     return {
       nom:r.nom, ville:r.ville, dept:r.dept, eyebrow:r.eyebrow, livraison:r.livraison,
-      prixMin:r.prix_min, pitch:r.pitch, image:r.image, quartier:r.quartier,
+      prixMin:r.prix_min, pitch:r.pitch, image:r.image, quartier:r.quartier, adresse:r.adresse,
+      photos:r.photos || [], transports:r.transports || [],
       dispositifs:r.dispositifs || [], typologies:r.typologies || [], atouts:r.atouts || []
     };
   }catch(e){ return null; }
 }
 
+// Lots libres (prix parking inclus), adresse et coordonnées — via la pige
+async function fetchPublic(slug){
+  if(!slug) return null;
+  try{
+    const res = await fetch(SB_URL + '/rest/v1/rpc/programme_public', {
+      method:'POST', headers:Object.assign({'Content-Type':'application/json'}, SB_H),
+      body: JSON.stringify({ p_slug: slug })
+    });
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(e){ return null; }
+}
+
+let P = null, LOTS = [], LOT_CHOISI = null;
+
+function carousel(photos){
+  const track = document.getElementById('car-track'), dots = document.getElementById('car-dots');
+  const car = document.getElementById('carousel');
+  if(!photos.length){ document.querySelector('.gallery').style.display = 'none'; return; }
+  track.innerHTML = photos.map((ph, i) =>
+    `<figure class="slide" aria-label="${i+1} sur ${photos.length}"><img src="${esc(ph.url)}" alt="${esc(ph.legende || P.nom)}" ${i ? 'loading="lazy"' : ''}>${ph.legende ? `<figcaption>${esc(ph.legende)}</figcaption>` : ''}</figure>`).join('');
+  if(photos.length < 2){ document.getElementById('car-prev').style.display = document.getElementById('car-next').style.display = 'none'; return; }
+  dots.innerHTML = photos.map((_, i) => `<button class="dot${i ? '' : ' on'}" aria-label="Photo ${i+1}"></button>`).join('');
+  let idx = 0, timer = null;
+  const go = i => { idx = (i + photos.length) % photos.length; track.scrollTo({ left: idx * track.clientWidth }); };
+  track.addEventListener('scroll', () => {
+    const i = Math.round(track.scrollLeft / track.clientWidth);
+    if(i !== idx) idx = i;
+    dots.querySelectorAll('.dot').forEach((d, k) => d.classList.toggle('on', k === idx));
+  }, { passive:true });
+  document.getElementById('car-prev').onclick = () => { go(idx - 1); restart(); };
+  document.getElementById('car-next').onclick = () => { go(idx + 1); restart(); };
+  dots.querySelectorAll('.dot').forEach((d, k) => d.onclick = () => { go(k); restart(); });
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const start = () => { if(!reduce) timer = setInterval(() => go(idx + 1), 5000); };
+  const stop = () => { clearInterval(timer); timer = null; };
+  const restart = () => { stop(); start(); };
+  car.addEventListener('mouseenter', stop); car.addEventListener('mouseleave', start);
+  car.addEventListener('touchstart', stop, { passive:true });
+  window.addEventListener('resize', () => go(idx));
+  start();
+}
+
+function renderTypos(){
+  const box = document.getElementById('s-typos');
+  if(LOTS.length){
+    const groupes = {};
+    LOTS.forEach(l => (groupes[l.typo] = groupes[l.typo] || []).push(l));
+    const ordre = Object.keys(groupes).sort((a, b) => groupes[a][0].pieces - groupes[b][0].pieces);
+    box.innerHTML = ordre.map(t => {
+      const g = groupes[t], min = Math.min(...g.map(l => l.prix));
+      const s = g.map(l => +l.surf), sMin = Math.min(...s), sMax = Math.max(...s);
+      const surf = sMin === sMax ? m2(sMin) : `${Math.floor(sMin)} à ${Math.ceil(sMax)} m²`;
+      return `<button class="typo" data-t="${esc(t)}" aria-expanded="false">
+        <div class="t">${esc(typoNom(t))}</div>
+        <div class="s">${surf} · ${g.length} disponible${g.length > 1 ? 's' : ''}</div>
+        <div class="p"><small>dès</small> ${euro(min)}&nbsp;<small>€</small></div>
+        <div class="more"><span>Voir les logements</span><span class="chev">⌄</span></div></button>`;
+    }).join('');
+    box.querySelectorAll('.typo').forEach(b => b.onclick = () => ouvrirTypo(b.dataset.t, b));
+    document.getElementById('s-intro').textContent = `${LOTS.length} appartements encore disponibles. Choisissez une typologie pour les voir un par un — les prix incluent le stationnement.`;
+  } else {
+    box.innerHTML = (P.typologies || []).map(t =>
+      `<a class="typo" href="#booking" style="text-decoration:none"><div class="t">${esc(t.type)}</div><div class="s">${esc(t.surface)}</div>
+       <div class="p">${esc(t.prix)}&nbsp;<small>€</small></div><div class="more"><span>Réserver une visio</span><span>→</span></div></a>`).join('');
+    document.getElementById('s-intro').textContent = 'Les typologies disponibles et leurs prix de lancement. Les lots précis et leur prix exact vous sont présentés en visio.';
+  }
+}
+
+function ouvrirTypo(t, btn){
+  const panel = document.getElementById('lots-panel');
+  const dejaOuvert = btn.classList.contains('on');
+  document.querySelectorAll('.typo').forEach(b => { b.classList.remove('on'); b.setAttribute('aria-expanded', 'false'); });
+  if(dejaOuvert){ panel.classList.remove('open'); return; }
+  btn.classList.add('on'); btn.setAttribute('aria-expanded', 'true');
+  const g = LOTS.filter(l => l.typo === t);
+  document.getElementById('lots-titre').textContent = typoNom(t);
+  document.getElementById('lots-sous').textContent = `${g.length} logement${g.length > 1 ? 's' : ''} disponible${g.length > 1 ? 's' : ''} · prix parking inclus`;
+  document.getElementById('lots-list').innerHTML = g.map(l =>
+    `<button class="lot" data-n="${esc(l.n)}">
+      <span class="ref">Lot ${esc(l.n)}</span>
+      <span class="c-et">${etageTxt(l.etage)}</span>
+      <span class="c-surf">${m2(l.surf)}</span>
+      <span class="c-ext">${l.ext ? '+ ' + m2(l.ext) + ' ext.' : '—'}</span>
+      <span class="c-expo">${esc(EXPO[l.expo] || l.expo || '—')}</span>
+      <span class="px">${euro(l.prix)} €</span>
+      <span class="go">›</span>
+      <span class="meta">${etageCourt(l.etage)} · ${m2(l.surf)}${l.ext ? ' + ' + m2(l.ext) + ' ext.' : ''} · ${esc(EXPO[l.expo] || l.expo || '')}</span>
+    </button>`).join('');
+  document.querySelectorAll('#lots-list .lot').forEach(b => b.onclick = () => ouvrirLot(b.dataset.n));
+  // le panneau s'insère juste sous la rangée de la carte cliquée (une carte par ligne sur mobile)
+  const cartes = [...document.querySelectorAll('#s-typos .typo')];
+  const finDeRangee = cartes.filter(c => c.offsetTop === btn.offsetTop).pop() || btn;
+  finDeRangee.after(panel);
+  panel.classList.add('open');
+  const r = panel.getBoundingClientRect();
+  if(r.top > window.innerHeight * .7 || r.top < 70) btn.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function ouvrirLot(n){
+  const l = LOTS.find(x => x.n === n); if(!l) return;
+  LOT_CHOISI = l;
+  document.getElementById('m-eyebrow').textContent = `${P.nom.split(/\s[–—-]\s/)[0]} · Lot ${l.n}`;
+  document.getElementById('m-titre').textContent = `${typoNom(l.typo)} de ${m2(l.surf)}`;
+  const specs = [
+    ['Étage', etageTxt(l.etage)],
+    ['Surface habitable', m2(l.surf)],
+    ['Espace extérieur', l.ext ? m2(l.ext) : '—'],
+    ['Exposition', EXPO[l.expo] || l.expo || '—'],
+    ['Stationnement', l.nb_pk > 1 ? l.nb_pk + ' places incluses' : '1 place incluse'],
+    ['Livraison', P.livraison || '—']
+  ];
+  document.getElementById('m-specs').innerHTML = specs.map(([k, v]) => `<div class="spec"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`).join('');
+  document.getElementById('m-prix').textContent = euro(l.prix) + ' €';
+  document.getElementById('m-prix-note').textContent = 'TTC, parking inclus';
+  const m = document.getElementById('lot-modal');
+  m.classList.add('open'); document.body.classList.add('modal-open');
+  document.getElementById('m-interet').focus();
+}
+function fermerLot(){ document.getElementById('lot-modal').classList.remove('open'); document.body.classList.remove('modal-open'); }
+
+function interetLot(){
+  const l = LOT_CHOISI; if(!l) return;
+  fermerLot();
+  const box = document.getElementById('lot-choisi');
+  box.innerHTML = `Logement choisi : <b>Lot ${esc(l.n)}</b> — ${esc(typoNom(l.typo))}, ${m2(l.surf)}, ${etageTxt(l.etage).toLowerCase()}, ${euro(l.prix)} €. On en parle en visio.`;
+  box.classList.add('on');
+  try{ sessionStorage.setItem('glr_lot', JSON.stringify({ prog:P.slug, lot:l.n })); }catch(e){}
+  document.getElementById('booking').scrollIntoView({ behavior:'smooth' });
+}
+
+function renderAtouts(){
+  const box = document.getElementById('s-atouts');
+  const at = P.atouts || [];
+  const avecChiffres = at.some(a => a.chiffre);
+  if(!avecChiffres) box.classList.add('plain');
+  box.innerHTML = at.map(a => `<div class="atout">${a.chiffre ? `<div class="c">${esc(a.chiffre)}</div>` : ''}<h3>${esc(a.titre)}</h3><p>${esc(a.texte)}</p></div>`).join('');
+  // photo d'accompagnement : une vue intérieure/terrasse si dispo, sinon la 2e photo
+  const ph = (P.photos || []);
+  const pick = ph.find(x => /terrasse|balcon|séjour|sejour|intérieur/i.test(x.legende || x.url)) || ph[1] || ph[0];
+  const el = document.getElementById('diff-photo');
+  if(pick){ el.style.backgroundImage = `url("${pick.url}")`; el.setAttribute('aria-label', pick.legende || ''); }
+  else { el.style.display = 'none'; document.getElementById('diff-grid').style.gridTemplateColumns = '1fr'; }
+}
+
+function renderEmplacement(pub){
+  document.getElementById('s-quartier').textContent = P.quartierTexte || '';
+  const adresse = (pub && pub.adresse) || P.adresse;
+  const cp = pub && pub.cp;
+  if(adresse){
+    document.getElementById('addr-l1').textContent = adresse;
+    document.getElementById('addr-l2').textContent = [cp, P.ville].filter(Boolean).join(' ') + (P.quartier ? ' · ' + P.quartier : '');
+    const q = pub && pub.lat ? `${pub.lat},${pub.lng}` : encodeURIComponent(`${adresse}, ${cp || ''} ${P.ville}`);
+    document.getElementById('addr-map').href = 'https://www.google.com/maps/search/?api=1&query=' + q;
+    document.getElementById('s-addr').style.display = '';
+  }
+  const tr = P.transports || [];
+  document.getElementById('s-transports').innerHTML = tr.map(t => {
+    const cls = /tram/i.test(t.mode) ? 'tram' : /bus/i.test(t.mode) ? 'bus' : /rer|train|métro|metro/i.test(t.mode) ? 'rer' : '';
+    const badge = esc(t.ligne || t.mode);
+    return `<li class="tr"><span class="badge ${cls}">${badge}</span><span><b>${esc(t.arret)}</b><small>${esc(t.detail || '')}</small></span><span class="dist">${esc(t.distance || '')}</span></li>`;
+  }).join('');
+  if(pub && pub.lat && pub.lng){
+    const d = .007, lat = +pub.lat, lng = +pub.lng;
+    const src = `https://www.openstreetmap.org/export/embed.html?bbox=${lng-d*1.6},${lat-d},${lng+d*1.6},${lat+d}&layer=mapnik&marker=${lat},${lng}`;
+    const map = document.getElementById('s-map');
+    map.innerHTML = `<iframe src="${src}" title="Plan de situation" loading="lazy"></iframe>`;
+    map.style.display = '';
+  } else {
+    document.querySelector('.place-grid').style.gridTemplateColumns = '1fr';
+  }
+}
+
 (async function(){
   const slug = new URLSearchParams(location.search).get('prog');
-  let p = await fetchProgramme(slug);            // 1) Supabase d'abord
-  if(!p){                                        // 2) repli sur la config locale
+  let [p, pub] = await Promise.all([fetchProgramme(slug), fetchPublic(slug)]);
+  if(!p){
     const keys = Object.keys(PROGRAMMES);
     p = PROGRAMMES[slug] || PROGRAMMES[keys[0]];
+    pub = null;
   }
-  if(!p){ return; }
+  if(!p) return;
+  p.slug = slug;
+  // Le texte « quartier » sert à la fois de nom de quartier (court) et de description (long)
+  if(p.quartier && p.quartier.length > 60){ p.quartierTexte = p.quartier; p.quartier = ''; }
+  else p.quartierTexte = '';
+  P = p;
+  LOTS = (pub && Array.isArray(pub.lots)) ? pub.lots.map(l => Object.assign({}, l, { surf:+l.surf, ext:l.ext == null ? null : +l.ext, prix:+l.prix })) : [];
 
-  const set = (id,txt)=>{ const el=document.getElementById(id); if(el) el.textContent=txt; };
+  const set = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+  const parts = p.nom.split(/\s[–—-]\s/);
+  const titre = parts[0], sousTitre = parts.slice(1).join(' – ');
 
-  document.title = `${p.nom} — ${p.ville} · Réserver une visio`;
-  set('tb-prog', `${p.nom} · ${p.ville}`);
+  document.title = `${p.nom} — ${p.ville} · Logements disponibles`;
+  set('tb-prog', `${titre} · ${p.ville}`);
   set('h-eyebrow', p.eyebrow || 'Programme neuf');
-  set('h-nom', p.nom);
-  set('h-loc', `${p.ville} · ${p.dept}`);
-  set('h-pitch', p.pitch);
-  set('s-quartier', p.quartier || '');
+  set('h-nom', titre);
+  if(sousTitre) set('h-sub', `« ${sousTitre} »`); else document.getElementById('h-sub').style.display = 'none';
+  set('h-loc', [p.ville, p.quartier].filter(Boolean).join(' · ') || p.dept || '');
+  set('h-pitch', p.pitch || '');
 
-  // hero image (fallback discret si l'image promoteur tombe)
-  const hi = document.getElementById('hero-img');
-  if(p.image){
-    const test = new Image();
-    test.onload = ()=>{ hi.style.backgroundImage = `url("${p.image}")`; };
-    test.onerror = ()=>{ hi.style.background = 'radial-gradient(120% 90% at 70% 10%, #2a2f3b 0%, #101219 70%)'; };
-    test.src = p.image;
-  } else {
-    hi.style.background = 'radial-gradient(120% 90% at 70% 10%, #2a2f3b 0%, #101219 70%)';
-  }
+  // chiffres clés
+  const prixMin = LOTS.length ? euro(Math.min(...LOTS.map(l => l.prix))) : (p.prixMin || '').replace(/\s*€\s*$/, '');
+  const typos = LOTS.length ? [...new Set(LOTS.map(l => l.typo))] : (p.typologies || []).map(t => t.type);
+  const facts = [];
+  if(prixMin) facts.push({ k:'À partir de', v:`${prixMin} €`, n: LOTS.length ? 'parking inclus' : '' });
+  if(p.livraison) facts.push({ k:'Livraison', v:p.livraison });
+  if(typos.length) facts.push({ k:'Typologies', v: typos.length > 1 ? `${typos[0]} au ${typos[typos.length-1]}` : typos[0] });
+  if(LOTS.length) facts.push({ k:'Disponibles', v:`${LOTS.length} logements` });
+  document.getElementById('h-facts').innerHTML = facts.map(f =>
+    `<div class="f"><div class="k">${f.k}</div><div class="v">${esc(f.v)}${f.n ? ` <small>${f.n}</small>` : ''}</div></div>`).join('');
 
-  // hero facts
-  const facts = [
-    {k:"À partir de", v:p.prixMin},
-    {k:"Livraison",   v:p.livraison},
-    {k:"Typologies",  v:(p.typologies&&p.typologies.length)? `${p.typologies[0].type.split(' ')[0]} au ${p.typologies[p.typologies.length-1].type.split(' ')[0]} P` : "—"}
-  ];
-  document.getElementById('h-facts').innerHTML = facts.map(f=>
-    `<div class="f"><div class="k">${f.k}</div><div class="v">${f.v}</div></div>`).join('');
+  // photos
+  let photos = (p.photos || []).filter(x => x && x.url);
+  if(!photos.length && p.image) photos = [{ url:p.image, legende:'' }];
+  P.photos = photos;
+  carousel(photos);
 
-  // typologies
- document.getElementById('s-typos').innerHTML = (p.typologies||[]).map(t=>
-  `<div class="typo"><div class="t">${t.type}</div><div class="s">${t.surface}</div>
-   <div class="p">${t.prix}&nbsp;<small>€</small></div>
-   <div class="book"><a href="#booking">Réserver une visio →</a></div></div>`).join('');
+  renderTypos();
+  document.getElementById('s-chips').innerHTML = (p.dispositifs || []).map(d => `<span class="chip">${esc(d)}</span>`).join('');
+  renderAtouts();
+  renderEmplacement(pub);
 
-  // dispositifs
-  document.getElementById('s-chips').innerHTML = (p.dispositifs||[]).map(d=>
-    `<span class="chip">${d}</span>`).join('');
+  // fenêtre lot
+  document.getElementById('m-close').onclick = fermerLot;
+  document.getElementById('m-autres').onclick = fermerLot;
+  document.getElementById('m-interet').onclick = interetLot;
+  document.getElementById('lot-modal').addEventListener('click', e => { if(e.target.id === 'lot-modal') fermerLot(); });
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') fermerLot(); });
 
-  // atouts
-  document.getElementById('s-atouts').innerHTML = (p.atouts||[]).map(a=>
-    `<div class="atout"><h3>${a.titre}</h3><p>${a.texte}</p></div>`).join('');
-
-  // footer contact
-  const fc=[];
-  fc.push(`<strong style="color:var(--text)">${AGENT.nom}</strong>`);
-  fc.push(AGENT.societe);
-  if(AGENT.tel)   fc.push(`<a href="tel:${AGENT.tel.replace(/\s/g,'')}">${AGENT.tel}</a>`);
+  // contact
+  const fc = [];
+  fc.push(`<strong style="color:var(--ink)">${esc(AGENT.nom)}</strong>`);
+  fc.push(esc(AGENT.societe));
+  if(AGENT.tel)   fc.push(`<a href="tel:${AGENT.tel.replace(/\s/g,'')}">${esc(AGENT.tel)}</a>`);
   if(AGENT.email) fc.push(`<a href="mailto:${AGENT.email}">${AGENT.email}</a>`);
   document.getElementById('foot-contact').innerHTML = fc.join('<br>');
 
-  // booking embed OU placeholder "à brancher"
+  // réservation
   const shell = document.getElementById('embed-shell');
   if(BOOKING_EMBED && BOOKING_EMBED.trim()){
     shell.innerHTML = `<iframe src="${BOOKING_EMBED}" title="Réserver un créneau" loading="lazy"></iframe>`;
@@ -377,19 +689,9 @@ async function fetchProgramme(slug){
       </div>`;
   } else {
     const mailto = AGENT.email
-      ? `mailto:${AGENT.email}?subject=${encodeURIComponent('Demande de visio — '+p.nom)}&body=${encodeURIComponent('Bonjour, je souhaite réserver une visio pour le programme '+p.nom+' à '+p.ville+'.')}`
+      ? `mailto:${AGENT.email}?subject=${encodeURIComponent('Demande de visio — ' + p.nom)}&body=${encodeURIComponent('Bonjour, je souhaite réserver une visio pour le programme ' + p.nom + ' à ' + p.ville + '.')}`
       : '#';
-    shell.innerHTML = `
-      <div class="embed-placeholder">
-        <div class="big">Module de réservation à brancher</div>
-        <p>Ici s'affichera ton calendrier Google avec les créneaux de visio.</p>
-        <ol>
-          <li>Dans Google Agenda → <code>Page de rendez-vous</code> (lieu&nbsp;: <code>Google&nbsp;Meet</code>).</li>
-          <li>Clique <code>Intégrer</code> et copie l'URL du <code>src</code> (elle finit par <code>?gv=true</code>).</li>
-          <li>Colle-la dans <code>BOOKING_EMBED</code> en haut du fichier.</li>
-        </ol>
-        <a class="btn" href="${mailto}">En attendant : demander un créneau par email</a>
-      </div>`;
+    shell.innerHTML = `<div class="embed-placeholder"><div class="big">Demander un créneau</div><a class="btn" href="${mailto}">Écrire par email</a></div>`;
   }
 })();
 </script>
