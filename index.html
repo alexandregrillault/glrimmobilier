@@ -2101,6 +2101,7 @@
         </div>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <div class="rm-switch"><button id="rm-vue-pige" class="rm-on" onclick="rmVue('pige')">Dernière pige</button><button id="rm-vue-mois" onclick="rmVue('mois')">Bilan du mois</button></div>
+          <select id="rm-fisc" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;color:var(--text);min-width:170px" title="Ne garder que les programmes proposant cette fiscalité" onchange="rmFisc(this.value)"><option value="">Toutes fiscalités</option></select>
           <button class="btn btn-ghost btn-sm" onclick="rmActualiser()">Actualiser</button>
         </div>
       </div>
@@ -3606,6 +3607,21 @@ let _rmData = null;
 //  cache pour la session ; le rapport s'affiche d'abord, les liens s'ajoutent.
 // ------------------------------------------------------------
 const _rmLiens = {};          // programme_id -> { url, exact } | null (connu sans lien)
+// Fiscalité par programme (20/10/2026, demande d'Alex : filtre du rapport marché). Étiquettes de
+// l'extranet (PTZ, LMNP, LLI, Jeanbrun…) + « Droit commun » dès qu'un prix TVA 20 % existe et
+// « TVA réduite » dès qu'un lot est en 5,5 % — même règle que la carte des programmes (12/10/2026).
+const _rmFiscParId = {};      // programme_id -> Set(étiquettes)
+const _RM_FISC_ORDRE = ['Droit commun', 'PTZ', 'TVA réduite', 'Jeanbrun', 'LMNP', 'LLI', 'Pinel', 'Accession maîtrisée / BRS', 'Nue-propriété', 'Déficit foncier / Malraux'];
+let _rmFisc = '';
+function _rmFiscOK(id) { if (!_rmFisc) return true; const f = id ? _rmFiscParId[id] : null; return !!(f && f.has(_rmFisc)); }
+function _rmFiscOptions() {
+  const sel = document.getElementById('rm-fisc'); if (!sel) return;
+  const vues = new Set(); Object.values(_rmFiscParId).forEach(f => f.forEach(x => vues.add(x)));
+  const liste = _RM_FISC_ORDRE.filter(x => vues.has(x)).concat([...vues].filter(x => !_RM_FISC_ORDRE.includes(x)).sort((a, b) => a.localeCompare(b, 'fr')));
+  const actuel = sel.value;
+  sel.innerHTML = '<option value="">Toutes fiscalités</option>' + liste.map(x => '<option value="' + _esc(x) + '"' + (x === actuel ? ' selected' : '') + '>' + _esc(x) + '</option>').join('');
+}
+function rmFisc(v) { _rmFisc = v || ''; renderRapportMarche(); renderRapportMensuel(); }
 let _rmLiensEnCours = null;
 const _RM_URL_GEN = /\/recherche-lots\/?$|\/admin\/explorer\/program\/?$|\/estate\/search\/programs|vos-interlocuteurs-prescription|bouygues-immobilier-partenaires\.fr\/?$|\/extranet\/?$|stock\?tab=|\/recherche\?|PROGRAMMEDETAIL\.ASP\?p=$/i;
 function _rmLienDepuis(id, source, url, idp) {
@@ -3625,8 +3641,14 @@ async function _rmLiensAssurer(ids, apres) {
     const trouves = {};
     for (let i = 0; i < manquants.length; i += 120) {
       const tranche = manquants.slice(i, i + 120);
-      const r = await fetch(SUPABASE_URL + '/rest/v1/pige_programmes?select=id,source,url:data->>url,idp:data->>idp&id=in.(' + tranche.map(encodeURIComponent).join(',') + ')', { headers: h });
-      if (r.ok) (await r.json()).forEach(p => { trouves[p.id] = p; });
+      const r = await fetch(SUPABASE_URL + '/rest/v1/pige_programmes?select=id,source,url:data->>url,idp:data->>idp,fisc:data->fisc,nb55:data->>nb_55,pm20:data->>prix_min20&id=in.(' + tranche.map(encodeURIComponent).join(',') + ')', { headers: h });
+      if (r.ok) (await r.json()).forEach(p => {
+        trouves[p.id] = p;
+        const f = new Set(Array.isArray(p.fisc) ? p.fisc.filter(x => typeof x === 'string') : []);
+        if (Number(p.pm20) > 0) f.add('Droit commun');
+        if (Number(p.nb55) > 0) f.add('TVA réduite');
+        _rmFiscParId[p.id] = f;
+      });
     }
     // une URL partagée par plusieurs programmes est une page générique, pas une fiche
     const nbParUrl = {};
@@ -3639,6 +3661,7 @@ async function _rmLiensAssurer(ids, apres) {
     });
   } catch (e) { manquants.forEach(id => { if (!(id in _rmLiens)) _rmLiens[id] = null; }); }
   _rmLiensEnCours = null;
+  _rmFiscOptions();
   if (typeof apres === 'function') apres();
 }
 function _rmNomLien(id, nom) {
@@ -3965,6 +3988,8 @@ async function rmMensuelRecalculer() {
   } catch (e) { toast('Recalcul impossible : ' + String(e).slice(0, 120), 'var(--danger)'); }
 }
 function _rmTable(cols, rows, vide) {
+  // Filtre fiscalité : seules les lignes rattachées à un programme (id) sont filtrées
+  if (_rmFisc && Array.isArray(rows)) rows = rows.filter(r => !r || typeof r.id !== 'string' || r.id.indexOf(':') === -1 || _rmFiscOK(r.id));
   if (!rows || !rows.length) return '<div class="rm-empty" style="padding:12px 24px">' + _esc(vide || 'Rien ce mois-ci.') + '</div>';
   return '<div style="overflow-x:auto"><table><thead><tr>' + cols.map(c => '<th' + (c.r ? ' style="text-align:right"' : '') + '>' + _esc(c.l) + '</th>').join('') + '</tr></thead><tbody>' +
     rows.map(row => '<tr>' + cols.map(c => '<td' + (c.r ? ' style="text-align:right"' : '') + '>' + c.f(row) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
@@ -4074,13 +4099,17 @@ function rmToggleDetail() { _rmDetailOuvert = !_rmDetailOuvert; renderRapportMar
 function renderRapportMarche() {
   const body = document.getElementById('rm-body');
   if (!body || !_rmData) return;
-  const maj = _rmData.maj, historique = _rmData.historique, evenements = _rmData.evenements, notes = _rmData.notes, lots = _rmData.lots, bientotLivres = _rmData.bientotLivres || { rows: [], total: 0 };
+  const maj = _rmData.maj, historique = _rmData.historique, notes = _rmData.notes, lots = _rmData.lots;
+  // Filtre fiscalité : ne garde que les événements et programmes concernés (les totaux de la pige restent globaux)
+  const evenements = _rmFisc ? _rmData.evenements.filter(e => _rmFiscOK(e.programme_id)) : _rmData.evenements;
+  const bl0 = _rmData.bientotLivres || { rows: [], total: 0 };
+  const bientotLivres = _rmFisc ? { rows: bl0.rows.filter(p => _rmFiscOK(p.id)), total: bl0.rows.filter(p => _rmFiscOK(p.id)).length } : bl0;
   // Pige précédente (historique est trié pige_date desc, created_at desc — donc
   // historique[0] est la pige courante) : sert à donner une tendance à chaque KPI.
   const prevMaj = historique[1] || null;
   const d = (champ) => prevMaj ? _rmDelta(maj[champ], prevMaj[champ]) : '';
 
-  _rmLiensAssurer(evenements.map(e => e.programme_id).concat(bientotLivres.rows.map(p => p.id)), renderRapportMarche);
+  _rmLiensAssurer(_rmData.evenements.map(e => e.programme_id).concat(bl0.rows.map(p => p.id)), renderRapportMarche);
   const parType = {};
   evenements.forEach(e => { (parType[e.type] = parType[e.type] || []).push(e); });
   const nouveauxProgs = parType.nouveau_programme || [];
@@ -4166,8 +4195,16 @@ function renderRapportMarche() {
     (lotsARegarder.length > 30 ? '<div class="rm-empty" style="padding:12px 24px">+ ' + (lotsARegarder.length - 30) + ' autres lots — détail complet sur la carte des programmes.</div>' : '') +
   '</div>' : '';
 
-  body.innerHTML =
-    '<div class="rm-kpi-strip">' +
+  const strip = _rmFisc
+    ? '<div class="rm-kpi-strip">' +
+      rmKpi(new Set(evenements.map(e => e.programme_id).filter(Boolean)).size, 'Programmes concernés', '') +
+      rmKpi(nouveauxProgs.length, 'Nouveaux programmes', '') +
+      rmKpi(nouveauxLots.length, 'Nouveaux lots', '') +
+      rmKpi(vendus.length, 'Vendus', '') +
+      rmKpi(hausses.length, 'Hausses de prix', '') +
+      rmKpi(baisses.length, 'Baisses de prix', '') +
+      '</div><div class="rm-empty" style="margin:-14px 0 18px;font-size:12px">Fiscalité « ' + _esc(_rmFisc) + ' » : chiffres de cette pige limités aux programmes qui la proposent (stock global et tendances non disponibles par fiscalité).</div>'
+    : '<div class="rm-kpi-strip">' +
       rmKpi(maj.nb_programmes, 'Programmes suivis', d('nb_programmes')) +
       rmKpi(maj.nb_logements, 'Logements', d('nb_logements')) +
       rmKpi(maj.nb_libres, 'Dont libres', d('nb_libres')) +
@@ -4176,7 +4213,9 @@ function renderRapportMarche() {
       rmKpi(maj.nb_vendus, 'Vendus', d('nb_vendus')) +
       rmKpi(maj.nb_hausses, 'Hausses de prix', d('nb_hausses')) +
       rmKpi(maj.nb_baisses, 'Baisses de prix', d('nb_baisses')) +
-    '</div>' +
+    '</div>';
+  body.innerHTML =
+    strip +
     '<div class="card"><div class="card-header"><div class="card-title">À retenir</div></div>' +
       '<div style="padding:16px 24px">' +
       (constats.length ? '<ul style="padding-left:18px;display:grid;gap:8px;font-size:13.5px;line-height:1.5;margin:0">' +
@@ -11765,6 +11804,9 @@ function _eqPropositionsEnAttente() {
   });
   const out = [];
   groupes.forEach(g => {
+    const idn = _propIdentite(g);
+    g.contact_id = g.contact_id || idn.contact_id;
+    if (idn.nom) g.client_nom = idn.nom;
     const r = etats[g.token] || {};
     // Le client a fini par retenir un créneau : ce n'est plus une attente
     if (r.reserve || r.confirme) return;
@@ -12174,6 +12216,45 @@ async function eqRdvValider(id) {
 // ---- Proposer trois autres créneaux --------------------------------------
 let _propCtx = null;   // { creneauRefuse, token, contactId, nom }
 
+// Retrouve la fiche et le nom du client à partir du jeton d'une sélection ou d'un lien de rendez-vous
+async function _propResoudreClient(token, contactId) {
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+  try {
+    if (!contactId) {
+      for (const t of ['rdv_liens', 'selections']) {
+        const r = await fetch(SUPABASE_URL + '/rest/v1/' + t + '?select=contact_id&token=eq.' + encodeURIComponent(token) + '&limit=1', { cache: 'no-store', headers: entetes });
+        if (r.ok) { const j = await r.json(); if (j[0] && j[0].contact_id) { contactId = j[0].contact_id; break; } }
+      }
+    }
+    if (!contactId) return { contactId: null, nom: '' };
+    const l = (typeof _eqLeads !== 'undefined' && _eqLeads || []).find(y => y.id === contactId);
+    let nom = l ? (nomComplet(l) || '') : '';
+    if (!nom) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille&id=eq.' + contactId + '&limit=1', { cache: 'no-store', headers: entetes });
+      if (r.ok) { const j = await r.json(); if (j[0]) nom = nomComplet(j[0]) || j[0].nom || ''; }
+    }
+    return { contactId, nom };
+  } catch (e) { return { contactId: contactId || null, nom: '' }; }
+}
+
+// Identité d'un groupe de créneaux proposés : on évite « Client » / « ce client » quand le jeton permet de la retrouver
+function _propIdentite(g) {
+  let contact_id = g.contact_id || null;
+  let nom = (g.client_nom && g.client_nom !== 'ce client') ? g.client_nom : '';
+  if ((!contact_id || !nom) && g.token) {
+    const s = ((typeof _eqSelectionsAll !== 'undefined' && _eqSelectionsAll) || []).find(x => x.token === g.token)
+      || Object.values((typeof _rdvLiens !== 'undefined' && _rdvLiens) || {}).find(x => x.token === g.token)
+      || ((typeof _grLots !== 'undefined' && _grLots) || []).find(x => x.token === g.token);
+    if (s) { contact_id = contact_id || s.contact_id || null; nom = nom || s.client_nom || s.nom || ''; }
+  }
+  if (!nom && contact_id) {
+    const l = ((typeof _eqLeads !== 'undefined' && _eqLeads) || []).find(y => y.id === contact_id);
+    if (l) nom = nomComplet(l) || '';
+    if (!nom && typeof _grNoms !== 'undefined' && _grNoms) nom = _grNoms[contact_id] || '';
+  }
+  return { contact_id, nom };
+}
+
 async function eqProposerOuvrir(creneauId, token) {
   const prenom = _creneauVendeur();
   const c = creneauId ? _eqRdv.find(x => x.id === creneauId) : null;
@@ -12181,15 +12262,27 @@ async function eqProposerOuvrir(creneauId, token) {
   // Reproposer après une proposition restée sans suite : on repart des anciens
   // créneaux proposés (mode, client), ils seront refermés à l'envoi.
   const ancien = (!c && !dem && token) ? (_eqRdv || []).find(x => x.statut === 'propose' && x.selection_token === token) : null;
+  // Vue gérant (Mes équipes) : la demande d'un autre vendeur n'est pas dans la liste de ce vendeur
+  const demGr = (!c && !dem && token) ? ((typeof _grLots !== 'undefined' && _grLots) || []).find(x => x.token === token) : null;
   // Format demandé par le client : visio (30 min) ou appel (10 min). Le mode
   // est écrit sur le créneau réservé, ou dans la demande libre.
   const modeDemande = (c && c.mode) || (dem && dem.avis && dem.avis.rdv && dem.avis.rdv.mode) || (ancien && ancien.mode) || 'telephone';
   const modeProp = modeDemande === 'visio' ? 'visio' : 'telephone';
+  const tokenProp = (c && c.selection_token) || token || null;
+  let ctxContact = (c && c.contact_id) || (dem && dem.contact_id) || (demGr && demGr.contact_id) || (ancien && ancien.contact_id) || null;
+  let ctxNom = (c && c.client_nom) || (dem && dem.client_nom) || (demGr && demGr.nom) || (ancien && ancien.client_nom) || '';
+  if (ctxNom === 'ce client') ctxNom = '';
+  // Le nom ou la fiche manque encore : on les retrouve par le jeton, pour que les créneaux proposés
+  // portent le nom du client (sinon il n'apparaît pas dans les activités du vendeur)
+  if (tokenProp && (!ctxContact || !ctxNom)) {
+    const rr = await _propResoudreClient(tokenProp, ctxContact);
+    ctxContact = rr.contactId || ctxContact; ctxNom = ctxNom || rr.nom;
+  }
   _propCtx = {
     creneauRefuse: creneauId || null,
-    token: (c && c.selection_token) || token || null,
-    contactId: (c && c.contact_id) || (dem && dem.contact_id) || (ancien && ancien.contact_id) || null,
-    nom: (c && c.client_nom) || (dem && dem.client_nom) || (ancien && ancien.client_nom) || 'ce client',
+    token: tokenProp,
+    contactId: ctxContact,
+    nom: ctxNom || 'ce client',
     mode: modeProp,
     duree: _crenDureeVoulue(modeProp)
   };
@@ -21381,11 +21474,14 @@ function grRdvPaquets() {
   const groupes = new Map();
   _grCreneaux.filter(c => c.statut === 'propose').forEach(c => {
     const cle = (c.vendeur || '') + '|' + (c.contact_id || c.client_nom || '');
-    if (!groupes.has(cle)) groupes.set(cle, { vendeur: c.vendeur, contact_id: c.contact_id, client_nom: c.client_nom, creneaux: [] });
+    if (!groupes.has(cle)) groupes.set(cle, { vendeur: c.vendeur, contact_id: c.contact_id, client_nom: c.client_nom, token: c.selection_token, creneaux: [] });
     groupes.get(cle).creneaux.push(c);
   });
   const enAttente = [], sansSuite = [];
   groupes.forEach(g => {
+    const idn = _propIdentite(g);
+    g.contact_id = g.contact_id || idn.contact_id;
+    if (idn.nom) g.client_nom = idn.nom;
     g.creneaux.sort((a, b) => new Date(a.debut) - new Date(b.debut));
     const prochain = g.creneaux.find(c => new Date(c.debut).getTime() > now);
     const r = dernierRdv.get(g.contact_id) || {};
