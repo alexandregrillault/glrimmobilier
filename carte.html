@@ -1462,6 +1462,8 @@ function extSurf(l) {
 function etageOK(l) {
   const e = (l.etage === null || l.etage === undefined || l.etage === '') ? null : Number(l.etage);
   const raw = String(l.etage_raw || '').trim();
+  // « Dernier étage » rangé dans la liste Étage (22/10/2026, demande d'Alex) — avant : pastille dans les filtres
+  if (F.etage === 'top') return !!l.top;
   if (F.etage === 'rdj') return /rdj|jardin/i.test(raw);
   // L'étage 0 n'est pas repris dans les données de la carte (valeur vide) : on lit le libellé promoteur
   if (F.etage === 'rdc') return e === 0 || /^\*?\s*(0|rdc|rc|r0|rez|rdj)/i.test(raw);
@@ -1478,7 +1480,6 @@ function lotOK(l) {
   if (F.pm2 && (!l.prix_m2 || l.prix_m2 > +F.pm2)) return false;
   if (F.etage && !etageOK(l)) return false;
   if (F.renta && (!l.renta || l.renta < +F.renta)) return false;
-  if (F.flags.has('top') && !l.top) return false;
   if (F.flags.has('ext') && !l.ext) return false;
   if (F.flags.has('ext') && F.extMin && extSurf(l) < +F.extMin) return false;
   if (F.flags.has('pk') && !l.pk) return false;
@@ -1503,8 +1504,8 @@ function progOK(p) {
   if (F.flags.has('pick') && !(p.picking && !p.nomandat)) return false;
   if (F.flags.has('nomandat') && !p.nomandat) return false;
   if (F.flags.has('nopick') && p.picking) return false;
-  if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.etage || F.flags.has('top') || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
-  if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.etage || ['top', 'ext', 'pk', 'new'].some(f => F.flags.has(f)));
+  if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.etage || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
+  if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.etage || ['ext', 'pk', 'new'].some(f => F.flags.has(f)));
   return p.logs.some(lotOK);
 }
 let VIS = [];
@@ -1625,12 +1626,12 @@ sel('fSource', sources.map(x => [x, x + ' (' + P.filter(p => p.extranet === x ||
 sel('fCom', [3, 4, 5, 6, 7].map(k => [k, '≥ ' + k + ' % (' + P.filter(p => p.commission_pct >= k).length + ')']));
 sel('fPm2', [4000, 4500, 5000, 5500, 6000, 7000, 8000, 10000].map(k => [k, '≤ ' + k.toLocaleString('fr-FR') + ' €/m²']));
 sel('fRenta', [3, 3.5, 4, 4.5, 5, 6].map(k => [k, '≥ ' + String(k).replace('.', ',') + ' %']));
-sel('fEtage', [['rdc', 'RDC ou RDJ'], ['rdj', 'Rez-de-jardin seulement'], ['min', 'À partir de l’étage…']]);
+sel('fEtage', [['rdc', 'RDC ou RDJ'], ['rdj', 'Rez-de-jardin seulement'], ['top', 'Dernier étage'], ['min', 'À partir de l’étage…']]);
 // Le champ numérique n'apparaît que pour « À partir de l'étage… » ; le seuil s'efface quand on quitte ce choix
 function renderEtageMin() { const i = document.getElementById('fEtageMin'); if (!i) return; const on = F.etage === 'min'; i.hidden = !on; if (!on) { if (F.etageMin || i.value) { F.etageMin = ''; i.value = ''; } } else { if (!i.value) i.value = F.etageMin || '1'; F.etageMin = i.value; } }
 document.getElementById('fEtageMin').oninput = () => { const i = document.getElementById('fEtageMin'); F.etageMin = i.value ? String(Math.min(60, Math.max(1, Math.round(+i.value)))) : ''; apply(); };
 sel('fGare', [[300, '≤ 300 m d’une gare'], [500, '≤ 500 m (6 min à pied)'], [800, '≤ 800 m (10 min à pied)'], [1200, '≤ 1,2 km (15 min à pied)'], [2000, '≤ 2 km']]);
-const FLAGS = [['top', 'Dernier étage'], ['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')], ['pick', 'Picking à demander'], ['nomandat', 'Sans mandat'], ['nopick', 'Mandat + stock seulement'], ['livre', 'Déjà livré'], ['nonact', 'Pas encore actable']];
+const FLAGS = [['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')], ['pick', 'Picking à demander'], ['nomandat', 'Sans mandat'], ['nopick', 'Mandat + stock seulement'], ['livre', 'Déjà livré'], ['nonact', 'Pas encore actable']];
 const fFl = document.getElementById('fFlags');
 FLAGS.forEach(([k, t]) => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.f = k; c.textContent = t; c.onclick = () => { F.flags.has(k) ? F.flags.delete(k) : F.flags.add(k); c.classList.toggle('on'); renderExtMin(); apply(); }; fFl.appendChild(c);
   if (k === 'ext') { const i = document.createElement('input'); i.type = 'number'; i.id = 'fExtMin'; i.min = '0'; i.step = '1'; i.placeholder = 'm² min'; i.title = 'Surface extérieure minimale (balcon, terrasse, jardin — m²)'; i.autocomplete = 'off'; i.hidden = true; i.style.cssText = 'width:72px;flex:0 0 auto;padding:2px 6px;font-size:11px'; i.oninput = () => { F.extMin = i.value ? String(Math.max(0, +i.value)) : ''; apply(); }; fFl.appendChild(i); } });
