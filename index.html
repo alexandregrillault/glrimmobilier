@@ -10590,6 +10590,55 @@ function rdvLienFermer() { const m = document.getElementById('rdv-lien-modal'); 
 // l'historique de la fiche.
 const RDV_FORMATS = { visio: { duree: 30, mode: 'visio', lbl: 'Visio', sous: '30 min' }, appel: { duree: 10, mode: 'telephone', lbl: 'Appel', sous: '10 min' } };
 let _rdvFixeCtx = null;
+// Plusieurs créneaux (23/10/2026) : le vendeur peut proposer jusqu'à 3 moments au
+// client, dans la même fenêtre. Un seul créneau = le rendez-vous est posé comme
+// avant ; deux ou trois = le client les reçoit par mail et choisit, le rendez-vous
+// est confirmé dès son choix (même mécanique que les créneaux proposés depuis le planning).
+const RDV_FIXE_MAX = 3;
+const RDV_FIXE_CHAMP = 'background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box';
+function _rdvFixeLigneHtml(jour, heure, premiere) {
+  const lbl = 'font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px';
+  return `<div class="rdv-fixe-slot" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:130px"><div style="${lbl}">Jour</div><input type="date" class="rdv-fixe-d"${premiere ? ' id="rdv-fixe-date"' : ''} value="${jour}" min="${_rdvFixeAujourdhui()}" style="${RDV_FIXE_CHAMP};width:100%"></div>
+      <div style="flex:1;min-width:110px"><div style="${lbl}">Heure</div><input type="time" class="rdv-fixe-h"${premiere ? ' id="rdv-fixe-heure"' : ''} value="${heure}" step="300" style="${RDV_FIXE_CHAMP};width:100%"></div>
+      ${premiere ? '' : `<button type="button" onclick="eqRdvFixerRetirer(this)" class="btn btn-sm btn-secondary" style="font-size:12px;margin-bottom:1px">Retirer</button>`}
+    </div>`;
+}
+function _rdvFixeAujourdhui() {
+  const a = new Date(); const pad = (n) => String(n).padStart(2, '0');
+  return a.getFullYear() + '-' + pad(a.getMonth() + 1) + '-' + pad(a.getDate());
+}
+function eqRdvFixerAjouter() {
+  const zone = document.getElementById('rdv-fixe-slots');
+  if (!zone) return;
+  const lignes = zone.querySelectorAll('.rdv-fixe-slot');
+  if (lignes.length >= RDV_FIXE_MAX) return;
+  // Le nouveau créneau reprend le dernier, au lendemain à la même heure
+  const der = lignes[lignes.length - 1];
+  const jour0 = (der.querySelector('.rdv-fixe-d') || {}).value || _rdvFixeAujourdhui();
+  const heure0 = (der.querySelector('.rdv-fixe-h') || {}).value || '10:00';
+  const d = new Date(jour0 + 'T12:00:00'); d.setDate(d.getDate() + 1);
+  const pad = (n) => String(n).padStart(2, '0');
+  const jour = isNaN(d) ? jour0 : d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  zone.insertAdjacentHTML('beforeend', _rdvFixeLigneHtml(jour, heure0, false));
+  eqRdvFixerMaj();
+}
+function eqRdvFixerRetirer(btn) {
+  const ligne = btn && btn.closest ? btn.closest('.rdv-fixe-slot') : null;
+  if (ligne) ligne.remove();
+  eqRdvFixerMaj();
+}
+function _rdvFixeNb() { return document.querySelectorAll('#rdv-fixe-slots .rdv-fixe-slot').length || 1; }
+function _rdvFixeLibelleOk() { const n = _rdvFixeNb(); return n > 1 ? 'Proposer ces ' + n + ' créneaux' : 'Poser le rendez-vous'; }
+// Le texte du bouton, l'explication et la case « mail » suivent le nombre de créneaux
+function eqRdvFixerMaj() {
+  const n = _rdvFixeNb();
+  const ok = document.getElementById('rdv-fixe-ok'); if (ok && !ok.disabled) ok.textContent = _rdvFixeLibelleOk();
+  const add = document.getElementById('rdv-fixe-ajout'); if (add) add.style.display = n >= RDV_FIXE_MAX ? 'none' : '';
+  const aide = document.getElementById('rdv-fixe-aide'); if (aide) aide.style.display = n > 1 ? '' : 'none';
+  const lbl = document.getElementById('rdv-fixe-mail-lbl');
+  if (lbl) lbl.textContent = n > 1 ? 'Envoyer ces créneaux par mail à ' : 'Envoyer la confirmation par mail à ';
+}
 
 function eqRdvFixerOuvrir(contactId) {
   const l = (_eqLeads || []).find(x => x.id === contactId);
@@ -10616,18 +10665,19 @@ function eqRdvFixerOuvrir(contactId) {
       <button onclick="eqRdvFixerFermer()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1">✕</button>
     </div>
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Le rendez-vous se pose dans ton planning et ${l.email ? 'le client reçoit la confirmation par mail, avec le rendez-vous pour son agenda' : 'reste dans ton planning — pas d\'email sur la fiche pour prévenir le client'}.</div>
-    ${transfert ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:14px">Ce client est à <strong>${_vEsc(l.vendeur)}</strong>. En fixant le rendez-vous, il passe chez toi : la paternité te revient, le transfert est tracé sur la fiche, et le mail part en ton nom.</div>` : ''}
+    ${transfert ? `<div style="background:var(--surface2);border:1px solid var(--warning);border-radius:10px;padding:10px 13px;font-size:12.5px;margin-bottom:14px">Ce client est à <strong>${_vEsc(l.vendeur)}</strong>. En fixant (ou en proposant) le rendez-vous, il passe chez toi : la paternité te revient, le transfert est tracé sur la fiche, et le mail part en ton nom.</div>` : ''}
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Format</div>
     <div id="rdv-fixe-formats" style="display:flex;gap:8px;margin-bottom:14px">
       ${Object.keys(RDV_FORMATS).map(f => `<button data-f="${f}" onclick="eqRdvFixerFormat('${f}')" style="flex:1;border-radius:10px;padding:10px 6px;cursor:pointer;font-family:var(--font-body);font-size:13px;color:var(--text);background:var(--surface2);border:1px solid var(--border)"><strong>${RDV_FORMATS[f].lbl}</strong><br><span style="font-size:11px;color:var(--muted)">${RDV_FORMATS[f].sous}</span></button>`).join('')}
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <div style="flex:1"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Jour</div><input type="date" id="rdv-fixe-date" value="${jourIso}" min="${jourIso}" style="${champ};width:100%"></div>
-      <div style="flex:1"><div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Heure</div><input type="time" id="rdv-fixe-heure" value="${heure}" step="300" style="${champ};width:100%"></div>
+    <div id="rdv-fixe-slots">${_rdvFixeLigneHtml(jourIso, heure, true)}</div>
+    <div style="margin-bottom:14px">
+      <button type="button" id="rdv-fixe-ajout" onclick="eqRdvFixerAjouter()" class="btn btn-sm btn-secondary" style="font-size:12px">+ Ajouter un autre créneau</button>
+      <div id="rdv-fixe-aide" style="display:none;font-size:12px;color:var(--muted);margin-top:8px">Le client reçoit ces créneaux par mail et choisit : le rendez-vous est confirmé dès qu'il a répondu. D'ici là, ils restent réservés dans ton planning.</div>
     </div>
     <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Note pour toi <span style="text-transform:none;letter-spacing:0">(facultatif)</span></div>
     <input id="rdv-fixe-note" maxlength="200" placeholder="Ex : veut parler financement, revoir le T3 de Clichy" style="${champ};width:100%;margin-bottom:14px">
-    ${l.email ? `<label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="rdv-fixe-mail" checked style="accent-color:var(--accent)">Envoyer la confirmation par mail à ${_vEsc(l.email)}</label>` : ''}
+    ${l.email ? `<label style="display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:16px;cursor:pointer"><input type="checkbox" id="rdv-fixe-mail" checked style="accent-color:var(--accent)"><span><span id="rdv-fixe-mail-lbl">Envoyer la confirmation par mail à </span>${_vEsc(l.email)}</span></label>` : ''}
     <div style="display:flex;justify-content:flex-end;gap:8px">
       <button class="btn btn-secondary" onclick="eqRdvFixerFermer()">Annuler</button>
       <button class="btn btn-primary" id="rdv-fixe-ok" onclick="eqRdvFixerValider()">Poser le rendez-vous</button>
@@ -10811,21 +10861,73 @@ async function eqRdvDeplacerValider() {
     toast('⚠ Le rendez-vous n\'a pas pu être déplacé — réessaie', 'var(--danger)');
   }
 }
+// Les créneaux saisis dans la fenêtre, contrôlés : remplis, valides, à venir,
+// qui ne se chevauchent pas entre eux. Rend la liste triée, ou null (le vendeur
+// a déjà été prévenu par un message).
+function _rdvFixeCreneaux(fmt) {
+  const lignes = [...document.querySelectorAll('#rdv-fixe-slots .rdv-fixe-slot')];
+  const res = [];
+  for (const li of lignes) {
+    const jour = (li.querySelector('.rdv-fixe-d') || {}).value || '';
+    const heure = ((li.querySelector('.rdv-fixe-h') || {}).value || '').slice(0, 5);
+    if (!jour || !heure) { toast(lignes.length > 1 ? 'Indique le jour et l\'heure de chaque créneau' : 'Indique le jour et l\'heure', 'var(--warning)'); return null; }
+    const debut = new Date(jour + 'T' + heure + ':00');
+    if (isNaN(debut)) { toast('Date ou heure invalide', 'var(--warning)'); return null; }
+    if (debut.getTime() < Date.now() - 5 * 60000) { toast('Ce moment est déjà passé', 'var(--warning)'); return null; }
+    res.push({ jour, heure, debut, fin: new Date(debut.getTime() + fmt.duree * 60000) });
+  }
+  res.sort((a, b) => a.debut - b.debut);
+  for (let i = 1; i < res.length; i++) {
+    if (res[i].debut < res[i - 1].fin) { toast('Deux de ces créneaux se chevauchent', 'var(--warning)'); return null; }
+  }
+  return res;
+}
+// Le planning du vendeur est regardé avant d'écrire quoi que ce soit : on ne pose
+// ni ne propose un moment où il a déjà un rendez-vous (confirmé, réservé, ou proposé
+// à un autre client). Ses disponibilités ouvertes ne comptent pas : elles se retirent
+// toutes seules. Les créneaux déjà proposés à CE client sont remplacés, pas comptés.
+async function _rdvFixeConflit(vendeur, contactId, slots) {
+  try {
+    const mini = slots[0].debut, maxi = slots[slots.length - 1].fin;
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?select=id,debut,fin,statut,contact_id,bloquant&vendeur=eq.' + encodeURIComponent(vendeur)
+      + '&statut=neq.libre&debut=lt.' + encodeURIComponent(maxi.toISOString()) + '&fin=gt.' + encodeURIComponent(mini.toISOString()) + '&limit=200', {
+      cache: 'no-store', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (!r.ok) return null;   // contrôle impossible : on ne bloque pas le vendeur pour autant
+    const pris = (await r.json()).filter(x => x.bloquant !== false && !(x.statut === 'propose' && x.contact_id === contactId));
+    for (const s of slots) {
+      const x = pris.find(p => new Date(p.debut) < s.fin && new Date(p.fin) > s.debut);
+      if (x) return { slot: s, pris: x };
+    }
+  } catch (e) { /* contrôle impossible */ }
+  return null;
+}
+function _rdvFixeMsgConflit(c) {
+  const d = new Date(c.pris.debut);
+  const quand = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' à ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+  const quoi = c.pris.statut === 'propose' ? 'un créneau proposé à un autre client' : 'un rendez-vous';
+  return 'Tu as déjà ' + quoi + ' ' + quand + ' — choisis un autre moment';
+}
+
 async function eqRdvFixerValider() {
   if (!_rdvFixeCtx) return;
   const { contactId, l, vendeur, format, transfert } = _rdvFixeCtx;
   const ancienVendeur = l.vendeur || null;
   const fmt = RDV_FORMATS[format];
-  const jour = (document.getElementById('rdv-fixe-date') || {}).value || '';
-  const heure = ((document.getElementById('rdv-fixe-heure') || {}).value || '').slice(0, 5);
   const note = ((document.getElementById('rdv-fixe-note') || {}).value || '').trim();
   const envoyer = !!(l.email && (document.getElementById('rdv-fixe-mail') || {}).checked);
-  if (!jour || !heure) { toast('Indique le jour et l\'heure', 'var(--warning)'); return; }
-  const debut = new Date(jour + 'T' + heure + ':00');
-  if (isNaN(debut)) { toast('Date ou heure invalide', 'var(--warning)'); return; }
-  if (debut.getTime() < Date.now() - 5 * 60000) { toast('Ce moment est déjà passé', 'var(--warning)'); return; }
-  const fin = new Date(debut.getTime() + fmt.duree * 60000);
+  const slots = _rdvFixeCreneaux(fmt);
+  if (!slots) return;
   const btn = document.getElementById('rdv-fixe-ok');
+  if (btn) { btn.disabled = true; btn.textContent = 'Vérification…'; }
+  const conflit = await _rdvFixeConflit(vendeur, contactId, slots);
+  if (conflit) {
+    if (btn) { btn.disabled = false; btn.textContent = _rdvFixeLibelleOk(); }
+    toast(_rdvFixeMsgConflit(conflit), 'var(--warning)');
+    return;
+  }
+  if (slots.length > 1) return _rdvFixerProposer(slots);
+  const jour = slots[0].jour, heure = slots[0].heure, debut = slots[0].debut, fin = slots[0].fin;
   if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
   const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
   try {
@@ -10892,8 +10994,121 @@ async function eqRdvFixerValider() {
     if (typeof _eqPlanRecharger === 'function') _eqPlanRecharger();
     if (typeof eqMajVue === 'function') eqMajVue(true);
   } catch (e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Poser le rendez-vous'; }
+    if (btn) { btn.disabled = false; btn.textContent = _rdvFixeLibelleOk(); }
     toast('⚠ ' + (e && e.motif ? e.motif : 'Le rendez-vous n\'a pas pu être enregistré — réessaie'), 'var(--danger)');
+  }
+}
+
+// Plusieurs créneaux : le client choisit. Chaque créneau est posé « proposé »
+// dans le planning du vendeur (bloqué, donc plus proposable à personne d'autre),
+// l'état du lien dit au client qu'il a le choix, et le mail lui donne les moments
+// et le lien de sa page. Dès qu'il en retient un, il est confirmé (accepter_proposition,
+// comme pour les créneaux proposés depuis le planning) et les autres se libèrent.
+function _rdvFixeMailPropositions(l, vendeur, format, slots, url) {
+  const jourLong = (d) => { const s = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }); return s.charAt(0).toUpperCase() + s.slice(1); };
+  const hh = (d) => d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+  // Jamais de genre deviné : « Monsieur Dupont » seulement si la fiche le dit
+  let sal = '';
+  try {
+    const n = nomPrenomContact(l); const nomF = String(n.nom_famille || '').trim(), prenom = String(n.prenom || '').trim();
+    if (l.mode_adresse === 'civilite_nom' && l.civilite && nomF) sal = l.civilite + ' ' + nomF;
+    else if (l.mode_adresse === 'prenom_nom' && prenom && nomF) sal = prenom + ' ' + nomF;
+  } catch (e) { sal = ''; }
+  const quoi = format === 'visio' ? 'une visio de 30 minutes' : 'un appel de 10 minutes';
+  return {
+    sujet: 'Votre rendez-vous avec ' + vendeur + ' — choisissez votre créneau',
+    texte: 'Bonjour' + (sal ? ' ' + sal : '') + ',\n\n'
+      + 'Suite à notre échange, voici les moments où je suis disponible pour ' + quoi + ' :\n\n'
+      + slots.map(s => '- ' + jourLong(s.debut) + ' à ' + hh(s.debut)).join('\n') + '\n\n'
+      + 'Choisissez celui qui vous arrange ici, il sera confirmé tout de suite : ' + url + '\n\n'
+      + 'Bien à vous,'
+  };
+}
+async function _rdvFixerProposer(slots) {
+  const { contactId, l, vendeur, format, transfert } = _rdvFixeCtx;
+  const ancienVendeur = l.vendeur || null;
+  const fmt = RDV_FORMATS[format];
+  const note = ((document.getElementById('rdv-fixe-note') || {}).value || '').trim();
+  const envoyer = !!(l.email && (document.getElementById('rdv-fixe-mail') || {}).checked);
+  const btn = document.getElementById('rdv-fixe-ok');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
+  const entetes = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  try {
+    // 0. La paternité revient à celui qui propose (comme à celui qui fixe)
+    const rp = await fetch(SUPABASE_URL + '/rest/v1/rpc/rdv_fixer_paternite', {
+      method: 'POST', headers: entetes, body: JSON.stringify({ p_contact: contactId, p_vendeur: vendeur })
+    });
+    if (!rp.ok) { let m = ''; try { const j = await rp.json(); m = j.message || j.hint || ''; } catch (e) {} const er = new Error(m || 'paternite'); er.motif = m; throw er; }
+    if (l.vendeur !== vendeur) {
+      const ancien = l.vendeur;
+      l.vendeur = vendeur; l.vendeur_depuis = new Date().toISOString();
+      if (ancien) l.vendeur_historique = (Array.isArray(l.vendeur_historique) ? l.vendeur_historique : []).concat([{ vendeur: ancien, du: null, au: l.vendeur_depuis, motif: 'rendez-vous proposé par ' + vendeur }]);
+    }
+    // 1. Le lien personnel du client
+    const lien = await rdvLienRecuperer(contactId, vendeur);
+    if (!lien) throw new Error('lien');
+    // 2. Une nouvelle proposition remplace l'ancienne : les créneaux déjà proposés
+    //    à ce client redeviennent de simples disponibilités
+    await fetch(SUPABASE_URL + '/rest/v1/creneaux?statut=eq.propose&selection_token=eq.' + encodeURIComponent(lien.token), {
+      method: 'PATCH', headers: Object.assign({}, entetes, { 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ statut: 'libre', contact_id: null, selection_token: null, client_nom: null, client_message: null, reserve_le: null })
+    });
+    // 3. Les disponibilités ouvertes qui chevauchent un des moments disparaissent
+    for (const s of slots) {
+      await fetch(SUPABASE_URL + '/rest/v1/creneaux?vendeur=eq.' + encodeURIComponent(vendeur) + '&statut=eq.libre&debut=lt.' + encodeURIComponent(s.fin.toISOString()) + '&fin=gt.' + encodeURIComponent(s.debut.toISOString()), {
+        method: 'DELETE', headers: entetes
+      });
+    }
+    // 4. Les créneaux proposés, d'un seul coup (tout ou rien)
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux', {
+      method: 'POST', headers: Object.assign({}, entetes, { 'Prefer': 'return=representation' }),
+      body: JSON.stringify(slots.map(s => ({
+        vendeur, debut: s.debut.toISOString(), fin: s.fin.toISOString(), mode: fmt.mode, statut: 'propose',
+        contact_id: contactId, selection_token: lien.token,
+        client_nom: nomComplet(l) || l.nom || 'Client', client_message: note || null, bloquant: true
+      })))
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const crees = await r.json();
+    // 5. L'état du lien : le client y retrouve ses choix. `initiative: vendeur` =
+    //    c'est le conseiller qui propose (la page ne dit pas « votre créneau n'était
+    //    pas disponible »).
+    await fetch(SUPABASE_URL + '/rest/v1/rdv_liens?token=eq.' + encodeURIComponent(lien.token), {
+      method: 'PATCH', headers: Object.assign({}, entetes, { 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ rdv: { demande: true, reserve: false, confirme: false, refuse: false,
+        propositions: crees.map(c => c.id), initiative: 'vendeur', mode: fmt.mode, format, duree: fmt.duree,
+        propose_le: new Date().toISOString(), propose_par: vendeur } })
+    });
+    // 6. La fiche : relance au lendemain (sauf activité de préparation déjà
+    //    datée d'ici là) et trace dans les notes
+    const pad = (n) => String(n).padStart(2, '0');
+    const dem = new Date(Date.now() + 864e5); const demain = dem.getFullYear() + '-' + pad(dem.getMonth() + 1) + '-' + pad(dem.getDate());
+    const auj = _rdvFixeAujourdhui();
+    const gardeRappel = !!(l.rappel_le && l.rappel_titre && l.rappel_le >= auj && l.rappel_le <= demain);
+    const libelles = slots.map(s => s.debut.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'numeric' }) + ' ' + s.heure.replace(':', 'h')).join(' / ');
+    const trace = '[' + new Date().toLocaleDateString('sv-SE') + '] ' + slots.length + ' créneaux ' + (format === 'visio' ? 'visio' : 'téléphoniques') + ' proposés par ' + vendeur + ' : ' + libelles + (note ? ' — ' + note : '') + (transfert ? ' — PATERNITÉ TRANSFÉRÉE de ' + ancienVendeur + ' à ' + vendeur : '');
+    const suivi = l.statut === 'Nouveau' ? { statut: 'Suivi', statut_maj: new Date().toISOString() } : {};
+    await _eqLeadPatch(contactId, Object.assign(gardeRappel ? {} : { rappel_le: demain, rappel_heure: null, rappel_titre: null }, suivi, { notes: (l.notes ? l.notes.trim() + '\n' : '') + trace }));
+    // 7. Le mail au client (sa page affiche les créneaux)
+    let mot = '';
+    const urlClient = RDV_SITE_URL + '?r=1&t=' + lien.token;   // « r=1 » : l'adresse reste un lien simple dans le mail, sans les boutons visio / appel
+    if (envoyer) {
+      const m = _rdvFixeMailPropositions(l, vendeur, format, slots, urlClient);
+      const res = await rdvNotifierClient(lien.token, 'libre', { sujet: m.sujet, texte: m.texte });
+      mot = _rdvNotifMot(res);
+      if (!(res && res.ok)) { try { await navigator.clipboard.writeText(urlClient); mot += ' (lien copié)'; } catch (e) {} }
+    } else {
+      try { await navigator.clipboard.writeText(urlClient); mot = ' — lien du client copié'; } catch (e) {}
+    }
+    eqRdvFixerFermer();
+    toast('✓ ' + slots.length + ' créneaux proposés' + mot, 'var(--success)');
+    try { if (typeof eqRdvCharger === 'function') await eqRdvCharger(); } catch (e) {}
+    if (typeof renderEqNotifs === 'function') renderEqNotifs();
+    if (typeof _eqPlanRecharger === 'function') _eqPlanRecharger();
+    if (typeof eqMajVue === 'function') eqMajVue(true);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = _rdvFixeLibelleOk(); }
+    toast('⚠ ' + (e && e.motif ? e.motif : 'Les créneaux n\'ont pas pu être proposés — réessaie'), 'var(--danger)');
   }
 }
 

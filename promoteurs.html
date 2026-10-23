@@ -59,6 +59,7 @@ th.tri:after{content:" ▾";color:var(--laiton)} th.tri.asc:after{content:" ▴"
 tr.cl{cursor:pointer} tr.cl:hover td{background:#FAF7F0}
 .tab{overflow:auto;max-height:620px;border:1px solid var(--ligne);border-radius:10px}
 .pastille{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.p-acc{background:#E6EEEA;color:var(--vert2)} .p-lmnp{background:#F4ECDD;color:#7A5A22} .p-autre{background:#E3EBF5;color:#2F5A8C}
 .p-ok{background:#E3F1EA;color:var(--ok)} .p-moyen{background:#F7EBD6;color:#8A5E17} .p-ko{background:#F5E0DC;color:var(--ko)} .p-gris{background:#ECEFEE;color:var(--txt2)}
 .constats{margin:0;padding-left:18px} .constats li{margin:5px 0}
 .note{font-size:12px;color:var(--txt2)}
@@ -149,7 +150,7 @@ function indic(promo){
     baisse_med:med(s.slice(1).filter(x=>x.baisses).map(x=>x.baisse_med)),
     pm2:dernier.pm2, dpm2:premier.pm2&&dernier.pm2?100*(dernier.pm2-premier.pm2)/premier.pm2:null,
     opt:dernier.stock?100*dernier.opt/dernier.stock:null, opt0:premier.stock?100*premier.opt/premier.stock:null,
-    fiab:fiab(promo), glrV:g.ventes||0, glrS:g.selections||0, glrSo:g.ouvertes||0, glr:g, prix:dernier.prix_med, all};
+    fiab:fiab(promo), mix:mixTypes(PAR_PROMO[promo]||[]), glrV:g.ventes||0, glrS:g.selections||0, glrSo:g.ouvertes||0, glr:g, prix:dernier.prix_med, all};
 }
 function annee(lk){if(lk==null)return null;const y=Math.floor(lk),q=Math.round((lk-y)*10)||1;return y+(q-1)/4+0.125}
 const AUJ=(()=>{const d=new Date();return d.getFullYear()+d.getMonth()/12})();
@@ -164,6 +165,27 @@ function interet(p){
   if(p.rythme!=null&&p.rythme<1&&st>=10){sc+=10;why.push('se vend lentement')}
   if(p.n55){sc+=5;why.push('TVA réduite')}
   return {sc:Math.round(sc),why};
+}
+
+// ---------- type de programme (23/10/2026, demande d'Alex) ----------
+// calculé côté base par pige_type_programme() : lmnp = résidence gérée (étudiante, seniors, services) ;
+// autre = nue-propriété, BRS / accession maîtrisée, ancien rénové ; sinon accession classique (y compris LMNP « non géré » et LLI).
+const TYPES={accession:{l:'Accession classique',c:'p-acc',coul:'#2C5246',o:0},lmnp:{l:'LMNP',c:'p-lmnp',coul:'#B0894C',o:1},autre:{l:'Autre',c:'p-autre',coul:'#3D6FA8',o:2}};
+const typeDe=p=>TYPES[p.type]?p.type:'accession';
+function badgeType(p){const t=TYPES[typeDe(p)];return `<span class="pastille ${t.c}">${t.l}${p.type_detail?' · '+esc(p.type_detail):''}</span>`}
+function mixTypes(progs){
+  const m={accession:0,lmnp:0,autre:0},det={};
+  progs.forEach(p=>{const t=typeDe(p);m[t]++;if(p.type_detail)det[p.type_detail]=(det[p.type_detail]||0)+1});
+  const n=progs.length||1, dom=Object.keys(m).sort((a,b)=>m[b]-m[a]||TYPES[a].o-TYPES[b].o)[0];
+  return {m,det,n:progs.length,dom,part:100*m[dom]/n};
+}
+function texteMix(x){
+  const parts=[];
+  if(x.m.accession) parts.push(x.m.accession+' en accession classique');
+  const dl=t=>Object.entries(x.det).filter(([d])=>(t==='lmnp')===/^Résidence/.test(d)).map(([d,n])=>n+' '+d.toLowerCase()).join(', ');
+  if(x.m.lmnp) parts.push(x.m.lmnp+' en LMNP ('+dl('lmnp')+')');
+  if(x.m.autre) parts.push(x.m.autre+' autre'+(x.m.autre>1?'s':'')+' ('+dl('autre')+')');
+  return parts.join(', ');
 }
 
 // ---------- rendu commun ----------
@@ -184,12 +206,12 @@ function vueClassement(){
   const rows=Object.keys(D.series).map(indic).filter(r=>r&&Math.max(r.stock,r.stock0)>=etat.minStock)
     .filter(r=>!etat.q||r.promo.toLowerCase().includes(etat.q.toLowerCase()));
   const k=etat.tri.k, a=etat.tri.asc?1:-1;
-  rows.sort((x,y)=>{const u=x[k],v=y[k];if(k==='promo')return a*String(u).localeCompare(String(v));if(k==='fiab')return a*((x.fiab.v??99)-(y.fiab.v??99));return a*((u??-1e9)-(v??-1e9))});
+  rows.sort((x,y)=>{const u=x[k],v=y[k];if(k==='promo')return a*String(u).localeCompare(String(v));if(k==='fiab')return a*((x.fiab.v??99)-(y.fiab.v??99));if(k==='type')return a*((TYPES[x.mix.dom].o*1000-x.mix.part)-(TYPES[y.mix.dom].o*1000-y.mix.part));return a*((u??-1e9)-(v??-1e9))});
   const tot=Object.keys(D.series).map(indic).filter(Boolean);
   const T={stock:sum(tot,r=>r.stock),stock0:sum(tot,r=>r.stock0),ventes:sum(tot,r=>r.ventes),baisses:sum(tot,r=>r.baisses)};
-  const cols=[['promo','Promoteur','g'],['np','Prog.'],['stock','Stock dispo'],['dstock','Évol. stock'],['ventes','Ventes prob.'],['rythme','Rythme / sem.'],['entrees','Lots entrés'],['baisses','Baisses prix'],['baisse_med','Baisse méd.'],['pm2','€/m² méd.'],['opt','% options'],['fiab','Fiabilité','g'],['glrV','Ventes GLR'],['glrS','Sélections']];
+  const cols=[['promo','Promoteur','g'],['type','Type','g'],['np','Prog.'],['stock','Stock dispo'],['dstock','Évol. stock'],['ventes','Ventes prob.'],['rythme','Rythme / sem.'],['entrees','Lots entrés'],['baisses','Baisses prix'],['baisse_med','Baisse méd.'],['pm2','€/m² méd.'],['opt','% options'],['fiab','Fiabilité','g'],['glrV','Ventes GLR'],['glrS','Sélections']];
   const th=cols.map(([c,l,g])=>`<th data-k="${c}" class="${g||''} ${etat.tri.k===c?'tri'+(etat.tri.asc?' asc':''):''}">${l}</th>`).join('');
-  const tr=rows.map(r=>`<tr class="cl" data-p="${esc(r.promo)}"><td>${esc(r.promo)}</td><td>${r.np}</td><td>${fmt(r.stock)}</td>
+  const tr=rows.map(r=>`<tr class="cl" data-p="${esc(r.promo)}"><td>${esc(r.promo)}</td><td class="g" title="${esc(texteMix(r.mix))}"><span class="pastille ${TYPES[r.mix.dom].c}">${r.mix.part>=99.5?TYPES[r.mix.dom].l:TYPES[r.mix.dom].l+' '+fmt(r.mix.part,0)+' %'}</span></td><td>${r.np}</td><td>${fmt(r.stock)}</td>
     <td class="${r.dstock>0?'up':r.dstock<0?'down':''}">${pct(r.dstock,0)}</td><td>${fmt(r.ventes)}</td><td>${r.rythme==null?'—':fmt(r.rythme,1)+' %'}</td><td>${fmt(r.entrees)}</td>
     <td>${fmt(r.baisses)}</td><td>${r.baisse_med?'−'+eur(r.baisse_med):'—'}</td><td>${eur(r.pm2)}</td><td>${r.opt==null?'—':fmt(r.opt,0)+' %'}</td>
     <td class="g"><span class="pastille ${r.fiab.c}">${r.fiab.t}</span></td><td>${r.glrV||'—'}</td><td>${r.glrS||'—'}</td></tr>`).join('');
@@ -206,8 +228,8 @@ function vueClassement(){
     <div class="kpi"><div class="l">Baisses de prix</div><div class="v">${fmt(T.baisses)}</div><div class="d">lots baissés sur la période</div></div>
   </div>
   <div class="panneau"><h2>Classement des promoteurs <small>clic sur une ligne pour ouvrir le rapport du promoteur</small></h2>
-    <div class="tab"><table><thead><tr>${th}</tr></thead><tbody>${tr||'<tr><td colspan="14" class="g">Aucun promoteur</td></tr>'}</tbody></table></div>
-    <p class="note">Ventes probables : lots disponibles sortis du stock pour de bon, hors retraits de programme entiers et changements d'identifiant. Rythme : part du stock de début de période vendue par semaine. Fiabilité : part de lots « disparus puis revenus » ou ré-identifiés (faux vendus) dans le stock de la source.</p>
+    <div class="tab"><table><thead><tr>${th}</tr></thead><tbody>${tr||'<tr><td colspan="15" class="g">Aucun promoteur</td></tr>'}</tbody></table></div>
+    <p class="note">Ventes probables : lots disponibles sortis du stock pour de bon, hors retraits de programme entiers et changements d'identifiant. Rythme : part du stock de début de période vendue par semaine. Fiabilité : part de lots « disparus puis revenus » ou ré-identifiés (faux vendus) dans le stock de la source. Type : type de programme dominant chez le promoteur (part de ses programmes) — LMNP = résidence gérée (étudiante, seniors, services) ; Autre = nue-propriété, BRS / accession maîtrisée, ancien rénové.</p>
   </div>`;
   $('#q').oninput=e=>{etat.q=e.target.value;const pos=e.target.selectionStart;vueClassement();const q=$('#q');q.focus();q.setSelectionRange(pos,pos)};
   $('#min').onchange=e=>{etat.minStock=+e.target.value||0;vueClassement()};
@@ -223,6 +245,7 @@ function constats(I,progs){
   if(I.dstock!=null&&Math.abs(I.dstock)>=3) L.push(`Stock ${I.dstock>0?'en hausse':'en baisse'} de ${fmt(Math.abs(I.dstock),0)} % depuis le ${dfr(etat.debut)} (${fmt(I.stock0)} → ${fmt(I.stock)} lots)${I.entrees?', avec '+fmt(I.entrees)+' lots entrés':''}.`);
   if(I.rythme!=null) L.push(`Rythme de vente : ${fmt(I.rythme,1)} % du stock par semaine (${fmt(I.ventes)} ventes probables en ${fmt(semaines(),1)} semaines)${I.rythme<1.5?' — lent':I.rythme>=4?' — soutenu':''}.`);
   if(I.baisses) L.push(`${fmt(I.baisses)} baisses de prix sur la période${I.baisse_med?', de '+eur(I.baisse_med)+' en valeur médiane':''}${I.hausses?' ; '+fmt(I.hausses)+' hausses':''}.`);
+  if(I.mix.n) L.push(`Types de programmes : ${texteMix(I.mix)}.`);
   const vite=progs.filter(p=>p.rythme!=null&&p.stock_debut>=5).sort((a,b)=>b.rythme-a.rythme);
   if(vite[0]&&vite[0].rythme>0) L.push(`Programme qui part le plus vite : ${esc(vite[0].nom)} (${esc(vite[0].ville)}), ${fmt(vite[0].rythme,1)} % du stock par semaine.`);
   const lent=progs.filter(p=>p.stock>=15&&p.rythme!=null&&p.rythme<0.5).sort((a,b)=>b.stock-a.stock);
@@ -254,6 +277,7 @@ function vueFiche(){
   </div>
   <div class="kpis">
     <div class="kpi"><div class="l">Programmes actifs</div><div class="v">${I.np}</div><div class="d">${progs.filter(p=>p.stock>0).length} avec du stock</div></div>
+    <div class="kpi"><div class="l">Type de programmes</div><div class="v" style="font-size:19px;white-space:nowrap">${(I.mix.dom==='accession'?'Accession':TYPES[I.mix.dom].l)+(I.mix.part>=99.5?'':' '+fmt(I.mix.part,0)+' %')}</div><div class="d">${['accession','lmnp','autre'].filter(t=>I.mix.m[t]).map(t=>I.mix.m[t]+' '+(t==='lmnp'?'LMNP':t)).join(' · ')}</div></div>
     <div class="kpi"><div class="l">Stock disponible</div><div class="v">${fmt(I.stock)}</div><div class="d"><span class="${I.dstock>0?'up':I.dstock<0?'down':''}">${pct(I.dstock,0)}</span> depuis le ${dfr(etat.debut)}</div></div>
     <div class="kpi"><div class="l">Ventes probables</div><div class="v">${fmt(I.ventes)}</div><div class="d">${I.rythme==null?'—':fmt(I.rythme,1)+' % du stock / semaine'}</div></div>
     <div class="kpi"><div class="l">Lots entrés</div><div class="v">${fmt(I.entrees)}</div><div class="d">${fmt(I.retraits)} retirés avec leur programme</div></div>
@@ -272,6 +296,7 @@ function vueFiche(){
       <button class="btn ${etat.mode==='prix'?'actif':''}" data-m="prix">Prix vs commune</button>
       <button class="btn ${etat.mode==='baisse'?'actif':''}" data-m="baisse">Baisses de prix</button>
       <button class="btn ${etat.mode==='livraison'?'actif':''}" data-m="livraison">Livraison</button>
+      <button class="btn ${etat.mode==='type'?'actif':''}" data-m="type">Type de programme</button>
       <button class="btn ${etat.conc?'actif':''}" id="b-conc">Concurrence autour</button>
     </div>
     <div id="carte"></div><div class="legende" id="legende"></div>
@@ -297,16 +322,18 @@ function couleur(p){
   if(m==='rythme'){if(p.rythme==null)return 'var(--gris)';return p.rythme>=4?'#2E7D5B':p.rythme>=1.5?'#7FA86A':p.rythme>0?'#C98A2B':'#B5483B'}
   if(m==='prix'){if(p.ecart==null)return 'var(--gris)';return p.ecart<=-8?'#2E7D5B':p.ecart<-2?'#7FA86A':p.ecart<=2?'#C9B27A':p.ecart<8?'#C98A2B':'#B5483B'}
   if(m==='baisse'){if(p.derniere_baisse&&p.derniere_baisse>=D.fin)return '#B5483B';if(p.baisses)return '#C98A2B';if(p.hausses)return '#3D6FA8';return 'var(--gris)'}
+  if(m==='type') return TYPES[typeDe(p)].coul;
   const a=annee(p.lk);if(a==null)return 'var(--gris)';const r=a-AUJ;return r<=0?'#6B5630':r<=1?'#B5483B':r<=2?'#C98A2B':'#2E7D5B';
 }
 const LEG={rythme:[['#2E7D5B','≥ 4 % / sem.'],['#7FA86A','1,5 à 4 %'],['#C98A2B','< 1,5 %'],['#B5483B','aucune vente'],['var(--gris)','trop récent']],
   prix:[['#2E7D5B','≥ 8 % sous la commune'],['#7FA86A','2 à 8 % sous'],['#C9B27A','dans le marché'],['#C98A2B','2 à 8 % au-dessus'],['#B5483B','≥ 8 % au-dessus'],['var(--gris)','seul dans sa commune']],
   baisse:[['#B5483B','baisse à la dernière pige'],['#C98A2B','baisse sur la période'],['#3D6FA8','hausse'],['var(--gris)','prix stables']],
+  type:[['#2C5246','Accession classique'],['#B0894C','LMNP (résidence gérée)'],['#3D6FA8','Autre (nue-propriété, BRS, ancien rénové)']],
   livraison:[['#6B5630','livré'],['#B5483B','sous 1 an'],['#C98A2B','1 à 2 ans'],['#2E7D5B','plus de 2 ans'],['var(--gris)','inconnue']]};
 function vraieCouleur(c){return c.startsWith('var(')?getComputedStyle(document.documentElement).getPropertyValue(c.slice(4,-1)).trim():c}
 function popup(p){
   const typ=p.typos?Object.entries(p.typos).sort().map(([t,n])=>`<span class="etiq">${esc(t)} ${n}</span>`).join(''):'';
-  return `<h3>${esc(p.nom)}</h3><div class="note">${esc(p.ville)} · ${esc(p.promoteur)} · livraison ${esc(p.livraison||'—')}</div>
+  return `<h3>${esc(p.nom)}</h3><div style="margin:2px 0 4px">${badgeType(p)}</div><div class="note">${esc(p.ville)} · ${esc(p.promoteur)} · livraison ${esc(p.livraison||'—')}</div>
   <table style="margin:6px 0"><tr><td class="g">Stock dispo</td><td>${p.stock} (début ${p.stock_debut??'—'})</td></tr>
   <tr><td class="g">Ventes probables</td><td>${p.ventes}${p.rythme!=null?' · '+fmt(p.rythme,1)+' %/sem.':''}</td></tr>
   <tr><td class="g">Prix au m² médian</td><td>${eur(p.pm2)}</td></tr>
@@ -347,12 +374,12 @@ function dessinerCarte(progs,init){
   setTimeout(()=>carte&&carte.invalidateSize(),50);
 }
 function tableProgs(progs){
-  const cols=[['nom','Programme','g'],['ville','Ville','g'],['interet','Intérêt'],['stock','Stock'],['ventes','Ventes'],['rythme','%/sem.'],['pm2','€/m²'],['ecart','vs commune'],['baisses','Baisses'],['lk','Livraison'],['docs','Documents','g']];
+  const cols=[['nom','Programme','g'],['ville','Ville','g'],['type','Type','g'],['interet','Intérêt'],['stock','Stock'],['ventes','Ventes'],['rythme','%/sem.'],['pm2','€/m²'],['ecart','vs commune'],['baisses','Baisses'],['lk','Livraison'],['docs','Documents','g']];
   const k=etat.triP.k,a=etat.triP.asc?1:-1;
-  const val=(p,k)=>k==='interet'?p._i.sc:k==='docs'?(p.plaquette?1:0)+(p.masse?1:0):p[k];
+  const val=(p,k)=>k==='type'?TYPES[typeDe(p)].o*100+(p.type_detail?1:0):k==='interet'?p._i.sc:k==='docs'?(p.plaquette?1:0)+(p.masse?1:0):p[k];
   progs.sort((x,y)=>{const u=val(x,k),v=val(y,k);if(typeof u==='string'||typeof v==='string')return a*String(u||'').localeCompare(String(v||''),'fr');return a*((u??-1e9)-(v??-1e9))});
   const th=cols.map(([c,l,g])=>`<th data-kp="${c}" class="${g||''} ${etat.triP.k===c?'tri'+(etat.triP.asc?' asc':''):''}">${l}</th>`).join('');
-  const tr=progs.map((p,i)=>`<tr class="cl" data-i="${esc(p.id)}"><td>${esc(p.nom)}${p._i.why.length?'<div class="note">'+p._i.why.join(' · ')+'</div>':''}</td><td class="g">${esc(p.ville)}</td><td>${p._i.sc}</td>
+  const tr=progs.map((p,i)=>`<tr class="cl" data-i="${esc(p.id)}"><td>${esc(p.nom)}${p._i.why.length?'<div class="note">'+p._i.why.join(' · ')+'</div>':''}</td><td class="g">${esc(p.ville)}</td><td class="g">${badgeType(p)}</td><td>${p._i.sc}</td>
     <td>${p.stock}</td><td>${p.ventes}</td><td>${p.rythme==null?'—':fmt(p.rythme,1)}</td><td>${eur(p.pm2)}</td><td class="${p.ecart<0?'up':p.ecart>0?'down':''}">${pct(p.ecart,0)}</td>
     <td>${p.baisses||'—'}</td><td>${esc(p.livraison||'—')}</td>
     <td class="g">${p.plaquette?`<a class="lien" href="${esc(p.plaquette)}" target="_blank" rel="noopener">Plaquette</a>`:''}${p.masse?`<a class="lien" href="${esc(p.masse)}" target="_blank" rel="noopener">PDM</a>`:''}</td></tr>`).join('');
