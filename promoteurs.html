@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rapport promoteurs — GLR Immobilier</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* Rapport promoteurs (23/10/2026) — page à part, ne partage rien avec carte.html.
+   Données : table pige_kpi_cache (id 'courant'), calculée par select public.pige_kpi_maj(); (après chaque pige + chaque nuit à 4 h 47 UTC par pg_cron « pige_kpi_nuit », ~16 s) — lecture gérants seulement (RLS). */
+:root{
+  --vert:#1E3A32; --vert2:#2C5246; --creme:#FBF8F1; --laiton:#B0894C; --laiton2:#D9C39A;
+  --bg:#F6F3EC; --carte:#FFFFFF; --txt:#1F2A26; --txt2:#5E6B66; --ligne:#E4DED2;
+  --ok:#2E7D5B; --moyen:#C98A2B; --ko:#B5483B; --gris:#9AA5A0; --bleu:#3D6FA8;
+  --rayon:12px; --ombre:0 1px 3px rgba(30,58,50,.08),0 4px 14px rgba(30,58,50,.05);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+a{color:var(--vert2)}
+header{background:var(--vert);color:var(--creme);padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:1000}
+header h1{font:600 18px/1.2 Georgia,"Times New Roman",serif;margin:0;letter-spacing:.2px}
+header .sous{color:var(--laiton2);font-size:12px}
+header .esp{flex:1}
+.btn{border:1px solid var(--ligne);background:var(--carte);color:var(--vert);border-radius:8px;padding:7px 12px;font:600 13px/1 inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--laiton)}
+header .btn{background:transparent;color:var(--creme);border-color:rgba(251,248,241,.35)}
+header .btn:hover{border-color:var(--laiton2)}
+.btn.actif{background:var(--vert);color:var(--creme);border-color:var(--vert)}
+main{max-width:1320px;margin:0 auto;padding:18px 20px 60px}
+.barre{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.barre label{font-size:12px;color:var(--txt2)}
+select,input[type=search],input[type=number]{border:1px solid var(--ligne);border-radius:8px;padding:8px 10px;font:14px inherit;background:var(--carte);color:var(--txt);min-width:0}
+input[type=search]{width:280px;max-width:100%}
+.panneau{background:var(--carte);border:1px solid var(--ligne);border-radius:var(--rayon);box-shadow:var(--ombre);padding:16px;margin-bottom:16px}
+.panneau h2{font:600 16px/1.3 Georgia,"Times New Roman",serif;color:var(--vert);margin:0 0 12px}
+.panneau h2 small{font:400 12px/1 inherit;color:var(--txt2);margin-left:8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--carte);border:1px solid var(--ligne);border-radius:10px;padding:12px 14px;box-shadow:var(--ombre)}
+.kpi .l{font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px}
+.kpi .v{font:600 22px/1.2 Georgia,serif;color:var(--vert);margin-top:4px}
+.kpi .d{font-size:12px;color:var(--txt2);margin-top:2px}
+.up{color:var(--ok)} .down{color:var(--ko)}
+.grille2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grille3{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+@media (max-width:900px){.grille2,.grille3{grid-template-columns:1fr}}
+.grille2>*,.grille3>*{min-width:0}
+.graph{position:relative;height:240px}
+#carte{height:460px;border-radius:10px;border:1px solid var(--ligne)}
+.modes{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.legende{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--txt2);margin-top:8px}
+.legende i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--ligne);text-align:right;white-space:nowrap}
+th:first-child,td:first-child,th.g,td.g{text-align:left}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--txt2);cursor:pointer;user-select:none;position:sticky;top:0;background:var(--carte)}
+th.tri:after{content:" ▾";color:var(--laiton)} th.tri.asc:after{content:" ▴"}
+tr.cl{cursor:pointer} tr.cl:hover td{background:#FAF7F0}
+.tab{overflow:auto;max-height:620px;border:1px solid var(--ligne);border-radius:10px}
+.pastille{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600}
+.p-ok{background:#E3F1EA;color:var(--ok)} .p-moyen{background:#F7EBD6;color:#8A5E17} .p-ko{background:#F5E0DC;color:var(--ko)} .p-gris{background:#ECEFEE;color:var(--txt2)}
+.constats{margin:0;padding-left:18px} .constats li{margin:5px 0}
+.note{font-size:12px;color:var(--txt2)}
+.vide{padding:40px;text-align:center;color:var(--txt2)}
+.etiq{display:inline-block;font-size:11px;background:#F1ECE1;color:#6B5630;border-radius:6px;padding:1px 6px;margin:1px 2px 1px 0}
+.lien{font-size:12px;margin-right:8px}
+.leaflet-popup-content{font:13px/1.4 -apple-system,"Segoe UI",Roboto,sans-serif;min-width:230px}
+.leaflet-popup-content h3{font:600 14px/1.3 Georgia,serif;color:var(--vert);margin:0 0 4px}
+@media (max-width:600px){main{padding:12px 12px 40px} header{padding:12px;position:static} header .btn{padding:6px 9px;font-size:12px} #carte{height:360px} .kpi .v{font-size:19px} input[type=search]{width:100%}}
+@media print{header .btn,.barre,.modes,#btn-retour{display:none!important} header{position:static} .panneau,.kpi{box-shadow:none;break-inside:avoid} .tab{max-height:none;overflow:visible} body{background:#fff}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Rapport promoteurs</h1><div class="sous" id="sous">Chargement…</div></div>
+  <div class="esp"></div>
+  <button class="btn" id="btn-retour" style="display:none">Retour au classement</button>
+  <button class="btn" id="btn-pdf">Exporter en PDF</button>
+</header>
+<main id="main"><div class="vide">Chargement des données…</div></main>
+<script>
+(function(){
+'use strict';
+const SUPABASE_URL='https://hydqfbxdtpmbuooexekp.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5ZHFmYnhkdHBtYnVvb2V4ZWtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyODA3NDEsImV4cCI6MjA5NDg1Njc0MX0.ylton95WooAxVbIqdgYIaiW8E6lGlxEuKsLEe-hzU0g';
+const SB_SESSION_KEY='glr_session';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(n,d=0)=>n==null||isNaN(n)?'—':Number(n).toLocaleString('fr-FR',{maximumFractionDigits:d,minimumFractionDigits:d});
+const eur=n=>n==null||isNaN(n)?'—':fmt(n)+' €';
+const pct=(n,d=1)=>n==null||isNaN(n)?'—':(n>0?'+':'')+fmt(n,d)+' %';
+const dfr=s=>{if(!s)return '—';const [y,m,d]=String(s).slice(0,10).split('-');return d+'/'+m+'/'+y.slice(2)};
+const sum=(a,f)=>a.reduce((s,x)=>s+(f(x)||0),0);
+const med=a=>{const b=a.filter(x=>x!=null&&!isNaN(x)).sort((x,y)=>x-y);if(!b.length)return null;const m=Math.floor(b.length/2);return b.length%2?b[m]:(b[m-1]+b[m])/2};
+
+// ---------- session (la même que le dashboard, même origine) ----------
+function lireSession(){try{return JSON.parse(localStorage.getItem(SB_SESSION_KEY)||'null')}catch(e){return null}}
+async function jeton(){
+  let s=lireSession(); if(!s||!s.access_token) return null;
+  if(!s.expires_at||s.expires_at-Date.now()<5*60e3){
+    if(!s.refresh_token) return null;
+    const r=await fetch(SUPABASE_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:s.refresh_token})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.access_token) return null;
+    s={access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+((j.expires_in||3600)*1000)};
+    try{localStorage.setItem(SB_SESSION_KEY,JSON.stringify(s))}catch(e){}
+  }
+  return s.access_token;
+}
+async function sb(chemin,opt){
+  const t=await jeton(); if(!t) throw new Error('session');
+  const r=await fetch(SUPABASE_URL+chemin,Object.assign({cache:'no-store'},opt||{},{headers:Object.assign({apikey:SUPABASE_KEY,Authorization:'Bearer '+t,'Content-Type':'application/json'},(opt||{}).headers||{})}));
+  if(!r.ok) throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,160));
+  return r.json();
+}
+
+// ---------- état ----------
+let D=null, PROGS=[], PAR_PROMO={}, PROMOS=[], etat={vue:'classement',promo:null,debut:null,mode:'rythme',conc:false,tri:{k:'stock',asc:false},triP:{k:'interet',asc:false},minStock:20,q:''};
+let carte=null, couche=null, coucheConc=null, graphs=[];
+
+function preparer(data){
+  D=data; PROGS=(data.programmes||[]).filter(p=>p.promoteur);
+  PAR_PROMO={}; for(const p of PROGS)(PAR_PROMO[p.promoteur]=PAR_PROMO[p.promoteur]||[]).push(p);
+  etat.debut=etat.debut||data.debut;
+}
+// séries d'un promoteur bornées à la période
+function serie(promo){return (D.series[promo]||[]).filter(x=>x.d>=etat.debut)}
+function semaines(){const a=new Date(etat.debut),b=new Date(D.fin);return Math.max(0.5,(b-a)/(7*864e5))}
+// fiabilité de la donnée : lots « faux vendus » (disparus puis revenus) rapportés au stock moyen, sur toute la période calculée
+function fiab(promo){
+  const s=D.series[promo]||[]; if(s.length<3) return {c:'p-gris',t:'Trop récent',v:null};
+  const st=med(s.map(x=>x.stock))||1, f=sum(s,x=>x.flicker), ic=sum(s,x=>x.idchg);
+  const src=new Set((PAR_PROMO[promo]||[]).map(p=>p.source));
+  const masque=[...src].some(x=>/station9/.test(x));
+  const taux=100*(f+ic)/st;
+  if(taux<1&&!masque) return {c:'p-ok',t:'Propre',v:taux};
+  if(taux<4) return {c:'p-moyen',t:masque?'Lots réservés masqués':'Quasi propre',v:taux};
+  return {c:'p-ko',t:'À surveiller',v:taux};
+}
+function indic(promo){
+  const s=serie(promo), all=D.series[promo]||[]; if(!s.length) return null;
+  const premier=s[0], dernier=s[s.length-1];
+  const ventes=sum(s.slice(1),x=>x.ventes), base=premier.stock||0;
+  const g=(D.glr||{})[promo]||{};
+  return {promo, np:dernier.np, stock:dernier.stock, stock0:base, dstock:base?100*(dernier.stock-base)/base:null,
+    ventes, retraits:sum(s.slice(1),x=>x.retraits), entrees:sum(s.slice(1),x=>x.entrees),
+    rythme:base?100*ventes/base/semaines():null, baisses:sum(s.slice(1),x=>x.baisses), hausses:sum(s.slice(1),x=>x.hausses),
+    baisse_med:med(s.slice(1).filter(x=>x.baisses).map(x=>x.baisse_med)),
+    pm2:dernier.pm2, dpm2:premier.pm2&&dernier.pm2?100*(dernier.pm2-premier.pm2)/premier.pm2:null,
+    opt:dernier.stock?100*dernier.opt/dernier.stock:null, opt0:premier.stock?100*premier.opt/premier.stock:null,
+    fiab:fiab(promo), glrV:g.ventes||0, glrS:g.selections||0, glrSo:g.ouvertes||0, glr:g, prix:dernier.prix_med, all};
+}
+function annee(lk){if(lk==null)return null;const y=Math.floor(lk),q=Math.round((lk-y)*10)||1;return y+(q-1)/4+0.125}
+const AUJ=(()=>{const d=new Date();return d.getFullYear()+d.getMonth()/12})();
+// intérêt commercial : beaucoup de stock + livraison proche + baisse récente + prix sous la commune
+function interet(p){
+  let sc=0,why=[];
+  const st=p.stock||0; if(!st) return {sc:0,why:[]};
+  sc+=Math.min(40,Math.log2(1+st)*7);
+  const a=annee(p.lk); if(a!=null&&a-AUJ<=1.25){sc+=20;why.push('livraison proche')}
+  if(p.derniere_baisse&&p.derniere_baisse>=D.fin){sc+=20;why.push('baisse à la dernière pige')} else if(p.baisses){sc+=8;why.push('prix déjà baissés')}
+  if(p.ecart!=null&&p.ecart<=-5){sc+=12;why.push('sous le prix de la commune')}
+  if(p.rythme!=null&&p.rythme<1&&st>=10){sc+=10;why.push('se vend lentement')}
+  if(p.n55){sc+=5;why.push('TVA réduite')}
+  return {sc:Math.round(sc),why};
+}
+
+// ---------- rendu commun ----------
+function entete(){
+  $('#sous').textContent='Piges du '+dfr(D.debut)+' au '+dfr(D.fin)+' · '+(D.dates||[]).length+' piges · calculé le '+new Date(D.calcule_le).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'});
+  $('#btn-retour').style.display=etat.vue==='fiche'?'':'none';
+}
+function barrePeriode(){
+  const opts=(D.dates||[]).slice(0,-1).map(d=>`<option value="${d}" ${d===etat.debut?'selected':''}>depuis le ${dfr(d)}</option>`).join('');
+  return `<label for="per">Période</label><select id="per">${opts}</select>`;
+}
+function detruireGraphs(){graphs.forEach(g=>g.destroy());graphs=[]}
+function brancherPeriode(){const s=$('#per'); if(s) s.onchange=()=>{etat.debut=s.value;rendre()}}
+
+// ---------- vue classement ----------
+function vueClassement(){
+  detruireGraphs(); if(carte){carte.remove();carte=null}
+  const rows=Object.keys(D.series).map(indic).filter(r=>r&&Math.max(r.stock,r.stock0)>=etat.minStock)
+    .filter(r=>!etat.q||r.promo.toLowerCase().includes(etat.q.toLowerCase()));
+  const k=etat.tri.k, a=etat.tri.asc?1:-1;
+  rows.sort((x,y)=>{const u=x[k],v=y[k];if(k==='promo')return a*String(u).localeCompare(String(v));if(k==='fiab')return a*((x.fiab.v??99)-(y.fiab.v??99));return a*((u??-1e9)-(v??-1e9))});
+  const tot=Object.keys(D.series).map(indic).filter(Boolean);
+  const T={stock:sum(tot,r=>r.stock),stock0:sum(tot,r=>r.stock0),ventes:sum(tot,r=>r.ventes),baisses:sum(tot,r=>r.baisses)};
+  const cols=[['promo','Promoteur','g'],['np','Prog.'],['stock','Stock dispo'],['dstock','Évol. stock'],['ventes','Ventes prob.'],['rythme','Rythme / sem.'],['entrees','Lots entrés'],['baisses','Baisses prix'],['baisse_med','Baisse méd.'],['pm2','€/m² méd.'],['opt','% options'],['fiab','Fiabilité','g'],['glrV','Ventes GLR'],['glrS','Sélections']];
+  const th=cols.map(([c,l,g])=>`<th data-k="${c}" class="${g||''} ${etat.tri.k===c?'tri'+(etat.tri.asc?' asc':''):''}">${l}</th>`).join('');
+  const tr=rows.map(r=>`<tr class="cl" data-p="${esc(r.promo)}"><td>${esc(r.promo)}</td><td>${r.np}</td><td>${fmt(r.stock)}</td>
+    <td class="${r.dstock>0?'up':r.dstock<0?'down':''}">${pct(r.dstock,0)}</td><td>${fmt(r.ventes)}</td><td>${r.rythme==null?'—':fmt(r.rythme,1)+' %'}</td><td>${fmt(r.entrees)}</td>
+    <td>${fmt(r.baisses)}</td><td>${r.baisse_med?'−'+eur(r.baisse_med):'—'}</td><td>${eur(r.pm2)}</td><td>${r.opt==null?'—':fmt(r.opt,0)+' %'}</td>
+    <td class="g"><span class="pastille ${r.fiab.c}">${r.fiab.t}</span></td><td>${r.glrV||'—'}</td><td>${r.glrS||'—'}</td></tr>`).join('');
+  $('#main').innerHTML=`
+  <div class="barre">
+    <input type="search" id="q" placeholder="Rechercher un promoteur…" value="${esc(etat.q)}">
+    ${barrePeriode()}
+    <label for="min">Stock min.</label><input type="number" id="min" min="0" step="10" value="${etat.minStock}" style="width:80px">
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Promoteurs suivis</div><div class="v">${tot.length}</div><div class="d">${fmt(PROGS.length)} programmes</div></div>
+    <div class="kpi"><div class="l">Stock disponible</div><div class="v">${fmt(T.stock)}</div><div class="d">${pct(T.stock0?100*(T.stock-T.stock0)/T.stock0:null)} sur la période</div></div>
+    <div class="kpi"><div class="l">Ventes probables</div><div class="v">${fmt(T.ventes)}</div><div class="d">${fmt(T.ventes/semaines(),0)} par semaine</div></div>
+    <div class="kpi"><div class="l">Baisses de prix</div><div class="v">${fmt(T.baisses)}</div><div class="d">lots baissés sur la période</div></div>
+  </div>
+  <div class="panneau"><h2>Classement des promoteurs <small>clic sur une ligne pour ouvrir le rapport du promoteur</small></h2>
+    <div class="tab"><table><thead><tr>${th}</tr></thead><tbody>${tr||'<tr><td colspan="14" class="g">Aucun promoteur</td></tr>'}</tbody></table></div>
+    <p class="note">Ventes probables : lots disponibles sortis du stock pour de bon, hors retraits de programme entiers et changements d'identifiant. Rythme : part du stock de début de période vendue par semaine. Fiabilité : part de lots « disparus puis revenus » ou ré-identifiés (faux vendus) dans le stock de la source.</p>
+  </div>`;
+  $('#q').oninput=e=>{etat.q=e.target.value;const pos=e.target.selectionStart;vueClassement();const q=$('#q');q.focus();q.setSelectionRange(pos,pos)};
+  $('#min').onchange=e=>{etat.minStock=+e.target.value||0;vueClassement()};
+  brancherPeriode();
+  document.querySelectorAll('th[data-k]').forEach(t=>t.onclick=()=>{const k=t.dataset.k;etat.tri=etat.tri.k===k?{k,asc:!etat.tri.asc}:{k,asc:k==='promo'};vueClassement()});
+  document.querySelectorAll('tr.cl').forEach(t=>t.onclick=()=>ouvrir(t.dataset.p));
+}
+
+// ---------- vue fiche promoteur ----------
+function ouvrir(promo){etat.vue='fiche';etat.promo=promo;history.replaceState(null,'','#'+encodeURIComponent(promo));rendre();window.scrollTo(0,0)}
+function constats(I,progs){
+  const L=[];
+  if(I.dstock!=null&&Math.abs(I.dstock)>=3) L.push(`Stock ${I.dstock>0?'en hausse':'en baisse'} de ${fmt(Math.abs(I.dstock),0)} % depuis le ${dfr(etat.debut)} (${fmt(I.stock0)} → ${fmt(I.stock)} lots)${I.entrees?', avec '+fmt(I.entrees)+' lots entrés':''}.`);
+  if(I.rythme!=null) L.push(`Rythme de vente : ${fmt(I.rythme,1)} % du stock par semaine (${fmt(I.ventes)} ventes probables en ${fmt(semaines(),1)} semaines)${I.rythme<1.5?' — lent':I.rythme>=4?' — soutenu':''}.`);
+  if(I.baisses) L.push(`${fmt(I.baisses)} baisses de prix sur la période${I.baisse_med?', de '+eur(I.baisse_med)+' en valeur médiane':''}${I.hausses?' ; '+fmt(I.hausses)+' hausses':''}.`);
+  const vite=progs.filter(p=>p.rythme!=null&&p.stock_debut>=5).sort((a,b)=>b.rythme-a.rythme);
+  if(vite[0]&&vite[0].rythme>0) L.push(`Programme qui part le plus vite : ${esc(vite[0].nom)} (${esc(vite[0].ville)}), ${fmt(vite[0].rythme,1)} % du stock par semaine.`);
+  const lent=progs.filter(p=>p.stock>=15&&p.rythme!=null&&p.rythme<0.5).sort((a,b)=>b.stock-a.stock);
+  if(lent.length) L.push(`${lent.length} programme${lent.length>1?'s':''} à fort stock qui ne se vend${lent.length>1?'ent':''} presque pas : ${lent.slice(0,3).map(p=>esc(p.nom)+' ('+p.stock+' lots)').join(', ')}.`);
+  const cher=progs.filter(p=>p.ecart!=null).sort((a,b)=>a.ecart-b.ecart);
+  if(cher.length){const lo=cher[0],hi=cher[cher.length-1];
+    if(lo.ecart<=-5) L.push(`Le mieux placé en prix : ${esc(lo.nom)} (${esc(lo.ville)}), ${pct(lo.ecart,0)} sous le prix au m² médian de la commune.`);
+    if(hi.ecart>=8) L.push(`Le plus cher face à sa commune : ${esc(hi.nom)} (${esc(hi.ville)}), ${pct(hi.ecart,0)}.`);}
+  const proche=progs.filter(p=>{const a=annee(p.lk);return a!=null&&a-AUJ<=1&&p.stock>=5});
+  if(proche.length) L.push(`${proche.length} programme${proche.length>1?'s':''} livré${proche.length>1?'s':''} d'ici un an avec encore du stock (${fmt(sum(proche,p=>p.stock))} lots) : levier de négociation.`);
+  if(I.opt!=null&&I.opt0!=null&&Math.abs(I.opt-I.opt0)>=4) L.push(`Part du stock en option : ${fmt(I.opt0,0)} % → ${fmt(I.opt,0)} % (${I.opt>I.opt0?'intérêt en hausse':'intérêt en baisse'}).`);
+  if(I.glrV||I.glrS) L.push(`Chez GLR : ${I.glrV} vente${I.glrV>1?'s':''} enregistrée${I.glrV>1?'s':''}${I.glr.derniere_vente?' (dernière le '+dfr(I.glr.derniere_vente)+')':''}, ${I.glrS} sélection${I.glrS>1?'s':''} client envoyée${I.glrS>1?'s':''} avec ses programmes dont ${I.glrSo} ouverte${I.glrSo>1?'s':''}.`);
+  else L.push('Aucune vente ni sélection client GLR sur ce promoteur pour l\'instant.');
+  if(I.fiab.c!=='p-ok') L.push(`Donnée : ${I.fiab.t.toLowerCase()}${I.fiab.v!=null?' ('+fmt(I.fiab.v,1)+' % de lots disparus puis revenus ou ré-identifiés)':''} — lire les ventes avec prudence.`);
+  return L;
+}
+function vueFiche(){
+  detruireGraphs();
+  const promo=etat.promo, I=indic(promo);
+  if(!I){etat.vue='classement';return vueClassement()}
+  const progs=(PAR_PROMO[promo]||[]).map(p=>Object.assign({},p,{_i:interet(p)}));
+  const s=serie(promo);
+  const opts=Object.keys(D.series).filter(p=>(PAR_PROMO[p]||[]).length).sort((a,b)=>a.localeCompare(b,'fr')).map(p=>`<option ${p===promo?'selected':''}>${esc(p)}</option>`).join('');
+  $('#main').innerHTML=`
+  <div class="barre">
+    <select id="promo" style="min-width:240px">${opts}</select>
+    ${barrePeriode()}
+    <span class="pastille ${I.fiab.c}" title="Part de lots disparus puis revenus ou ré-identifiés">Donnée : ${I.fiab.t}</span>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Programmes actifs</div><div class="v">${I.np}</div><div class="d">${progs.filter(p=>p.stock>0).length} avec du stock</div></div>
+    <div class="kpi"><div class="l">Stock disponible</div><div class="v">${fmt(I.stock)}</div><div class="d"><span class="${I.dstock>0?'up':I.dstock<0?'down':''}">${pct(I.dstock,0)}</span> depuis le ${dfr(etat.debut)}</div></div>
+    <div class="kpi"><div class="l">Ventes probables</div><div class="v">${fmt(I.ventes)}</div><div class="d">${I.rythme==null?'—':fmt(I.rythme,1)+' % du stock / semaine'}</div></div>
+    <div class="kpi"><div class="l">Lots entrés</div><div class="v">${fmt(I.entrees)}</div><div class="d">${fmt(I.retraits)} retirés avec leur programme</div></div>
+    <div class="kpi"><div class="l">Baisses de prix</div><div class="v">${fmt(I.baisses)}</div><div class="d">${I.baisse_med?'médiane −'+eur(I.baisse_med):'aucune'}${I.hausses?' · '+I.hausses+' hausses':''}</div></div>
+    <div class="kpi"><div class="l">Prix au m² médian</div><div class="v">${eur(I.pm2)}</div><div class="d">${pct(I.dpm2)} sur la période</div></div>
+    <div class="kpi"><div class="l">Stock en option</div><div class="v">${I.opt==null?'—':fmt(I.opt,0)+' %'}</div><div class="d">${I.opt0==null?'':'au début : '+fmt(I.opt0,0)+' %'}</div></div>
+    <div class="kpi"><div class="l">Chez GLR</div><div class="v">${I.glrV} vente${I.glrV>1?'s':''}</div><div class="d">${I.glrS} sélection${I.glrS>1?'s':''} · ${I.glrSo} ouverte${I.glrSo>1?'s':''}</div></div>
+  </div>
+  <div class="grille3">
+    <div class="panneau"><h2>Ce qu'il faut retenir</h2><ul class="constats">${constats(I,progs).map(x=>'<li>'+x+'</li>').join('')}</ul></div>
+    <div class="panneau"><h2>Typologies en stock</h2><div class="graph" style="height:220px"><canvas id="g-typo"></canvas></div></div>
+  </div>
+  <div class="panneau"><h2>Carte des programmes <small>taille = stock disponible · clic sur une bulle pour la fiche</small></h2>
+    <div class="modes">
+      <button class="btn ${etat.mode==='rythme'?'actif':''}" data-m="rythme">Rythme de vente</button>
+      <button class="btn ${etat.mode==='prix'?'actif':''}" data-m="prix">Prix vs commune</button>
+      <button class="btn ${etat.mode==='baisse'?'actif':''}" data-m="baisse">Baisses de prix</button>
+      <button class="btn ${etat.mode==='livraison'?'actif':''}" data-m="livraison">Livraison</button>
+      <button class="btn ${etat.conc?'actif':''}" id="b-conc">Concurrence autour</button>
+    </div>
+    <div id="carte"></div><div class="legende" id="legende"></div>
+    <p class="note">Les points sont ceux donnés par le promoteur ; une quarantaine de programmes sont décalés de plus de 500 m de leur adresse : lecture à l'échelle de la commune.</p>
+  </div>
+  <div class="grille2">
+    <div class="panneau"><h2>Stock et ventes par pige</h2><div class="graph"><canvas id="g-stock"></canvas></div></div>
+    <div class="panneau"><h2>Prix au m² médian et mouvements de prix</h2><div class="graph"><canvas id="g-prix"></canvas></div></div>
+  </div>
+  <div class="panneau"><h2>Programmes <small>triés par intérêt commercial : stock, livraison proche, baisse récente, prix sous la commune</small></h2>
+    <div class="tab" id="t-progs"></div>
+  </div>`;
+  $('#promo').onchange=e=>ouvrir(e.target.value);
+  brancherPeriode();
+  document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{etat.mode=b.dataset.m;document.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('actif',x===b));dessinerCarte(progs)});
+  $('#b-conc').onclick=e=>{etat.conc=!etat.conc;e.target.classList.toggle('actif',etat.conc);dessinerCarte(progs)};
+  tableProgs(progs);
+  graphiques(s,progs);
+  dessinerCarte(progs,true);
+}
+function couleur(p){
+  const m=etat.mode;
+  if(m==='rythme'){if(p.rythme==null)return 'var(--gris)';return p.rythme>=4?'#2E7D5B':p.rythme>=1.5?'#7FA86A':p.rythme>0?'#C98A2B':'#B5483B'}
+  if(m==='prix'){if(p.ecart==null)return 'var(--gris)';return p.ecart<=-8?'#2E7D5B':p.ecart<-2?'#7FA86A':p.ecart<=2?'#C9B27A':p.ecart<8?'#C98A2B':'#B5483B'}
+  if(m==='baisse'){if(p.derniere_baisse&&p.derniere_baisse>=D.fin)return '#B5483B';if(p.baisses)return '#C98A2B';if(p.hausses)return '#3D6FA8';return 'var(--gris)'}
+  const a=annee(p.lk);if(a==null)return 'var(--gris)';const r=a-AUJ;return r<=0?'#6B5630':r<=1?'#B5483B':r<=2?'#C98A2B':'#2E7D5B';
+}
+const LEG={rythme:[['#2E7D5B','≥ 4 % / sem.'],['#7FA86A','1,5 à 4 %'],['#C98A2B','< 1,5 %'],['#B5483B','aucune vente'],['var(--gris)','trop récent']],
+  prix:[['#2E7D5B','≥ 8 % sous la commune'],['#7FA86A','2 à 8 % sous'],['#C9B27A','dans le marché'],['#C98A2B','2 à 8 % au-dessus'],['#B5483B','≥ 8 % au-dessus'],['var(--gris)','seul dans sa commune']],
+  baisse:[['#B5483B','baisse à la dernière pige'],['#C98A2B','baisse sur la période'],['#3D6FA8','hausse'],['var(--gris)','prix stables']],
+  livraison:[['#6B5630','livré'],['#B5483B','sous 1 an'],['#C98A2B','1 à 2 ans'],['#2E7D5B','plus de 2 ans'],['var(--gris)','inconnue']]};
+function vraieCouleur(c){return c.startsWith('var(')?getComputedStyle(document.documentElement).getPropertyValue(c.slice(4,-1)).trim():c}
+function popup(p){
+  const typ=p.typos?Object.entries(p.typos).sort().map(([t,n])=>`<span class="etiq">${esc(t)} ${n}</span>`).join(''):'';
+  return `<h3>${esc(p.nom)}</h3><div class="note">${esc(p.ville)} · ${esc(p.promoteur)} · livraison ${esc(p.livraison||'—')}</div>
+  <table style="margin:6px 0"><tr><td class="g">Stock dispo</td><td>${p.stock} (début ${p.stock_debut??'—'})</td></tr>
+  <tr><td class="g">Ventes probables</td><td>${p.ventes}${p.rythme!=null?' · '+fmt(p.rythme,1)+' %/sem.':''}</td></tr>
+  <tr><td class="g">Prix au m² médian</td><td>${eur(p.pm2)}</td></tr>
+  <tr><td class="g">Commune (${p.nb_commune||0} prog.)</td><td>${eur(p.pm2_commune)} ${p.ecart!=null?'('+pct(p.ecart,0)+')':''}</td></tr>
+  <tr><td class="g">À partir de</td><td>${eur(p.pmin)}</td></tr>
+  <tr><td class="g">Baisses</td><td>${p.baisses?p.baisses+' (méd. −'+eur(p.baisse_med)+')':'—'}</td></tr></table>
+  ${typ}${p.n55?`<div class="note">${p.n55} lots en TVA réduite</div>`:''}
+  <div style="margin-top:6px">${p.plaquette?`<a class="lien" href="${esc(p.plaquette)}" target="_blank" rel="noopener">Plaquette</a>`:''}${p.masse?`<a class="lien" href="${esc(p.masse)}" target="_blank" rel="noopener">Plan de masse</a>`:''}${p.url?`<a class="lien" href="${esc(p.url)}" target="_blank" rel="noopener">Extranet</a>`:''}</div>`;
+}
+function dessinerCarte(progs,init){
+  if(!window.L){$('#carte').innerHTML='<div class="vide">Carte indisponible</div>';return}
+  if(!carte||init){
+    if(carte) carte.remove();
+    carte=L.map('carte',{zoomControl:true,scrollWheelZoom:false});
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',subdomains:'abcd',maxZoom:19}).addTo(carte);
+  }
+  if(couche) couche.remove(); if(coucheConc) coucheConc.remove();
+  const pts=progs.filter(p=>p.lat&&p.lng);
+  couche=L.layerGroup().addTo(carte);
+  if(etat.conc){
+    const villes=new Set(pts.map(p=>p.ville));
+    coucheConc=L.layerGroup().addTo(carte);
+    PROGS.filter(p=>p.promoteur!==etat.promo&&villes.has(p.ville)&&p.lat&&p.lng&&p.stock>0).forEach(p=>{
+      L.circleMarker([p.lat,p.lng],{radius:4+Math.sqrt(p.stock)*0.9,color:'#8C9692',weight:1,fillColor:'#C9CFCC',fillOpacity:.55}).bindPopup(popup(p)).addTo(coucheConc);
+    });
+  }
+  pts.sort((a,b)=>b.stock-a.stock).forEach(p=>{
+    const c=vraieCouleur(couleur(p));
+    L.circleMarker([p.lat,p.lng],{radius:5+Math.sqrt(p.stock||0)*1.5,color:'#fff',weight:1.5,fillColor:c,fillOpacity:p.stock?.85:.35}).bindPopup(popup(p)).addTo(couche);
+  });
+  if(init&&pts.length){const b=L.latLngBounds(pts.map(p=>[p.lat,p.lng]));carte.fitBounds(b.pad(0.15),{maxZoom:13})}
+  if(init&&!pts.length) carte.setView([48.86,2.35],10);
+  $('#legende').innerHTML=LEG[etat.mode].map(([c,t])=>`<span><i style="background:${c}"></i>${t}</span>`).join('')+(etat.conc?'<span><i style="background:#C9CFCC;border:1px solid #8C9692"></i>autres promoteurs (mêmes communes)</span>':'');
+  setTimeout(()=>carte&&carte.invalidateSize(),50);
+}
+function tableProgs(progs){
+  const cols=[['nom','Programme','g'],['ville','Ville','g'],['interet','Intérêt'],['stock','Stock'],['ventes','Ventes'],['rythme','%/sem.'],['pm2','€/m²'],['ecart','vs commune'],['baisses','Baisses'],['lk','Livraison'],['docs','Documents','g']];
+  const k=etat.triP.k,a=etat.triP.asc?1:-1;
+  const val=(p,k)=>k==='interet'?p._i.sc:k==='docs'?(p.plaquette?1:0)+(p.masse?1:0):p[k];
+  progs.sort((x,y)=>{const u=val(x,k),v=val(y,k);if(typeof u==='string'||typeof v==='string')return a*String(u||'').localeCompare(String(v||''),'fr');return a*((u??-1e9)-(v??-1e9))});
+  const th=cols.map(([c,l,g])=>`<th data-kp="${c}" class="${g||''} ${etat.triP.k===c?'tri'+(etat.triP.asc?' asc':''):''}">${l}</th>`).join('');
+  const tr=progs.map((p,i)=>`<tr class="cl" data-i="${esc(p.id)}"><td>${esc(p.nom)}${p._i.why.length?'<div class="note">'+p._i.why.join(' · ')+'</div>':''}</td><td class="g">${esc(p.ville)}</td><td>${p._i.sc}</td>
+    <td>${p.stock}</td><td>${p.ventes}</td><td>${p.rythme==null?'—':fmt(p.rythme,1)}</td><td>${eur(p.pm2)}</td><td class="${p.ecart<0?'up':p.ecart>0?'down':''}">${pct(p.ecart,0)}</td>
+    <td>${p.baisses||'—'}</td><td>${esc(p.livraison||'—')}</td>
+    <td class="g">${p.plaquette?`<a class="lien" href="${esc(p.plaquette)}" target="_blank" rel="noopener">Plaquette</a>`:''}${p.masse?`<a class="lien" href="${esc(p.masse)}" target="_blank" rel="noopener">PDM</a>`:''}</td></tr>`).join('');
+  $('#t-progs').innerHTML=`<table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table>`;
+  document.querySelectorAll('th[data-kp]').forEach(t=>t.onclick=()=>{const k=t.dataset.kp;etat.triP=etat.triP.k===k?{k,asc:!etat.triP.asc}:{k,asc:['nom','ville','lk'].includes(k)};tableProgs(progs)});
+  document.querySelectorAll('#t-progs tr.cl').forEach(t=>t.onclick=e=>{if(e.target.tagName==='A')return;const p=progs.find(x=>x.id===t.dataset.i);if(p&&p.lat&&carte){$('#carte').scrollIntoView({behavior:'smooth',block:'center'});carte.setView([p.lat,p.lng],14);couche.eachLayer(l=>{const ll=l.getLatLng();if(Math.abs(ll.lat-p.lat)<1e-7&&Math.abs(ll.lng-p.lng)<1e-7)l.openPopup()})}});
+}
+function graphiques(s,progs){
+  if(!window.Chart) return;
+  Chart.defaults.font.family='-apple-system,"Segoe UI",Roboto,sans-serif'; Chart.defaults.color='#5E6B66'; Chart.defaults.animation=false; Chart.defaults.locale='fr-FR';
+  const lab=s.map(x=>dfr(x.d));
+  graphs.push(new Chart($('#g-stock'),{data:{labels:lab,datasets:[
+    {type:'line',label:'Stock disponible',data:s.map(x=>x.stock),borderColor:'#1E3A32',backgroundColor:'#1E3A32',yAxisID:'y',tension:.25,pointRadius:3},
+    {type:'bar',label:'Ventes probables',data:s.map((x,i)=>i?x.ventes:null),backgroundColor:'#B0894C',yAxisID:'y2'},
+    {type:'bar',label:'Lots entrés',data:s.map((x,i)=>i?x.entrees:null),backgroundColor:'#9FC1B1',yAxisID:'y2'}]},
+    options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{boxWidth:10}}},
+      scales:{y:{position:'left',grid:{color:'#EEE9DF'}},y2:{position:'right',grid:{display:false},beginAtZero:true}}}}));
+  graphs.push(new Chart($('#g-prix'),{data:{labels:lab,datasets:[
+    {type:'line',label:'€/m² médian',data:s.map(x=>x.pm2),borderColor:'#1E3A32',backgroundColor:'#1E3A32',yAxisID:'y',tension:.25,pointRadius:3},
+    {type:'bar',label:'Baisses',data:s.map((x,i)=>i?x.baisses:null),backgroundColor:'#C9725F',yAxisID:'y2'},
+    {type:'bar',label:'Hausses',data:s.map((x,i)=>i?x.hausses:null),backgroundColor:'#7E9CC3',yAxisID:'y2'}]},
+    options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{boxWidth:10}}},
+      scales:{y:{position:'left',grid:{color:'#EEE9DF'}},y2:{position:'right',grid:{display:false},beginAtZero:true}}}}));
+  const ty={};progs.forEach(p=>Object.entries(p.typos||{}).forEach(([t,n])=>ty[t]=(ty[t]||0)+n));
+  const keys=Object.keys(ty).filter(t=>t!=='?').sort();
+  graphs.push(new Chart($('#g-typo'),{type:'bar',data:{labels:keys,datasets:[{label:'Lots disponibles',data:keys.map(k=>ty[k]),backgroundColor:'#2C5246'}]},
+    options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#EEE9DF'}},x:{grid:{display:false}}}}}));
+}
+
+// ---------- routage ----------
+function rendre(){entete(); if(etat.vue==='fiche') vueFiche(); else vueClassement()}
+$('#btn-retour').onclick=()=>{etat.vue='classement';history.replaceState(null,'',location.pathname+location.search);rendre()};
+$('#btn-pdf').onclick=()=>window.print();
+async function charger(){
+  const r=await sb('/rest/v1/pige_kpi_cache?id=eq.courant&select=data,maj_at');
+  if(!r.length) throw new Error('vide');
+  preparer(r[0].data);
+  const h=decodeURIComponent(location.hash.slice(1)); if(h&&D.series[h]){etat.vue='fiche';etat.promo=h}
+  rendre();
+}
+charger().catch(e=>{
+  const msg=e.message==='session'?`Connecte-toi d'abord au dashboard GLR (même navigateur), puis recharge cette page.<br><br><a class="btn" href="index.html">Ouvrir le dashboard</a>`
+    :e.message==='vide'?'Les indicateurs n\'ont pas encore été calculés (select public.pige_kpi_maj();).'
+    :/HTTP 40[13]/.test(e.message)?'Accès réservé aux gérants.':'Chargement impossible : '+esc(e.message);
+  $('#sous').textContent='';$('#main').innerHTML='<div class="panneau vide">'+msg+'</div>';
+});
+})();
+</script>
+</body>
+</html>

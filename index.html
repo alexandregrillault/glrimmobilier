@@ -754,6 +754,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h9l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"></path><path d="M8 13l2.5 2.5L15 11"></path></svg>
         Rapport marché
       </div>
+      <div class="nav-item" onclick="goTo(&#39;rapport-promoteurs&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M6 21V11"></path><path d="M11 21V6"></path><path d="M16 21v-7"></path><path d="M21 21V9"></path></svg>
+        Rapport promoteurs
+      </div>
       <div class="nav-item" onclick="goTo(&#39;marche&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"></path><path d="M5 20V10l4-3 4 3 4-5 2 1.5V20"></path></svg>
         Marché
@@ -2109,6 +2113,16 @@
       <div id="rm-mensuel" style="display:none"><div class="empty"><p>Chargement…</p></div></div>
     </div>
 
+    <!-- PAGE: RAPPORT PROMOTEURS (23/10/2026) — fichier promoteurs.html à côté d'index.html, réservé aux gérants
+         (données : Supabase pige_kpi_cache, calculées par pige_kpi_maj() depuis pige_archives ; carte propre, sans lien avec carte.html). -->
+    <div class="page" id="page-rapport-promoteurs">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="section-sub">Stock, rythme de vente, prix et programmes à pousser pour chaque promoteur, à partir de l'historique des piges — et ce que ça représente chez GLR.</div>
+        <a href="promoteurs.html" target="_blank" rel="noopener" class="btn btn-secondary" style="font-size:12px;text-decoration:none">Ouvrir dans un onglet</a>
+      </div>
+      <iframe id="rapport-promoteurs-cadre" title="Rapport promoteurs" style="width:100%;height:calc(100vh - 150px);min-height:600px;border:1px solid var(--border);border-radius:12px;background:#F6F3EC"></iframe>
+    </div>
+
     <div class="page" id="page-simulateur">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
         <div class="section-sub">Budget maximum d'un client selon sa situation et le secteur visé, puis montage lot par lot avec les aides mobilisables (PTZ, Action Logement, Paris Logement, TVA 5,5 %). Version de test — estimations hors étude bancaire.</div>
@@ -3272,7 +3286,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev', 'rapport-marche',
+const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage'];
 
 function appliquerRole() {
@@ -3556,7 +3570,7 @@ const pages = {
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'veille': 'Réveil veille', 'pilotage': 'Pilotage commercial',
-  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'marche': 'Marché'
+  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'rapport-promoteurs': 'Rapport promoteurs', 'marche': 'Marché'
 };
 
 let currentSpace = 'gerant';
@@ -4425,6 +4439,14 @@ window.addEventListener('message', async function (e) {
   _selPlansSuivre(planPreparerLots(nouveaux)).then(r => { if (r.faits && _selCtx === ctx) selAjouterLibreRefresh(); });
 });
 
+// Le rapport promoteurs vit dans promoteurs.html, à côté d'index.html (23/10/2026, gérants seulement).
+// Chargé à la première ouverture puis conservé (promoteur et période choisis gardés).
+function loadRapportPromoteurs() {
+  const f = document.getElementById('rapport-promoteurs-cadre');
+  if (!f || f.src) return;
+  f.src = 'promoteurs.html?embed=1';
+}
+
 // Le simulateur de financement vit dans simulateur.html, à côté d'index.html
 // (barèmes 2026 et taux dans le fichier lui-même). Chargé à la première
 // ouverture puis conservé : la saisie du client reste en place.
@@ -4462,6 +4484,7 @@ function goTo(id, el) {
   else if (id === 'mails') loadMailsGuide();
   else if (id === 'carte') loadCarte();
   else if (id === 'rapport-marche') loadRapportMarche();
+  else if (id === 'rapport-promoteurs') loadRapportPromoteurs();
   else if (id === 'marche') loadMarche();
   else if (id === 'simulateur') loadSimulateur();
   else if (id === 'journal') loadJournal();
