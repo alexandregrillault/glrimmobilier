@@ -321,7 +321,11 @@ function dessinerCarte(progs,init){
   if(!carte||init){
     if(carte) carte.remove();
     carte=L.map('carte',{zoomControl:true,scrollWheelZoom:false});
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',subdomains:'abcd',maxZoom:19}).addTo(carte);
+    // fond CARTO clair avec la clé GLR (sans clé : tuiles « API KEY REQUIRED », 23/10) — même fond que carte.html, libellés dans un calque au-dessus
+    const CARTO_KEY='cb1_3s9l_1_f6e0eaa79d9477f1729177a5';
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png?key='+CARTO_KEY,{attribution:'© OpenStreetMap, © CARTO',subdomains:'abcd',maxZoom:19}).addTo(carte);
+    carte.createPane('libelles'); carte.getPane('libelles').style.zIndex=450; carte.getPane('libelles').style.pointerEvents='none';
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png?key='+CARTO_KEY,{subdomains:'abcd',maxZoom:19,pane:'libelles'}).addTo(carte);
   }
   if(couche) couche.remove(); if(coucheConc) coucheConc.remove();
   const pts=progs.filter(p=>p.lat&&p.lng);
