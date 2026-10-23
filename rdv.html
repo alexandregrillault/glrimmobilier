@@ -402,7 +402,9 @@
     if (props.length){
       h += "<div class='bloc rdv'>";
       h += "<h2>" + qui + " vous propose ces créneaux</h2>";
-      h += "<p>Le créneau que vous aviez choisi n'était finalement pas disponible. Choisissez celui qui vous arrange : il sera confirmé immédiatement.</p>";
+      h += etat.initiative === "vendeur"
+        ? "<p>Voici les moments proposés par " + qui + ". Choisissez celui qui vous arrange : il sera confirmé immédiatement.</p>"
+        : "<p>Le créneau que vous aviez choisi n'était finalement pas disponible. Choisissez celui qui vous arrange : il sera confirmé immédiatement.</p>";
       h += htmlModes();
       h += htmlCreneaux(props, "accepter_proposition");
       // Aucun des trois ne va : le client donne ses disponibilités plutôt que
