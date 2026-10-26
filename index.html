@@ -12101,9 +12101,23 @@ function renderEqNotifs() {
   const rep = (id) => eqReperesLead((_eqLeads || []).find(x => x.id === id));
   const btnActions = (id) => `<button class="btn btn-sm btn-secondary" onclick="eqActMenu('${id}', event)" style="font-size:11px" title="Reporter, changer le statut ou retirer cette activité">Actions ▾</button>`;
 
-  // 1. RDV choisis par un client : à valider (en retard si la date est déjà passée)
+  // 1 bis. RDV choisi par un client, date passée, jamais validé : souvent le vendeur
+  // a eu le client au téléphone entre-temps. On demande seulement s'il a eu lieu
+  // (« Oui » le compte dans les chiffres), sans aucun mail au client.
+  _eqRdv.filter(c => c.statut === 'reserve' && new Date(c.fin || c.debut) < now).forEach(c => {
+    const html = item('rdv',
+      'Le rendez-vous de ' + esc(c.client_nom || 'Client') + ' a-t-il eu lieu ?' + rep(c.contact_id),
+      esc(_rdvQuand(c)) + ' · ' + esc(_crenLbl(c)) + ' · réservé par le client, jamais validé',
+      btnFiche(c.contact_id) +
+      `<button class="btn btn-sm btn-secondary" onclick="eqRdvPasEuLieu('${c.id}')" style="font-size:11px" title="Le rendez-vous ne s'est pas tenu — le client n'est pas prévenu">Non</button>
+       <button class="btn btn-sm btn-primary" onclick="eqRdvAEuLieu('${c.id}')" style="font-size:11px" title="Le rendez-vous a eu lieu : il compte dans tes chiffres — aucun mail au client">Oui, il a eu lieu</button>`,
+      'var(--warning)');
+    retard.push({ t: -1, g: 'valider', d: String(c.debut).slice(0, 10), html });
+  });
+
+  // 1. RDV choisis par un client, à venir : à valider
   // — sauf si le commercial a déjà agi sur la fiche depuis la réservation
-  _eqRdv.filter(c => c.statut === 'reserve' && !_eqRdvDejaTraite(c)).forEach(c => {
+  _eqRdv.filter(c => c.statut === 'reserve' && new Date(c.fin || c.debut) >= now && !_eqRdvDejaTraite(c)).forEach(c => {
     const html = item('rdv',
       'Valider le RDV de ' + esc(c.client_nom || 'Client') + rep(c.contact_id),
       esc(_rdvQuand(c)) + ' · ' + esc(_crenLbl(c)) + (c.client_message ? ' · « ' + esc(c.client_message) + ' »' : ''),
@@ -12446,6 +12460,44 @@ async function eqRdvValider(id) {
     const lead = c && c.contact_id && (_eqLeads || []).find(x => x.id === c.contact_id);
     if (lead && lead.statut === 'Nouveau') { lead.statut = 'Suivi'; lead.statut_maj = new Date().toISOString(); }
   } catch (e) { toast('⚠ Validation impossible', 'var(--danger)'); }
+  await eqRdvCharger();
+  renderEqNotifs();
+  eqMajVue(true);
+}
+
+// Rendez-vous réservé par le client, date passée, jamais validé : on régularise
+// sans écrire au client (le rendez-vous est derrière nous).
+async function eqRdvAEuLieu(id) {
+  const c = _eqRdv.find(x => x.id === id);
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + id, {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ statut: 'confirme' })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await _planMajSelection(c && c.selection_token, { confirme: true, refuse: false, confirme_le: new Date().toISOString() });
+    toast('✓ Rendez-vous compté dans tes chiffres', 'var(--success)');
+  } catch (e) { toast('⚠ Enregistrement impossible', 'var(--danger)'); }
+  await eqRdvCharger();
+  renderEqNotifs();
+  eqMajVue(true);
+}
+
+async function eqRdvPasEuLieu(id) {
+  const c = _eqRdv.find(x => x.id === id);
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/creneaux?id=eq.' + id, {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ statut: 'libre', contact_id: null, selection_token: null, client_nom: null, client_message: null, reserve_le: null })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await _planMajSelection(c && c.selection_token, { reserve: false, confirme: false, traite: true });
+    if (c && c.contact_id) await _ecarterMarquerFiche(c.contact_id,
+      '[' + new Date().toLocaleDateString('sv-SE') + '] Rendez-vous du ' + new Date(c.debut).toLocaleDateString('fr-FR') + ' réservé par le client : n\'a pas eu lieu', false);
+    toast('Rendez-vous retiré — noté sur la fiche');
+  } catch (e) { toast('⚠ Enregistrement impossible', 'var(--danger)'); }
   await eqRdvCharger();
   renderEqNotifs();
   eqMajVue(true);
