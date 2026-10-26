@@ -13,7 +13,7 @@ Un CRM maison en un seul fichier `index.html` (vanilla JS, ~1,5 Mo, aucun build)
 | `rdv.html` | Copie de secours de la page de rendez-vous client (source : `glr-site/rdv/index.html`). |
 | `valider.html` | Confirmation d'un rendez-vous depuis le mail reçu par le vendeur. |
 | `mails.html` | Guide des mails automatiques, affiché dans le CRM (Outils → Mails automatiques). À régénérer quand un mail change. |
-| `carte.html` + `carte/` | Carte des programmes pigés (iframe dans le CRM). **Ne jamais modifier `carte.html` directement** : il est généré par `pige/current/build_map.py` depuis `map_template.html` (dossier `Desktop/GLR-dashboard/pige/current/` sur le Mac d'Alex). Modifier le template, régénérer, déposer. |
+| `carte.html` + `carte/` | Carte des programmes pigés (iframe dans le CRM). **Ne jamais modifier `carte.html` directement** : il est généré par `pige/current/build_map.py` depuis `map_template.html` (dossier `Desktop/GLR-dashboard/pige/current/` sur le Mac d'Alex). Modifier le template, régénérer, déposer. **Déposer uniquement la version CRM** (`pige/current/crm/carte.html`, ~170 Ko, données lues par la RPC `pige_carte()` avec la session `glr_session`), jamais la version autonome `pige/current/carte.html` (~12 Mo) : elle embarque toute la pige, commissions comprises, et le dépôt est public (règle du 26/10/2026). |
 | `simulateur.html` | Simulateur de financement (iframe gérant, ou ouvert avec le contexte d'un client). |
 | `programme.html`, `promoteurs.html`, `plaquette.html`, `rapport-maj.html` | Pages annexes (programme pigé, annuaire promoteurs, plaquette client en diaporama, rapport de pige). |
 | `gares.json` | Stations ferrées IDF, lu par l'edge function `selection` (lignes de transport à proximité). |
@@ -81,5 +81,6 @@ Attention : l'outil Supabase de Claude n'exécute pas les instructions destructi
 ## Chantiers connus
 
 - Réattribution groupée (« Réattribuer à… ») : les leads transférés restent affichés tant que la liste n'est pas rechargée, et le compteur final est faux quand des leads sont sautés. À corriger : disparition immédiate du tableau, rechargement jamais ignoré, bilan « transférés / déjà chez X / échecs ».
-- Sécurité : table `promoteurs` expose login et mot de passe à tout utilisateur connecté ; tables `pige_*` et `documents_*` lisibles par `anon`. À traiter avec l'arbitrage d'Alex.
+- Sécurité : table `promoteurs` expose login et mot de passe à tout utilisateur connecté (lecture et modification). À traiter avec l'arbitrage d'Alex.
+- Sécurité, pige : lecture publique de `pige_programmes`, `pige_lots`, `pige_archives`, `documents_lot`, `documents_programme` fermée par `supabase/migrations/20261026_pige_lecture_privee.sql` (à appliquer après le dépôt de la carte version CRM). Restent ouverts aux anonymes : l'insertion dans `pige_brut` (push hebdo depuis Chrome) et la lecture de `pige_lots` par `scripts/immolead_plans.js` (cassée par la migration, à remplacer).
 - Edge functions et migrations à rapatrier dans ce dépôt (voir « Base »).
