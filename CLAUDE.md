@@ -15,7 +15,8 @@ Un CRM maison en un seul fichier `index.html` (vanilla JS, ~1,5 Mo, aucun build)
 | `mails.html` | Guide des mails automatiques, affiché dans le CRM (Outils → Mails automatiques). À régénérer quand un mail change. |
 | `carte.html` + `carte/` | Carte des programmes pigés (iframe dans le CRM). **Ne jamais modifier `carte.html` directement** : il est généré par `pige/current/build_map.py` depuis `map_template.html` (dossier `Desktop/GLR-dashboard/pige/current/` sur le Mac d'Alex). Modifier le template, régénérer, déposer. **Déposer uniquement la version CRM** (`pige/current/crm/carte.html`, ~170 Ko, données lues par la RPC `pige_carte()` avec la session `glr_session`), jamais la version autonome `pige/current/carte.html` (~12 Mo) : elle embarque toute la pige, commissions comprises, et le dépôt est public (règle du 26/10/2026). |
 | `simulateur.html` | Simulateur de financement (iframe gérant, ou ouvert avec le contexte d'un client). |
-| `programme.html`, `promoteurs.html`, `plaquette.html`, `rapport-maj.html` | Pages annexes (programme pigé, annuaire promoteurs, plaquette client en diaporama, rapport de pige). |
+| `programme.html`, `promoteurs.html`, `plaquette.html` | Pages annexes (programme pigé, annuaire promoteurs, plaquette client en diaporama). |
+| ~~`rapport-maj.html`~~ | **Retiré le 26/10/2026, ne plus déposer** : le rapport de pige (prix, programmes nommés) était lisible par tous dans ce dépôt public et aucune page n'y renvoyait. Il reste sur le Mac d'Alex (`Desktop/GLR-dashboard/rapport-maj.html`) ; la synthèse est dans la base (`pige_maj.rapport_html`). |
 | `gares.json` | Stations ferrées IDF, lu par l'edge function `selection` (lignes de transport à proximité). |
 
 ## Deux rôles dans le CRM
