@@ -9867,7 +9867,7 @@ ${(() => {
              + conjointFicheHtml(l);
       })()}
       <select onchange="eqLeadStatutChange('${l.id}', this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-size:13px;cursor:pointer">
-        ${STATUTS_LEAD.map(s => `<option value="${esc(s)}" ${s===cur?'selected':''}>${esc(s)}</option>`).join('')}
+        ${(STATUTS_LEAD.includes(cur) ? STATUTS_LEAD : [cur, ...STATUTS_LEAD]).map(s => `<option value="${esc(s)}" ${s===cur?'selected':''}>${s === 'Stop' ? 'Ne plus contacter' : esc(s)}</option>`).join('')}
       </select>
       ${(() => {
         const auj = new Date().toISOString().slice(0, 10);
@@ -16639,6 +16639,7 @@ async function loadContacts() {
     _setContactsProgress(100, '✓ Préparation de l\'affichage…');
     window._contacts = all;
     renderContacts(); // remplace l'écran de chargement par le tableau
+    ctChargerRaisonsStop();
   } catch(e) {
     console.error('Erreur chargement contacts:', e);
     if (tbody) tbody.innerHTML = '<tr><td colspan="11"><div class="empty"><div class="empty-icon">⚠</div><p>Erreur de chargement — réessayez</p></div></td></tr>';
@@ -16670,19 +16671,54 @@ async function saveContact(contact) {
 }
 
 async function updateContactStatut(id, statut) {
+  const c = (window._contacts||[]).find(x => x.id === id);
   try {
-    await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id, {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_KEY,
         'Authorization': 'Bearer ' + SB_BEARER,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
       },
       body: JSON.stringify({ statut })
     });
-    const c = (window._contacts||[]).find(x => x.id === id);
+    if (!r.ok) {
+      let msg = 'HTTP ' + r.status;
+      try { const err = await r.json(); msg = err.message || msg; } catch(e) {}
+      throw new Error(msg);
+    }
     if (c) c.statut = statut;
+    if (statut === 'Stop') _ctStopRaisons[id] = { acteur: MON_ROLE.prenom || '', quand: new Date().toISOString() };
+    renderContacts();
+  } catch(e) {
+    toast('⚠ Statut non enregistré : ' + e.message, 'var(--danger)');
+    renderContacts(); // le menu revient sur le statut réellement en base
+  }
+}
+
+// « Ne plus contacter » : qui l'a décidé et quand, lu dans le journal des modifications.
+// Le lien de désinscription des mails écrit sans session → acteur « systeme ».
+let _ctStopRaisons = {};
+async function ctChargerRaisonsStop() {
+  if (!(window._contacts || []).some(c => c.statut === 'Stop')) return;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/journal_audit?select=ligne_id,acteur,quand&cible=eq.contacts&action=eq.statut&apres=eq.Stop&order=quand.asc', {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
+    });
+    if (!r.ok) return;
+    const raisons = {};
+    (await r.json()).forEach(j => { raisons[j.ligne_id] = { acteur: j.acteur, quand: j.quand }; }); // la plus récente l'emporte
+    _ctStopRaisons = raisons;
+    renderContacts();
   } catch(e) {}
+}
+function ctRaisonStop(id) {
+  const j = _ctStopRaisons[id];
+  if (!j) return 'Raison inconnue (avant le journal)';
+  const d = new Date(j.quand).toLocaleDateString('fr-FR');
+  if (!j.acteur || j.acteur === 'systeme') return 'Désinscrit par le client (lien du mail) le ' + d;
+  return 'Décidé par ' + j.acteur + ' le ' + d + ' (à la main ou import Brevo)';
 }
 
 async function deleteContact(id) {
@@ -17681,7 +17717,8 @@ const _SITUATIONS = [
   { v: 'libre', l: 'Libres (sans vendeur)' },
   { v: 'echu', l: 'Échus (paternité passée)' },
   { v: 'veille', l: 'En veille' },
-  { v: 'sous_paternite', l: 'Sous paternité' }
+  { v: 'sous_paternite', l: 'Sous paternité' },
+  { v: 'stop', l: 'Ne plus contacter' }
 ];
 const _FILTRE_STATUTS = new Set(['libre', 'echu', 'veille']);   // par défaut : tout ce qui est libre
 function situationContact(c) {
@@ -17695,7 +17732,7 @@ function situationContact(c) {
 function filtreStatutsActifs() { return [..._FILTRE_STATUTS]; }
 function filtreSituationOk(c, actifs) {
   const sit = situationContact(c);
-  if (sit === 'stop') return false;
+  if (sit === 'stop') return actifs.includes('stop'); // désinscrits : seulement si la case est cochée
   return !actifs.length || actifs.includes(sit);
 }
 function _filtreStatutsRendre() {
@@ -17705,7 +17742,7 @@ function _filtreStatutsRendre() {
   menu.innerHTML = _SITUATIONS.map(o => `
     <label style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--text)" onmouseenter="this.style.background='var(--bg)'" onmouseleave="this.style.background=''">
       <input type="checkbox" ${_FILTRE_STATUTS.has(o.v) ? 'checked' : ''} onchange="filtreStatutToggle('${o.v}', this.checked)" style="accent-color:var(--accent);cursor:pointer"><span style="flex:1">${o.l}</span><span style="color:var(--muted);font-size:12px">${compte[o.v] || 0}</span></label>`).join('') +
-    `<div style="font-size:11.5px;color:var(--muted);padding:6px 8px 2px;line-height:1.4">« Ne plus contacter » est toujours exclu${compte.stop ? ' (' + compte.stop + ')' : ''}.</div>
+    `<div style="font-size:11.5px;color:var(--muted);padding:6px 8px 2px;line-height:1.4">« Ne plus contacter » n'apparaît que coché, et n'est jamais visé par une campagne.</div>
     <div style="display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)">
       <button type="button" class="btn btn-ghost btn-sm" onclick="filtreStatutsVider()">Tout voir</button>
       <button type="button" class="btn btn-primary btn-sm" onclick="toggleFiltreStatuts()">Fermer</button>
@@ -17770,7 +17807,14 @@ function renderContacts() {
     return;
   }
 
-  const statutColors = { 'Nouveau':'var(--accent2)', 'Contacté':'var(--warning)', 'Chaud':'var(--danger)', 'Client':'var(--success)', 'En veille':'var(--accent2)', 'Perdu':'var(--muted)', 'Non qualifié':'#b03a39', 'Stop':'#b03a39' };
+  const statutColors = { 'Nouveau':'var(--accent2)', 'Vendu':'var(--success)', 'En veille':'var(--accent2)', 'Perdu':'var(--muted)', 'Non qualifié':'#b03a39', 'Stop':'#b03a39' };
+  // Mêmes statuts que la fiche client, plus « Ne plus contacter » (désinscrits).
+  // Un statut hors liste (ancienne fiche) reste affiché tel quel, sans être proposé.
+  const ctOptions = (cur) => {
+    const liste = [...STATUTS_LEAD, 'Stop'];
+    if (cur && !liste.includes(cur)) liste.unshift(cur);
+    return liste.map(s => `<option value="${_vEsc(s)}" ${s === (cur || 'Nouveau') ? 'selected' : ''}>${s === 'Stop' ? 'Ne plus contacter' : _vEsc(s)}</option>`).join('');
+  };
 
   tbody.innerHTML = filtered.map(c => `<tr>
     <td><input type="checkbox" class="contact-cb" data-id="${c.id}" ${selectedContacts.includes(c.id)?'checked':''} onchange="updateSelection()" style="cursor:pointer;accent-color:var(--accent)"></td>
@@ -17784,15 +17828,9 @@ function renderContacts() {
     <td>${paterniteBadge(c)}</td>
     <td>
       <select onchange="updateContactStatut('${c.id}', this.value)" style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 8px;color:${statutColors[c.statut]||'var(--text)'};font-size:12px;cursor:pointer;font-family:var(--font-body)">
-        <option value="Nouveau" ${c.statut==='Nouveau'?'selected':''}>Nouveau</option>
-        <option value="Contacté" ${c.statut==='Contacté'?'selected':''}>Contacté</option>
-        <option value="Chaud" ${c.statut==='Chaud'?'selected':''}>Chaud</option>
-        <option value="Client" ${c.statut==='Client'?'selected':''}>Client</option>
-        <option value="En veille" ${c.statut==='En veille'?'selected':''}>En veille</option>
-        <option value="Perdu" ${c.statut==='Perdu'?'selected':''}>Perdu</option>
-        <option value="Non qualifié" ${c.statut==='Non qualifié'?'selected':''}>Non qualifié</option>
-        <option value="Stop" ${c.statut==='Stop'?'selected':''}>Ne plus contacter</option>
+        ${ctOptions(c.statut)}
       </select>
+      ${c.statut === 'Stop' ? `<div style="font-size:10.5px;color:var(--muted);margin-top:3px;max-width:190px;line-height:1.3">${_vEsc(ctRaisonStop(c.id))}</div>` : ''}
     </td>
     <td style="white-space:nowrap"><button class="btn btn-sm" title="Modifier le contact" onclick="openEditContact('${c.id}')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);margin-right:4px">Modifier</button><button class="btn btn-danger btn-sm" onclick="deleteContact('${c.id}')">✕</button></td>
   </tr>`).join('');
@@ -18064,7 +18102,7 @@ async function confirmDedup() {
 }
 
 // Statuts qui ne doivent JAMAIS recevoir de campagne (anti-spam / RGPD)
-const EXCLUDED_STATUSES = ['Client', 'Perdu', 'Non qualifié', 'Stop'];
+const EXCLUDED_STATUSES = ['Vendu', 'Perdu', 'Non qualifié', 'Stop'];
 
 // À partir d'une liste d'ids, sépare les contacts ciblables des exclus
 function splitCampagneTargets(ids) {
@@ -18086,7 +18124,7 @@ function lancerCampagne() {
   const recap = document.getElementById('campagne-exclus-recap');
   if (recap) {
     if (exclus.length) {
-      const nbClient = exclus.filter(c => c.statut === 'Client').length;
+      const nbClient = exclus.filter(c => c.statut === 'Vendu').length;
       const nbPerdu  = exclus.filter(c => c.statut === 'Perdu').length;
       const nbNonQ   = exclus.filter(c => c.statut === 'Non qualifié').length;
       const nbStop   = exclus.filter(c => c.statut === 'Stop').length;
@@ -18261,32 +18299,12 @@ async function envoyerCampagne() {
   const corps = encodeURIComponent(message);
 const gmailUrl = `https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1&authuser=agl@glrimmobilier.com&bcc=${encodeURIComponent(emails)}&su=${sujet}&body=${corps}`;
 window.open(gmailUrl, '_blank');
-  // TRI AUTOMATIQUE DU FUNNEL : les "Nouveau" passent en "Contacté"
-  const aPromouvoir = contacts.filter(c => c.statut === 'Nouveau').map(c => c.id);
-  if (aPromouvoir.length) {
-    try {
-      await fetch(SUPABASE_URL + '/rest/v1/contacts?id=in.(' + aPromouvoir.join(',') + ')', {
-        method: 'PATCH',
-        headers: {
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SB_BEARER,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ statut: 'Contacté' })
-      });
-      aPromouvoir.forEach(id => {
-        const c = (window._contacts || []).find(x => x.id === id);
-        if (c) c.statut = 'Contacté';
-      });
-      renderContacts();
-    } catch(e) {}
-  }
+  // Une campagne groupée ne change aucun statut : un lead « Nouveau » n'a pas été travaillé pour autant.
 
   closeModal('campagne');
   clearSelection();
   let msg = '✓ Client mail ouvert avec ' + contacts.length + ' destinataire(s)';
   if (exclus.length) msg += ' — ' + exclus.length + ' exclu(s) (clients/perdus/désinscrits)';
-  if (aPromouvoir.length) msg += ' · ' + aPromouvoir.length + ' passé(s) en « Contacté »';
   toast(msg + ' !');
 }
 
