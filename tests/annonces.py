@@ -135,6 +135,16 @@ with sync_playwright() as p:
                         '-45 %', '-19 %', '-12 %', '5 leadsdernier ', 'annonces à 179 000 € à 181 000 €', '1 leaddernier '):
             if attendu not in fiches: erreurs.append(f'{nom} : fiche ville, « {attendu} » absent')
         page.evaluate("anVille('CLAMART')"); page.wait_for_timeout(300)
+        if nom == 'bureau':
+            # Zoom à la molette, et le zoom choisi reste quand on change de couche
+            z0 = page.evaluate('_anCarte.getZoom()')
+            bx = page.locator('#an-carte').bounding_box()
+            page.mouse.move(bx['x'] + bx['width'] / 2, bx['y'] + bx['height'] / 2); page.mouse.wheel(0, -400); page.wait_for_timeout(800)
+            z1 = page.evaluate('_anCarte.getZoom()')
+            page.evaluate("anCouche('promo')"); page.wait_for_timeout(400)
+            z2 = page.evaluate('_anCarte.getZoom()')
+            page.evaluate("anCouche('promo'); _anCoucheVue = 'ecart'"); page.wait_for_timeout(400)
+            if not z1 > z0 or z2 != z1: erreurs.append(f'zoom molette : {z0} → {z1}, après couche {z2}')
         large = page.evaluate('document.documentElement.scrollWidth')
         if large > vp['width'] + 1: erreurs.append(f'{nom} : page plus large que l\'écran ({large} px)')
         page.screenshot(path=str(SORTIE / f'annonces_{nom}.png'), full_page=False)

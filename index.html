@@ -16547,7 +16547,7 @@ let _anSL = {}, _anSLDate = null; // dernier relevé SeLoger : _anSL[ville][typo
 let _anPeriode = 60, _anVille = '', _anTypo = '';
 // Couches de la carte (Alex, 27/10/2026) ; la dernière allumée donne le classement à côté de la carte
 let _anCouches = { annonces: true, promo: true, seloger: false, ecart: false }, _anCoucheVue = 'annonces';
-let _anCarte = null, _anCouche = null;
+let _anCarte = null, _anCouche = null, _anCadre = false; // cadrage fait une seule fois : le zoom choisi à la molette reste
 
 const _anNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
 
@@ -16967,7 +16967,7 @@ async function _anRendre() {
   if (_anOnglet !== 'annonces') return;
   try { await _anChargerLeaflet(); } catch (e) { document.getElementById('an-carte').innerHTML = '<div class="empty"><p>Carte indisponible</p></div>'; return; }
   if (!_anCarte) {
-    _anCarte = L.map('an-carte', { scrollWheelZoom: false }).setView([48.86, 2.35], 10);
+    _anCarte = L.map('an-carte', { scrollWheelZoom: true }).setView([48.86, 2.35], 10);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5', { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 18 }).addTo(_anCarte);
   }
   _anCarte.invalidateSize(); // avant le cadrage : la taille réelle du cadre
@@ -17001,7 +17001,7 @@ async function _anRendre() {
   }
   // Cadrage sur l'Île-de-France : les quelques annonces en province écraseraient la carte
   const idf = pts.filter(p => p[0] > 48.1 && p[0] < 49.25 && p[1] > 1.4 && p[1] < 3.6);
-  if (!_anVille && (idf.length || pts.length)) _anCarte.fitBounds(L.latLngBounds(idf.length ? idf : pts).pad(0.08));
+  if (!_anCadre && (idf.length || pts.length)) { _anCarte.fitBounds(L.latLngBounds(idf.length ? idf : pts).pad(0.08)); _anCadre = true; }
 }
 
 function calculerComm() {
