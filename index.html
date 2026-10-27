@@ -19287,11 +19287,17 @@ function _facturationState() {
   if (!data.objectifs.facturation.emises) data.objectifs.facturation.emises = [];
   return data.objectifs.facturation;
 }
+// Numérotation continue (1, 2, 3…) : le plus grand numéro déjà émis + 1.
+// st.dernier garde le plus grand numéro attribué, pour qu'une facture
+// supprimée ne voie jamais son numéro réutilisé.
+function _numFacture(numero) {
+  const m = String(numero || '').match(/(\d+)\s*$/);
+  return m ? parseInt(m[1], 10) : 0;
+}
 function _nextFactureNumero() {
   const st = _facturationState();
-  const y = new Date().getFullYear();
-  const seq = ((st.year === y ? (st.seq || 0) : 0)) + 1;
-  return { numero: 'F' + y + '-' + String(seq).padStart(3, '0'), y: y, seq: seq };
+  const n = Math.max(st.dernier || 0, ...st.emises.map(x => _numFacture(x.numero))) + 1;
+  return { numero: String(n), n: n };
 }
 function _facMajTotaux() {
   const ht = parseFloat((document.getElementById('fac-ht') || {}).value) || 0;
@@ -19436,8 +19442,7 @@ function saveFacture(withPdf) {
     if (st.emises.some(x => x.numero === numero)) { toast('⚠ Ce numéro de facture existe déjà', 'var(--warning)'); return; }
     rec.createdAt = new Date().toISOString();
     st.emises.push(rec);
-    const nn = _nextFactureNumero();
-    if (numero === nn.numero) { st.seq = nn.seq; st.year = nn.y; }
+    st.dernier = Math.max(st.dernier || 0, _numFacture(numero));
   }
   saveData();
   renderFactures();
