@@ -16594,14 +16594,20 @@ async function loadAnnonces(force) {
       // Stock réel par ville et typologie (RPC annonces_stock, lots « libre » de la pige)
       _anStock = {};
       stock.forEach(s => { const k = _anCleVille(s.cle); ((_anStock[k] = _anStock[k] || {})[s.type === 'Maison' ? 'Maison' : s.typo] = s); });
-      // Dernier relevé SeLoger (table seloger_concurrence, importée depuis le fichier du script de pige)
+      // Relevés SeLoger (table seloger_concurrence, importée depuis le fichier du script de pige).
+      // Rotation : chaque pige relève un tiers des villes ; on garde, ville par ville, son relevé
+      // le plus récent des 10 derniers jours.
       _anSL = {}; _anSLDate = null;
-      const der = await (await fetch(SUPABASE_URL + '/rest/v1/seloger_concurrence?select=releve&order=releve.desc&limit=1', { cache: 'no-store', headers: h })).json();
-      if (Array.isArray(der) && der.length) {
-        _anSLDate = der[0].releve;
-        const lignes = await _sbTout(SUPABASE_URL + '/rest/v1/seloger_concurrence?select=cle,typo,total,rang,prix,surface,annonceur,promoteur,glr,cree,sid&releve=eq.' + _anSLDate + '&order=rang.asc.nullsfirst', h);
-        lignes.forEach(l => {
-          const k = _anCleVille(l.cle), v = _anSL[k] || (_anSL[k] = {});
+      const depuisSL = new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10);
+      const lignesSL = await _sbTout(SUPABASE_URL + '/rest/v1/seloger_concurrence?select=releve,cle,typo,total,rang,prix,surface,annonceur,promoteur,glr,cree,sid&releve=gte.' + depuisSL + '&order=rang.asc.nullsfirst', h);
+      const derVille = {};
+      lignesSL.forEach(l => { const k = _anCleVille(l.cle); if (!derVille[k] || l.releve > derVille[k]) derVille[k] = l.releve; });
+      if (lignesSL.length) {
+        _anSLDate = { du: Object.values(derVille).sort()[0], au: Object.values(derVille).sort().pop(), villes: Object.keys(derVille).length };
+        lignesSL.forEach(l => {
+          const k = _anCleVille(l.cle);
+          if (l.releve !== derVille[k]) return;
+          const v = _anSL[k] || (_anSL[k] = {});
           const t = v[l.typo] || (v[l.typo] = { total: l.total, top: [], glr: [] });
           if (l.rang == null) return;
           if (l.glr) t.glr.push(l);
@@ -16631,7 +16637,8 @@ function anVendeur(v) { _anVendeur = v; _anVille = ''; _anRendre(); }
 function anVille(k) { _anVille = _anVille === k ? '' : k; _anRendre(); }
 
 // Import du fichier seloger_concurrence.json (script de pige seloger_concurrence.js).
-// Un relevé déjà importé pour la même date est remplacé.
+// Les villes de ce fichier déjà importées à la même date sont remplacées (les autres
+// tiers de la rotation ne sont pas touchés).
 async function anImporterReleve(input) {
   const f = input.files && input.files[0];
   input.value = '';
@@ -16644,15 +16651,19 @@ async function anImporterReleve(input) {
   const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
   try {
     toast('Import du relevé du ' + d.releve + '…', 'var(--accent)');
-    const del = await fetch(SUPABASE_URL + '/rest/v1/seloger_concurrence?releve=eq.' + d.releve, { method: 'DELETE', headers: h });
-    if (!del.ok) throw new Error('HTTP ' + del.status);
+    const villes = [...new Set(d.lignes.map(l => l.cle))];
+    for (let i = 0; i < villes.length; i += 25) {
+      const liste = villes.slice(i, i + 25).map(v => '"' + String(v).replace(/"/g, '') + '"').join(',');
+      const del = await fetch(SUPABASE_URL + '/rest/v1/seloger_concurrence?releve=eq.' + d.releve + '&cle=in.(' + encodeURIComponent(liste) + ')', { method: 'DELETE', headers: h });
+      if (!del.ok) throw new Error('HTTP ' + del.status);
+    }
     const champs = ['cle', 'typo', 'total', 'rang', 'prix', 'surface', 'annonceur', 'promoteur', 'glr', 'cree', 'sid'];
     const lignes = d.lignes.map(l => { const o = { releve: d.releve }; champs.forEach(c => o[c] = l[c] == null ? null : l[c]); o.glr = !!l.glr; return o; });
     for (let i = 0; i < lignes.length; i += 1000) {
       const r = await fetch(SUPABASE_URL + '/rest/v1/seloger_concurrence', { method: 'POST', headers: h, body: JSON.stringify(lignes.slice(i, i + 1000)) });
       if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0, 120));
     }
-    toast('Relevé SeLoger importé : ' + d.villes + ' villes, ' + lignes.length + ' annonces', 'var(--success)');
+    toast('Relevé SeLoger importé : ' + villes.length + ' villes, ' + lignes.length + ' annonces' + (d.complet === false ? ' (relevé interrompu par SeLoger)' : ''), 'var(--success)');
     loadAnnonces(true);
   } catch (e) {
     toast("Échec de l'import : " + String(e.message || e).slice(0, 120), 'var(--danger)');
@@ -16785,8 +16796,9 @@ async function _anRendre() {
 
   // Relevé SeLoger : date, et nos annonces en ligne sans lead (toutes vendeurs confondus :
   // le relevé ne dit pas qui a publié l'annonce)
+  const jourFr = d => new Date(d + 'T12:00:00').toLocaleDateString('fr-FR');
   document.getElementById('an-releve').textContent = _anSLDate
-    ? 'Relevé SeLoger du ' + new Date(_anSLDate + 'T12:00:00').toLocaleDateString('fr-FR') + ' — appartements neufs, tri par prix croissant'
+    ? 'SeLoger : ' + _anSLDate.villes + ' villes relevées ' + (_anSLDate.du === _anSLDate.au ? 'le ' + jourFr(_anSLDate.au) : 'du ' + jourFr(_anSLDate.du) + ' au ' + jourFr(_anSLDate.au)) + ' — appartements neufs, tri par prix croissant'
     : 'Aucun relevé SeLoger importé pour le moment';
   document.getElementById('an-sanslead-box').style.display = sansLead.length && !_anVendeur ? '' : 'none';
   document.getElementById('an-sanslead').innerHTML = `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Nos annonces trouvées sur SeLoger qui ne correspondent à aucune annonce ayant reçu un lead sur la période : à retravailler ou à couper.</div>` +
