@@ -1,0 +1,91 @@
+# Test de la page Annonces (gérants) : syntaxe de tous les blocs <script>,
+# rendu bureau et iPhone avec des réponses Supabase simulées.
+# Lancer : ~/glr-pige-robot/.venv/bin/python tests/annonces.py
+import json, pathlib, re, sys, datetime
+from playwright.sync_api import sync_playwright
+
+ICI = pathlib.Path(__file__).resolve().parent
+INDEX = ICI.parent / 'index.html'
+SORTIE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ICI
+
+def j(n):
+    return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
+
+LEADS = [
+    *[{'reference_annonce': 'Jules T2 - CLAMART - 45 M²', 'prix_annonce': 237000, 'date_lead': j(i), 'statut': 'Suivi' if i % 3 == 0 else 'Sans réponse'} for i in (1, 4, 9, 15, 30)],
+    {'reference_annonce': 'Jules T2 - CLAMART - 45 M² - 237 000 €', 'prix_annonce': 237000, 'date_lead': j(33), 'statut': 'Perdu'},
+    *[{'reference_annonce': 'Anaïs T2 - COLOMBES - 44 M²', 'prix_annonce': 179000, 'date_lead': j(i), 'statut': 'Nouveau'} for i in (2, 3, 10, 20)],
+    {'reference_annonce': 'Alex T3 - PARIS 15E - 75 M²', 'prix_annonce': 837000, 'date_lead': j(5), 'statut': 'Sélections'},
+    {'reference_annonce': 'Jules T2 - SAINT-DENIS PLEYEL - 45 M² - 177 000 €', 'prix_annonce': 177000, 'date_lead': j(25), 'statut': 'Sans réponse'},
+    {'reference_annonce': 'Jules T2 - SAINT-DENIS - 45 M²', 'prix_annonce': 182000, 'date_lead': j(6), 'statut': 'Sans réponse'},
+    {'reference_annonce': 'MTO - T4 - MASSY', 'prix_annonce': 265000, 'date_lead': j(2), 'statut': 'Nouveau'},
+    {'reference_annonce': 'MTO - VELIZY T3', 'prix_annonce': 347000, 'date_lead': j(8), 'statut': 'Nouveau'},
+    {'reference_annonce': 'T3 Rueil-Malmaison Nour', 'prix_annonce': 302000, 'date_lead': j(40), 'statut': 'En veille'},
+    {'reference_annonce': 'Louis T5 - ANNECY - 120 M²', 'prix_annonce': 693000, 'date_lead': j(12), 'statut': 'Nouveau'},
+    {'reference_annonce': 'FLP7', 'prix_annonce': 150000, 'date_lead': j(3), 'statut': 'Nouveau'},
+    {'reference_annonce': 'Anaïs', 'prix_annonce': 161000, 'date_lead': j(50), 'statut': 'Nouveau'},
+    {'reference_annonce': 'Théo T4 - L HAY-LES-ROSES - 84 M²', 'prix_annonce': 337000, 'date_lead': j(70), 'statut': 'Nouveau'},
+]
+PIGE = [
+    {'ville': 'Clamart', 'cp': '92140', 'lat': 48.80, 'lng': 2.26, 'prix_min': 295000, 'nb_libres': 13, 'source': 'bouygues'},
+    {'ville': 'Clamart', 'cp': '92140', 'lat': 48.81, 'lng': 2.27, 'prix_min': 330000, 'nb_libres': 8, 'source': 'lnc'},
+    {'ville': 'Clamart', 'cp': '92140', 'lat': 48.81, 'lng': 2.27, 'prix_min': 150000, 'nb_libres': 3, 'source': 'nomandat'},
+    {'ville': 'Colombes', 'cp': '92700', 'lat': 48.92, 'lng': 2.25, 'prix_min': 210000, 'nb_libres': 20, 'source': 'nexity'},
+    {'ville': 'Paris', 'cp': '75015', 'lat': 48.84, 'lng': 2.30, 'prix_min': 600000, 'nb_libres': 4, 'source': 'cogedim'},
+    {'ville': 'Saint-Denis', 'cp': '93200', 'lat': 48.93, 'lng': 2.36, 'prix_min': 199000, 'nb_libres': 31, 'source': 'vinci'},
+    {'ville': 'Massy', 'cp': '91300', 'lat': 48.73, 'lng': 2.28, 'prix_min': 240000, 'nb_libres': 0, 'source': 'kaufman'},
+    {'ville': 'Rueil-Malmaison', 'cp': '92500', 'lat': 48.88, 'lng': 2.19, 'prix_min': 320000, 'nb_libres': 6, 'source': 'ogic'},
+]
+GEO = {'VELIZY': {'nom': 'Vélizy-Villacoublay', 'centre': {'coordinates': [2.19, 48.78]}, 'codeDepartement': '78'},
+       'ANNECY': {'nom': 'Annecy', 'centre': {'coordinates': [6.13, 45.90]}, 'codeDepartement': '74'}}
+
+def route(r):
+    u = r.request.url
+    if 'supabase.co' in u:
+        if '/rest/v1/contacts' in u: body = LEADS
+        elif '/rest/v1/pige_programmes' in u: body = PIGE
+        else: body = []
+        return r.fulfill(status=200, content_type='application/json', body=json.dumps(body))
+    if 'geo.api.gouv.fr' in u:
+        nom = re.search(r'nom=([^&]+)', u).group(1)
+        c = GEO.get(nom.replace('%20', ' ').split(' ')[0])
+        return r.fulfill(status=200, content_type='application/json', body=json.dumps([c] if c else []))
+    return r.continue_()
+
+erreurs = []
+with sync_playwright() as p:
+    nav = p.chromium.launch()
+    for nom, vp in (('bureau', {'width': 1400, 'height': 1000}), ('iphone', {'width': 390, 'height': 844})):
+        page = nav.new_page(viewport=vp)
+        page.on('pageerror', lambda e: erreurs.append(str(e)))
+        page.route('**/*', route)
+        page.goto(INDEX.as_uri())
+        if nom == 'bureau':
+            # Syntaxe : chaque bloc <script> compilé par le moteur du navigateur
+            res = page.evaluate("""() => [...document.querySelectorAll('script:not([src])')].map((s, i) => {
+                try { new Function(s.textContent); return 'bloc ' + i + ' : ok'; } catch (e) { return 'bloc ' + i + ' : ' + e.message; } })""")
+            print('\n'.join(res))
+        page.evaluate("""() => { _hideLogin();
+            try { localStorage.removeItem('glr-an-geo'); } catch (e) {} goTo('gerant-annonces', null); }""")
+        page.wait_for_selector('.an-ville', timeout=15000)
+        page.wait_for_timeout(1500)
+        texte = re.sub(r'[\u202f\u00a0]', ' ', page.inner_text('#page-gerant-annonces'))
+        for attendu in ('Clamart', '6 leads', 'Saint-Denis', 'Pige : 2 programmes, 21 lots disponibles, dès 295 000 €',
+                        'Aucun stock dans la pige', 'FLP7', 'Madina', 'Vélizy-Villacoublay', 'Paris 15e'):
+            if attendu not in texte: erreurs.append(f'{nom} : « {attendu} » absent')
+        if 'Théo' in texte: erreurs.append(f'{nom} : lead de plus de 60 jours compté')
+        nb = page.evaluate("document.querySelectorAll('#an-carte .leaflet-interactive').length")
+        if nb < 6: erreurs.append(f'{nom} : {nb} ronds sur la carte')
+        large = page.evaluate('document.documentElement.scrollWidth')
+        if large > vp['width'] + 1: erreurs.append(f'{nom} : page plus large que l\'écran ({large} px)')
+        page.screenshot(path=str(SORTIE / f'annonces_{nom}.png'), full_page=False)
+        if nom == 'bureau':
+            page.evaluate("anVille('CLAMART')")
+            if page.locator('.an-ville').count() != 1: erreurs.append('filtre ville inopérant')
+            page.evaluate("anVille(''); anVendeur('Jules')")
+            if 'Colombes' in page.inner_text('#an-villes'): erreurs.append('filtre vendeur inopérant')
+        page.close()
+    nav.close()
+
+print('\n'.join(erreurs) if erreurs else 'Tout est bon.')
+sys.exit(1 if erreurs else 0)

@@ -21,7 +21,7 @@ Un CRM maison en un seul fichier `index.html` (vanilla JS, ~1,5 Mo, aucun build)
 
 ## Deux rôles dans le CRM
 
-- **Gérant** (Alex, Théophile) : accès complet. Pages : Rendez-vous, Chiffres, Contacts, Pilotage, Journal, Documents, Carte, Simulateur, Marché.
+- **Gérant** (Alex, Théophile) : accès complet. Pages : Rendez-vous, Chiffres, Contacts, Pilotage, Journal, Documents, Carte, Simulateur, Marché, Annonces.
 - **Commercial** (Anaïs, Louis, Nour, Jules, Fabien, Madina) : ses leads, son planning, le pool, ses ventes, les outils. Pas de page Contacts, pas de charges ni de trésorerie, pas de détail des ventes des autres.
 
 Tout nouveau champ de la fiche vendeur utilisé côté commercial doit être ajouté dans la RPC `donnees_espace`.
@@ -38,7 +38,7 @@ Tout nouveau champ de la fiche vendeur utilisé côté commercial doit être ajo
 
 ## Repères dans index.html
 
-Préfixes : `eq*` = espace équipe (leads, fiche client, planning, rendez-vous), `ct*` = onglet Contacts, `_sel*` = composition d'une sélection, `rdv*` = liens et notifications de rendez-vous, `plaq*` = plaquette, `sim*` = simulateur, `rm*` / `loadMarche` = rapport et page Marché.
+Préfixes : `an*` / `_an*` = page Annonces (registre de nos annonces SeLoger reconstitué depuis `contacts.reference_annonce`, intitulés « Prénom T2 - VILLE - 45 M² » ; `MTO` = Madina, `FLPnn` = Fabien, illisibles ; stock réel = `pige_programmes` hors `picking`/`nomandat`), `eq*` = espace équipe (leads, fiche client, planning, rendez-vous), `ct*` = onglet Contacts, `_sel*` = composition d'une sélection, `rdv*` = liens et notifications de rendez-vous, `plaq*` = plaquette, `sim*` = simulateur, `rm*` / `loadMarche` = rapport et page Marché.
 
 Fonctions à connaître : `_eqLeadPatch(id, body)` (toute écriture sur une fiche depuis l'espace équipe), `_eqSelBulk` (actions groupées sur les leads cochés), `eqRdvFixerOuvrir` / `eqRdvFixerValider` / `_rdvFixerProposer` (fixer ou proposer des créneaux depuis la fiche), `eqProposerEnvoyer` (proposer des créneaux depuis le planning), `rdvNotifierClient(token, type, extra)` (tout mail client, via l'edge function `rdv-notif`), `rdvLienRecuperer` (le lien de rendez-vous personnel d'un client), `_planMajSelection` / `_planCalerRappel`, `eqMajVue(force)` (rafraîchissement de la page courante), `renderEquipeLeads` / `renderEquipeLeadsTable`, `toast(message, couleur)`, `_vEsc` (échappement HTML), `nomComplet(l)`, `_creneauVendeur()` (le vendeur dont on regarde l'espace).
 
@@ -59,7 +59,7 @@ for i, b in enumerate(re.findall(r'<script(?![^>]*src)[^>]*>(.*?)</script>', s, 
 EOF
 ```
 
-Test fonctionnel : Playwright (Chromium) sur `file://.../index.html`, en interceptant les appels à `*.supabase.co` pour renvoyer des réponses simulées, en masquant `#login-overlay`, et en appelant directement les fonctions (`_eqLeads = [...]`, `eqRdvFixerOuvrir('id')`…). Vérifier aussi en largeur 390 px (iPhone). Mettre les scripts de test dans `tests/` (à créer au premier test) plutôt que de les perdre.
+Test fonctionnel : Playwright (Chromium) sur `file://.../index.html`, en interceptant les appels à `*.supabase.co` pour renvoyer des réponses simulées, en masquant `#login-overlay`, et en appelant directement les fonctions (`_eqLeads = [...]`, `eqRdvFixerOuvrir('id')`…). Vérifier aussi en largeur 390 px (iPhone). Les scripts de test vont dans `tests/` (ex. `tests/annonces.py`, qui contrôle aussi la syntaxe de tous les blocs). Node n'est pas installé sur le Mac d'Alex : lancer les tests avec le Python du robot, `~/glr-pige-robot/.venv/bin/python tests/annonces.py`.
 
 ## Règles métier à respecter dans le code
 

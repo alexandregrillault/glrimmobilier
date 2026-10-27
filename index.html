@@ -358,6 +358,34 @@
   .mk-stats b { display: block; font-family: var(--font-head); font-size: 15px; font-weight: 700; }
   .mk-stats span { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; }
   .mk-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  /* ---- ANNONCES (gérants) ---- */
+  .an-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  .an-carte-box { padding: 0; overflow: hidden; position: sticky; top: 12px; }
+  #an-carte { height: 520px; background: #f4f1ea; }
+  .an-legende { font-size: 11.5px; color: var(--muted); padding: 8px 14px; border-top: 1px solid var(--border); }
+  #an-villes { display: flex; flex-direction: column; gap: 10px; max-height: 760px; overflow-y: auto; }
+  .an-ville { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .an-ville.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .an-ville-t { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; cursor: pointer; }
+  .an-ville-t b { font-family: var(--font-head); font-size: 15px; }
+  .an-ville-t span { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .an-stock { font-size: 12px; color: var(--muted); margin: 3px 0 8px; }
+  .an-ligne { display: flex; align-items: baseline; gap: 8px; font-size: 13px; padding: 5px 0; border-top: 1px dashed var(--border); }
+  .an-ligne .an-pt { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; align-self: center; }
+  .an-ligne .an-desc { flex: 1; min-width: 0; }
+  .an-ligne .an-n { font-family: var(--font-head); font-weight: 700; white-space: nowrap; }
+  .an-ligne small { color: var(--muted); }
+  .an-h { font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 10px; }
+  .an-vd { font-size: 13px; padding: 6px 0; border-top: 1px dashed var(--border); }
+  .an-vd:first-child { border-top: 0; }
+  .an-retour { border: 1px solid var(--border); background: var(--surface2); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; cursor: pointer; align-self: flex-start; }
+  @media (max-width: 900px) {
+    .an-grid { grid-template-columns: 1fr; }
+    .an-carte-box { position: static; }
+    #an-carte { height: 300px; }
+    #an-villes { max-height: none; overflow: visible; }
+  }
   .mk-tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
   .mk-tag.avp { color: var(--accent); border-color: var(--accent); }
   .mk-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
@@ -746,6 +774,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
         Villes &amp; leads
       </div>
+      <div class="nav-item" onclick="goTo(&#39;gerant-annonces&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l15-6v14L3 13z"></path><path d="M7 13v5a2 2 0 0 0 4 0v-3.5"></path></svg>
+        Annonces
+      </div>
       <div class="nav-item" onclick="goTo(&#39;treso-prev&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 6l-9.5 9.5-5-5L1 18"></path><path d="M17 6h6v6"></path></svg>
         Trésorerie prév.
@@ -1068,6 +1100,39 @@
         <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">Par département <span style="text-transform:none;letter-spacing:0">(clique pour voir les villes)</span></div>
         <div id="gv-depts">—</div>
         <div style="font-size:11px;color:var(--muted);margin-top:10px">Un lead qui cite plusieurs villes est compté dans chacune.</div>
+      </div>
+    </div>
+
+    <!-- PAGE: ANNONCES — registre de nos annonces SeLoger, reconstitué depuis les leads
+         (contacts.reference_annonce, intitulés « Prénom T2 - VILLE - 45 M² » depuis le 23/09/2026),
+         avec le stock réel de la pige par ville. Gérants seulement (27/10/2026). -->
+    <div class="page" id="page-gerant-annonces">
+      <div class="mk-head">
+        <div>
+          <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Annonces</div>
+          <div class="section-sub" id="an-sub">Nos annonces SeLoger, d'après les leads reçus</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="loadAnnonces(true)">Actualiser</button>
+      </div>
+      <div class="mk-filtres">
+        <div class="mk-chips" id="an-periode"></div>
+        <div class="mk-chips" id="an-vendeurs"></div>
+      </div>
+      <div class="mk-kpis" id="an-kpis"></div>
+      <div class="an-grid">
+        <div class="card an-carte-box">
+          <div id="an-carte"></div>
+          <div class="an-legende">Taille du rond = nombre de leads. Clique sur une ville pour n'afficher qu'elle.</div>
+        </div>
+        <div id="an-villes"></div>
+      </div>
+      <div class="card" style="padding:16px 20px;margin-top:16px">
+        <div class="an-h">Par vendeur</div>
+        <div id="an-par-vendeur"></div>
+      </div>
+      <div class="card" style="padding:16px 20px;margin-top:16px" id="an-nonlus-box">
+        <div class="an-h">Intitulés illisibles</div>
+        <div id="an-nonlus"></div>
       </div>
     </div>
 
@@ -3286,7 +3351,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
+const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage'];
 
 function appliquerRole() {
@@ -3570,7 +3635,8 @@ const pages = {
   'equipe-dashboard': 'Mon tableau de bord', 'equipe-ventes': 'Mes ventes', 'equipe-leads': 'Mes leads', 'equipe-calcul': 'Calculateur commission',
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'veille': 'Réveil veille', 'pilotage': 'Pilotage commercial',
-  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'rapport-promoteurs': 'Rapport promoteurs', 'marche': 'Marché'
+  'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'rapport-promoteurs': 'Rapport promoteurs', 'marche': 'Marché',
+  'gerant-annonces': 'Annonces'
 };
 
 let currentSpace = 'gerant';
@@ -4486,6 +4552,7 @@ function goTo(id, el) {
   else if (id === 'rapport-marche') loadRapportMarche();
   else if (id === 'rapport-promoteurs') loadRapportPromoteurs();
   else if (id === 'marche') loadMarche();
+  else if (id === 'gerant-annonces') loadAnnonces();
   else if (id === 'simulateur') loadSimulateur();
   else if (id === 'journal') loadJournal();
   else if (id === 'veille') renderVeillePage();
@@ -16406,6 +16473,241 @@ function _gvRender() {
       </div>`).join('');
   }
   _renderDepts('gv-depts', s, 'gv');
+}
+
+// ============================================================
+//  ANNONCES (gérants) — registre de nos annonces SeLoger
+// ============================================================
+// Il n'existe pas de liste de nos annonces : on la reconstitue à partir de
+// l'intitulé que SeLoger renvoie avec chaque lead (contacts.reference_annonce).
+// Formats lus : « Jules T2 - CLAMART - 45 M² » (depuis le 23/09/2026), l'ancien
+// « T3 Rueil-Malmaison Nour », et ceux de Madina « MTO - T4 - MASSY ».
+// Les codes de Fabien (« FLP7 ») ne disent ni la ville ni la typologie : ils
+// sont listés à part. Le stock réel vient de pige_programmes (hors programmes
+// SeLoger sans mandat ou à demander).
+const AN_VENDEURS = { ANAIS: 'Anaïs', THEO: 'Théo', JULES: 'Jules', ALEX: 'Alex', LOUIS: 'Louis', FABIEN: 'Fabien', NOUR: 'Nour', MADINA: 'Madina', MTO: 'Madina', FLP: 'Fabien' };
+const AN_QUALIFIES = ['Suivi', 'Sélections', 'Retour documentation', 'Finaliser la vente', 'Vendu'];
+let _anLeads = null, _anPige = null, _anGeo = {};
+let _anPeriode = 60, _anVendeur = '', _anVille = '';
+let _anCarte = null, _anCouche = null;
+
+const _anNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+
+// Clé de ville commune aux intitulés et à la pige ; Paris par arrondissement.
+function _anCleVille(v) {
+  const k = _anNorm(v);
+  const p = k.match(/^PARIS (\d{1,2})(?: ?(?:E|EME|ER))?$/) || k.match(/^750(\d\d)$/);
+  return p ? 'PARIS ' + (+p[1]) : k;
+}
+
+function _anLire(ref) {
+  const r = String(ref || '').trim();
+  let m = r.match(/^([A-Za-zÀ-ÿ]+)\s+T(\d)\s*-\s*(.+?)\s*-\s*(\d+(?:[.,]\d+)?)\s*M²/i);
+  if (m && AN_VENDEURS[_anNorm(m[1])]) return { vendeur: AN_VENDEURS[_anNorm(m[1])], typo: 'T' + m[2], ville: m[3], surf: Math.round(parseFloat(m[4].replace(',', '.'))) };
+  if (/^MTO\b/i.test(r)) {
+    let typo = '';
+    const parts = r.replace(/^MTO\s*-?\s*/i, '').split(/\s*-\s*/).map(p => {
+      const t = p.match(/\bT(\d)\b|\b(\d)\s*P\b/i);
+      if (t) typo = 'T' + (t[1] || t[2]);
+      if (/\bmaison\b/i.test(p)) typo = typo || 'Maison';
+      return p.replace(/\bT\d\b|\b\d\s*P\b|\bDUPLEX\b|\bLI\b|\bmaison\b/gi, '').trim();
+    }).filter(Boolean);
+    if (parts.length) return { vendeur: 'Madina', typo: typo || '?', ville: parts[parts.length - 1], surf: null };
+  }
+  m = r.match(/^T(\d)\s+(.+?)\s+([A-Za-zÀ-ÿ]+)$/);
+  if (m && AN_VENDEURS[_anNorm(m[3])]) return { vendeur: AN_VENDEURS[_anNorm(m[3])], typo: 'T' + m[1], ville: m[2], surf: null };
+  return null;
+}
+
+// Rattache une ville d'intitulé à la pige : exacte, puis en retirant les mots
+// de fin (« SAINT-DENIS PLEYEL » → Saint-Denis).
+function _anTrouverVille(v) {
+  let k = _anCleVille(v);
+  while (k) {
+    if (_anPige && _anPige[k]) return k;
+    if (!k.includes(' ')) break;
+    k = k.slice(0, k.lastIndexOf(' '));
+  }
+  return _anCleVille(v);
+}
+
+async function _anChargerLeaflet() {
+  if (window.L && window.L.map) return;
+  if (!document.querySelector('link[data-an-leaflet]')) {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; l.dataset.anLeaflet = '1';
+    document.head.appendChild(l);
+  }
+  await new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+    s.onload = ok; s.onerror = ko;
+    document.head.appendChild(s);
+  });
+}
+
+// Villes hors pige (Annecy, Thonon…) : centre de la commune par l'API publique
+// geo.api.gouv.fr, gardé dans le navigateur.
+async function _anGeocoder(cles) {
+  try { _anGeo = JSON.parse(localStorage.getItem('glr-an-geo') || '{}'); } catch (e) { _anGeo = {}; }
+  const manquantes = cles.filter(k => !(_anPige[k] && _anPige[k].lat) && !(k in _anGeo));
+  await Promise.all(manquantes.map(async k => {
+    try {
+      const nom = k.startsWith('PARIS ') ? 'Paris' : k;
+      const r = await fetch('https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(nom) + '&fields=nom,centre,codeDepartement&boost=population&limit=1');
+      const c = (await r.json())[0];
+      _anGeo[k] = c && c.centre ? { lat: c.centre.coordinates[1], lng: c.centre.coordinates[0], nom: c.nom, dept: c.codeDepartement } : null;
+    } catch (e) { /* ville laissée hors carte */ }
+  }));
+  try { localStorage.setItem('glr-an-geo', JSON.stringify(_anGeo)); } catch (e) {}
+}
+
+async function loadAnnonces(force) {
+  const box = document.getElementById('an-villes');
+  if (force) { _anLeads = null; _anPige = null; }
+  if (!_anLeads || !_anPige) {
+    box.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
+    const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
+    const depuis = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
+    try {
+      const [leads, progs] = await Promise.all([
+        _sbTout(SUPABASE_URL + '/rest/v1/contacts?select=reference_annonce,prix_annonce,date_lead,statut&reference_annonce=not.is.null&date_lead=gte.' + depuis + '&order=date_lead.desc', h),
+        _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=ville,cp,lat,lng,prix_min,nb_libres,source', h)
+      ]);
+      _anLeads = leads.filter(l => String(l.reference_annonce || '').trim());
+      _anPige = {};
+      progs.filter(p => p.source !== 'picking' && p.source !== 'nomandat').forEach(p => {
+        const k = /^75\d{3}$/.test(p.cp || '') ? 'PARIS ' + (+String(p.cp).slice(3) % 100) : _anCleVille(p.ville);
+        const v = _anPige[k] || (_anPige[k] = { nom: /^75/.test(p.cp || '') ? 'Paris ' + (+String(p.cp).slice(3) % 100) + (+String(p.cp).slice(3) % 100 === 1 ? 'er' : 'e') : p.ville, dept: String(p.cp || '').slice(0, 2), progs: 0, libres: 0, prixMin: null, lat: null, lng: null, nGeo: 0 });
+        v.progs++;
+        v.libres += +p.nb_libres || 0;
+        if (+p.prix_min > 0 && +p.nb_libres > 0 && (v.prixMin == null || +p.prix_min < v.prixMin)) v.prixMin = +p.prix_min;
+        if (p.lat && p.lng) { v.lat = ((v.lat || 0) * v.nGeo + +p.lat) / (v.nGeo + 1); v.lng = ((v.lng || 0) * v.nGeo + +p.lng) / (v.nGeo + 1); v.nGeo++; }
+      });
+    } catch (e) {
+      box.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><p>Erreur de chargement — réessayez</p></div>';
+      return;
+    }
+  }
+  _anRendre();
+}
+
+function anPeriode(j) { _anPeriode = j; _anVille = ''; _anRendre(); }
+function anVendeur(v) { _anVendeur = v; _anVille = ''; _anRendre(); }
+function anVille(k) { _anVille = _anVille === k ? '' : k; _anRendre(); }
+
+async function _anRendre() {
+  const depuis = new Date(Date.now() - _anPeriode * 864e5).toISOString().slice(0, 10);
+  const auj = Date.now();
+  const leads = _anLeads.filter(l => String(l.date_lead || '') >= depuis);
+
+  // Regroupement en annonces
+  const annonces = {}, illisibles = {};
+  leads.forEach(l => {
+    const ref = String(l.reference_annonce).trim();
+    const a = _anLire(ref);
+    if (!a) {
+      const i = illisibles[ref] || (illisibles[ref] = { ref, n: 0, vendeur: /^FLP/i.test(ref) ? 'Fabien' : '' });
+      i.n++;
+      return;
+    }
+    const kv = _anTrouverVille(a.ville);
+    const cle = [a.vendeur, a.typo, kv, a.surf || ''].join('|');
+    const x = annonces[cle] || (annonces[cle] = { ...a, kv, n: 0, qualifies: 0, prix: null, dernier: '', refs: new Set() });
+    x.n++;
+    if (AN_QUALIFIES.includes(l.statut)) x.qualifies++;
+    if (String(l.date_lead) > x.dernier) { x.dernier = String(l.date_lead).slice(0, 10); if (l.prix_annonce) x.prix = +l.prix_annonce; }
+    if (!x.prix && l.prix_annonce) x.prix = +l.prix_annonce;
+    x.refs.add(ref);
+  });
+  let liste = Object.values(annonces);
+  const vendeurs = [...new Set(liste.map(a => a.vendeur))].sort((a, b) => a.localeCompare(b, 'fr'));
+  if (_anVendeur) liste = liste.filter(a => a.vendeur === _anVendeur);
+
+  // Filtres
+  document.getElementById('an-periode').innerHTML = [30, 60, 90].map(j => `<button class="${j === _anPeriode ? 'on' : ''}" onclick="anPeriode(${j})">${j} jours</button>`).join('');
+  document.getElementById('an-vendeurs').innerHTML = `<button class="${!_anVendeur ? 'on' : ''}" onclick="anVendeur('')">Tous</button>` +
+    vendeurs.map(v => `<button class="${v === _anVendeur ? 'on' : ''}" onclick="anVendeur('${_vEsc(v)}')">${_vEsc(v)}</button>`).join('');
+
+  // Villes
+  const villes = {};
+  liste.forEach(a => {
+    const v = villes[a.kv] || (villes[a.kv] = { k: a.kv, annonces: [], n: 0, qualifies: 0 });
+    v.annonces.push(a); v.n += a.n; v.qualifies += a.qualifies;
+  });
+  const lv = Object.values(villes).sort((a, b) => b.n - a.n);
+  await _anGeocoder(lv.map(v => v.k));
+  const infoVille = k => {
+    const p = _anPige[k], g = _anGeo[k];
+    const nom = p ? p.nom : g ? (k.startsWith('PARIS ') ? k.replace('PARIS ', 'Paris ') + 'e' : g.nom) : k.charAt(0) + k.slice(1).toLowerCase();
+    return { nom, dept: p ? p.dept : g ? g.dept : '', lat: (p && p.lat) || (g && g.lat), lng: (p && p.lng) || (g && g.lng), pige: p };
+  };
+  const nbLeads = liste.reduce((s, a) => s + a.n, 0);
+  const actives = liste.filter(a => (auj - Date.parse(a.dernier)) / 864e5 <= 7).length;
+  const sansStock = lv.filter(v => !(_anPige[v.k] && _anPige[v.k].libres > 0)).length;
+  const nbIllis = Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).reduce((s, i) => s + i.n, 0);
+
+  document.getElementById('an-sub').textContent = `Nos annonces SeLoger reconstituées depuis les leads des ${_anPeriode} derniers jours` + (_anVendeur ? ' — ' + _anVendeur : '');
+  document.getElementById('an-kpis').innerHTML = `
+    <div class="mk-kpi"><span>Annonces</span><b>${liste.length}</b><small>dont ${actives} avec un lead cette semaine</small></div>
+    <div class="mk-kpi"><span>Leads</span><b>${nbLeads}</b><small>${liste.reduce((s, a) => s + a.qualifies, 0)} qualifiés (suivi ou plus)</small></div>
+    <div class="mk-kpi"><span>Villes</span><b>${lv.length}</b><small>${sansStock} sans stock dans la pige</small></div>
+    <div class="mk-kpi"><span>Leads non rattachés</span><b>${nbIllis}</b><small>intitulé illisible, voir en bas</small></div>`;
+
+  // Texte : une carte par ville
+  const fmtJ = d => { const j = Math.round((auj - Date.parse(d)) / 864e5); return j <= 0 ? "aujourd'hui" : j === 1 ? 'hier' : 'il y a ' + j + ' j'; };
+  const pastille = d => { const j = (auj - Date.parse(d)) / 864e5; return j <= 7 ? 'var(--success)' : j <= 21 ? 'var(--warning)' : 'var(--border)'; };
+  const aff = _anVille ? lv.filter(v => v.k === _anVille) : lv;
+  document.getElementById('an-villes').innerHTML = (_anVille ? `<button class="an-retour" onclick="anVille('')">← Toutes les villes</button>` : '') +
+    (!aff.length ? '<div class="empty"><p>Aucune annonce sur cette période</p></div>' : aff.map(v => {
+      const iv = infoVille(v.k), p = iv.pige;
+      const stock = p && p.libres > 0
+        ? `Pige : ${p.progs} programme${p.progs > 1 ? 's' : ''}, ${p.libres} lot${p.libres > 1 ? 's' : ''} disponible${p.libres > 1 ? 's' : ''}${p.prixMin ? ', dès ' + fmtEur(p.prixMin) : ''}`
+        : 'Aucun stock dans la pige';
+      const lignes = v.annonces.sort((a, b) => b.n - a.n).map(a => `
+        <div class="an-ligne" title="${_vEsc([...a.refs].join(' · '))}">
+          <span class="an-pt" style="background:${pastille(a.dernier)}"></span>
+          <div class="an-desc"><b>${a.typo}</b>${a.surf ? ' · ' + a.surf + ' m²' : ''}${a.prix ? ' · ' + fmtEur(a.prix) : ''} · ${_vEsc(a.vendeur)}<br><small>dernier lead ${fmtJ(a.dernier)}${a.qualifies ? ' · ' + a.qualifies + ' qualifié' + (a.qualifies > 1 ? 's' : '') : ''}</small></div>
+          <span class="an-n">${a.n} lead${a.n > 1 ? 's' : ''}</span>
+        </div>`).join('');
+      return `<div class="an-ville${v.k === _anVille ? ' sel' : ''}">
+        <div class="an-ville-t" onclick="anVille('${_vEsc(v.k)}')"><b>${_vEsc(iv.nom)}${iv.dept ? ' <span>(' + _vEsc(iv.dept) + ')</span>' : ''}</b><span>${v.n} lead${v.n > 1 ? 's' : ''} · ${v.annonces.length} annonce${v.annonces.length > 1 ? 's' : ''}</span></div>
+        <div class="an-stock">${stock}</div>${lignes}</div>`;
+    }).join(''));
+
+  // Par vendeur
+  const pv = {};
+  Object.values(annonces).forEach(a => { const x = pv[a.vendeur] || (pv[a.vendeur] = { annonces: 0, n: 0, q: 0, villes: new Set(), top: null }); x.annonces++; x.n += a.n; x.q += a.qualifies; x.villes.add(a.kv); if (!x.top || a.n > x.top.n) x.top = a; });
+  document.getElementById('an-par-vendeur').innerHTML = Object.entries(pv).sort((a, b) => b[1].n - a[1].n).map(([nom, x]) =>
+    `<div class="an-vd"><b>${_vEsc(nom)}</b> — ${x.annonces} annonce${x.annonces > 1 ? 's' : ''} dans ${x.villes.size} ville${x.villes.size > 1 ? 's' : ''}, ${x.n} lead${x.n > 1 ? 's' : ''} (${x.q} qualifié${x.q > 1 ? 's' : ''}) · celle qui marche le mieux : ${x.top.typo} ${_vEsc(infoVille(x.top.kv).nom)}${x.top.prix ? ' à ' + fmtEur(x.top.prix) : ''} (${x.top.n})</div>`).join('') || '<div class="an-vd">—</div>';
+
+  // Intitulés illisibles
+  const il = Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).sort((a, b) => b.n - a.n);
+  document.getElementById('an-nonlus-box').style.display = il.length ? '' : 'none';
+  document.getElementById('an-nonlus').innerHTML = `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Leads dont l'intitulé ne donne pas la ville ou la typologie : ils ne sont rattachés à aucune annonce. Format attendu : « Prénom T2 - VILLE - 45 M² ».</div>` +
+    il.map(i => `<div class="an-vd">${_vEsc(i.ref)}${i.vendeur ? ' <small style="color:var(--muted)">(' + i.vendeur + ')</small>' : ''} — ${i.n} lead${i.n > 1 ? 's' : ''}</div>`).join('');
+
+  // Carte
+  try { await _anChargerLeaflet(); } catch (e) { document.getElementById('an-carte').innerHTML = '<div class="empty"><p>Carte indisponible</p></div>'; return; }
+  if (!_anCarte) {
+    _anCarte = L.map('an-carte', { scrollWheelZoom: false }).setView([48.86, 2.35], 10);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5', { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 18 }).addTo(_anCarte);
+  }
+  setTimeout(() => _anCarte.invalidateSize(), 50);
+  if (_anCouche) _anCouche.remove();
+  _anCouche = L.layerGroup().addTo(_anCarte);
+  const pts = [];
+  lv.forEach(v => {
+    const iv = infoVille(v.k);
+    if (!iv.lat) return;
+    pts.push([iv.lat, iv.lng]);
+    L.circleMarker([iv.lat, iv.lng], { radius: 5 + Math.sqrt(v.n) * 3.2, color: '#1E3A32', weight: v.k === _anVille ? 3 : 1.5, fillColor: '#B0894C', fillOpacity: v.k === _anVille ? .9 : .6 })
+      .bindTooltip(`<b>${_vEsc(iv.nom)}</b><br>${v.n} lead${v.n > 1 ? 's' : ''} · ${v.annonces.length} annonce${v.annonces.length > 1 ? 's' : ''}`)
+      .on('click', () => anVille(v.k)).addTo(_anCouche);
+  });
+  // Cadrage sur l'Île-de-France : les quelques annonces en province écraseraient la carte
+  const idf = pts.filter(p => p[0] > 48.1 && p[0] < 49.25 && p[1] > 1.4 && p[1] < 3.6);
+  if (!_anVille && (idf.length || pts.length)) _anCarte.fitBounds(L.latLngBounds(idf.length ? idf : pts).pad(0.08));
 }
 
 function calculerComm() {
