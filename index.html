@@ -432,6 +432,17 @@
   .mk-tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
   .mk-tag.avp { color: var(--accent); border-color: var(--accent); }
   .mk-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+  .mk-video { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 6px; border-top: 1px dashed var(--border); }
+  .mk-video small { color: var(--muted); font-size: 11.5px; }
+  .qdn-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 4px 20px 18px; }
+  .qdn-col h4 { font-family: var(--font-head); font-size: 13px; font-weight: 700; margin: 0 0 6px; }
+  .qdn-l { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 7px 0; border-top: 1px dashed var(--border); font-size: 13px; }
+  .qdn-l .qdn-j { font-weight: 700; min-width: 92px; }
+  .qdn-l .qdn-t { flex: 1; min-width: 140px; }
+  .qdn-l .qdn-t small { color: var(--muted); }
+  .qdn-alerte { font-size: 12px; color: var(--accent2); padding: 6px 0 0; }
+  .qdn-vide { font-size: 12.5px; color: var(--muted); font-style: italic; padding: 6px 0; }
+  @media (max-width: 760px) { .qdn-cols { grid-template-columns: 1fr; } }
   .mk-date { font-size: 11.5px; color: var(--muted); margin-left: auto; }
   .mk-rows { padding: 0 20px 16px; }
   .mk-row { display: grid; grid-template-columns: 28px minmax(140px, 1.3fr) minmax(160px, 2fr) 70px 70px 90px 60px; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 10px; cursor: pointer; border: 1px solid transparent; }
@@ -2205,6 +2216,7 @@
       <div class="mk-filtres">
         <div class="mk-chips" id="mk-depts"></div>
         <div class="mk-chips" id="mk-periode">
+          <button data-j="5" onclick="mkPeriode(5)">5 jours</button>
           <button data-j="30" class="on" onclick="mkPeriode(30)">30 jours</button>
           <button data-j="60" onclick="mkPeriode(60)">60 jours</button>
           <button data-j="90" onclick="mkPeriode(90)">90 jours</button>
@@ -3906,6 +3918,7 @@ async function loadMarche(force) {
     const d = await r.json();
     d.jours = _mkJours;
     d.lancements.forEach(l => { const p = d.programmes.find(x => x.id === l.id); l.p = p || null; });
+    await Promise.all([qdnCharger(), _mkRecents(d)]);
     _mk = d;
     if (!_mkMois) _mkMois = d.meta.mois;
     _rmLiensAssurer(d.lancements.map(l => l.id), () => renderMarche());
@@ -3941,6 +3954,122 @@ function _mkFiscTags(fisc) {
   return (fisc || []).filter(f => ok.includes(f)).map(f => '<span class="mk-tag">' + _esc(f === 'Accession maîtrisée / BRS' ? 'BRS' : f) + '</span>').join('');
 }
 
+// ------------------------------------------------------------
+//  VIDÉOS « QUOI DE NEUF » (27/10/2026) — table qdn_videos, gérants seulement.
+//  « Vidéo du lundi » : programme de l'épisode du lundi qui vient, puis un focus par jour
+//  (mardi, mercredi, jeudi) dans l'ordre de passage. « Bonus » : vidéo en plus, postée le
+//  vendredi de la semaine en cours. Lu aussi par le rappel du matin et le skill qdn-propositions.
+// ------------------------------------------------------------
+let _qdn = [];
+const QDN_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+const QDN_STATUTS = { a_faire: 'À faire', faite: 'Faite', postee: 'Postée' };
+function _qdnIso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function _qdnPlus(iso, j) { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + j); return d; }
+// Lundi de la semaine en cours (bonus) et lundi qui vient (épisode en préparation ; coché un lundi → le suivant).
+function _qdnLundis() {
+  const t = new Date(); t.setHours(12, 0, 0, 0);
+  const cur = new Date(t); cur.setDate(t.getDate() - (t.getDay() + 6) % 7);
+  return { cur: _qdnIso(cur), next: _qdnIso(_qdnPlus(_qdnIso(cur), 7)) };
+}
+function _qdnH() { return { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' }; }
+async function qdnCharger() {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/qdn_videos?select=*&semaine=gte.' + _qdnLundis().cur + '&order=semaine.asc,type.asc,ordre.asc', { cache: 'no-store', headers: _qdnH() });
+    if (r.ok) _qdn = await r.json();
+  } catch (e) { /* bandeau vide, la page Marché reste utilisable */ }
+}
+// Date la plus récente où une pige a (re)fait apparaître le programme (ex. Le 103, ouvert à la prescription le 05/10 puis revu le 26/10).
+async function _mkRecents(d) {
+  if (_mkJours > 7) return;
+  try {
+    const ev = await _sbTout(SUPABASE_URL + '/rest/v1/pige_evenements?select=programme_id,pige_date&type=in.(nouveau_programme,nouvelle_tranche,picking_resolu)&pige_date=gt.' + d.meta.debut, _qdnH());
+    const der = {};
+    ev.forEach(e => { if (!der[e.programme_id] || e.pige_date > der[e.programme_id]) der[e.programme_id] = e.pige_date; });
+    d.lancements.forEach(l => { if (der[l.id] && der[l.id] > (l.date || '')) l.recent = der[l.id]; });
+  } catch (e) { /* on garde la date du rapport */ }
+}
+function _qdnTrouve(pid, type) { const L = _qdnLundis(); return _qdn.find(v => v.programme_id === pid && v.type === type && v.semaine === (type === 'lundi' ? L.next : L.cur)); }
+// Pas de vidéo pour un programme livré, sans logement libre ou plus sur l'extranet.
+function _qdnEligible(l) {
+  const p = l.p; if (!p || !(p.libres > 0)) return false;
+  const n = new Date(), tq = n.getFullYear() + (Math.floor(n.getMonth() / 3) + 1) / 10;
+  return !(p.lk && +p.lk < tq - 0.001);
+}
+function _qdnBoutons(l) {
+  if (!_qdnEligible(l)) return '<div class="mk-video"><small>Pas de vidéo : livré ou sans logement libre</small></div>';
+  const b = (type, lib) => { const v = _qdnTrouve(l.id, type); return '<button class="btn btn-sm ' + (v ? 'btn-primary' : 'btn-ghost') + '" onclick="qdnBasculer(\'' + _esc(l.id) + '\',\'' + type + '\')">' + (v ? '✓ ' : '') + lib + '</button>'; };
+  return '<div class="mk-video">' + b('lundi', 'Vidéo du lundi') + b('bonus', 'Bonus') + '</div>';
+}
+async function qdnBasculer(pid, type) {
+  const v = _qdnTrouve(pid, type), L = _qdnLundis();
+  try {
+    if (v) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/qdn_videos?id=eq.' + v.id, { method: 'DELETE', headers: _qdnH() });
+      if (!r.ok) throw new Error();
+      toast('Retiré des vidéos');
+    } else {
+      const l = (_mk && _mk.lancements || []).find(x => x.id === pid) || {}, p = l.p || {};
+      const semaine = type === 'lundi' ? L.next : L.cur;
+      const ordre = 1 + Math.max(0, ..._qdn.filter(x => x.semaine === semaine && x.type === type).map(x => x.ordre));
+      const r = await fetch(SUPABASE_URL + '/rest/v1/qdn_videos', { method: 'POST', headers: _qdnH(),
+        body: JSON.stringify({ programme_id: pid, nom: l.nom || p.nom, ville: l.ville || p.ville, promoteur: l.promoteur || p.promoteur, type, semaine, ordre }) });
+      if (!r.ok) throw new Error();
+      toast(type === 'lundi' ? 'Ajouté à l’épisode du lundi ' + _mkDj(semaine) : 'Ajouté en bonus, vendredi ' + _mkDj(_qdnIso(_qdnPlus(semaine, 4))));
+    }
+  } catch (e) { toast('Enregistrement impossible', 'var(--danger)'); }
+  await qdnCharger(); renderMarche();
+}
+async function qdnDeplacer(id, sens) {
+  const v = _qdn.find(x => x.id === id); if (!v) return;
+  const liste = _qdn.filter(x => x.semaine === v.semaine && x.type === v.type).sort((a, b) => a.ordre - b.ordre);
+  const i = liste.indexOf(v), w = liste[i + sens]; if (!w) return;
+  const patch = (x, o) => fetch(SUPABASE_URL + '/rest/v1/qdn_videos?id=eq.' + x.id, { method: 'PATCH', headers: _qdnH(), body: JSON.stringify({ ordre: o }) });
+  // ordres renumérotés 1..n pour éviter les doublons
+  liste.splice(i, 1); liste.splice(i + sens, 0, v);
+  try { const rs = await Promise.all(liste.map((x, k) => x.ordre !== k + 1 ? patch(x, k + 1) : null).filter(Boolean)); if (rs.some(r => !r.ok)) throw new Error(); }
+  catch (e) { toast('Enregistrement impossible', 'var(--danger)'); }
+  await qdnCharger(); renderMarche();
+}
+async function qdnRetirer(id) {
+  try { const r = await fetch(SUPABASE_URL + '/rest/v1/qdn_videos?id=eq.' + id, { method: 'DELETE', headers: _qdnH() }); if (!r.ok) throw new Error(); toast('Retiré des vidéos'); }
+  catch (e) { toast('Enregistrement impossible', 'var(--danger)'); }
+  await qdnCharger(); renderMarche();
+}
+async function qdnStatut(id) {
+  const v = _qdn.find(x => x.id === id); if (!v) return;
+  const suite = { a_faire: 'faite', faite: 'postee', postee: 'a_faire' }[v.statut] || 'a_faire';
+  try { const r = await fetch(SUPABASE_URL + '/rest/v1/qdn_videos?id=eq.' + id, { method: 'PATCH', headers: _qdnH(), body: JSON.stringify({ statut: suite }) }); if (!r.ok) throw new Error(); }
+  catch (e) { toast('Enregistrement impossible', 'var(--danger)'); }
+  await qdnCharger(); renderMarche();
+}
+function _qdnBandeau() {
+  const L = _qdnLundis();
+  const nom = v => '<b>' + _esc(v.nom || v.programme_id) + '</b> <small>' + _esc(v.ville || '') + '</small>';
+  const st = v => '<button class="btn btn-ghost btn-sm" title="Changer l’état" onclick="qdnStatut(\'' + v.id + '\')">' + QDN_STATUTS[v.statut] + '</button>';
+  const retirer = v => '<button class="btn btn-ghost btn-sm" onclick="qdnRetirer(\'' + v.id + '\')">Retirer</button>';
+  const de = (s, t) => _qdn.filter(v => v.semaine === s && v.type === t).sort((a, b) => a.ordre - b.ordre);
+  const jour = (s, j) => QDN_JOURS[j] + ' ' + _mkDj(_qdnIso(_qdnPlus(s, j)));
+  // Cette semaine : l'épisode de lundi, les focus, les bonus du vendredi.
+  const cl = de(L.cur, 'lundi'), cb = de(L.cur, 'bonus');
+  let c1 = '';
+  if (cl.length) {
+    c1 += '<div class="qdn-l"><span class="qdn-j">' + jour(L.cur, 0) + '</span><span class="qdn-t">Épisode récap : ' + cl.map(v => _esc(v.nom || v.programme_id)).join(', ') + '</span></div>';
+    c1 += cl.map((v, i) => '<div class="qdn-l"><span class="qdn-j">' + (i < 3 ? jour(L.cur, i + 1) : 'Jour à fixer') + '</span><span class="qdn-t">Focus ' + nom(v) + '</span>' + st(v) + '</div>').join('');
+  }
+  c1 += cb.map(v => '<div class="qdn-l"><span class="qdn-j">' + jour(L.cur, 4) + '</span><span class="qdn-t">Bonus ' + nom(v) + '</span>' + st(v) + retirer(v) + '</div>').join('');
+  if (!c1) c1 = '<div class="qdn-vide">Rien de prévu cette semaine. Un « Bonus » coché sur une carte part vendredi.</div>';
+  // Lundi qui vient : la sélection en cours, dans l'ordre de passage.
+  const nl = de(L.next, 'lundi');
+  let c2 = nl.map((v, i) => '<div class="qdn-l"><span class="qdn-j">' + (i < 3 ? (i + 1) + '. ' + QDN_JOURS[i + 1].toLowerCase() : (i + 1) + '. à fixer') + '</span><span class="qdn-t">' + nom(v) + '</span>' +
+    (i > 0 ? '<button class="btn btn-ghost btn-sm" onclick="qdnDeplacer(\'' + v.id + '\',-1)">Monter</button>' : '') +
+    (i < nl.length - 1 ? '<button class="btn btn-ghost btn-sm" onclick="qdnDeplacer(\'' + v.id + '\',1)">Descendre</button>' : '') + retirer(v) + '</div>').join('');
+  if (!nl.length) c2 = '<div class="qdn-vide">Aucun programme choisi. Passe en vue « 5 jours » et clique « Vidéo du lundi » sur les cartes.</div>';
+  else if (nl.length < 3) c2 += '<div class="qdn-alerte">' + (3 - nl.length) + ' programme' + (nl.length === 2 ? '' : 's') + ' à choisir pour avoir un focus mardi, mercredi et jeudi.</div>';
+  else if (nl.length > 3) c2 += '<div class="qdn-alerte">Plus de 3 programmes : seuls les 3 premiers ont un jour de focus.</div>';
+  return '<div class="card"><div class="mk-titre"><div><h3>Vidéos Quoi de neuf</h3><small>Lundi l’épisode récap, puis un focus par jour dans l’ordre de passage ; les bonus partent le vendredi.</small></div></div>' +
+    '<div class="qdn-cols"><div class="qdn-col"><h4>Cette semaine</h4>' + c1 + '</div><div class="qdn-col"><h4>Épisode du lundi ' + _mkDj(L.next) + '</h4>' + c2 + '</div></div></div>';
+}
+
 function renderMarche() {
   const body = document.getElementById('mk-body');
   if (!body || !_mk) return;
@@ -3953,7 +4082,9 @@ function renderMarche() {
 
   const progs = _mk.programmes.filter(p => !_mkDept || p.dept === _mkDept);
   const villes = _mk.villes.filter(v => !_mkDept || v.dept === _mkDept);
-  const lanc = _mk.lancements.filter(l => (!_mkDept || (l.p ? l.p.dept === _mkDept : false)) && l.mois === _mkMois && (!_mkKind || l.kind === _mkKind || l.kind === 'extranet'));
+  // Vue 5 jours (27/10/2026) : les nouveautés que les piges de la fenêtre ont fait (ré)apparaître, quel que soit le mois.
+  const court = _mkJours <= 7;
+  const lanc = _mk.lancements.filter(l => (!_mkDept || (l.p ? l.p.dept === _mkDept : false)) && (court ? (l.recent || l.date) > M.debut : l.mois === _mkMois) && (!_mkKind || l.kind === _mkKind || l.kind === 'extranet'));
   const nbLancMois = m => _mk.lancements.filter(l => l.mois === m && (!_mkDept || (l.p && l.p.dept === _mkDept))).length;
   const vendus = progs.reduce((s, p) => s + p.vendus, 0), libres = progs.reduce((s, p) => s + p.libres, 0);
   const villesActives = villes.filter(v => v.vendus > 0).length;
@@ -3978,7 +4109,7 @@ function renderMarche() {
     const dep = p.dept || '', coul = MK_DEPT_COUL[dep] || 'var(--border)';
     const badge = _mkDept ? '' : (dep ? '<button class="mk-dept" style="background:' + coul + '" title="' + _esc(MK_DEPT_NOMS[dep] || dep) + '" onclick="mkDept(\'' + dep + '\')">' + _esc(dep) + '</button>' : '<span class="mk-dept off" title="Plus sur l’extranet">—</span>');
     return '<div class="mk-card" style="border-top-color:' + coul + '">' +
-      '<div style="display:flex;align-items:center;gap:8px"><span class="mk-kind ' + l.kind + '"><i></i>' + MK_KINDS[l.kind] + '</span><span class="mk-date">vu le ' + _mkDj(l.date) + '</span>' + badge + '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px"><span class="mk-kind ' + l.kind + '"><i></i>' + MK_KINDS[l.kind] + '</span><span class="mk-date">vu le ' + _mkDj(court ? (l.recent || l.date) : l.date) + '</span>' + badge + '</div>' +
       '<div class="mk-nom">' + _rmNomLien(l.id, l.nom) + '</div>' +
       '<div class="mk-lieu">' + _esc(l.ville) + (p.dept ? ' <span style="opacity:.7">(' + _esc(p.dept) + ')</span>' : '') + ' · ' + _esc(l.promoteur || p.promoteur || '') +
         (l.kind === 'stock' ? '<br>Arrivé chez nous le ' + _mkDj(l.arrivee) + ' avec moins de 5 lots — stock ouvert le ' + _mkDj(l.date) : l.ouverture ? '<br>Ouverture d’étage / bâtiment : ' + _esc(l.ouverture) + ' d’un coup' : l.origine ? '<br>Tranche de ' + _esc(l.origine) : '') + '</div>' +
@@ -3995,6 +4126,7 @@ function renderMarche() {
       (vend ? '<div class="mk-lieu" style="font-size:12px">Stock au ' + _mkDj(M.debut) + ' : ' + _rmNum(p.stock0) + vend + '</div>' : '') +
       '<div class="mk-actions"><button class="btn btn-ghost btn-sm" onclick="mkCarte(' + JSON.stringify(l.ville).replace(/"/g, '&quot;') + ')">Voir sur la carte</button>' +
         (_rmLiens[l.id] && _rmLiens[l.id].url ? '<a class="btn btn-ghost btn-sm" href="' + _esc(_rmLiens[l.id].url) + '" target="_blank" rel="noopener">Fiche promoteur</a>' : '') + '</div>' +
+      _qdnBoutons(l) +
     '</div>';
   };
   const lancA = lanc.filter(l => l.kind !== 'extranet'), lancB = lanc.filter(l => l.kind === 'extranet');
@@ -4011,7 +4143,7 @@ function renderMarche() {
   const moisChips = '<div class="mk-chips">' + [M.mois, M.mois_prev].map(m => '<button class="' + (_mkMois === m ? 'on' : '') + '" onclick="mkMois(\'' + m + '\')">' + _esc(_mkMoisLabel(m)) + '</button>').join('') + '</div>';
   const cardLanc = '<div class="card">' +
     '<div class="mk-titre"><div><h3>Lancements <span style="color:var(--muted);font-weight:500">(' + lancA.length + ')</span></h3><small>Nouveaux programmes et nouvelles tranches, jamais vus avant — relus avec les règles du 05/10 —, et lancements du stock : programmes arrivés avec moins de 5 lots dont le stock vient de s’ouvrir.</small></div>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + moisChips +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' + (court ? '' : moisChips) +
         '<div class="mk-chips">' + ['nouveau', 'tranche', 'stock'].map(k => '<button class="' + (_mkKind === k ? 'on' : '') + '" onclick="mkKind(\'' + k + '\')">' + MK_KINDS[k] + '</button>').join('') + '</div>' +
       '</div></div>' +
     (lancA.length ? grille(lancA) : '<div class="mk-vide">Aucun lancement sur cette sélection.</div>') +
@@ -4067,7 +4199,7 @@ function renderMarche() {
       : '<div class="mk-vide">Aucune commune sur cette sélection.</div>') +
   '</div>';
 
-  body.innerHTML = kpis + cardLanc + cardVilles +
+  body.innerHTML = _qdnBandeau() + kpis + cardLanc + cardVilles +
     '<div style="color:var(--muted);font-size:11.5px;margin-top:4px">Données des piges du ' + _mkDj(M.debut) + ' au ' + _mkDj(M.fin) + ' (' + M.nb_piges + ' piges). Les ventes sont déduites des lots sortis du stock d’une pige à l’autre ; parkings et caves exclus.</div>';
 }
 
