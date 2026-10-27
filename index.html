@@ -372,10 +372,14 @@
   .an-ville-t span { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .an-stock { font-size: 12px; color: var(--muted); margin: 3px 0 8px; }
   .an-ligne { display: flex; align-items: baseline; gap: 8px; font-size: 13px; padding: 5px 0; border-top: 1px dashed var(--border); }
-  .an-ligne .an-pt { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; align-self: center; }
+  .an-ligne .an-pt { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; align-self: flex-start; margin-top: 6px; }
   .an-ligne .an-desc { flex: 1; min-width: 0; }
   .an-ligne .an-n { font-family: var(--font-head); font-weight: 700; white-space: nowrap; }
   .an-ligne small { color: var(--muted); }
+  .an-reel { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  .an-reel-non { color: var(--danger); }
+  .an-sous { color: var(--accent); }
+  .an-dessus { color: var(--danger); }
   .an-h { font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 10px; }
   .an-vd { font-size: 13px; padding: 6px 0; border-top: 1px dashed var(--border); }
   .an-vd:first-child { border-top: 0; }
@@ -16487,7 +16491,7 @@ function _gvRender() {
 // SeLoger sans mandat ou à demander).
 const AN_VENDEURS = { ANAIS: 'Anaïs', THEO: 'Théo', JULES: 'Jules', ALEX: 'Alex', LOUIS: 'Louis', FABIEN: 'Fabien', NOUR: 'Nour', MADINA: 'Madina', MTO: 'Madina', FLP: 'Fabien' };
 const AN_QUALIFIES = ['Suivi', 'Sélections', 'Retour documentation', 'Finaliser la vente', 'Vendu'];
-let _anLeads = null, _anPige = null, _anGeo = {};
+let _anLeads = null, _anPige = null, _anStock = {}, _anGeo = {};
 let _anPeriode = 60, _anVendeur = '', _anVille = '';
 let _anCarte = null, _anCouche = null;
 
@@ -16570,10 +16574,14 @@ async function loadAnnonces(force) {
     const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
     const depuis = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
     try {
-      const [leads, progs] = await Promise.all([
+      const [leads, progs, stock] = await Promise.all([
         _sbTout(SUPABASE_URL + '/rest/v1/contacts?select=reference_annonce,prix_annonce,date_lead,statut&reference_annonce=not.is.null&date_lead=gte.' + depuis + '&order=date_lead.desc', h),
-        _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=ville,cp,lat,lng,prix_min,nb_libres,source', h)
+        _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=ville,cp,lat,lng,prix_min,nb_libres,source', h),
+        _sbTout(SUPABASE_URL + '/rest/v1/rpc/annonces_stock', h)
       ]);
+      // Stock réel par ville et typologie (RPC annonces_stock, lots « libre » de la pige)
+      _anStock = {};
+      stock.forEach(s => { const k = _anCleVille(s.cle); ((_anStock[k] = _anStock[k] || {})[s.type === 'Maison' ? 'Maison' : s.typo] = s); });
       _anLeads = leads.filter(l => String(l.reference_annonce || '').trim());
       _anPige = {};
       progs.filter(p => p.source !== 'picking' && p.source !== 'nomandat').forEach(p => {
@@ -16645,11 +16653,15 @@ async function _anRendre() {
   const nbLeads = liste.reduce((s, a) => s + a.n, 0);
   const actives = liste.filter(a => (auj - Date.parse(a.dernier)) / 864e5 <= 7).length;
   const sansStock = lv.filter(v => !(_anPige[v.k] && _anPige[v.k].libres > 0)).length;
+  // Le vrai lot le moins cher de la même typologie dans la ville (T5 = 5 pièces et plus)
+  const reel = a => (_anStock[a.kv] || {})[a.typo === 'Maison' ? 'Maison' : a.typo] || null;
+  const sansReel = liste.filter(a => !reel(a)).length;
   const nbIllis = Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).reduce((s, i) => s + i.n, 0);
 
   document.getElementById('an-sub').textContent = `Nos annonces SeLoger reconstituées depuis les leads des ${_anPeriode} derniers jours` + (_anVendeur ? ' — ' + _anVendeur : '');
   document.getElementById('an-kpis').innerHTML = `
     <div class="mk-kpi"><span>Annonces</span><b>${liste.length}</b><small>dont ${actives} avec un lead cette semaine</small></div>
+    <div class="mk-kpi"><span>Sans stock réel</span><b>${sansReel}</b><small>aucun lot de cette typologie dans la ville</small></div>
     <div class="mk-kpi"><span>Leads</span><b>${nbLeads}</b><small>${liste.reduce((s, a) => s + a.qualifies, 0)} qualifiés (suivi ou plus)</small></div>
     <div class="mk-kpi"><span>Villes</span><b>${lv.length}</b><small>${sansStock} sans stock dans la pige</small></div>
     <div class="mk-kpi"><span>Leads non rattachés</span><b>${nbIllis}</b><small>intitulé illisible, voir en bas</small></div>`;
@@ -16664,12 +16676,20 @@ async function _anRendre() {
       const stock = p && p.libres > 0
         ? `Pige : ${p.progs} programme${p.progs > 1 ? 's' : ''}, ${p.libres} lot${p.libres > 1 ? 's' : ''} disponible${p.libres > 1 ? 's' : ''}${p.prixMin ? ', dès ' + fmtEur(p.prixMin) : ''}`
         : 'Aucun stock dans la pige';
-      const lignes = v.annonces.sort((a, b) => b.n - a.n).map(a => `
+      const lignes = v.annonces.sort((a, b) => b.n - a.n).map(a => {
+        const r = reel(a);
+        const ecart = r && a.prix ? Math.round((a.prix - r.prix_min) / r.prix_min * 100) : null;
+        const comp = !r
+          ? `<div class="an-reel an-reel-non">Aucun ${a.typo === 'Maison' ? 'maison' : a.typo} disponible dans la pige pour cette ville</div>`
+          : `<div class="an-reel">Pige : ${r.nb} ${a.typo === 'Maison' ? 'maison' + (r.nb > 1 ? 's' : '') : a.typo} dispo, dès <b>${fmtEur(r.prix_min)}</b>${r.surf_min ? ' (' + Math.round(r.surf_min) + ' m²)' : ''} — ${_vEsc(r.programme_min)}` +
+            (ecart != null ? ` · <b class="${ecart < 0 ? 'an-sous' : 'an-dessus'}">annonce ${ecart > 0 ? '+' : ''}${ecart} %</b>` : '') + `</div>`;
+        return `
         <div class="an-ligne" title="${_vEsc([...a.refs].join(' · '))}">
           <span class="an-pt" style="background:${pastille(a.dernier)}"></span>
-          <div class="an-desc"><b>${a.typo}</b>${a.surf ? ' · ' + a.surf + ' m²' : ''}${a.prix ? ' · ' + fmtEur(a.prix) : ''} · ${_vEsc(a.vendeur)}<br><small>dernier lead ${fmtJ(a.dernier)}${a.qualifies ? ' · ' + a.qualifies + ' qualifié' + (a.qualifies > 1 ? 's' : '') : ''}</small></div>
+          <div class="an-desc"><b>${a.typo}</b>${a.surf ? ' · ' + a.surf + ' m²' : ''}${a.prix ? ' · ' + fmtEur(a.prix) : ''} · ${_vEsc(a.vendeur)}<br><small>dernier lead ${fmtJ(a.dernier)}${a.qualifies ? ' · ' + a.qualifies + ' qualifié' + (a.qualifies > 1 ? 's' : '') : ''}</small>${comp}</div>
           <span class="an-n">${a.n} lead${a.n > 1 ? 's' : ''}</span>
-        </div>`).join('');
+        </div>`;
+      }).join('');
       return `<div class="an-ville${v.k === _anVille ? ' sel' : ''}">
         <div class="an-ville-t" onclick="anVille('${_vEsc(v.k)}')"><b>${_vEsc(iv.nom)}${iv.dept ? ' <span>(' + _vEsc(iv.dept) + ')</span>' : ''}</b><span>${v.n} lead${v.n > 1 ? 's' : ''} · ${v.annonces.length} annonce${v.annonces.length > 1 ? 's' : ''}</span></div>
         <div class="an-stock">${stock}</div>${lignes}</div>`;

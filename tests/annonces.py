@@ -36,6 +36,11 @@ PIGE = [
     {'ville': 'Massy', 'cp': '91300', 'lat': 48.73, 'lng': 2.28, 'prix_min': 240000, 'nb_libres': 0, 'source': 'kaufman'},
     {'ville': 'Rueil-Malmaison', 'cp': '92500', 'lat': 48.88, 'lng': 2.19, 'prix_min': 320000, 'nb_libres': 6, 'source': 'ogic'},
 ]
+STOCK = [
+    {'cle': 'Clamart', 'ville': 'Clamart', 'cp': '92140', 'type': 'Appartement', 'typo': 'T2', 'nb': 11, 'prix_min': 315000, 'prix_med': 355000, 'surf_min': 35.45, 'programme_min': "Victor's Square (Les Nouveaux Constructeurs)"},
+    {'cle': 'Colombes', 'ville': 'Colombes', 'cp': '92700', 'type': 'Appartement', 'typo': 'T2', 'nb': 5, 'prix_min': 170000, 'prix_med': 230000, 'surf_min': 40, 'programme_min': 'Test (Nexity)'},
+    {'cle': 'PARIS 15', 'ville': 'Paris', 'cp': '75015', 'type': 'Appartement', 'typo': 'T3', 'nb': 3, 'prix_min': 1100000, 'prix_med': 1200000, 'surf_min': 70.19, 'programme_min': '15Ème Merveille (Bouygues Immobilier)'},
+]
 GEO = {'VELIZY': {'nom': 'Vélizy-Villacoublay', 'centre': {'coordinates': [2.19, 48.78]}, 'codeDepartement': '78'},
        'ANNECY': {'nom': 'Annecy', 'centre': {'coordinates': [6.13, 45.90]}, 'codeDepartement': '74'}}
 
@@ -44,6 +49,7 @@ def route(r):
     if 'supabase.co' in u:
         if '/rest/v1/contacts' in u: body = LEADS
         elif '/rest/v1/pige_programmes' in u: body = PIGE
+        elif '/rest/v1/rpc/annonces_stock' in u: body = STOCK
         else: body = []
         return r.fulfill(status=200, content_type='application/json', body=json.dumps(body))
     if 'geo.api.gouv.fr' in u:
@@ -71,7 +77,9 @@ with sync_playwright() as p:
         page.wait_for_timeout(1500)
         texte = re.sub(r'[\u202f\u00a0]', ' ', page.inner_text('#page-gerant-annonces'))
         for attendu in ('Clamart', '6 leads', 'Saint-Denis', 'Pige : 2 programmes, 21 lots disponibles, dès 295 000 €',
-                        'Aucun stock dans la pige', 'FLP7', 'Madina', 'Vélizy-Villacoublay', 'Paris 15e'):
+                        'Aucun stock dans la pige', 'FLP7', 'Madina', 'Vélizy-Villacoublay', 'Paris 15e',
+                        'Pige : 11 T2 dispo, dès 315 000 € (35 m²)', 'annonce -25 %', 'annonce +5 %', 'annonce -24 %',
+                        'Aucun T4 disponible dans la pige', 'aucun lot de cette typologie dans la ville'):
             if attendu not in texte: erreurs.append(f'{nom} : « {attendu} » absent')
         if 'Théo' in texte: erreurs.append(f'{nom} : lead de plus de 60 jours compté')
         nb = page.evaluate("document.querySelectorAll('#an-carte .leaflet-interactive').length")
