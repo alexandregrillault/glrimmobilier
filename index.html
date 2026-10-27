@@ -379,6 +379,8 @@
   .an-reel { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
   .an-reel-non { color: var(--danger); }
   .an-sous { color: var(--accent); }
+  .an-bien { color: var(--success); }
+  .an-moyen { color: var(--warning); }
   .an-dessus { color: var(--danger); }
   .an-h { font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 10px; }
   .an-vd { font-size: 13px; padding: 6px 0; border-top: 1px dashed var(--border); }
@@ -1115,8 +1117,13 @@
         <div>
           <div class="section-title" style="font-family:var(--font-head);font-size:18px;font-weight:700">Annonces</div>
           <div class="section-sub" id="an-sub">Nos annonces SeLoger, d'après les leads reçus</div>
+          <div class="section-sub" id="an-releve"></div>
         </div>
-        <button class="btn btn-ghost btn-sm" onclick="loadAnnonces(true)">Actualiser</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('an-fichier').click()">Importer un relevé SeLoger</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadAnnonces(true)">Actualiser</button>
+          <input type="file" id="an-fichier" accept=".json,application/json" style="display:none" onchange="anImporterReleve(this)">
+        </div>
       </div>
       <div class="mk-filtres">
         <div class="mk-chips" id="an-periode"></div>
@@ -1129,6 +1136,10 @@
           <div class="an-legende">Taille du rond = nombre de leads. Clique sur une ville pour n'afficher qu'elle.</div>
         </div>
         <div id="an-villes"></div>
+      </div>
+      <div class="card" style="padding:16px 20px;margin-top:16px" id="an-sanslead-box">
+        <div class="an-h">En ligne sur SeLoger sans aucun lead</div>
+        <div id="an-sanslead"></div>
       </div>
       <div class="card" style="padding:16px 20px;margin-top:16px">
         <div class="an-h">Par vendeur</div>
@@ -16492,6 +16503,7 @@ function _gvRender() {
 const AN_VENDEURS = { ANAIS: 'Anaïs', THEO: 'Théo', JULES: 'Jules', ALEX: 'Alex', LOUIS: 'Louis', FABIEN: 'Fabien', NOUR: 'Nour', MADINA: 'Madina', MTO: 'Madina', FLP: 'Fabien' };
 const AN_QUALIFIES = ['Suivi', 'Sélections', 'Retour documentation', 'Finaliser la vente', 'Vendu'];
 let _anLeads = null, _anPige = null, _anStock = {}, _anGeo = {};
+let _anSL = {}, _anSLDate = null; // dernier relevé SeLoger : _anSL[ville][typo] = {total, top, glr}
 let _anPeriode = 60, _anVendeur = '', _anVille = '';
 let _anCarte = null, _anCouche = null;
 
@@ -16582,6 +16594,20 @@ async function loadAnnonces(force) {
       // Stock réel par ville et typologie (RPC annonces_stock, lots « libre » de la pige)
       _anStock = {};
       stock.forEach(s => { const k = _anCleVille(s.cle); ((_anStock[k] = _anStock[k] || {})[s.type === 'Maison' ? 'Maison' : s.typo] = s); });
+      // Dernier relevé SeLoger (table seloger_concurrence, importée depuis le fichier du script de pige)
+      _anSL = {}; _anSLDate = null;
+      const der = await (await fetch(SUPABASE_URL + '/rest/v1/seloger_concurrence?select=releve&order=releve.desc&limit=1', { cache: 'no-store', headers: h })).json();
+      if (Array.isArray(der) && der.length) {
+        _anSLDate = der[0].releve;
+        const lignes = await _sbTout(SUPABASE_URL + '/rest/v1/seloger_concurrence?select=cle,typo,total,rang,prix,surface,annonceur,promoteur,glr,cree,sid&releve=eq.' + _anSLDate + '&order=rang.asc.nullsfirst', h);
+        lignes.forEach(l => {
+          const k = _anCleVille(l.cle), v = _anSL[k] || (_anSL[k] = {});
+          const t = v[l.typo] || (v[l.typo] = { total: l.total, top: [], glr: [] });
+          if (l.rang == null) return;
+          if (l.glr) t.glr.push(l);
+          if (l.rang <= 10) t.top.push(l);
+        });
+      }
       _anLeads = leads.filter(l => String(l.reference_annonce || '').trim());
       _anPige = {};
       progs.filter(p => p.source !== 'picking' && p.source !== 'nomandat').forEach(p => {
@@ -16603,6 +16629,35 @@ async function loadAnnonces(force) {
 function anPeriode(j) { _anPeriode = j; _anVille = ''; _anRendre(); }
 function anVendeur(v) { _anVendeur = v; _anVille = ''; _anRendre(); }
 function anVille(k) { _anVille = _anVille === k ? '' : k; _anRendre(); }
+
+// Import du fichier seloger_concurrence.json (script de pige seloger_concurrence.js).
+// Un relevé déjà importé pour la même date est remplacé.
+async function anImporterReleve(input) {
+  const f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  let d;
+  try { d = JSON.parse(await f.text()); } catch (e) { toast('Fichier illisible', 'var(--danger)'); return; }
+  if (!d || d.source !== 'seloger.com' || !/^\d{4}-\d{2}-\d{2}$/.test(d.releve || '') || !Array.isArray(d.lignes) || !d.lignes.length) {
+    toast("Ce n'est pas un relevé SeLoger (seloger_concurrence.json)", 'var(--danger)'); return;
+  }
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' };
+  try {
+    toast('Import du relevé du ' + d.releve + '…', 'var(--accent)');
+    const del = await fetch(SUPABASE_URL + '/rest/v1/seloger_concurrence?releve=eq.' + d.releve, { method: 'DELETE', headers: h });
+    if (!del.ok) throw new Error('HTTP ' + del.status);
+    const champs = ['cle', 'typo', 'total', 'rang', 'prix', 'surface', 'annonceur', 'promoteur', 'glr', 'cree', 'sid'];
+    const lignes = d.lignes.map(l => { const o = { releve: d.releve }; champs.forEach(c => o[c] = l[c] == null ? null : l[c]); o.glr = !!l.glr; return o; });
+    for (let i = 0; i < lignes.length; i += 1000) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/seloger_concurrence', { method: 'POST', headers: h, body: JSON.stringify(lignes.slice(i, i + 1000)) });
+      if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text()).slice(0, 120));
+    }
+    toast('Relevé SeLoger importé : ' + d.villes + ' villes, ' + lignes.length + ' annonces', 'var(--success)');
+    loadAnnonces(true);
+  } catch (e) {
+    toast("Échec de l'import : " + String(e.message || e).slice(0, 120), 'var(--danger)');
+  }
+}
 
 async function _anRendre() {
   const depuis = new Date(Date.now() - _anPeriode * 864e5).toISOString().slice(0, 10);
@@ -16656,6 +16711,33 @@ async function _anRendre() {
   // Le vrai lot le moins cher de la même typologie dans la ville (T5 = 5 pièces et plus)
   const reel = a => (_anStock[a.kv] || {})[a.typo === 'Maison' ? 'Maison' : a.typo] || null;
   const sansReel = liste.filter(a => !reel(a)).length;
+
+  // Relevé SeLoger : chaque annonce du registre est rattachée à notre annonce SeLoger
+  // de même ville et typologie au prix le plus proche (3 % d'écart au plus). Nos annonces
+  // SeLoger qu'aucune annonce du registre ne réclame sont en ligne sans avoir reçu de lead.
+  const slPris = new Set();
+  Object.values(annonces).sort((a, b) => b.n - a.n).forEach(a => {
+    a.sl = null;
+    const t = (_anSL[a.kv] || {})[a.typo];
+    if (!t || !a.prix) return;
+    let best = null;
+    t.glr.forEach(g => { if (!slPris.has(g.sid) && Math.abs(g.prix - a.prix) / a.prix <= 0.03 && (!best || Math.abs(g.prix - a.prix) < Math.abs(best.prix - a.prix))) best = g; });
+    if (best) { slPris.add(best.sid); a.sl = best; }
+  });
+  const slLigne = a => {
+    if (!_anSLDate) return '';
+    const t = (_anSL[a.kv] || {})[a.typo];
+    if (!t) return `<div class="an-reel">SeLoger : ville ou typologie hors relevé</div>`;
+    if (!t.total) return `<div class="an-reel">SeLoger : aucune annonce ${a.typo} neuve dans la ville</div>`;
+    const prem = t.top[0], cinq = t.top[4];
+    const place = a.sl
+      ? `notre annonce <b class="${a.sl.rang <= 5 ? 'an-bien' : a.sl.rang <= 15 ? 'an-moyen' : 'an-dessus'}">${a.sl.rang}<sup>e</sup> sur ${t.total}</b> en prix croissant`
+      : `notre annonce <b class="an-dessus">introuvable</b> dans les 120 premières (${t.total} annonces)`;
+    const cible = cinq && (!a.sl || a.sl.rang > 5) ? ` · top 5 sous ${fmtEur(cinq.prix)}` : '';
+    return `<div class="an-reel">SeLoger : ${place}${prem ? ` · la moins chère ${fmtEur(prem.prix)} (${_vEsc(prem.annonceur || '?')})` : ''}${cible}</div>`;
+  };
+  const sansLead = [];
+  Object.entries(_anSL).forEach(([k, typos]) => Object.entries(typos).forEach(([typo, t]) => t.glr.forEach(g => { if (!slPris.has(g.sid)) sansLead.push({ k, typo, g, total: t.total }); })));
   const nbIllis = Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).reduce((s, i) => s + i.n, 0);
 
   document.getElementById('an-sub').textContent = `Nos annonces SeLoger reconstituées depuis les leads des ${_anPeriode} derniers jours` + (_anVendeur ? ' — ' + _anVendeur : '');
@@ -16686,7 +16768,7 @@ async function _anRendre() {
         return `
         <div class="an-ligne" title="${_vEsc([...a.refs].join(' · '))}">
           <span class="an-pt" style="background:${pastille(a.dernier)}"></span>
-          <div class="an-desc"><b>${a.typo}</b>${a.surf ? ' · ' + a.surf + ' m²' : ''}${a.prix ? ' · ' + fmtEur(a.prix) : ''} · ${_vEsc(a.vendeur)}<br><small>dernier lead ${fmtJ(a.dernier)}${a.qualifies ? ' · ' + a.qualifies + ' qualifié' + (a.qualifies > 1 ? 's' : '') : ''}</small>${comp}</div>
+          <div class="an-desc"><b>${a.typo}</b>${a.surf ? ' · ' + a.surf + ' m²' : ''}${a.prix ? ' · ' + fmtEur(a.prix) : ''} · ${_vEsc(a.vendeur)}<br><small>dernier lead ${fmtJ(a.dernier)}${a.qualifies ? ' · ' + a.qualifies + ' qualifié' + (a.qualifies > 1 ? 's' : '') : ''}</small>${comp}${slLigne(a)}</div>
           <span class="an-n">${a.n} lead${a.n > 1 ? 's' : ''}</span>
         </div>`;
       }).join('');
@@ -16701,8 +16783,20 @@ async function _anRendre() {
   document.getElementById('an-par-vendeur').innerHTML = Object.entries(pv).sort((a, b) => b[1].n - a[1].n).map(([nom, x]) =>
     `<div class="an-vd"><b>${_vEsc(nom)}</b> — ${x.annonces} annonce${x.annonces > 1 ? 's' : ''} dans ${x.villes.size} ville${x.villes.size > 1 ? 's' : ''}, ${x.n} lead${x.n > 1 ? 's' : ''} (${x.q} qualifié${x.q > 1 ? 's' : ''}) · celle qui marche le mieux : ${x.top.typo} ${_vEsc(infoVille(x.top.kv).nom)}${x.top.prix ? ' à ' + fmtEur(x.top.prix) : ''} (${x.top.n})</div>`).join('') || '<div class="an-vd">—</div>';
 
+  // Relevé SeLoger : date, et nos annonces en ligne sans lead (toutes vendeurs confondus :
+  // le relevé ne dit pas qui a publié l'annonce)
+  document.getElementById('an-releve').textContent = _anSLDate
+    ? 'Relevé SeLoger du ' + new Date(_anSLDate + 'T12:00:00').toLocaleDateString('fr-FR') + ' — appartements neufs, tri par prix croissant'
+    : 'Aucun relevé SeLoger importé pour le moment';
+  document.getElementById('an-sanslead-box').style.display = sansLead.length && !_anVendeur ? '' : 'none';
+  document.getElementById('an-sanslead').innerHTML = `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Nos annonces trouvées sur SeLoger qui ne correspondent à aucune annonce ayant reçu un lead sur la période : à retravailler ou à couper.</div>` +
+    sansLead.sort((a, b) => a.k.localeCompare(b.k, 'fr') || a.typo.localeCompare(b.typo)).map(s => {
+      const iv = infoVille(s.k), r = (_anStock[s.k] || {})[s.typo];
+      return `<div class="an-vd"><b>${_vEsc(iv.nom)}</b> · ${s.typo}${s.g.surface ? ' · ' + Math.round(s.g.surface) + ' m²' : ''} · ${fmtEur(s.g.prix)} — ${s.g.rang}<sup>e</sup> sur ${s.total}${s.g.cree ? ', créée le ' + new Date(s.g.cree + 'T12:00:00').toLocaleDateString('fr-FR') : ''}${r ? ' · pige dès ' + fmtEur(r.prix_min) : ' · <span class="an-dessus">aucun ' + s.typo + ' dans la pige</span>'}</div>`;
+    }).join('');
+
   // Intitulés illisibles
-  const il = Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).sort((a, b) => b.n - a.n);
+  const il =Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).sort((a, b) => b.n - a.n);
   document.getElementById('an-nonlus-box').style.display = il.length ? '' : 'none';
   document.getElementById('an-nonlus').innerHTML = `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Leads dont l'intitulé ne donne pas la ville ou la typologie : ils ne sont rattachés à aucune annonce. Format attendu : « Prénom T2 - VILLE - 45 M² ».</div>` +
     il.map(i => `<div class="an-vd">${_vEsc(i.ref)}${i.vendeur ? ' <small style="color:var(--muted)">(' + i.vendeur + ')</small>' : ''} — ${i.n} lead${i.n > 1 ? 's' : ''}</div>`).join('');
