@@ -382,6 +382,21 @@
   .an-bien { color: var(--success); }
   .an-moyen { color: var(--warning); }
   .an-dessus { color: var(--danger); }
+  .an-faire { padding: 16px 20px; margin-bottom: 16px; }
+  .an-faire-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .an-act { background: var(--surface2); border: 1px solid var(--border); border-top: 3px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+  .an-act h4 { font-family: var(--font-head); font-size: 15px; margin: 0 0 4px; display: flex; justify-content: space-between; }
+  .an-act h4 span { font-size: 13px; color: var(--muted); }
+  .an-act-ret { border-top-color: var(--danger); }
+  .an-act-cre { border-top-color: var(--success); }
+  .an-act-aju { border-top-color: var(--warning); }
+  .an-act-note { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .an-it { font-size: 12.5px; line-height: 1.45; padding: 8px 0; border-top: 1px dashed var(--border); }
+  .an-it b { font-size: 13px; }
+  .an-it div { color: var(--muted); margin-top: 2px; }
+  .an-it div b { color: var(--text); font-size: inherit; }
+  .an-regles { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+  @media (max-width: 900px) { .an-faire-grid { grid-template-columns: 1fr; } }
   .an-h { font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 10px; }
   .an-vd { font-size: 13px; padding: 6px 0; border-top: 1px dashed var(--border); }
   .an-vd:first-child { border-top: 0; }
@@ -1129,6 +1144,7 @@
         <div class="mk-chips" id="an-periode"></div>
         <div class="mk-chips" id="an-vendeurs"></div>
       </div>
+      <div class="card an-faire" id="an-faire"></div>
       <div class="mk-kpis" id="an-kpis"></div>
       <div class="an-grid">
         <div class="card an-carte-box">
@@ -1136,10 +1152,6 @@
           <div class="an-legende">Taille du rond = nombre de leads. Clique sur une ville pour n'afficher qu'elle.</div>
         </div>
         <div id="an-villes"></div>
-      </div>
-      <div class="card" style="padding:16px 20px;margin-top:16px" id="an-sanslead-box">
-        <div class="an-h">En ligne sur SeLoger sans aucun lead</div>
-        <div id="an-sanslead"></div>
       </div>
       <div class="card" style="padding:16px 20px;margin-top:16px">
         <div class="an-h">Par vendeur</div>
@@ -16501,8 +16513,11 @@ function _gvRender() {
 // sont listés à part. Le stock réel vient de pige_programmes (hors programmes
 // SeLoger sans mandat ou à demander).
 const AN_VENDEURS = { ANAIS: 'Anaïs', THEO: 'Théo', JULES: 'Jules', ALEX: 'Alex', LOUIS: 'Louis', FABIEN: 'Fabien', NOUR: 'Nour', MADINA: 'Madina', MTO: 'Madina', FLP: 'Fabien' };
+// Règles du bloc « Ce qu'il faut faire » (seuils proposés le 27/10/2026, à ajuster avec Alex)
+const AN_REGLES = { silence: 21, rangMauvais: 10, rangVise: 5, rangCreer: 3, stockMin: 3, demandeMin: 3, maxListe: 12 };
 const AN_QUALIFIES = ['Suivi', 'Sélections', 'Retour documentation', 'Finaliser la vente', 'Vendu'];
 let _anLeads = null, _anPige = null, _anStock = {}, _anGeo = {};
+let _anTousLeads = [];
 let _anSL = {}, _anSLDate = null; // dernier relevé SeLoger : _anSL[ville][typo] = {total, top, glr}
 let _anPeriode = 60, _anVendeur = '', _anVille = '';
 let _anCarte = null, _anCouche = null;
@@ -16531,7 +16546,7 @@ function _anLire(ref) {
     if (parts.length) return { vendeur: 'Madina', typo: typo || '?', ville: parts[parts.length - 1], surf: null };
   }
   m = r.match(/^T(\d)\s+(.+?)\s+([A-Za-zÀ-ÿ]+)$/);
-  if (m && AN_VENDEURS[_anNorm(m[3])]) return { vendeur: AN_VENDEURS[_anNorm(m[3])], typo: 'T' + m[1], ville: m[2], surf: null };
+  if (m && AN_VENDEURS[_anNorm(m[3])]) return { vendeur: AN_VENDEURS[_anNorm(m[3])], typo: 'T' + m[1], ville: m[2], surf: null, ancien: true };
   return null;
 }
 
@@ -16587,7 +16602,7 @@ async function loadAnnonces(force) {
     const depuis = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
     try {
       const [leads, progs, stock] = await Promise.all([
-        _sbTout(SUPABASE_URL + '/rest/v1/contacts?select=reference_annonce,prix_annonce,date_lead,statut&reference_annonce=not.is.null&date_lead=gte.' + depuis + '&order=date_lead.desc', h),
+        _sbTout(SUPABASE_URL + '/rest/v1/contacts?select=reference_annonce,prix_annonce,date_lead,statut,lieu,typologie&date_lead=gte.' + depuis + '&order=date_lead.desc', h),
         _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=ville,cp,lat,lng,prix_min,nb_libres,source', h),
         _sbTout(SUPABASE_URL + '/rest/v1/rpc/annonces_stock', h)
       ]);
@@ -16615,6 +16630,7 @@ async function loadAnnonces(force) {
         });
       }
       _anLeads = leads.filter(l => String(l.reference_annonce || '').trim());
+      _anTousLeads = leads; // ville et typologie recherchées, pour mesurer la demande
       _anPige = {};
       progs.filter(p => p.source !== 'picking' && p.source !== 'nomandat').forEach(p => {
         const k = /^75\d{3}$/.test(p.cp || '') ? 'PARIS ' + (+String(p.cp).slice(3) % 100) : _anCleVille(p.ville);
@@ -16800,12 +16816,76 @@ async function _anRendre() {
   document.getElementById('an-releve').textContent = _anSLDate
     ? 'SeLoger : ' + _anSLDate.villes + ' villes relevées ' + (_anSLDate.du === _anSLDate.au ? 'le ' + jourFr(_anSLDate.au) : 'du ' + jourFr(_anSLDate.du) + ' au ' + jourFr(_anSLDate.au)) + ' — appartements neufs, tri par prix croissant'
     : 'Aucun relevé SeLoger importé pour le moment';
-  document.getElementById('an-sanslead-box').style.display = sansLead.length && !_anVendeur ? '' : 'none';
-  document.getElementById('an-sanslead').innerHTML = `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Nos annonces trouvées sur SeLoger qui ne correspondent à aucune annonce ayant reçu un lead sur la période : à retravailler ou à couper.</div>` +
-    sansLead.sort((a, b) => a.k.localeCompare(b.k, 'fr') || a.typo.localeCompare(b.typo)).map(s => {
-      const iv = infoVille(s.k), r = (_anStock[s.k] || {})[s.typo];
-      return `<div class="an-vd"><b>${_vEsc(iv.nom)}</b> · ${s.typo}${s.g.surface ? ' · ' + Math.round(s.g.surface) + ' m²' : ''} · ${fmtEur(s.g.prix)} — ${s.g.rang}<sup>e</sup> sur ${s.total}${s.g.cree ? ', créée le ' + new Date(s.g.cree + 'T12:00:00').toLocaleDateString('fr-FR') : ''}${r ? ' · pige dès ' + fmtEur(r.prix_min) : ' · <span class="an-dessus">aucun ' + s.typo + ' dans la pige</span>'}</div>`;
-    }).join('');
+  // ---- Ce qu'il faut faire : retirer, ajuster, créer ----
+  // Règles (proposées le 27/10/2026, à faire évoluer avec Alex) : AN_REGLES plus haut.
+  const R = AN_REGLES;
+  const nomTypo = t => t === 'Maison' ? 'maison' : t;
+  const titre = (k, typo, surf, prix, vendeur) => `${_vEsc(infoVille(k).nom)} · ${typo}${surf ? ' ' + Math.round(surf) + ' m²' : ''}${prix ? ' · ' + fmtEur(prix) : ''}${vendeur ? ' — ' + _vEsc(vendeur) : ''}`;
+  const retirer = [], ajuster = [], creer = [];
+  // Les anciens intitulés (« T3 Rueil-Malmaison Nour ») ont été renommés au format du 23/09 : ignorés ici
+  liste.filter(a => !a.ancien).forEach(a => {
+    const r = reel(a), iv = infoVille(a.kv), jours = Math.round((auj - Date.parse(a.dernier)) / 864e5);
+    if (!r) retirer.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: 0,
+      why: `Aucun ${nomTypo(a.typo)} disponible dans la pige à ${_vEsc(iv.nom)} : les clients qui appellent demandent un bien qu'on ne peut pas leur proposer ici.` });
+    else if (jours > R.silence) retirer.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: 1,
+      why: `Plus aucun lead depuis ${jours} jours (${a.n} sur la période) : si elle est encore en ligne, elle occupe une place pour rien.` });
+    else {
+      const t = (_anSL[a.kv] || {})[a.typo];
+      if (t && t.total && (!a.sl || a.sl.rang > R.rangMauvais)) {
+        const vise = t.top[R.rangVise - 1];
+        ajuster.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: a.n,
+          why: `${a.sl ? a.sl.rang + '<sup>e</sup> sur ' + t.total : 'Introuvable dans les 120 premières sur ' + t.total} en prix croissant sur SeLoger : les clients qui trient par prix ne la voient pas.` +
+            (vise ? ` Pour entrer dans les ${R.rangVise} premières, l'afficher sous <b>${fmtEur(vise.prix)}</b>` : ' La remonter en baissant son prix') +
+            ` (vrai ${a.typo} le moins cher dans la pige : ${fmtEur(r.prix_min)}).` });
+      }
+    }
+  });
+  if (!_anVendeur) sansLead.forEach(s => {
+    const r = (_anStock[s.k] || {})[s.typo];
+    retirer.push({ t: titre(s.k, s.typo, s.g.surface, s.g.prix, ''), p: r ? 2 : 0,
+      why: `En ligne sur SeLoger (${s.g.rang}<sup>e</sup> sur ${s.total} en prix croissant${s.g.cree ? ', créée le ' + jourFr(s.g.cree) : ''}) mais aucun lead sur la période` +
+        (r ? '.' : ` et aucun ${s.typo} dans la pige.`) });
+  });
+  // Demande : villes et typologies citées par tous les leads de la période (avec ou sans annonce)
+  const demande = {};
+  _anTousLeads.forEach(l => {
+    if (String(l.date_lead || '') < depuis || !l.lieu) return;
+    const ty = (_normTypo(l.typologie) || '').replace('T5+', 'T5');
+    new Set(String(l.lieu).split(/\s*,\s*/).map(part => {
+      const cp = (part.match(/\b(\d{5})\b/) || [])[1];
+      if (cp && /^75\d{3}$/.test(cp)) return 'PARIS ' + (+cp.slice(3) % 100);
+      const v = part.replace(/\(?\d{5}\)?/g, '').trim();
+      return v ? _anTrouverVille(v) : null;
+    }).filter(Boolean)).forEach(k => {
+      const d = demande[k] || (demande[k] = { n: 0, typos: {} });
+      d.n++; if (ty) d.typos[ty] = (d.typos[ty] || 0) + 1;
+    });
+  });
+  const dejaLa = new Set(Object.values(annonces).map(a => a.kv + '|' + a.typo));
+  Object.entries(_anStock).forEach(([k, typos]) => Object.entries(typos).forEach(([typo, r]) => {
+    if (typo === 'Maison' || r.nb < R.stockMin || dejaLa.has(k + '|' + typo)) return;
+    const t = (_anSL[k] || {})[typo];
+    if (t && t.glr.length) return; // déjà une annonce GLR en ligne (sans lead : elle est dans « à retirer »)
+    const d = demande[k] || { n: 0, typos: {} }, dt = d.typos[typo] || 0;
+    if (dt < R.demandeMin) return;
+    const vise = t && t.top[R.rangCreer - 1];
+    creer.push({ t: `${_vEsc(infoVille(k).nom)} · ${typo}`, p: dt * 3 + Math.min(r.nb, 20) / 5 - (t ? t.total / 50 : 0),
+      why: `${dt} leads cherchaient un ${typo} dans cette ville sur la période${d.n > dt ? ' (' + d.n + ' leads au total pour la ville)' : ''}, et nous n'y avons aucune annonce ${typo}. ` +
+        `La pige a <b>${r.nb} ${typo} disponibles dès ${fmtEur(r.prix_min)}</b>${r.surf_min ? ' (' + Math.round(r.surf_min) + ' m²)' : ''} — ${_vEsc(r.programme_min)}. ` +
+        (!t ? 'Concurrence SeLoger pas encore relevée pour cette ville.' : !t.total ? `Aucune annonce ${typo} neuve sur SeLoger : la place est libre.`
+          : `Sur SeLoger : ${t.total} annonce${t.total > 1 ? 's' : ''} ${typo}, la moins chère à ${fmtEur(t.top[0].prix)}${vise ? ` ; pour être dans les ${R.rangCreer} premières, afficher moins de <b>${fmtEur(vise.prix)}</b>` : ''}.`) });
+  }));
+  retirer.sort((a, b) => a.p - b.p); ajuster.sort((a, b) => b.p - a.p); creer.sort((a, b) => b.p - a.p);
+  const bloc = (nom, cls, items, vide, note) => `<div class="an-act ${cls}"><h4>${nom} <span>${items.length}</span></h4>` +
+    (note ? `<div class="an-act-note">${note}</div>` : '') +
+    (items.length ? items.slice(0, R.maxListe).map(x => `<div class="an-it"><b>${x.t}</b><div>${x.why}</div></div>`).join('') +
+      (items.length > R.maxListe ? `<div class="an-act-note">… et ${items.length - R.maxListe} autres, à voir dans le détail par ville ci-dessous.</div>` : '')
+      : `<div class="an-act-note">${vide}</div>`) + `</div>`;
+  document.getElementById('an-faire').innerHTML = `<div class="an-h">Ce qu'il faut faire</div><div class="an-faire-grid">` +
+    bloc('À retirer', 'an-act-ret', retirer, 'Rien à retirer.', 'Annonces qui ne servent à rien ou qui promettent un bien que nous n\'avons pas.') +
+    bloc('À créer', 'an-act-cre', creer, 'Aucune ville ne réunit demande et stock sans annonce de notre part.', 'Villes où les clients cherchent, où les promoteurs ont du stock, et où nous ne sommes pas.' + (_anVendeur ? ' Pour toute l\'équipe.' : '')) +
+    bloc('À ajuster', 'an-act-aju', ajuster, _anSLDate ? 'Nos annonces sont bien placées sur SeLoger.' : 'Il faut un relevé SeLoger pour savoir où nos annonces sont placées.', 'Annonces utiles mais mal placées quand le client trie par prix.') +
+    `</div><div class="an-regles">Règles utilisées : retirer si aucun lot de la typologie dans la pige, ou si aucun lead depuis ${R.silence} jours, ou si l'annonce est en ligne sans aucun lead ; les anciens intitulés (avant le 23/09) ne sont pas pris en compte ; ajuster si l'annonce est au-delà de la ${R.rangMauvais}<sup>e</sup> place en prix croissant ; créer si au moins ${R.demandeMin} leads ont cherché cette typologie dans la ville sur la période, au moins ${R.stockMin} lots disponibles dans la pige, et aucune annonce de notre part.</div>`;
 
   // Intitulés illisibles
   const il =Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).sort((a, b) => b.n - a.n);
