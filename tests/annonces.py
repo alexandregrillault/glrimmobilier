@@ -11,26 +11,29 @@ SORTIE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ICI
 def j(n):
     return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
 
+def lead(lieu, typo, n, ref=None, prix=None, statut='Nouveau', source='SeLoger'):
+    return {'reference_annonce': ref, 'prix_annonce': prix, 'date_lead': j(n), 'statut': statut, 'source': source, 'lieu': lieu, 'typologie': typo}
+# Leads rangés par ville et typologie : premier lieu de la fiche (celui de l'annonce) et première typologie ;
+# à défaut l'intitulé. Les villes et typologies qui suivent sont les critères du client : jamais comptées.
 LEADS = [
-    *[{'reference_annonce': 'Jules T2 - CLAMART - 45 M²', 'prix_annonce': 237000, 'date_lead': j(i), 'statut': 'Suivi' if i % 3 == 0 else 'Sans réponse'} for i in (1, 4, 9, 15, 30)],
-    {'reference_annonce': 'Jules T2 - CLAMART - 45 M² - 237 000 €', 'prix_annonce': 237000, 'date_lead': j(33), 'statut': 'Perdu'},
-    *[{'reference_annonce': 'Anaïs T2 - COLOMBES - 44 M²', 'prix_annonce': 179000, 'date_lead': j(i), 'statut': 'Nouveau'} for i in (2, 3, 10, 20)],
-    {'reference_annonce': 'Alex T3 - PARIS 15E - 75 M²', 'prix_annonce': 837000, 'date_lead': j(5), 'statut': 'Sélections'},
-    {'reference_annonce': 'Jules T2 - SAINT-DENIS PLEYEL - 45 M² - 177 000 €', 'prix_annonce': 177000, 'date_lead': j(25), 'statut': 'Sans réponse'},
-    {'reference_annonce': 'Jules T2 - SAINT-DENIS - 45 M²', 'prix_annonce': 182000, 'date_lead': j(6), 'statut': 'Sans réponse'},
-    {'reference_annonce': 'MTO - T4 - MASSY', 'prix_annonce': 265000, 'date_lead': j(2), 'statut': 'Nouveau'},
-    {'reference_annonce': 'MTO - VELIZY T3', 'prix_annonce': 347000, 'date_lead': j(8), 'statut': 'Nouveau'},
-    {'reference_annonce': 'T3 Rueil-Malmaison Nour', 'prix_annonce': 302000, 'date_lead': j(40), 'statut': 'En veille'},
-    {'reference_annonce': 'Louis T5 - ANNECY - 120 M²', 'prix_annonce': 693000, 'date_lead': j(12), 'statut': 'Nouveau'},
-    {'reference_annonce': 'FLP7', 'prix_annonce': 150000, 'date_lead': j(3), 'statut': 'Nouveau'},
-    {'reference_annonce': 'Anaïs', 'prix_annonce': 161000, 'date_lead': j(50), 'statut': 'Nouveau'},
-    {'reference_annonce': 'Théo T4 - L HAY-LES-ROSES - 84 M²', 'prix_annonce': 337000, 'date_lead': j(70), 'statut': 'Nouveau'},
-    # Historique : une annonce T3 à Nanterre qui a fait 5 leads il y a 2-3 mois (+ 1 ancien lead RAM, à ignorer)
-    *[{'reference_annonce': 'Jules T3 - NANTERRE - 67 M²', 'prix_annonce': 292500, 'date_lead': j(i), 'statut': 'Nouveau', 'source': 'SeLoger'} for i in (75, 78, 80, 85, 88)],
-    {'reference_annonce': 'Jules T3 - NANTERRE - 67 M²', 'prix_annonce': 292500, 'date_lead': j(82), 'statut': 'Nouveau', 'source': 'Ancien lead RAM'},
-    {'reference_annonce': None, 'prix_annonce': None, 'date_lead': j(4), 'statut': 'Nouveau', 'lieu': 'Nanterre 92000, Puteaux 92800', 'typologie': 'Appartement 3 pièces'},
-    {'reference_annonce': '', 'prix_annonce': None, 'date_lead': j(9), 'statut': 'Nouveau', 'lieu': 'Nanterre (92000)', 'typologie': 'T3'},
-    {'reference_annonce': None, 'prix_annonce': None, 'date_lead': j(11), 'statut': 'Nouveau', 'lieu': 'Nanterre 92000', 'typologie': '3 pièces'},
+    *[lead('Clamart (92140)', 'Appartement 2 pièces, T2', i, 'Jules T2 - CLAMART - 45 M²', 237000, 'Suivi' if i % 3 == 0 else 'Sans réponse') for i in (1, 4, 9, 15, 30)],
+    lead('Clamart (92140), Meudon 92190', 'Appartement 2 pièces, T3, T4', 33, 'Anaïs', 237000, 'Perdu'),
+    *[lead('Colombes (92700)', 'Appartement 2 pièces', i, 'Anaïs', 179000) for i in (2, 3, 10, 20)],
+    lead('Colombes (92700)', 'Appartement 2 pièces', 6, None, 181000, source='Leboncoin'),
+    lead('Clamart (92140)', 'Appartement 2 pièces', 2, None, 237000, source='Saisie manuelle'),
+    lead('Paris 15ème (75015)', 'Appartement 3 pièces, T3', 5, 'Alex T3 - PARIS 15E - 75 M²', 837000, 'Sélections'),
+    lead(None, None, 25, 'Jules T2 - SAINT-DENIS PLEYEL - 45 M² - 177 000 €', 177000),
+    lead('Saint-Denis (93200)', 'Appartement 2 pièces', 6, 'Théo', 182000),
+    lead('Massy (91300)', 'Appartement 4 pièces', 2, 'MTO - T4 - MASSY', 265000),
+    lead('Vélizy-Villacoublay (78140)', 'Appartement 3 pièces', 8, 'MTO - VELIZY T3', 347000),
+    lead('Rueil-Malmaison (92500)', 'Appartement 3 pièces, T2, T3', 40, 'T3 Rueil-Malmaison Nour', 302000, 'En veille'),
+    lead('Annecy (74000)', 'Appartement 5 pièces, T5+', 12, 'Louis T5 - ANNECY - 120 M²', 693000),
+    lead(None, None, 3, 'FLP7', 150000),
+    lead('Clamart (92140)', None, 3, 'Programme Clamart', None),
+    lead("L'Haÿ-les-Roses (94240)", 'Appartement 4 pièces', 70, 'Théo', 337000),
+    # Historique : 5 leads T3 à Nanterre il y a 2-3 mois (+ 1 ancien lead RAM, à ignorer)
+    *[lead('Nanterre (92000)', 'Appartement 3 pièces', i, 'Jules T3 - NANTERRE - 67 M²', 292500) for i in (75, 78, 80, 85, 88)],
+    lead('Nanterre (92000)', None, 82, None, None, source='Ancien lead RAM'),
 ]
 PIGE = [
     {'ville': 'Clamart', 'cp': '92140', 'lat': 48.80, 'lng': 2.26, 'prix_min': 295000, 'nb_libres': 13, 'source': 'bouygues'},
@@ -100,21 +103,24 @@ with sync_playwright() as p:
         page.wait_for_selector('.an-act', timeout=15000)
         page.wait_for_timeout(1500)
         texte = norm(page.text_content('#page-gerant-annonces'))
-        for attendu in ('Clamart', 'Saint-Denis', 'FLP7', 'Madina', 'Vélizy-Villacoublay', 'Paris 15e',
-                        '4 villes relevées du ' + datetime.date.fromisoformat(j(3)).strftime('%d/%m/%Y') + ' au ' + datetime.date.fromisoformat(j(1)).strftime('%d/%m/%Y'), 'Aucun T2 disponible dans la pige à Saint-Denis', 'En ligne sur SeLoger (15e sur 97 en prix croissant', 'Antony · T2 45 m² · 237 000 €',
-                        'Introuvable dans les 120 premières sur 40', 'Nanterre · T3', 'Nos anciennes annonces T3 ici ont fait 5 leads', '8 T3 disponibles dès 290 000 €',
-                        'Concurrence SeLoger pas encore relevée pour cette ville', "Comment c'est calculé", 'pas de T2 dans la pige', 'en ligne, aucun lead', 'hors des 120', '5 leads avant · 8 lots', 'Clamart · T3', '20 concurrents · 12 lots', 'pour être dans les 3 premières il faut moins de 310 000 €'):
+        for attendu in ('19 leads reçus (SeLoger et Leboncoin) dans 8 villes sur les 60 derniers jours · 1 sans ville lisible',
+                        'Saint-Denis · T2', '2 leads · pas de T2 dans la pige', 'Massy · T4', 'Vélizy-Villacoublay · T3', 'Annecy · T5', 'Rueil-Malmaison · T3',
+                        'Antony · T2 · 237 000 €', 'en ligne, aucun lead', 'En ligne sur SeLoger (15e sur 97 en prix croissant',
+                        'Colombes · T2', 'hors des 120', 'Notre annonce est introuvable dans les 120 premières sur 40',
+                        'Nanterre · T3', '5 leads avant · 8 lots', 'Nous avons reçu 5 leads T3 ici', '8 T3 disponibles dès 290 000 €',
+                        'Concurrence SeLoger pas encore relevée pour cette ville', 'Clamart · T3', '20 concurrents · 12 lots',
+                        'pour être dans les 3 premières il faut moins de 310 000 €', "Comment c'est calculé", 'Leads non rangés (1)', 'FLP7',
+                        '4 villes relevées du ' + datetime.date.fromisoformat(j(3)).strftime('%d/%m/%Y') + ' au ' + datetime.date.fromisoformat(j(1)).strftime('%d/%m/%Y')):
             if attendu not in texte: erreurs.append(f'{nom} : « {attendu} » absent')
-        if 'Rueil-Malmaison · T3 · 302 000 € — Nour' in texte: erreurs.append(f'{nom} : ancien intitulé proposé au retrait')
-        if 'ANCIEN RELEVE' in texte: erreurs.append(f'{nom} : ancien relevé de Clamart affiché')
-        if 'Théo' in texte: erreurs.append(f'{nom} : lead de plus de 60 jours compté')
+        for absent in ('Meudon', 'ANCIEN RELEVE', 'Haÿ', 'Clamart · T2'):
+            if absent in texte: erreurs.append(f'{nom} : « {absent} » ne devrait pas apparaître')
         if not page.is_visible('#an-faire') or page.is_visible('#an-carte'): erreurs.append(f'{nom} : onglet « À faire » pas affiché par défaut')
         page.screenshot(path=str(SORTIE / f'annonces_{nom}_faire.png'), full_page=False)
         page.evaluate("anOnglet('annonces')"); page.wait_for_timeout(800)
         nb = page.evaluate("document.querySelectorAll('#an-carte .leaflet-interactive').length")
         if nb < 10: erreurs.append(f'{nom} : {nb} ronds sur la carte (nos annonces + offre promoteurs)')
         cl = norm(page.text_content('#an-villes'))
-        if 'les villes qui rapportent le plus de leads' not in cl or not re.search(r'Clamart\s*6 leads', cl): erreurs.append(f'{nom} : classement « nos annonces » ' + cl[:120])
+        if 'les villes qui en reçoivent le plus' not in cl or not re.search(r'Clamart\s*7 leads', cl): erreurs.append(f'{nom} : classement « nos annonces » ' + cl[:120])
         page.evaluate("anCouche('ecart')"); page.wait_for_timeout(400)
         cl = norm(page.text_content('#an-villes'))
         if not re.search(r'Clamart\s*SeLoger 32 % moins cher', cl) or 'Colombes' not in cl: erreurs.append(f'{nom} : classement « écart » ' + cl[:160])
@@ -124,11 +130,9 @@ with sync_playwright() as p:
         for k in ('CLAMART', 'COLOMBES', 'MASSY', 'PARIS 15'):
             page.evaluate(f"anVille('{k}')"); page.wait_for_timeout(300)
             fiches += norm(page.text_content('#an-villes')) + ' | '
-        for attendu in ('Pige : 2 programmes, 21 lots disponibles, dès 295 000 €', '6 leads', 'Aucun stock dans la pige',
-                        'Pige : 11 T2 dispo, dès 315 000 € (35 m²)', 'annonce -25 %', 'annonce +5 %', 'annonce -24 %',
-                        'Aucun T4 disponible dans la pige', 'notre annonce 6e sur 59 en prix croissant', 'la moins chère 172 000 € (CABINET 1)',
-                        'top 5 sous 180 000 €', 'introuvable dans les 120 premières (40 annonces)', 'aucune annonce T4 neuve dans la ville',
-                        '11 lotsdès 315 000 €', '59 annoncesdès 172 000 €', '-45 %', '-19 %', '-12 %'):
+        for attendu in ('Pige : 2 programmes, 21 lots disponibles, dès 295 000 €', '7 leads reçus sur 60 j', 'Non précisée\n        1 lead', 'Aucun stock dans la pige',
+                        '6 leadsdernier ', ', 3 qualifiés', 'annonces à 237 000 €', '11 lotsdès 315 000 €', '59 annoncesdès 172 000 €la nôtre 6e',
+                        '-45 %', '-19 %', '-12 %', '5 leadsdernier ', 'annonces à 179 000 € à 181 000 €', '1 leaddernier '):
             if attendu not in fiches: erreurs.append(f'{nom} : fiche ville, « {attendu} » absent')
         page.evaluate("anVille('CLAMART')"); page.wait_for_timeout(300)
         large = page.evaluate('document.documentElement.scrollWidth')
@@ -148,7 +152,7 @@ with sync_playwright() as p:
             f.unlink()
             page.evaluate("anVille(''); anTypo('T3')"); page.wait_for_timeout(300)
             cl = norm(page.text_content('#an-villes'))
-            if 'Colombes' in cl or 'Clamart' not in cl: erreurs.append('filtre typologie inopérant : ' + cl[:160])
+            if 'Colombes' in cl or 'SeLoger 19 % moins cher' not in cl: erreurs.append('filtre typologie inopérant : ' + cl[:160])
         page.close()
     nav.close()
 
