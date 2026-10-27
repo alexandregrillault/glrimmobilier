@@ -16529,10 +16529,9 @@ function _gvRender() {
 // SeLoger sans mandat ou à demander).
 const AN_VENDEURS = { ANAIS: 'Anaïs', THEO: 'Théo', JULES: 'Jules', ALEX: 'Alex', LOUIS: 'Louis', FABIEN: 'Fabien', NOUR: 'Nour', MADINA: 'Madina', MTO: 'Madina', FLP: 'Fabien' };
 // Règles du bloc « Ce qu'il faut faire » (seuils proposés le 27/10/2026, à ajuster avec Alex)
-const AN_REGLES = { silence: 21, rangMauvais: 10, rangVise: 5, rangCreer: 3, stockMin: 3, demandeMin: 3, maxListe: 6 };
+const AN_REGLES = { silence: 21, rangMauvais: 10, rangVise: 5, rangCreer: 3, stockMin: 3, histoMin: 5, concMin: 15, maxListe: 6 };
 const AN_QUALIFIES = ['Suivi', 'Sélections', 'Retour documentation', 'Finaliser la vente', 'Vendu'];
 let _anLeads = null, _anPige = null, _anStock = {}, _anGeo = {};
-let _anTousLeads = [];
 let _anSL = {}, _anSLDate = null; // dernier relevé SeLoger : _anSL[ville][typo] = {total, top, glr}
 let _anPeriode = 60, _anVendeur = '', _anVille = '';
 let _anCarte = null, _anCouche = null;
@@ -16568,9 +16567,10 @@ function _anLire(ref) {
 // Rattache une ville d'intitulé à la pige : exacte, puis en retirant les mots
 // de fin (« SAINT-DENIS PLEYEL » → Saint-Denis).
 function _anTrouverVille(v) {
-  let k = _anCleVille(v);
+  let k = _anNorm(v);
   while (k) {
-    if (_anPige && _anPige[k]) return k;
+    const c = _anCleVille(k);
+    if (_anPige && _anPige[c]) return c;
     if (!k.includes(' ')) break;
     k = k.slice(0, k.lastIndexOf(' '));
   }
@@ -16617,7 +16617,7 @@ async function loadAnnonces(force) {
     const depuis = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
     try {
       const [leads, progs, stock] = await Promise.all([
-        _sbTout(SUPABASE_URL + '/rest/v1/contacts?select=reference_annonce,prix_annonce,date_lead,statut,lieu,typologie&date_lead=gte.' + depuis + '&order=date_lead.desc', h),
+        _sbTout(SUPABASE_URL + '/rest/v1/contacts?select=reference_annonce,prix_annonce,date_lead,statut,source&reference_annonce=not.is.null&order=date_lead.desc', h), // tout l'historique : « À créer » s'en sert
         _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=ville,cp,lat,lng,prix_min,nb_libres,source', h),
         _sbTout(SUPABASE_URL + '/rest/v1/rpc/annonces_stock', h)
       ]);
@@ -16645,7 +16645,6 @@ async function loadAnnonces(force) {
         });
       }
       _anLeads = leads.filter(l => String(l.reference_annonce || '').trim());
-      _anTousLeads = leads; // ville et typologie recherchées, pour mesurer la demande
       _anPige = {};
       progs.filter(p => p.source !== 'picking' && p.source !== 'nomandat').forEach(p => {
         const k = /^75\d{3}$/.test(p.cp || '') ? 'PARIS ' + (+String(p.cp).slice(3) % 100) : _anCleVille(p.ville);
@@ -16861,34 +16860,39 @@ async function _anRendre() {
       why: `En ligne sur SeLoger (${s.g.rang}<sup>e</sup> sur ${s.total} en prix croissant${s.g.cree ? ', créée le ' + jourFr(s.g.cree) : ''}) mais aucun lead sur la période` +
         (r ? '.' : ` et aucun ${s.typo} dans la pige.`) });
   });
-  // Demande : villes et typologies citées par tous les leads de la période (avec ou sans annonce)
-  const demande = {};
-  _anTousLeads.forEach(l => {
-    if (String(l.date_lead || '') < depuis || !l.lieu) return;
-    const ty = (_normTypo(l.typologie) || '').replace('T5+', 'T5');
-    new Set(String(l.lieu).split(/\s*,\s*/).map(part => {
-      const cp = (part.match(/\b(\d{5})\b/) || [])[1];
-      if (cp && /^75\d{3}$/.test(cp)) return 'PARIS ' + (+cp.slice(3) % 100);
-      const v = part.replace(/\(?\d{5}\)?/g, '').trim();
-      return v ? _anTrouverVille(v) : null;
-    }).filter(Boolean)).forEach(k => {
-      const d = demande[k] || (demande[k] = { n: 0, typos: {} });
-      d.n++; if (ty) d.typos[ty] = (d.typos[ty] || 0) + 1;
-    });
+  // À créer — décision d'Alex du 27/10/2026 : pas la « ville » des leads (c'est celle de l'annonce
+  // cliquée, donc l'écho de nos propres annonces), mais (1) nos anciennes annonces qui ont bien marché,
+  // tout l'historique hors anciens leads RAM, et (2) la concurrence SeLoger (les cabinets publient
+  // là où ils trouvent des clients). Toujours avec du stock dans la pige et sans annonce de notre part.
+  const histo = {};
+  _anLeads.forEach(l => {
+    if (/ancien lead ram/i.test(l.source || '')) return;
+    // Lecture souple : les anciens intitulés aux initiales inconnues (« T5 Paris 18éme LGL ») comptent aussi
+    const m = String(l.reference_annonce || '').trim().match(/^T(\d)\s+(.+)$/i);
+    const a = _anLire(l.reference_annonce) || (m && { typo: 'T' + m[1], ville: m[2] });
+    if (!a) return;
+    const kv = _anTrouverVille(a.ville);
+    if (!_anPige[kv]) return;
+    const k = kv + '|' + a.typo, h = histo[k] || (histo[k] = { n: 0, dernier: '' });
+    h.n++; if (String(l.date_lead) > h.dernier) h.dernier = String(l.date_lead).slice(0, 10);
   });
   const dejaLa = new Set(Object.values(annonces).map(a => a.kv + '|' + a.typo));
   Object.entries(_anStock).forEach(([k, typos]) => Object.entries(typos).forEach(([typo, r]) => {
     if (typo === 'Maison' || r.nb < R.stockMin || dejaLa.has(k + '|' + typo)) return;
     const t = (_anSL[k] || {})[typo];
     if (t && t.glr.length) return; // déjà une annonce GLR en ligne (sans lead : elle est dans « à retirer »)
-    const d = demande[k] || { n: 0, typos: {} }, dt = d.typos[typo] || 0;
-    if (dt < R.demandeMin) return;
+    const h = histo[k + '|' + typo] || { n: 0 };
+    const conc = t ? t.total : 0;
+    const okHisto = h.n >= R.histoMin, okConc = conc >= R.concMin;
+    if (!okHisto && !okConc) return;
     const vise = t && t.top[R.rangCreer - 1];
-    creer.push({ t: `${_vEsc(infoVille(k).nom)} · ${typo}`, p: dt * 3 + Math.min(r.nb, 20) / 5 - (t ? t.total / 50 : 0), tag: `${dt} leads · ${r.nb} lots dès ${fmtEur(r.prix_min)}`,
-      why: `${dt} leads cherchaient un ${typo} dans cette ville sur la période${d.n > dt ? ' (' + d.n + ' leads au total pour la ville)' : ''}, et nous n'y avons aucune annonce ${typo}. ` +
-        `La pige a <b>${r.nb} ${typo} disponibles dès ${fmtEur(r.prix_min)}</b>${r.surf_min ? ' (' + Math.round(r.surf_min) + ' m²)' : ''} — ${_vEsc(r.programme_min)}. ` +
-        (!t ? 'Concurrence SeLoger pas encore relevée pour cette ville.' : !t.total ? `Aucune annonce ${typo} neuve sur SeLoger : la place est libre.`
-          : `Sur SeLoger : ${t.total} annonce${t.total > 1 ? 's' : ''} ${typo}, la moins chère à ${fmtEur(t.top[0].prix)}${vise ? ` ; pour être dans les ${R.rangCreer} premières, afficher moins de <b>${fmtEur(vise.prix)}</b>` : ''}.`) });
+    creer.push({ t: `${_vEsc(infoVille(k).nom)} · ${typo}`, p: h.n * 2 + conc / 5 + Math.min(r.nb, 20) / 5,
+      tag: [okHisto ? h.n + ' leads avant' : '', okConc ? conc + ' concurrents' : '', r.nb + ' lots'].filter(Boolean).join(' · '),
+      why: (okHisto ? `Nos anciennes annonces ${typo} ici ont fait <b>${h.n} leads</b> (le dernier le ${jourFr(h.dernier)}), et nous n'en avons plus. ` : '') +
+        (!t ? 'Concurrence SeLoger pas encore relevée pour cette ville. '
+          : !t.total ? `Aucune annonce ${typo} neuve sur SeLoger : la place est libre. `
+          : `Sur SeLoger, <b>${t.total} annonce${t.total > 1 ? 's' : ''} ${typo}</b>${okConc ? ' : les cabinets y trouvent des clients' : ''} ; la moins chère à ${fmtEur(t.top[0].prix)}${vise ? `, pour être dans les ${R.rangCreer} premières il faut moins de <b>${fmtEur(vise.prix)}</b>` : ''}. `) +
+        `La pige a <b>${r.nb} ${typo} disponibles dès ${fmtEur(r.prix_min)}</b>${r.surf_min ? ' (' + Math.round(r.surf_min) + ' m²)' : ''} — ${_vEsc(r.programme_min)}.` });
   }));
   retirer.sort((a, b) => a.p - b.p); ajuster.sort((a, b) => b.p - a.p); creer.sort((a, b) => b.p - a.p);
   const bloc = (nom, cls, items, vide, note) => `<div class="an-act ${cls}${items.length <= R.maxListe ? ' tout' : ''}"><h4>${nom} <span>${items.length}</span></h4>` +
@@ -16898,9 +16902,9 @@ async function _anRendre() {
       : `<div class="an-act-note">${vide}</div>`) + `</div>`;
   document.getElementById('an-faire').innerHTML = `<div class="an-faire-grid">` +
     bloc('À retirer', 'an-act-ret', retirer, 'Rien à retirer.', 'Elles ne rapportent rien, ou promettent un bien que nous n\'avons pas.') +
-    bloc('À créer', 'an-act-cre', creer, 'Rien à créer pour le moment.', 'Demande, stock dans la pige, et aucune annonce de notre part.' + (_anVendeur ? ' Pour toute l\'équipe.' : '')) +
+    bloc('À créer', 'an-act-cre', creer, 'Rien à créer pour le moment.', 'Ce qui a déjà marché chez nous ou attire les cabinets, avec du stock dans la pige.' + (_anVendeur ? ' Pour toute l\'équipe.' : '')) +
     bloc('À ajuster', 'an-act-aju', ajuster, _anSLDate ? 'Nos annonces sont bien placées sur SeLoger.' : 'Il faut un relevé SeLoger pour le savoir.', 'Mal placées quand le client trie par prix.') +
-    `</div><details class="an-regles"><summary>Comment c'est calculé</summary>Retirer : aucun lot de la typologie dans la pige, aucun lead depuis ${R.silence} jours, ou en ligne sur SeLoger sans aucun lead. Ajuster : au-delà de la ${R.rangMauvais}<sup>e</sup> place en prix croissant sur SeLoger. Créer : au moins ${R.demandeMin} leads ont cherché cette typologie dans la ville sur la période, au moins ${R.stockMin} lots dans la pige, aucune annonce de notre part. Les anciens intitulés (avant le 23/09) ne comptent pas. Touchez une ligne pour lire l'explication.</details>`;
+    `</div><details class="an-regles"><summary>Comment c'est calculé</summary>Retirer : aucun lot de la typologie dans la pige, aucun lead depuis ${R.silence} jours, ou en ligne sur SeLoger sans aucun lead. Ajuster : au-delà de la ${R.rangMauvais}<sup>e</sup> place en prix croissant sur SeLoger. Créer : nos anciennes annonces de cette typologie dans la ville ont fait au moins ${R.histoMin} leads (anciens leads RAM exclus), ou au moins ${R.concMin} annonces concurrentes sur SeLoger ; avec au moins ${R.stockMin} lots dans la pige et aucune annonce de notre part. Les anciens intitulés (avant le 23/09) ne comptent pas. Touchez une ligne pour lire l'explication.</details>`;
 
   // Intitulés illisibles
   const il =Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).sort((a, b) => b.n - a.n);

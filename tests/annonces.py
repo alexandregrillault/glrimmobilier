@@ -25,7 +25,9 @@ LEADS = [
     {'reference_annonce': 'FLP7', 'prix_annonce': 150000, 'date_lead': j(3), 'statut': 'Nouveau'},
     {'reference_annonce': 'Anaïs', 'prix_annonce': 161000, 'date_lead': j(50), 'statut': 'Nouveau'},
     {'reference_annonce': 'Théo T4 - L HAY-LES-ROSES - 84 M²', 'prix_annonce': 337000, 'date_lead': j(70), 'statut': 'Nouveau'},
-    # Demande sans annonce : deux leads qui cherchent un T3 à Nanterre
+    # Historique : une annonce T3 à Nanterre qui a fait 5 leads il y a 2-3 mois (+ 1 ancien lead RAM, à ignorer)
+    *[{'reference_annonce': 'Jules T3 - NANTERRE - 67 M²', 'prix_annonce': 292500, 'date_lead': j(i), 'statut': 'Nouveau', 'source': 'SeLoger'} for i in (75, 78, 80, 85, 88)],
+    {'reference_annonce': 'Jules T3 - NANTERRE - 67 M²', 'prix_annonce': 292500, 'date_lead': j(82), 'statut': 'Nouveau', 'source': 'Ancien lead RAM'},
     {'reference_annonce': None, 'prix_annonce': None, 'date_lead': j(4), 'statut': 'Nouveau', 'lieu': 'Nanterre 92000, Puteaux 92800', 'typologie': 'Appartement 3 pièces'},
     {'reference_annonce': '', 'prix_annonce': None, 'date_lead': j(9), 'statut': 'Nouveau', 'lieu': 'Nanterre (92000)', 'typologie': 'T3'},
     {'reference_annonce': None, 'prix_annonce': None, 'date_lead': j(11), 'statut': 'Nouveau', 'lieu': 'Nanterre 92000', 'typologie': '3 pièces'},
@@ -38,12 +40,14 @@ PIGE = [
     {'ville': 'Paris', 'cp': '75015', 'lat': 48.84, 'lng': 2.30, 'prix_min': 600000, 'nb_libres': 4, 'source': 'cogedim'},
     {'ville': 'Saint-Denis', 'cp': '93200', 'lat': 48.93, 'lng': 2.36, 'prix_min': 199000, 'nb_libres': 31, 'source': 'vinci'},
     {'ville': 'Massy', 'cp': '91300', 'lat': 48.73, 'lng': 2.28, 'prix_min': 240000, 'nb_libres': 0, 'source': 'kaufman'},
+    {'ville': 'Nanterre', 'cp': '92000', 'lat': 48.89, 'lng': 2.21, 'prix_min': 290000, 'nb_libres': 8, 'source': 'vinci'},
     {'ville': 'Rueil-Malmaison', 'cp': '92500', 'lat': 48.88, 'lng': 2.19, 'prix_min': 320000, 'nb_libres': 6, 'source': 'ogic'},
 ]
 STOCK = [
     {'cle': 'Clamart', 'ville': 'Clamart', 'cp': '92140', 'type': 'Appartement', 'typo': 'T2', 'nb': 11, 'prix_min': 315000, 'prix_med': 355000, 'surf_min': 35.45, 'programme_min': "Victor's Square (Les Nouveaux Constructeurs)"},
     {'cle': 'Colombes', 'ville': 'Colombes', 'cp': '92700', 'type': 'Appartement', 'typo': 'T2', 'nb': 5, 'prix_min': 170000, 'prix_med': 230000, 'surf_min': 40, 'programme_min': 'Test (Nexity)'},
     {'cle': 'Nanterre', 'ville': 'Nanterre', 'cp': '92000', 'type': 'Appartement', 'typo': 'T3', 'nb': 8, 'prix_min': 290000, 'prix_med': 310000, 'surf_min': 62, 'programme_min': 'Test Nanterre (Vinci)'},
+    {'cle': 'Clamart', 'ville': 'Clamart', 'cp': '92140', 'type': 'Appartement', 'typo': 'T3', 'nb': 12, 'prix_min': 360000, 'prix_med': 380000, 'surf_min': 60.31, 'programme_min': 'Opalya (Bouygues Immobilier)'},
     {'cle': 'PARIS 15', 'ville': 'Paris', 'cp': '75015', 'type': 'Appartement', 'typo': 'T3', 'nb': 3, 'prix_min': 1100000, 'prix_med': 1200000, 'surf_min': 70.19, 'programme_min': '15Ème Merveille (Bouygues Immobilier)'},
 ]
 def sl(cle, typo, total, rang, prix, ann, glr=False, releve=None):
@@ -53,6 +57,7 @@ SELOGER = [sl('Clamart', 'T2', 59, r, 170000 + r * 2000, 'CABINET %d' % r) for r
     sl('Colombes', 'T2', 40, 1, 150000, 'ELIXIUM'),
     sl('Antony', 'T2', 97, 15, 237000, 'GLR IMMOBILIER', True),
     sl('Massy', 'T4', 0, None, None, None, releve=j(3)),
+    *[sl('Clamart', 'T3', 20, r, 280000 + r * 10000, 'CABINET T3 %d' % r) for r in (1, 2, 3)],
     sl('Clamart', 'T2', 80, 1, 99000, 'ANCIEN RELEVE', releve=j(3)),
 ]
 GEO = {'VELIZY': {'nom': 'Vélizy-Villacoublay', 'centre': {'coordinates': [2.19, 48.78]}, 'codeDepartement': '78'},
@@ -101,8 +106,8 @@ with sync_playwright() as p:
                         'notre annonce 6e sur 59 en prix croissant', 'la moins chère 172 000 € (CABINET 1)', 'top 5 sous 180 000 €',
                         'introuvable dans les 120 premières (40 annonces)', 'aucune annonce T4 neuve dans la ville',
                         '4 villes relevées du ' + datetime.date.fromisoformat(j(3)).strftime('%d/%m/%Y') + ' au ' + datetime.date.fromisoformat(j(1)).strftime('%d/%m/%Y'), 'Aucun T2 disponible dans la pige à Saint-Denis', 'En ligne sur SeLoger (15e sur 97 en prix croissant', 'Antony · T2 45 m² · 237 000 €',
-                        'Introuvable dans les 120 premières sur 40', 'Nanterre · T3', '3 leads cherchaient un T3 dans cette ville sur la période', '8 T3 disponibles dès 290 000 €',
-                        'Concurrence SeLoger pas encore relevée pour cette ville', "Comment c'est calculé", 'pas de T2 dans la pige', 'en ligne, aucun lead', 'hors des 120', '3 leads · 8 lots dès 290 000 €'):
+                        'Introuvable dans les 120 premières sur 40', 'Nanterre · T3', 'Nos anciennes annonces T3 ici ont fait 5 leads', '8 T3 disponibles dès 290 000 €',
+                        'Concurrence SeLoger pas encore relevée pour cette ville', "Comment c'est calculé", 'pas de T2 dans la pige', 'en ligne, aucun lead', 'hors des 120', '5 leads avant · 8 lots', 'Clamart · T3', '20 concurrents · 12 lots', 'pour être dans les 3 premières il faut moins de 310 000 €'):
             if attendu not in texte: erreurs.append(f'{nom} : « {attendu} » absent')
         if 'Rueil-Malmaison · T3 · 302 000 € — Nour' in texte: erreurs.append(f'{nom} : ancien intitulé proposé au retrait')
         if 'ANCIEN RELEVE' in texte: erreurs.append(f'{nom} : ancien relevé de Clamart affiché')
