@@ -3956,21 +3956,27 @@ function _mkFiscTags(fisc) {
 
 // ------------------------------------------------------------
 //  VIDÉOS « QUOI DE NEUF » (27/10/2026) — table qdn_videos, gérants seulement.
-//  « Vidéo du lundi » : programme de l'épisode du lundi qui vient, puis un focus par jour
-//  (mardi, mercredi, jeudi) dans l'ordre de passage. « Bonus » : vidéo en plus, postée le
-//  vendredi de la semaine en cours. Lu aussi par le rappel du matin et le skill qdn-propositions.
+//  « Vidéo du dimanche » : programme de l'épisode du dimanche qui vient (19 h), puis un focus
+//  par jour (lundi, mardi, mercredi, 18 h 30) dans l'ordre de passage. « Bonus » : vidéo en plus,
+//  postée le jeudi. Décision d'Alex du 27/10/2026. En base, type 'lundi' (nom d'origine) = épisode,
+//  et semaine = le lundi du premier focus (épisode la veille). Lu aussi par le rappel du matin
+//  et le skill qdn-propositions.
 // ------------------------------------------------------------
 let _qdn = [];
-const QDN_JOURS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'];
+const QDN_JOURS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const QDN_STATUTS = { a_faire: 'À faire', faite: 'Faite', postee: 'Postée' };
 function _qdnIso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function _qdnPlus(iso, j) { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + j); return d; }
-// Lundi de la semaine en cours (bonus) et lundi qui vient (épisode en préparation ; coché un lundi → le suivant).
+// cur = semaine des focus en cours (le dimanche, c'est déjà celle qui commence demain) ;
+// next = semaine dont l'épisode est en préparation (coché un dimanche → le dimanche suivant) ;
+// bonus = semaine du prochain jeudi (vendredi et samedi : celui de la semaine suivante).
 function _qdnLundis() {
   const t = new Date(); t.setHours(12, 0, 0, 0);
-  const cur = new Date(t); cur.setDate(t.getDate() - (t.getDay() + 6) % 7);
-  return { cur: _qdnIso(cur), next: _qdnIso(_qdnPlus(_qdnIso(cur), 7)) };
+  const lun = new Date(t); lun.setDate(t.getDate() - (t.getDay() + 6) % 7);
+  const cur = _qdnIso(_qdnPlus(_qdnIso(lun), t.getDay() === 0 ? 7 : 0)), next = _qdnIso(_qdnPlus(cur, 7));
+  return { cur, next, bonus: t.getDay() >= 5 ? next : cur };
 }
+function _qdnJour(s, j) { const d = _qdnPlus(s, j); return QDN_JOURS[d.getDay()] + ' ' + _mkDj(_qdnIso(d)); }
 function _qdnH() { return { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' }; }
 async function qdnCharger() {
   try {
@@ -3988,7 +3994,7 @@ async function _mkRecents(d) {
     d.lancements.forEach(l => { if (der[l.id] && der[l.id] > (l.date || '')) l.recent = der[l.id]; });
   } catch (e) { /* on garde la date du rapport */ }
 }
-function _qdnTrouve(pid, type) { const L = _qdnLundis(); return _qdn.find(v => v.programme_id === pid && v.type === type && v.semaine === (type === 'lundi' ? L.next : L.cur)); }
+function _qdnTrouve(pid, type) { const L = _qdnLundis(); return _qdn.find(v => v.programme_id === pid && v.type === type && v.semaine === (type === 'lundi' ? L.next : L.bonus)); }
 // Pas de vidéo pour un programme livré, sans logement libre ou plus sur l'extranet.
 function _qdnEligible(l) {
   const p = l.p; if (!p || !(p.libres > 0)) return false;
@@ -3998,7 +4004,7 @@ function _qdnEligible(l) {
 function _qdnBoutons(l) {
   if (!_qdnEligible(l)) return '<div class="mk-video"><small>Pas de vidéo : livré ou sans logement libre</small></div>';
   const b = (type, lib) => { const v = _qdnTrouve(l.id, type); return '<button class="btn btn-sm ' + (v ? 'btn-primary' : 'btn-ghost') + '" onclick="qdnBasculer(\'' + _esc(l.id) + '\',\'' + type + '\')">' + (v ? '✓ ' : '') + lib + '</button>'; };
-  return '<div class="mk-video">' + b('lundi', 'Vidéo du lundi') + b('bonus', 'Bonus') + '</div>';
+  return '<div class="mk-video">' + b('lundi', 'Vidéo du dimanche') + b('bonus', 'Bonus') + '</div>';
 }
 async function qdnBasculer(pid, type) {
   const v = _qdnTrouve(pid, type), L = _qdnLundis();
@@ -4009,12 +4015,12 @@ async function qdnBasculer(pid, type) {
       toast('Retiré des vidéos');
     } else {
       const l = (_mk && _mk.lancements || []).find(x => x.id === pid) || {}, p = l.p || {};
-      const semaine = type === 'lundi' ? L.next : L.cur;
+      const semaine = type === 'lundi' ? L.next : L.bonus;
       const ordre = 1 + Math.max(0, ..._qdn.filter(x => x.semaine === semaine && x.type === type).map(x => x.ordre));
       const r = await fetch(SUPABASE_URL + '/rest/v1/qdn_videos', { method: 'POST', headers: _qdnH(),
         body: JSON.stringify({ programme_id: pid, nom: l.nom || p.nom, ville: l.ville || p.ville, promoteur: l.promoteur || p.promoteur, type, semaine, ordre }) });
       if (!r.ok) throw new Error();
-      toast(type === 'lundi' ? 'Ajouté à l’épisode du lundi ' + _mkDj(semaine) : 'Ajouté en bonus, vendredi ' + _mkDj(_qdnIso(_qdnPlus(semaine, 4))));
+      toast(type === 'lundi' ? 'Ajouté à l’épisode du ' + _qdnJour(semaine, -1).toLowerCase() : 'Ajouté en bonus, ' + _qdnJour(semaine, 3).toLowerCase());
     }
   } catch (e) { toast('Enregistrement impossible', 'var(--danger)'); }
   await qdnCharger(); renderMarche();
@@ -4048,26 +4054,27 @@ function _qdnBandeau() {
   const st = v => '<button class="btn btn-ghost btn-sm" title="Changer l’état" onclick="qdnStatut(\'' + v.id + '\')">' + QDN_STATUTS[v.statut] + '</button>';
   const retirer = v => '<button class="btn btn-ghost btn-sm" onclick="qdnRetirer(\'' + v.id + '\')">Retirer</button>';
   const de = (s, t) => _qdn.filter(v => v.semaine === s && v.type === t).sort((a, b) => a.ordre - b.ordre);
-  const jour = (s, j) => QDN_JOURS[j] + ' ' + _mkDj(_qdnIso(_qdnPlus(s, j)));
-  // Cette semaine : l'épisode de lundi, les focus, les bonus du vendredi.
+  const jour = _qdnJour;
+  // Cette semaine : l'épisode du dimanche, les focus du lundi au mercredi, les bonus du jeudi.
   const cl = de(L.cur, 'lundi'), cb = de(L.cur, 'bonus');
   let c1 = '';
   if (cl.length) {
-    c1 += '<div class="qdn-l"><span class="qdn-j">' + jour(L.cur, 0) + '</span><span class="qdn-t">Épisode récap : ' + cl.map(v => _esc(v.nom || v.programme_id)).join(', ') + '</span></div>';
-    c1 += cl.map((v, i) => '<div class="qdn-l"><span class="qdn-j">' + (i < 3 ? jour(L.cur, i + 1) : 'Jour à fixer') + '</span><span class="qdn-t">Focus ' + nom(v) + '</span>' + st(v) + '</div>').join('');
+    c1 += '<div class="qdn-l"><span class="qdn-j">' + jour(L.cur, -1) + '</span><span class="qdn-t">Épisode récap : ' + cl.map(v => _esc(v.nom || v.programme_id)).join(', ') + '</span></div>';
+    c1 += cl.map((v, i) => '<div class="qdn-l"><span class="qdn-j">' + (i < 3 ? jour(L.cur, i) : 'Jour à fixer') + '</span><span class="qdn-t">Focus ' + nom(v) + '</span>' + st(v) + '</div>').join('');
   }
-  c1 += cb.map(v => '<div class="qdn-l"><span class="qdn-j">' + jour(L.cur, 4) + '</span><span class="qdn-t">Bonus ' + nom(v) + '</span>' + st(v) + retirer(v) + '</div>').join('');
-  if (!c1) c1 = '<div class="qdn-vide">Rien de prévu cette semaine. Un « Bonus » coché sur une carte part vendredi.</div>';
-  // Lundi qui vient : la sélection en cours, dans l'ordre de passage.
-  const nl = de(L.next, 'lundi');
+  c1 += cb.map(v => '<div class="qdn-l"><span class="qdn-j">' + jour(v.semaine, 3) + '</span><span class="qdn-t">Bonus ' + nom(v) + '</span>' + st(v) + retirer(v) + '</div>').join('');
+  if (!c1) c1 = '<div class="qdn-vide">Rien de prévu cette semaine. Un « Bonus » coché sur une carte part jeudi.</div>';
+  // Dimanche qui vient : la sélection en cours, dans l'ordre de passage (+ bonus déjà calés sur cette semaine-là).
+  const nl = de(L.next, 'lundi'), nb = L.next === L.bonus ? de(L.next, 'bonus') : [];
   let c2 = nl.map((v, i) => '<div class="qdn-l"><span class="qdn-j">' + (i < 3 ? (i + 1) + '. ' + QDN_JOURS[i + 1].toLowerCase() : (i + 1) + '. à fixer') + '</span><span class="qdn-t">' + nom(v) + '</span>' +
     (i > 0 ? '<button class="btn btn-ghost btn-sm" onclick="qdnDeplacer(\'' + v.id + '\',-1)">Monter</button>' : '') +
     (i < nl.length - 1 ? '<button class="btn btn-ghost btn-sm" onclick="qdnDeplacer(\'' + v.id + '\',1)">Descendre</button>' : '') + retirer(v) + '</div>').join('');
-  if (!nl.length) c2 = '<div class="qdn-vide">Aucun programme choisi. Passe en vue « 5 jours » et clique « Vidéo du lundi » sur les cartes.</div>';
-  else if (nl.length < 3) c2 += '<div class="qdn-alerte">' + (3 - nl.length) + ' programme' + (nl.length === 2 ? '' : 's') + ' à choisir pour avoir un focus mardi, mercredi et jeudi.</div>';
+  if (!nl.length) c2 = '<div class="qdn-vide">Aucun programme choisi. Passe en vue « 5 jours » et clique « Vidéo du dimanche » sur les cartes.</div>';
+  else if (nl.length < 3) c2 += '<div class="qdn-alerte">' + (3 - nl.length) + ' programme' + (nl.length === 2 ? '' : 's') + ' à choisir pour avoir un focus lundi, mardi et mercredi.</div>';
   else if (nl.length > 3) c2 += '<div class="qdn-alerte">Plus de 3 programmes : seuls les 3 premiers ont un jour de focus.</div>';
-  return '<div class="card"><div class="mk-titre"><div><h3>Vidéos Quoi de neuf</h3><small>Lundi l’épisode récap, puis un focus par jour dans l’ordre de passage ; les bonus partent le vendredi.</small></div></div>' +
-    '<div class="qdn-cols"><div class="qdn-col"><h4>Cette semaine</h4>' + c1 + '</div><div class="qdn-col"><h4>Épisode du lundi ' + _mkDj(L.next) + '</h4>' + c2 + '</div></div></div>';
+  c2 += nb.map(v => '<div class="qdn-l"><span class="qdn-j">' + jour(v.semaine, 3) + '</span><span class="qdn-t">Bonus ' + nom(v) + '</span>' + retirer(v) + '</div>').join('');
+  return '<div class="card"><div class="mk-titre"><div><h3>Vidéos Quoi de neuf</h3><small>Le dimanche à 19 h l’épisode récap, puis un focus par jour à 18 h 30 (lundi, mardi, mercredi) dans l’ordre de passage ; les bonus partent le jeudi.</small></div></div>' +
+    '<div class="qdn-cols"><div class="qdn-col"><h4>Cette semaine</h4>' + c1 + '</div><div class="qdn-col"><h4>Épisode du ' + jour(L.next, -1).toLowerCase() + '</h4>' + c2 + '</div></div></div>';
 }
 
 function renderMarche() {

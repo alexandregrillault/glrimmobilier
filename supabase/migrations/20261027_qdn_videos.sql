@@ -1,4 +1,6 @@
 -- Vidéos « Quoi de neuf » de la semaine, choisies depuis l'onglet Marché du CRM (27/10/2026).
+-- Planning revu le même jour : épisode le dimanche, focus lundi → mercredi, bonus le jeudi ;
+-- type 'lundi' garde son nom mais désigne l'épisode, semaine = lundi du premier focus (voir CLAUDE.md).
 -- Rythme d'Alex : lundi l'épisode récap des programmes « Vidéo du lundi », puis un focus par jour
 -- (mardi, mercredi, jeudi) dans l'ordre de passage ; « Bonus » = vidéo en plus, postée le vendredi
 -- de la semaine en cours.

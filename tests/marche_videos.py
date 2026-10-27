@@ -1,4 +1,4 @@
-# Test de la page Marché : vue 5 jours, boutons « Vidéo du lundi » / « Bonus » et bandeau
+# Test de la page Marché : vue 5 jours, boutons « Vidéo du dimanche » / « Bonus » et bandeau
 # « Vidéos Quoi de neuf » (table qdn_videos simulée), bureau et iPhone.
 # Lancer : ~/glr-pige-robot/.venv/bin/python tests/marche_videos.py
 import json, pathlib, re, sys, datetime, uuid
@@ -11,8 +11,10 @@ SORTIE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ICI
 
 AUJ = datetime.date.today()
 def j(n): return (AUJ - datetime.timedelta(days=n)).isoformat()
-LUNDI = AUJ - datetime.timedelta(days=AUJ.weekday())
+# Même règle que _qdnLundis() : semaine = lundi du premier focus (épisode la veille, le dimanche).
+LUNDI = AUJ - datetime.timedelta(days=AUJ.weekday()) + datetime.timedelta(days=7 if AUJ.weekday() == 6 else 0)
 PROCHAIN = LUNDI + datetime.timedelta(days=7)
+BONUS = PROCHAIN if AUJ.weekday() in (4, 5) else LUNDI
 MOIS = AUJ.replace(day=1).isoformat()
 MOIS_PREV = (AUJ.replace(day=1) - datetime.timedelta(days=1)).replace(day=1).isoformat()
 
@@ -97,15 +99,15 @@ with sync_playwright() as p:
             if 'vu le ' + datetime.date.fromisoformat(j(1)).strftime('%-d') not in c103: erreurs.append('Le 103 : date récente absente : ' + c103[:80])
             # Trois programmes pour lundi, dans l'ordre des clics, puis un bonus
             for n in ('Le 103', 'Carré Martre', 'Les Quarante Arpents'):
-                page.locator('.mk-card', has_text=n).get_by_role('button', name='Vidéo du lundi').click(); page.wait_for_timeout(500)
+                page.locator('.mk-card', has_text=n).get_by_role('button', name='Vidéo du dimanche').click(); page.wait_for_timeout(500)
             page.locator('.mk-card', has_text='Carré Martre').get_by_role('button', name='Bonus').click(); page.wait_for_timeout(500)
             lun = sorted([v for v in VIDEOS if v['semaine'] == PROCHAIN.isoformat()], key=lambda v: v['ordre'])
             if [v['nom'] for v in lun] != ['Le 103', 'Carré Martre', 'Les Quarante Arpents'] or [v['ordre'] for v in lun] != [1, 2, 3]:
                 erreurs.append('sélection du lundi : ' + str([(v['nom'], v['ordre']) for v in lun]))
             bon = [v for v in VIDEOS if v['type'] == 'bonus']
-            if len(bon) != 1 or bon[0]['semaine'] != LUNDI.isoformat(): erreurs.append('bonus : ' + str(bon))
+            if len(bon) != 1 or bon[0]['semaine'] != BONUS.isoformat(): erreurs.append('bonus : ' + str(bon))
             t = norm(page.text_content('#page-marche'))
-            for attendu in ('1. mardi', '2. mercredi', '3. jeudi', 'Bonus Carré Martre', 'Vendredi'):
+            for attendu in ('1. lundi', '2. mardi', '3. mercredi', 'Bonus Carré Martre', 'Jeudi', 'Épisode du dimanche'):
                 if attendu not in t: erreurs.append(f'après choix : « {attendu} » absent')
             # Monter Les Quarante Arpents en 2e, puis changer l'état d'un focus, puis décocher
             page.locator('.qdn-l', has_text='Les Quarante Arpents').get_by_role('button', name='Monter').click(); page.wait_for_timeout(600)
@@ -113,7 +115,7 @@ with sync_playwright() as p:
             if [v['nom'] for v in lun] != ['Le 103', 'Les Quarante Arpents', 'Carré Martre']: erreurs.append('Monter : ' + str([v['nom'] for v in lun]))
             page.locator('.qdn-l', has_text='Focus Hameau du Lac').get_by_role('button', name='À faire').click(); page.wait_for_timeout(500)
             if next(v for v in VIDEOS if v['nom'] == 'Hameau du Lac')['statut'] != 'faite': erreurs.append('état du focus non changé')
-            page.locator('.mk-card', has_text='Le 103').get_by_role('button', name='✓ Vidéo du lundi').click(); page.wait_for_timeout(500)
+            page.locator('.mk-card', has_text='Le 103').get_by_role('button', name='✓ Vidéo du dimanche').click(); page.wait_for_timeout(500)
             if any(v['nom'] == 'Le 103' for v in VIDEOS): erreurs.append('décocher Le 103 ne le retire pas')
             if 'à choisir pour avoir un focus' not in norm(page.text_content('#page-marche')): erreurs.append('alerte « à choisir » absente')
             # Retour à 30 jours : vue par mois, le vieux lancement revient
