@@ -16986,13 +16986,15 @@ async function _anRendre() {
   document.getElementById('an-nonlus').innerHTML = `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Leads dont l'intitulé ne donne pas la ville ou la typologie : ils ne sont rattachés à aucune annonce. Format attendu : « Prénom T2 - VILLE - 45 M² ».</div>` +
     il.map(i => `<div class="an-vd">${_vEsc(i.ref)}${i.vendeur ? ' <small style="color:var(--muted)">(' + i.vendeur + ')</small>' : ''} — ${i.n} lead${i.n > 1 ? 's' : ''}</div>`).join('');
 
-  // Carte : de dessous en dessus, offre promoteurs, offre SeLoger, écart de prix, nos annonces
+  // Carte : de dessous en dessus, offre promoteurs, offre SeLoger, écart de prix, nos annonces.
+  // Dessinée seulement onglet « Carte » affiché : cachée, elle mesure 0 px et le cadrage part sur le monde entier.
+  if (_anOnglet !== 'annonces') return;
   try { await _anChargerLeaflet(); } catch (e) { document.getElementById('an-carte').innerHTML = '<div class="empty"><p>Carte indisponible</p></div>'; return; }
   if (!_anCarte) {
     _anCarte = L.map('an-carte', { scrollWheelZoom: false }).setView([48.86, 2.35], 10);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5', { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 18 }).addTo(_anCarte);
   }
-  setTimeout(() => _anCarte.invalidateSize(), 50);
+  _anCarte.invalidateSize(); // avant le cadrage : la taille réelle du cadre
   if (_anCouche) _anCouche.remove();
   _anCouche = L.layerGroup().addTo(_anCarte);
   const couleurEcart = e => e <= -0.15 ? '#C0392B' : e <= -0.05 ? '#E59866' : e < 0.05 ? '#C9C2B2' : e < 0.15 ? '#7FB3D5' : '#1F618D';
@@ -17004,8 +17006,8 @@ async function _anRendre() {
     m.ecart != null && `écart : ${m.ecart < 0 ? 'SeLoger' : 'pige'} ${Math.abs(Math.round(m.ecart * 100))} % moins cher`
   ].filter(Boolean).map(x => '<br>' + x).join('');
   const pts = [];
-  [['promo', m => m.lots, m => ({ radius: Math.min(30, 3 + Math.sqrt(m.lots) * 1.3), stroke: false, fillColor: '#1E3A32', fillOpacity: .22 })],
-   ['seloger', m => m.sl, m => ({ radius: Math.min(30, 3 + Math.sqrt(m.sl) * 1.3), color: '#7D5BA6', weight: 2, fillColor: '#7D5BA6', fillOpacity: .04 })],
+  [['promo', m => m.lots, m => ({ radius: Math.min(20, 2 + Math.sqrt(m.lots) * 0.9), color: '#1E3A32', weight: .5, opacity: .5, fillColor: '#1E3A32', fillOpacity: .15 })],
+   ['seloger', m => m.sl, m => ({ radius: Math.min(20, 2 + Math.sqrt(m.sl) * 0.9), color: '#7D5BA6', weight: 2, fillColor: '#7D5BA6', fillOpacity: .04 })],
    ['ecart', m => m.ecart != null, m => ({ radius: 8, color: '#fff', weight: 1, fillColor: couleurEcart(m.ecart), fillOpacity: .9 })],
    ['annonces', m => m.nos, m => ({ radius: 4 + Math.sqrt(m.nos.n) * 2.6, color: '#fff', weight: 1.5, fillColor: couleurFrais(m.nos.dernier), fillOpacity: .9 })]
   ].forEach(([c, a, style]) => {
