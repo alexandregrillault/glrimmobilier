@@ -124,7 +124,7 @@ with sync_playwright() as p:
         page.evaluate("anCouche('ecart')"); page.wait_for_timeout(400)
         cl = norm(page.text_content('#an-villes'))
         if not re.search(r'Clamart\s*SeLoger 32 % moins cher', cl) or 'Colombes' not in cl: erreurs.append(f'{nom} : classement « écart » ' + cl[:160])
-        if 'SeLoger 15 % moins cher ou plus' not in page.text_content('#an-legende'): erreurs.append(f'{nom} : légende de l\'écart absente')
+        if '30 % ou plus' not in page.text_content('#an-legende'): erreurs.append(f'{nom} : légende de l\'écart absente')
         # Fiches des villes : tableau pige / SeLoger / écart / chez nous, puis nos annonces
         fiches = ''
         for k in ('CLAMART', 'COLOMBES', 'MASSY', 'PARIS 15'):

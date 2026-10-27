@@ -16547,7 +16547,7 @@ let _anSL = {}, _anSLDate = null; // dernier relevé SeLoger : _anSL[ville][typo
 let _anPeriode = 60, _anVille = '', _anTypo = '';
 // Couches de la carte (Alex, 27/10/2026) ; la dernière allumée donne le classement à côté de la carte
 let _anCouches = { annonces: true, promo: true, seloger: false, ecart: false }, _anCoucheVue = 'annonces';
-let _anCarte = null, _anCouche = null, _anCadre = false; // cadrage fait une seule fois : le zoom choisi à la molette reste
+let _anCarte = null, _anCouche = null, _anCadre = false, _anDessin = null; // cadrage fait une seule fois : le zoom choisi à la molette reste
 
 const _anNorm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
 
@@ -16823,18 +16823,18 @@ async function _anRendre() {
   toutes.forEach(k => { M[k] = mesure(k); });
   const pct = e => (e > 0 ? '+' : '') + Math.round(e * 100) + ' %';
   const clsEcart = e => e <= -0.05 ? 'an-dessus' : e >= 0.05 ? 'an-sous' : '';
-  const COUCHES = [['annonces', 'Nos leads', '#B0894C'], ['promo', 'Offre promoteurs', '#1E3A32'], ['seloger', 'Offre SeLoger', '#7D5BA6'], ['ecart', 'Écart de prix', '#C0392B']];
+  const COUCHES = [['annonces', 'Nos leads', '#8C5E14'], ['promo', 'Offre promoteurs', '#1F8A5E'], ['seloger', 'Offre SeLoger', '#7D5BA6'], ['ecart', 'Écart de prix', '#C0392B']];
   document.getElementById('an-couches').innerHTML = COUCHES.map(([c, nom, coul]) =>
     `<button class="${_anCouches[c] ? 'on' : ''}" onclick="anCouche('${c}')"><i style="background:${coul}"></i>${nom}</button>`).join('');
   document.getElementById('an-typos').innerHTML = ['', 'T1', 'T2', 'T3', 'T4', 'T5'].map(t =>
     `<button class="${t === _anTypo ? 'on' : ''}" onclick="anTypo('${t}')">${t || 'Toutes typologies'}</button>`).join('');
   const sansSL = 'aucun relevé SeLoger importé pour le moment';
   document.getElementById('an-legende').innerHTML = [
-    _anCouches.annonces && `<div><b>Nos leads</b>, taille = leads reçus sur ${_anPeriode} j : <i style="background:#2E7D57"></i>dernier lead dans les 7 jours <i style="background:#D68910"></i>8 à 21 j <i style="background:#A9A397"></i>rien depuis plus de 21 j</div>`,
-    _anCouches.promo && `<div><i style="background:#1E3A32;opacity:.4"></i><b>Offre promoteurs</b> : taille = lots disponibles dans la pige</div>`,
+    _anCouches.annonces && `<div><b>Nos leads</b>, taille = leads reçus sur ${_anPeriode} j : <i style="background:#8C5E14"></i>dernier lead dans les 7 jours <i style="background:#D4A75A"></i>8 à 21 j <i style="background:#F3EBDA;border:1px solid #6B4610"></i>rien depuis plus de 21 j</div>`,
+    _anCouches.promo && `<div><i style="background:#1F8A5E;opacity:.7;border:1px solid #14523B"></i><b>Offre promoteurs</b> : taille = lots disponibles dans la pige</div>`,
     _anCouches.seloger && `<div><i style="border:2px solid #7D5BA6;width:7px;height:7px"></i><b>Offre SeLoger</b> : ${_anSLDate ? 'taille = annonces neuves en ligne' : sansSL}</div>`,
     _anCouches.ecart && (_anSLDate
-      ? `<div><b>Écart de prix</b>, la moins chère sur SeLoger face au vrai prix le plus bas de la pige : <i style="background:#C0392B"></i>SeLoger 15 % moins cher ou plus <i style="background:#E59866"></i>5 à 15 % <i style="background:#C9C2B2"></i>proches <i style="background:#7FB3D5"></i>pige 5 à 15 % moins chère <i style="background:#1F618D"></i>15 % ou plus</div>`
+      ? `<div><b>Écart de prix</b>, la moins chère sur SeLoger face au vrai prix le plus bas de la pige (plus le rond est gros, plus l'écart est grand). SeLoger moins cher de : <i style="background:#7B1E1E"></i>30 % ou plus <i style="background:#C0392B"></i>20 à 30 % <i style="background:#E67E22"></i>10 à 20 % <i style="background:#C9C2B2"></i>moins de 10 % <i style="background:#2471A3"></i>la pige est moins chère</div>`
       : `<div><b>Écart de prix</b> : ${sansSL}</div>`),
     '<div>Touchez une ville pour tout voir.</div>'].filter(Boolean).join('');
 
@@ -16969,39 +16969,46 @@ async function _anRendre() {
   if (!_anCarte) {
     _anCarte = L.map('an-carte', { scrollWheelZoom: true }).setView([48.86, 2.35], 10);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5', { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 18 }).addTo(_anCarte);
+    _anCarte.on('zoomend', () => _anDessin && _anDessin());
   }
   _anCarte.invalidateSize(); // avant le cadrage : la taille réelle du cadre
-  if (_anCouche) _anCouche.remove();
-  _anCouche = L.layerGroup().addTo(_anCarte);
-  const couleurEcart = e => e <= -0.15 ? '#C0392B' : e <= -0.05 ? '#E59866' : e < 0.05 ? '#C9C2B2' : e < 0.15 ? '#7FB3D5' : '#1F618D';
-  const couleurFrais = d => { const j = (auj - Date.parse(d)) / 864e5; return j <= 7 ? '#2E7D57' : j <= 21 ? '#D68910' : '#A9A397'; };
+  // Écart : SeLoger presque toujours moins cher (20 à 38 % au premier relevé) ; paliers serrés de ce côté-là
+  const couleurEcart = e => e <= -0.30 ? '#7B1E1E' : e <= -0.20 ? '#C0392B' : e <= -0.10 ? '#E67E22' : e < 0.05 ? '#C9C2B2' : '#2471A3';
+  const couleurFrais = d => { const j = (auj - Date.parse(d)) / 864e5; return j <= 7 ? '#8C5E14' : j <= 21 ? '#D4A75A' : '#F3EBDA'; };
   const bulle = (iv, m) => `<b>${_vEsc(iv.nom)}</b>` + [
     m.nos && `${m.nos.n} lead${m.nos.n > 1 ? 's' : ''} reçu${m.nos.n > 1 ? 's' : ''}`,
     m.lots && `${m.lots} lots dans la pige`,
     m.slVu && `${m.sl} annonces sur SeLoger`,
     m.ecart != null && `écart : ${m.ecart < 0 ? 'SeLoger' : 'pige'} ${Math.abs(Math.round(m.ecart * 100))} % moins cher`
   ].filter(Boolean).map(x => '<br>' + x).join('');
-  const pts = [];
-  [['promo', m => m.lots, m => ({ radius: Math.min(20, 2 + Math.sqrt(m.lots) * 0.9), color: '#1E3A32', weight: .5, opacity: .5, fillColor: '#1E3A32', fillOpacity: .15 })],
-   ['seloger', m => m.sl, m => ({ radius: Math.min(20, 2 + Math.sqrt(m.sl) * 0.9), color: '#7D5BA6', weight: 2, fillColor: '#7D5BA6', fillOpacity: .04 })],
-   ['ecart', m => m.ecart != null, m => ({ radius: 8, color: '#fff', weight: 1, fillColor: couleurEcart(m.ecart), fillOpacity: .9 })],
-   ['annonces', m => m.nos, m => ({ radius: 4 + Math.sqrt(m.nos.n) * 2.6, color: '#fff', weight: 1.5, fillColor: couleurFrais(m.nos.dernier), fillOpacity: .9 })]
-  ].forEach(([c, a, style]) => {
-    if (!_anCouches[c]) return;
-    toutes.forEach(k => {
-      const m = M[k], iv = infoVille(k);
-      if (!iv.lat || !a(m)) return;
-      pts.push([iv.lat, iv.lng]);
-      L.circleMarker([iv.lat, iv.lng], style(m)).bindTooltip(bulle(iv, m)).on('click', () => anVille(k)).addTo(_anCouche);
+  // Taille des ronds selon le zoom : petits vue d'ensemble (pour ne pas se chevaucher), plus gros en zoomant.
+  // Dans chaque couche, les gros sont posés d'abord : les petits restent visibles et cliquables par-dessus.
+  const COUCHES_CARTE = [
+    ['promo', m => m.lots, m => 2 + Math.sqrt(m.lots) * 1.1, m => ({ color: '#14523B', weight: 1, opacity: .9, fillColor: '#1F8A5E', fillOpacity: .5 })],
+    ['seloger', m => m.sl, m => 2 + Math.sqrt(m.sl) * 1.1, m => ({ color: '#7D5BA6', weight: 2.5, fillColor: '#7D5BA6', fillOpacity: .06 })],
+    ['ecart', m => m.ecart != null, m => 3 + Math.min(Math.abs(m.ecart), .5) * 36, m => ({ color: '#fff', weight: 1, fillColor: couleurEcart(m.ecart), fillOpacity: .85 })],
+    ['annonces', m => m.nos, m => 3 + Math.sqrt(m.nos.n) * 2.2, m => ({ color: '#6B4610', weight: 1.5, fillColor: couleurFrais(m.nos.dernier), fillOpacity: .95 })]
+  ];
+  _anDessin = () => {
+    if (_anCouche) _anCouche.remove();
+    _anCouche = L.layerGroup().addTo(_anCarte);
+    const f = Math.min(3, Math.max(.6, Math.pow(1.4, _anCarte.getZoom() - 10)));
+    COUCHES_CARTE.forEach(([c, a, taille, style]) => {
+      if (!_anCouches[c]) return;
+      toutes.filter(k => infoVille(k).lat && a(M[k])).sort((x, y) => taille(M[y]) - taille(M[x])).forEach(k => {
+        const m = M[k], iv = infoVille(k);
+        L.circleMarker([iv.lat, iv.lng], { ...style(m), radius: Math.min(36, taille(m) * f) }).bindTooltip(bulle(iv, m)).on('click', () => anVille(k)).addTo(_anCouche);
+      });
     });
-  });
-  if (_anVille) {
-    const iv = infoVille(_anVille);
-    if (iv.lat) L.circleMarker([iv.lat, iv.lng], { radius: 16, color: '#1E3A32', weight: 3, fill: false, interactive: false }).addTo(_anCouche);
-  }
-  // Cadrage sur l'Île-de-France : les quelques annonces en province écraseraient la carte
-  const idf = pts.filter(p => p[0] > 48.1 && p[0] < 49.25 && p[1] > 1.4 && p[1] < 3.6);
-  if (!_anCadre && (idf.length || pts.length)) { _anCarte.fitBounds(L.latLngBounds(idf.length ? idf : pts).pad(0.08)); _anCadre = true; }
+    if (_anVille) {
+      const iv = infoVille(_anVille);
+      if (iv.lat) L.circleMarker([iv.lat, iv.lng], { radius: 18, color: '#1E3A32', weight: 3, fill: false, interactive: false }).addTo(_anCouche);
+    }
+  };
+  // Premier cadrage sur Paris et les deux couronnes (les villes lointaines de la pige écraseraient la carte) ;
+  // ensuite le zoom choisi à la molette reste
+  if (!_anCadre) { _anCarte.fitBounds([[48.68, 2.05], [49.02, 2.65]]); _anCadre = true; }
+  _anDessin();
 }
 
 function calculerComm() {
