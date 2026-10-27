@@ -82,6 +82,7 @@ def route(r):
     return r.continue_()
 
 erreurs = []
+norm = lambda t: re.sub(r'[\u202f\u00a0]', ' ', t)
 with sync_playwright() as p:
     nav = p.chromium.launch()
     for nom, vp in (('bureau', {'width': 1400, 'height': 1000}), ('iphone', {'width': 390, 'height': 844})):
@@ -98,13 +99,8 @@ with sync_playwright() as p:
             try { localStorage.removeItem('glr-an-geo'); } catch (e) {} goTo('gerant-annonces', null); }""")
         page.wait_for_selector('.an-act', timeout=15000)
         page.wait_for_timeout(1500)
-        texte = re.sub(r'[\u202f\u00a0]', ' ', page.text_content('#page-gerant-annonces'))
-        for attendu in ('Clamart', '6 leads', 'Saint-Denis', 'Pige : 2 programmes, 21 lots disponibles, dès 295 000 €',
-                        'Aucun stock dans la pige', 'FLP7', 'Madina', 'Vélizy-Villacoublay', 'Paris 15e',
-                        'Pige : 11 T2 dispo, dès 315 000 € (35 m²)', 'annonce -25 %', 'annonce +5 %', 'annonce -24 %',
-                        'Aucun T4 disponible dans la pige',
-                        'notre annonce 6e sur 59 en prix croissant', 'la moins chère 172 000 € (CABINET 1)', 'top 5 sous 180 000 €',
-                        'introuvable dans les 120 premières (40 annonces)', 'aucune annonce T4 neuve dans la ville',
+        texte = norm(page.text_content('#page-gerant-annonces'))
+        for attendu in ('Clamart', 'Saint-Denis', 'FLP7', 'Madina', 'Vélizy-Villacoublay', 'Paris 15e',
                         '4 villes relevées du ' + datetime.date.fromisoformat(j(3)).strftime('%d/%m/%Y') + ' au ' + datetime.date.fromisoformat(j(1)).strftime('%d/%m/%Y'), 'Aucun T2 disponible dans la pige à Saint-Denis', 'En ligne sur SeLoger (15e sur 97 en prix croissant', 'Antony · T2 45 m² · 237 000 €',
                         'Introuvable dans les 120 premières sur 40', 'Nanterre · T3', 'Nos anciennes annonces T3 ici ont fait 5 leads', '8 T3 disponibles dès 290 000 €',
                         'Concurrence SeLoger pas encore relevée pour cette ville', "Comment c'est calculé", 'pas de T2 dans la pige', 'en ligne, aucun lead', 'hors des 120', '5 leads avant · 8 lots', 'Clamart · T3', '20 concurrents · 12 lots', 'pour être dans les 3 premières il faut moins de 310 000 €'):
@@ -116,13 +112,29 @@ with sync_playwright() as p:
         page.screenshot(path=str(SORTIE / f'annonces_{nom}_faire.png'), full_page=False)
         page.evaluate("anOnglet('annonces')"); page.wait_for_timeout(800)
         nb = page.evaluate("document.querySelectorAll('#an-carte .leaflet-interactive').length")
-        if nb < 6: erreurs.append(f'{nom} : {nb} ronds sur la carte')
+        if nb < 10: erreurs.append(f'{nom} : {nb} ronds sur la carte (nos annonces + offre promoteurs)')
+        cl = norm(page.text_content('#an-villes'))
+        if 'les villes qui rapportent le plus de leads' not in cl or not re.search(r'Clamart\s*6 leads', cl): erreurs.append(f'{nom} : classement « nos annonces » ' + cl[:120])
+        page.evaluate("anCouche('ecart')"); page.wait_for_timeout(400)
+        cl = norm(page.text_content('#an-villes'))
+        if not re.search(r'Clamart\s*SeLoger 32 % moins cher', cl) or 'Colombes' not in cl: erreurs.append(f'{nom} : classement « écart » ' + cl[:160])
+        if 'SeLoger 15 % moins cher ou plus' not in page.text_content('#an-legende'): erreurs.append(f'{nom} : légende de l\'écart absente')
+        # Fiches des villes : tableau pige / SeLoger / écart / chez nous, puis nos annonces
+        fiches = ''
+        for k in ('CLAMART', 'COLOMBES', 'MASSY', 'PARIS 15'):
+            page.evaluate(f"anVille('{k}')"); page.wait_for_timeout(300)
+            fiches += norm(page.text_content('#an-villes')) + ' | '
+        for attendu in ('Pige : 2 programmes, 21 lots disponibles, dès 295 000 €', '6 leads', 'Aucun stock dans la pige',
+                        'Pige : 11 T2 dispo, dès 315 000 € (35 m²)', 'annonce -25 %', 'annonce +5 %', 'annonce -24 %',
+                        'Aucun T4 disponible dans la pige', 'notre annonce 6e sur 59 en prix croissant', 'la moins chère 172 000 € (CABINET 1)',
+                        'top 5 sous 180 000 €', 'introuvable dans les 120 premières (40 annonces)', 'aucune annonce T4 neuve dans la ville',
+                        '11 lotsdès 315 000 €', '59 annoncesdès 172 000 €', '-45 %', '-19 %', '-12 %'):
+            if attendu not in fiches: erreurs.append(f'{nom} : fiche ville, « {attendu} » absent')
+        page.evaluate("anVille('CLAMART')"); page.wait_for_timeout(300)
         large = page.evaluate('document.documentElement.scrollWidth')
         if large > vp['width'] + 1: erreurs.append(f'{nom} : page plus large que l\'écran ({large} px)')
         page.screenshot(path=str(SORTIE / f'annonces_{nom}.png'), full_page=False)
         if nom == 'bureau':
-            page.evaluate("anVille('CLAMART')")
-            if page.locator('.an-ville').count() != 1: erreurs.append('filtre ville inopérant')
             # Import d'un fichier de relevé : suppression des seules villes du fichier, puis insertion
             f = SORTIE / 'releve_test.json'
             f.write_text(json.dumps({'source': 'seloger.com', 'releve': '2026-10-28', 'villes': 2, 'complet': False,
@@ -134,8 +146,9 @@ with sync_playwright() as p:
             elif 'releve=eq.2026-10-28' not in APPELS[0][1] or 'Clamart' not in APPELS[0][1] or 'Ha%C3%BF' not in APPELS[0][1]: erreurs.append('import : suppression mal ciblée ' + APPELS[0][1])
             elif len(json.loads(APPELS[1][2])) != 2 or json.loads(APPELS[1][2])[0]['releve'] != '2026-10-28': erreurs.append('import : insertion incorrecte')
             f.unlink()
-            page.evaluate("anVille(''); anVendeur('Jules')")
-            if 'Colombes' in page.inner_text('#an-villes'): erreurs.append('filtre vendeur inopérant')
+            page.evaluate("anVille(''); anTypo('T3')"); page.wait_for_timeout(300)
+            cl = norm(page.text_content('#an-villes'))
+            if 'Colombes' in cl or 'Clamart' not in cl: erreurs.append('filtre typologie inopérant : ' + cl[:160])
         page.close()
     nav.close()
 
