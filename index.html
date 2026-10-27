@@ -382,7 +382,7 @@
   .an-bien { color: var(--success); }
   .an-moyen { color: var(--warning); }
   .an-dessus { color: var(--danger); }
-  .an-faire { padding: 16px 20px; margin-bottom: 16px; }
+  .an-faire { padding: 14px; margin-bottom: 16px; }
   .an-faire-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .an-act { background: var(--surface2); border: 1px solid var(--border); border-top: 3px solid var(--border); border-radius: 12px; padding: 12px 14px; }
   .an-act h4 { font-family: var(--font-head); font-size: 15px; margin: 0 0 4px; display: flex; justify-content: space-between; }
@@ -391,11 +391,21 @@
   .an-act-cre { border-top-color: var(--success); }
   .an-act-aju { border-top-color: var(--warning); }
   .an-act-note { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-  .an-it { font-size: 12.5px; line-height: 1.45; padding: 8px 0; border-top: 1px dashed var(--border); }
-  .an-it b { font-size: 13px; }
-  .an-it div { color: var(--muted); margin-top: 2px; }
-  .an-it div b { color: var(--text); font-size: inherit; }
+  .an-it { font-size: 12.5px; line-height: 1.45; border-top: 1px dashed var(--border); }
+  .an-it summary { list-style: none; cursor: pointer; padding: 7px 0; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .an-it summary::-webkit-details-marker { display: none; }
+  .an-it summary b { font-size: 13px; font-weight: 600; min-width: 0; }
+  .an-it summary em { font-style: normal; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .an-it[open] summary em { color: var(--text); }
+  .an-it > div { color: var(--muted); padding: 0 0 8px; }
+  .an-it > div b { color: var(--text); }
+  .an-act:not(.tout) .an-cache { display: none; }
+  .an-voir { border: none; background: none; color: var(--accent); font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 8px 0 0; }
   .an-regles { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+  .an-regles summary { cursor: pointer; }
+  .an-plus { padding: 12px 20px; margin-top: 16px; }
+  .an-plus summary { cursor: pointer; font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; }
+  .an-plus[open] summary { margin-bottom: 10px; }
   @media (max-width: 900px) { .an-faire-grid { grid-template-columns: 1fr; } }
   .an-h { font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 10px; }
   .an-vd { font-size: 13px; padding: 6px 0; border-top: 1px dashed var(--border); }
@@ -1141,11 +1151,15 @@
         </div>
       </div>
       <div class="mk-filtres">
+        <div class="mk-chips" id="an-onglets">
+          <button data-o="faire" class="on" onclick="anOnglet('faire')">À faire</button>
+          <button data-o="annonces" onclick="anOnglet('annonces')">Nos annonces</button>
+        </div>
         <div class="mk-chips" id="an-periode"></div>
         <div class="mk-chips" id="an-vendeurs"></div>
       </div>
-      <div class="card an-faire" id="an-faire"></div>
-      <div class="mk-kpis" id="an-kpis"></div>
+      <div id="an-vue-faire"><div class="card an-faire" id="an-faire"></div></div>
+      <div id="an-vue-annonces" style="display:none">
       <div class="an-grid">
         <div class="card an-carte-box">
           <div id="an-carte"></div>
@@ -1153,13 +1167,14 @@
         </div>
         <div id="an-villes"></div>
       </div>
-      <div class="card" style="padding:16px 20px;margin-top:16px">
-        <div class="an-h">Par vendeur</div>
+      <details class="card an-plus">
+        <summary>Par vendeur</summary>
         <div id="an-par-vendeur"></div>
-      </div>
-      <div class="card" style="padding:16px 20px;margin-top:16px" id="an-nonlus-box">
-        <div class="an-h">Intitulés illisibles</div>
+      </details>
+      <details class="card an-plus" id="an-nonlus-box">
+        <summary id="an-nonlus-titre">Intitulés illisibles</summary>
         <div id="an-nonlus"></div>
+      </details>
       </div>
     </div>
 
@@ -16514,7 +16529,7 @@ function _gvRender() {
 // SeLoger sans mandat ou à demander).
 const AN_VENDEURS = { ANAIS: 'Anaïs', THEO: 'Théo', JULES: 'Jules', ALEX: 'Alex', LOUIS: 'Louis', FABIEN: 'Fabien', NOUR: 'Nour', MADINA: 'Madina', MTO: 'Madina', FLP: 'Fabien' };
 // Règles du bloc « Ce qu'il faut faire » (seuils proposés le 27/10/2026, à ajuster avec Alex)
-const AN_REGLES = { silence: 21, rangMauvais: 10, rangVise: 5, rangCreer: 3, stockMin: 3, demandeMin: 3, maxListe: 12 };
+const AN_REGLES = { silence: 21, rangMauvais: 10, rangVise: 5, rangCreer: 3, stockMin: 3, demandeMin: 3, maxListe: 6 };
 const AN_QUALIFIES = ['Suivi', 'Sélections', 'Retour documentation', 'Finaliser la vente', 'Vendu'];
 let _anLeads = null, _anPige = null, _anStock = {}, _anGeo = {};
 let _anTousLeads = [];
@@ -16651,6 +16666,15 @@ async function loadAnnonces(force) {
 function anPeriode(j) { _anPeriode = j; _anVille = ''; _anRendre(); }
 function anVendeur(v) { _anVendeur = v; _anVille = ''; _anRendre(); }
 function anVille(k) { _anVille = _anVille === k ? '' : k; _anRendre(); }
+let _anOnglet = 'faire';
+function anOnglet(o) {
+  _anOnglet = o;
+  document.querySelectorAll('#an-onglets button').forEach(b => b.classList.toggle('on', b.dataset.o === o));
+  document.getElementById('an-vue-faire').style.display = o === 'faire' ? '' : 'none';
+  document.getElementById('an-vue-annonces').style.display = o === 'annonces' ? '' : 'none';
+  if (o === 'annonces' && _anLeads) _anRendre(); // la carte se dessine une fois visible
+}
+function anVoirTout(btn) { btn.parentElement.classList.add('tout'); btn.remove(); }
 
 // Import du fichier seloger_concurrence.json (script de pige seloger_concurrence.js).
 // Les villes de ce fichier déjà importées à la même date sont remplacées (les autres
@@ -16733,11 +16757,8 @@ async function _anRendre() {
     return { nom, dept: p ? p.dept : g ? g.dept : '', lat: (p && p.lat) || (g && g.lat), lng: (p && p.lng) || (g && g.lng), pige: p };
   };
   const nbLeads = liste.reduce((s, a) => s + a.n, 0);
-  const actives = liste.filter(a => (auj - Date.parse(a.dernier)) / 864e5 <= 7).length;
-  const sansStock = lv.filter(v => !(_anPige[v.k] && _anPige[v.k].libres > 0)).length;
   // Le vrai lot le moins cher de la même typologie dans la ville (T5 = 5 pièces et plus)
   const reel = a => (_anStock[a.kv] || {})[a.typo === 'Maison' ? 'Maison' : a.typo] || null;
-  const sansReel = liste.filter(a => !reel(a)).length;
 
   // Relevé SeLoger : chaque annonce du registre est rattachée à notre annonce SeLoger
   // de même ville et typologie au prix le plus proche (3 % d'écart au plus). Nos annonces
@@ -16767,13 +16788,7 @@ async function _anRendre() {
   Object.entries(_anSL).forEach(([k, typos]) => Object.entries(typos).forEach(([typo, t]) => t.glr.forEach(g => { if (!slPris.has(g.sid)) sansLead.push({ k, typo, g, total: t.total }); })));
   const nbIllis = Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).reduce((s, i) => s + i.n, 0);
 
-  document.getElementById('an-sub').textContent = `Nos annonces SeLoger reconstituées depuis les leads des ${_anPeriode} derniers jours` + (_anVendeur ? ' — ' + _anVendeur : '');
-  document.getElementById('an-kpis').innerHTML = `
-    <div class="mk-kpi"><span>Annonces</span><b>${liste.length}</b><small>dont ${actives} avec un lead cette semaine</small></div>
-    <div class="mk-kpi"><span>Sans stock réel</span><b>${sansReel}</b><small>aucun lot de cette typologie dans la ville</small></div>
-    <div class="mk-kpi"><span>Leads</span><b>${nbLeads}</b><small>${liste.reduce((s, a) => s + a.qualifies, 0)} qualifiés (suivi ou plus)</small></div>
-    <div class="mk-kpi"><span>Villes</span><b>${lv.length}</b><small>${sansStock} sans stock dans la pige</small></div>
-    <div class="mk-kpi"><span>Leads non rattachés</span><b>${nbIllis}</b><small>intitulé illisible, voir en bas</small></div>`;
+  document.getElementById('an-sub').textContent = `${liste.length} annonces · ${nbLeads} leads · ${lv.length} villes sur les ${_anPeriode} derniers jours` + (_anVendeur ? ' — ' + _anVendeur : '') + (nbIllis ? ` · ${nbIllis} leads à l'intitulé illisible` : '');
 
   // Texte : une carte par ville
   const fmtJ = d => { const j = Math.round((auj - Date.parse(d)) / 864e5); return j <= 0 ? "aujourd'hui" : j === 1 ? 'hier' : 'il y a ' + j + ' j'; };
@@ -16825,15 +16840,15 @@ async function _anRendre() {
   // Les anciens intitulés (« T3 Rueil-Malmaison Nour ») ont été renommés au format du 23/09 : ignorés ici
   liste.filter(a => !a.ancien).forEach(a => {
     const r = reel(a), iv = infoVille(a.kv), jours = Math.round((auj - Date.parse(a.dernier)) / 864e5);
-    if (!r) retirer.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: 0,
+    if (!r) retirer.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: 0, tag: `pas de ${nomTypo(a.typo)} dans la pige`,
       why: `Aucun ${nomTypo(a.typo)} disponible dans la pige à ${_vEsc(iv.nom)} : les clients qui appellent demandent un bien qu'on ne peut pas leur proposer ici.` });
-    else if (jours > R.silence) retirer.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: 1,
+    else if (jours > R.silence) retirer.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: 1, tag: `aucun lead depuis ${jours} j`,
       why: `Plus aucun lead depuis ${jours} jours (${a.n} sur la période) : si elle est encore en ligne, elle occupe une place pour rien.` });
     else {
       const t = (_anSL[a.kv] || {})[a.typo];
       if (t && t.total && (!a.sl || a.sl.rang > R.rangMauvais)) {
         const vise = t.top[R.rangVise - 1];
-        ajuster.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: a.n,
+        ajuster.push({ t: titre(a.kv, a.typo, a.surf, a.prix, a.vendeur), p: a.n, tag: (a.sl ? a.sl.rang + 'e/' + t.total : 'hors des 120') + (vise ? ' → sous ' + fmtEur(vise.prix) : ''),
           why: `${a.sl ? a.sl.rang + '<sup>e</sup> sur ' + t.total : 'Introuvable dans les 120 premières sur ' + t.total} en prix croissant sur SeLoger : les clients qui trient par prix ne la voient pas.` +
             (vise ? ` Pour entrer dans les ${R.rangVise} premières, l'afficher sous <b>${fmtEur(vise.prix)}</b>` : ' La remonter en baissant son prix') +
             ` (vrai ${a.typo} le moins cher dans la pige : ${fmtEur(r.prix_min)}).` });
@@ -16842,7 +16857,7 @@ async function _anRendre() {
   });
   if (!_anVendeur) sansLead.forEach(s => {
     const r = (_anStock[s.k] || {})[s.typo];
-    retirer.push({ t: titre(s.k, s.typo, s.g.surface, s.g.prix, ''), p: r ? 2 : 0,
+    retirer.push({ t: titre(s.k, s.typo, s.g.surface, s.g.prix, ''), p: r ? 2 : 0, tag: 'en ligne, aucun lead',
       why: `En ligne sur SeLoger (${s.g.rang}<sup>e</sup> sur ${s.total} en prix croissant${s.g.cree ? ', créée le ' + jourFr(s.g.cree) : ''}) mais aucun lead sur la période` +
         (r ? '.' : ` et aucun ${s.typo} dans la pige.`) });
   });
@@ -16869,27 +16884,28 @@ async function _anRendre() {
     const d = demande[k] || { n: 0, typos: {} }, dt = d.typos[typo] || 0;
     if (dt < R.demandeMin) return;
     const vise = t && t.top[R.rangCreer - 1];
-    creer.push({ t: `${_vEsc(infoVille(k).nom)} · ${typo}`, p: dt * 3 + Math.min(r.nb, 20) / 5 - (t ? t.total / 50 : 0),
+    creer.push({ t: `${_vEsc(infoVille(k).nom)} · ${typo}`, p: dt * 3 + Math.min(r.nb, 20) / 5 - (t ? t.total / 50 : 0), tag: `${dt} leads · ${r.nb} lots dès ${fmtEur(r.prix_min)}`,
       why: `${dt} leads cherchaient un ${typo} dans cette ville sur la période${d.n > dt ? ' (' + d.n + ' leads au total pour la ville)' : ''}, et nous n'y avons aucune annonce ${typo}. ` +
         `La pige a <b>${r.nb} ${typo} disponibles dès ${fmtEur(r.prix_min)}</b>${r.surf_min ? ' (' + Math.round(r.surf_min) + ' m²)' : ''} — ${_vEsc(r.programme_min)}. ` +
         (!t ? 'Concurrence SeLoger pas encore relevée pour cette ville.' : !t.total ? `Aucune annonce ${typo} neuve sur SeLoger : la place est libre.`
           : `Sur SeLoger : ${t.total} annonce${t.total > 1 ? 's' : ''} ${typo}, la moins chère à ${fmtEur(t.top[0].prix)}${vise ? ` ; pour être dans les ${R.rangCreer} premières, afficher moins de <b>${fmtEur(vise.prix)}</b>` : ''}.`) });
   }));
   retirer.sort((a, b) => a.p - b.p); ajuster.sort((a, b) => b.p - a.p); creer.sort((a, b) => b.p - a.p);
-  const bloc = (nom, cls, items, vide, note) => `<div class="an-act ${cls}"><h4>${nom} <span>${items.length}</span></h4>` +
-    (note ? `<div class="an-act-note">${note}</div>` : '') +
-    (items.length ? items.slice(0, R.maxListe).map(x => `<div class="an-it"><b>${x.t}</b><div>${x.why}</div></div>`).join('') +
-      (items.length > R.maxListe ? `<div class="an-act-note">… et ${items.length - R.maxListe} autres, à voir dans le détail par ville ci-dessous.</div>` : '')
+  const bloc = (nom, cls, items, vide, note) => `<div class="an-act ${cls}${items.length <= R.maxListe ? ' tout' : ''}"><h4>${nom} <span>${items.length}</span></h4>` +
+    `<div class="an-act-note">${note}</div>` +
+    (items.length ? items.map((x, i) => `<details class="an-it${i >= R.maxListe ? ' an-cache' : ''}"><summary><b>${x.t}</b><em>${x.tag}</em></summary><div>${x.why}</div></details>`).join('') +
+      (items.length > R.maxListe ? `<button class="an-voir" onclick="anVoirTout(this)">Voir les ${items.length - R.maxListe} autres</button>` : '')
       : `<div class="an-act-note">${vide}</div>`) + `</div>`;
-  document.getElementById('an-faire').innerHTML = `<div class="an-h">Ce qu'il faut faire</div><div class="an-faire-grid">` +
-    bloc('À retirer', 'an-act-ret', retirer, 'Rien à retirer.', 'Annonces qui ne servent à rien ou qui promettent un bien que nous n\'avons pas.') +
-    bloc('À créer', 'an-act-cre', creer, 'Aucune ville ne réunit demande et stock sans annonce de notre part.', 'Villes où les clients cherchent, où les promoteurs ont du stock, et où nous ne sommes pas.' + (_anVendeur ? ' Pour toute l\'équipe.' : '')) +
-    bloc('À ajuster', 'an-act-aju', ajuster, _anSLDate ? 'Nos annonces sont bien placées sur SeLoger.' : 'Il faut un relevé SeLoger pour savoir où nos annonces sont placées.', 'Annonces utiles mais mal placées quand le client trie par prix.') +
-    `</div><div class="an-regles">Règles utilisées : retirer si aucun lot de la typologie dans la pige, ou si aucun lead depuis ${R.silence} jours, ou si l'annonce est en ligne sans aucun lead ; les anciens intitulés (avant le 23/09) ne sont pas pris en compte ; ajuster si l'annonce est au-delà de la ${R.rangMauvais}<sup>e</sup> place en prix croissant ; créer si au moins ${R.demandeMin} leads ont cherché cette typologie dans la ville sur la période, au moins ${R.stockMin} lots disponibles dans la pige, et aucune annonce de notre part.</div>`;
+  document.getElementById('an-faire').innerHTML = `<div class="an-faire-grid">` +
+    bloc('À retirer', 'an-act-ret', retirer, 'Rien à retirer.', 'Elles ne rapportent rien, ou promettent un bien que nous n\'avons pas.') +
+    bloc('À créer', 'an-act-cre', creer, 'Rien à créer pour le moment.', 'Demande, stock dans la pige, et aucune annonce de notre part.' + (_anVendeur ? ' Pour toute l\'équipe.' : '')) +
+    bloc('À ajuster', 'an-act-aju', ajuster, _anSLDate ? 'Nos annonces sont bien placées sur SeLoger.' : 'Il faut un relevé SeLoger pour le savoir.', 'Mal placées quand le client trie par prix.') +
+    `</div><details class="an-regles"><summary>Comment c'est calculé</summary>Retirer : aucun lot de la typologie dans la pige, aucun lead depuis ${R.silence} jours, ou en ligne sur SeLoger sans aucun lead. Ajuster : au-delà de la ${R.rangMauvais}<sup>e</sup> place en prix croissant sur SeLoger. Créer : au moins ${R.demandeMin} leads ont cherché cette typologie dans la ville sur la période, au moins ${R.stockMin} lots dans la pige, aucune annonce de notre part. Les anciens intitulés (avant le 23/09) ne comptent pas. Touchez une ligne pour lire l'explication.</details>`;
 
   // Intitulés illisibles
   const il =Object.values(illisibles).filter(i => !_anVendeur || i.vendeur === _anVendeur).sort((a, b) => b.n - a.n);
   document.getElementById('an-nonlus-box').style.display = il.length ? '' : 'none';
+  document.getElementById('an-nonlus-titre').textContent = `Intitulés illisibles (${il.reduce((x, i) => x + i.n, 0)} leads)`;
   document.getElementById('an-nonlus').innerHTML = `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Leads dont l'intitulé ne donne pas la ville ou la typologie : ils ne sont rattachés à aucune annonce. Format attendu : « Prénom T2 - VILLE - 45 M² ».</div>` +
     il.map(i => `<div class="an-vd">${_vEsc(i.ref)}${i.vendeur ? ' <small style="color:var(--muted)">(' + i.vendeur + ')</small>' : ''} — ${i.n} lead${i.n > 1 ? 's' : ''}</div>`).join('');
 
