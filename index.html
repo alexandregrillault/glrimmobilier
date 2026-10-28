@@ -406,6 +406,24 @@
   .an-plus { padding: 12px 20px; margin-top: 16px; }
   .an-plus summary { cursor: pointer; font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; }
   .an-plus[open] summary { margin-bottom: 10px; }
+  .an-robot-tete { padding: 16px 20px; margin-bottom: 14px; }
+  .an-robot-ligne { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 14px; }
+  .an-robot-etat { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+  .an-robot-ok { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+  .an-robot-ko { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+  .an-robot-neutre { background: var(--surface2); color: var(--muted); }
+  .an-robot-chiffres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .an-robot-chiffres div { background: var(--surface2); border-radius: 10px; padding: 10px 12px; }
+  .an-robot-chiffres b { display: block; font-size: 22px; }
+  .an-robot-chiffres span { font-size: 12px; color: var(--muted); }
+  .an-robot-arret { color: var(--danger); font-weight: 600; margin: 12px 0 0; }
+  .an-robot-passage { padding: 14px 20px; margin-bottom: 10px; }
+  .an-robot-titre { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+  .an-robot-titre span { color: var(--muted); font-size: 12.5px; }
+  .an-robot-passage ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.55; }
+  .an-robot-table { overflow-x: auto; }
+  .an-robot-table table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  .an-robot-table th, .an-robot-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   @media (max-width: 900px) { .an-faire-grid { grid-template-columns: 1fr; } }
   .an-h { font-size: 11px; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 10px; }
   .an-vd { font-size: 13px; padding: 6px 0; border-top: 1px dashed var(--border); }
@@ -1177,10 +1195,12 @@
         <div class="mk-chips" id="an-onglets">
           <button data-o="faire" class="on" onclick="anOnglet('faire')">À faire</button>
           <button data-o="annonces" onclick="anOnglet('annonces')">Carte</button>
+          <button data-o="robot" onclick="anOnglet('robot')">Robot SeLoger</button>
         </div>
         <div class="mk-chips" id="an-periode"></div>
       </div>
       <div id="an-vue-faire"><div class="card an-faire" id="an-faire"></div></div>
+      <div id="an-vue-robot" style="display:none"><div id="an-robot"></div></div>
       <div id="an-vue-annonces" style="display:none">
       <div class="an-reglages">
         <div class="mk-chips" id="an-couches"></div>
@@ -16762,7 +16782,7 @@ async function _anGeocoder(cles) {
 
 async function loadAnnonces(force) {
   const box = document.getElementById('an-villes');
-  if (force) { _anLeads = null; _anPige = null; }
+  if (force) { _anLeads = null; _anPige = null; _anRobot = null; if (_anOnglet === 'robot') anRobotCharger(); }
   if (!_anLeads || !_anPige) {
     box.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
     const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER };
@@ -16824,9 +16844,64 @@ function anOnglet(o) {
   document.querySelectorAll('#an-onglets button').forEach(b => b.classList.toggle('on', b.dataset.o === o));
   document.getElementById('an-vue-faire').style.display = o === 'faire' ? '' : 'none';
   document.getElementById('an-vue-annonces').style.display = o === 'annonces' ? '' : 'none';
+  document.getElementById('an-vue-robot').style.display = o === 'robot' ? '' : 'none';
+  document.getElementById('an-periode').style.display = o === 'robot' ? 'none' : ''; // la période ne concerne que les leads
   if (o === 'annonces' && _anLeads) _anRendre(); // la carte se dessine une fois visible
+  if (o === 'robot') anRobotCharger();
 }
 function anVoirTout(btn) { btn.parentElement.classList.add('tout'); btn.remove(); }
+
+// Onglet « Robot SeLoger » (demande d'Alex du 28/10/2026) : passages du robot qui recrée nos annonces
+// chaque jour (glr-pige/outils/seloger_recreer.py), lus dans seloger_recreation_passages (gérants seulement).
+// Bilan groupé par passage ; le détail annonce par annonce reste replié.
+let _anRobot = null;
+async function anRobotCharger() {
+  const box = document.getElementById('an-robot');
+  if (!_anRobot) {
+    box.innerHTML = '<div class="empty"><p>Chargement…</p></div>';
+    try {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/seloger_recreation_passages?select=id,jour,debut,fin,prevu,recrees,supprimees,en_ligne,arret,resume,detail&order=jour.desc,id.desc&limit=30',
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER } });
+      if (!r.ok) throw new Error(r.status);
+      _anRobot = await r.json();
+    } catch (e) {
+      box.innerHTML = '<div class="empty"><div class="empty-icon">⚠</div><p>Erreur de chargement — réessayez</p></div>';
+      return;
+    }
+  }
+  const P = _anRobot;
+  if (!P.length) { box.innerHTML = '<div class="card an-robot-tete"><p>Le robot n\'a encore fait aucun passage.</p></div>'; return; }
+  const heure = d => d ? new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', ' h ') : '';
+  const eur = v => v == null ? '—' : new Intl.NumberFormat('fr-FR').format(Math.round(+v)) + ' €';
+  const jourTxt = j => new Date(j + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const auj = new Date().toISOString().slice(0, 10);
+  const d = P[0];
+  const etat = d.arret ? ['an-robot-ko', 'Arrêté'] : d.jour === auj ? ['an-robot-ok', 'Fait aujourd\'hui'] : ['an-robot-neutre', 'Pas encore de passage aujourd\'hui'];
+  const depuis = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);
+  const q = P.filter(x => x.jour >= depuis);
+  const tot = k => q.reduce((s, x) => s + (+x[k] || 0), 0);
+  let h = `<div class="card an-robot-tete">
+    <div class="an-robot-ligne"><span class="an-robot-etat ${etat[0]}">${etat[1]}</span>
+      <span>Dernier passage : <b>${_vEsc(jourTxt(d.jour))}</b>${d.debut ? ' à ' + _vEsc(heure(d.debut)) : ''} — ${+d.recrees || 0} annonce${+d.recrees > 1 ? 's' : ''} recréée${+d.recrees > 1 ? 's' : ''}${d.prevu != null ? ' sur ' + d.prevu : ''}</span></div>
+    <div class="an-robot-chiffres">
+      <div><b>${tot('recrees')}</b><span>recréées sur 14 jours</span></div>
+      <div><b>${tot('supprimees')}</b><span>anciennes supprimées</span></div>
+      <div><b>${d.en_ligne != null ? d.en_ligne : '—'}</b><span>annonces en ligne</span></div>
+    </div>
+    ${d.arret ? '<p class="an-robot-arret">Arrêt : ' + _vEsc(d.arret) + '</p>' : ''}
+  </div>`;
+  h += P.map(x => {
+    const lignes = (x.resume || []).filter(l => !/^Arrêt/.test(l)).map(l => '<li>' + _vEsc(l) + '</li>').join('')
+      + (x.arret ? '<li class="an-robot-arret">Arrêt : ' + _vEsc(x.arret) + '</li>' : '');
+    const det = (x.detail || []).map(r => `<tr><td>${_vEsc(r.ville || '')}</td><td>${_vEsc(r.ref || r.ref_avant || '')}</td><td>${_vEsc(eur(r.prix_avant))} → ${_vEsc(eur(r.prix))}</td><td>${_vEsc(String(r.photos != null ? r.photos : ''))}</td><td>${_vEsc(r.etat || '')}</td></tr>`).join('');
+    return `<div class="card an-robot-passage">
+      <div class="an-robot-titre"><b>${_vEsc(jourTxt(x.jour))}</b><span>${_vEsc(heure(x.debut))}${x.fin ? ' – ' + _vEsc(heure(x.fin)) : ''}</span></div>
+      <ul>${lignes}</ul>
+      ${det ? `<details class="an-plus"><summary>Détail des ${(x.detail || []).length} annonce(s)</summary><div class="an-robot-table"><table><tr><th>Ville</th><th>Référence</th><th>Prix</th><th>Photos</th><th>État</th></tr>${det}</table></div></details>` : ''}
+    </div>`;
+  }).join('');
+  box.innerHTML = h;
+}
 
 // Import du fichier seloger_concurrence.json (script de pige seloger_concurrence.js).
 // Les villes de ce fichier déjà importées à la même date sont remplacées (les autres
