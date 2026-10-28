@@ -18,7 +18,10 @@ def passage(n, recrees, prevu, arret=None, detail=None):
             'detail': detail or []}
 
 PASSAGES = [
-    passage(0, 10, 10, detail=[{'ville': 'Créteil', 'ref': 'Théo T4 - CRETEIL - 84 M²', 'prix_avant': 291997, 'prix': 289997, 'photos': 12, 'etat': 'en cours de publication'}]),
+    passage(0, 10, 10, detail=[
+        {'ville': 'Créteil', 'ref': 'Théo T4 - CRETEIL - 84 M²', 'titre': 'T4 - CRETEIL - 84 M² - NEUF VEFA', 'prix_avant': 291997, 'prix': 289997, 'photos': 12, 'etat': 'en cours de publication'},
+        {'ville': 'Créteil', 'ref': 'Théo T3 - CRETEIL - 65 M²', 'titre': 'T3 - CRETEIL - 65 M² - NEUF VEFA', 'prix_avant': 226997, 'prix': 224997, 'photos': 11, 'etat': 'en cours de publication'},
+        {'ville': 'Ivry-sur-Seine', 'ref': 'MTO T2 - IVRY-SUR-SEINE - 44 M²', 'titre': 'T2 - IVRY-SUR-SEINE - 44 M² - NEUF VEFA', 'prix_avant': 222000, 'prix': 220000, 'photos': 7, 'etat': 'brouillon, photos incomplètes'}]),
     passage(1, 4, 10, arret='SeLoger demande une vérification anti-robot'),
     passage(2, 10, 10),
 ]
@@ -51,13 +54,24 @@ with sync_playwright() as p:
         page.wait_for_timeout(500)
         texte = norm(page.text_content('#an-robot'))
         for attendu in ("Fait aujourd'hui", '10 annonces recréées sur 10', 'recréées sur 14 jours', '313', 'Par vendeur : Théo 6, MTO 4.',
-                        'Arrêt', 'SeLoger demande une vérification anti-robot', 'Détail des 1 annonce(s)', '291 997 € → 289 997 €'):
+                        'Arrêt', 'SeLoger demande une vérification anti-robot', 'Détail des 3 annonce(s)', '291 997 € → 289 997 €', 'Villes (2)'):
             if attendu not in texte: erreurs.append(f'{nom} : « {attendu} » absent')
         if not re.search(r'\b24\s*recréées sur 14 jours', texte): erreurs.append(f'{nom} : total sur 14 jours faux')
         if page.is_visible('#an-faire') or page.is_visible('#an-carte'): erreurs.append(f'{nom} : les autres onglets restent visibles')
         large = page.evaluate('document.documentElement.scrollWidth > window.innerWidth + 1')
         if large: erreurs.append(f'{nom} : la page déborde en largeur')
         page.screenshot(path=str(SORTIE / f'annonces_robot_{nom}.png'), full_page=False)
+        # Fenêtre « Villes » du passage du jour
+        page.click('.an-robot-btn'); page.wait_for_selector('#modal-an-villes.open', timeout=5000)
+        fen = norm(page.text_content('#modal-an-villes'))
+        for attendu in ('Villes recréées le', '2 villes · 3 annonces', 'Créteil', '2 annonces', 'T4 1, T3 1', 'Théo 2', '224 997 € à 289 997 €',
+                        'Ivry-sur-Seine', '1 laissée en l\'état', 'MTO 1', '220 000 €'):
+            if attendu not in fen: erreurs.append(f'{nom} : fenêtre Villes, « {attendu} » absent')
+        if page.evaluate('document.documentElement.scrollWidth > window.innerWidth + 1'): erreurs.append(f'{nom} : la fenêtre déborde en largeur')
+        page.wait_for_timeout(700)
+        page.screenshot(path=str(SORTIE / f'annonces_robot_villes_{nom}.png'), full_page=False)
+        page.click('#modal-an-villes .btn-ghost')
+        if page.is_visible('#modal-an-villes .modal'): erreurs.append(f'{nom} : la fenêtre Villes ne se ferme pas')
         page.close()
     nav.close()
 

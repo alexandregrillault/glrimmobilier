@@ -422,6 +422,11 @@
   .an-robot-titre span { color: var(--muted); font-size: 12.5px; }
   .an-robot-passage ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.55; }
   .an-robot-table { overflow-x: auto; }
+  .an-robot-btn { margin-top: 10px; }
+  .an-villes-sous { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  .an-villes-ligne { display: grid; grid-template-columns: 1.3fr 1.5fr 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; align-items: baseline; }
+  .an-villes-ligne span { display: block; color: var(--muted); font-size: 12px; }
+  @media (max-width: 600px) { .an-villes-ligne { grid-template-columns: 1fr; gap: 2px; } }
   .an-robot-table table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
   .an-robot-table th, .an-robot-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   @media (max-width: 900px) { .an-faire-grid { grid-template-columns: 1fr; } }
@@ -2657,6 +2662,14 @@
 </div>
 
 <!-- MODAL: CHARGE -->
+<div class="modal-overlay" id="modal-an-villes" onclick="if (event.target === this) closeModal('an-villes')">
+  <div class="modal" style="width:620px">
+    <div class="modal-title" id="an-villes-titre">Villes</div>
+    <div id="an-villes-corps"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px"><button class="btn btn-ghost" onclick="closeModal('an-villes')">Fermer</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-relance">
   <div class="modal" style="width:600px">
     <div class="modal-title">Relance actabilité</div>
@@ -16851,6 +16864,27 @@ function anOnglet(o) {
 }
 function anVoirTout(btn) { btn.parentElement.classList.add('tout'); btn.remove(); }
 
+// Fenêtre « Villes » d'un passage du robot (demande d'Alex du 28/10/2026) : les villes dont les
+// annonces ont été recréées ce jour-là, regroupées, pour ne pas alourdir l'onglet.
+function anRobotVilles(id) {
+  const x = (_anRobot || []).find(p => p.id === id);
+  if (!x) return;
+  const eur = v => v == null ? '—' : new Intl.NumberFormat('fr-FR').format(Math.round(+v)) + ' €';
+  const compte = arr => Object.entries(arr.reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {})).sort((a, b) => b[1] - a[1]).map(([k, n]) => k + ' ' + n).join(', ');
+  const villes = {};
+  (x.detail || []).forEach(r => (villes[r.ville || 'Ville inconnue'] = villes[r.ville || 'Ville inconnue'] || []).push(r));
+  const lignes = Object.entries(villes).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'fr')).map(([v, rs]) => {
+    const prix = rs.map(r => +r.prix).filter(n => n > 0);
+    const ok = rs.filter(r => r.etat === 'en cours de publication').length;
+    return `<div class="an-villes-ligne"><div><b>${_vEsc(v)}</b><span>${rs.length} annonce${rs.length > 1 ? 's' : ''}${ok < rs.length ? ' · ' + (rs.length - ok) + ' laissée' + (rs.length - ok > 1 ? 's' : '') + ' en l\'état' : ''}</span></div>
+      <div>${_vEsc(compte(rs.map(r => (r.titre || r.ref || '?').match(/\bT\d+/) ? (r.titre || r.ref).match(/\bT\d+/)[0] : '?')))} · ${_vEsc(compte(rs.map(r => (r.ref || '?').split(' ')[0])))}</div>
+      <div>${prix.length ? (Math.min(...prix) === Math.max(...prix) ? _vEsc(eur(prix[0])) : _vEsc(eur(Math.min(...prix))) + ' à ' + _vEsc(eur(Math.max(...prix)))) : ''}</div></div>`;
+  }).join('');
+  document.getElementById('an-villes-titre').textContent = 'Villes recréées le ' + new Date(x.jour + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  document.getElementById('an-villes-corps').innerHTML = `<p class="an-villes-sous">${Object.keys(villes).length} ville${Object.keys(villes).length > 1 ? 's' : ''} · ${(x.detail || []).length} annonce${(x.detail || []).length > 1 ? 's' : ''}</p>` + lignes;
+  document.getElementById('modal-an-villes').classList.add('open');
+}
+
 // Onglet « Robot SeLoger » (demande d'Alex du 28/10/2026) : passages du robot qui recrée nos annonces
 // chaque jour (glr-pige/outils/seloger_recreer.py), lus dans seloger_recreation_passages (gérants seulement).
 // Bilan groupé par passage ; le détail annonce par annonce reste replié.
@@ -16896,6 +16930,7 @@ async function anRobotCharger() {
     const det = (x.detail || []).map(r => `<tr><td>${_vEsc(r.ville || '')}</td><td>${_vEsc(r.ref || r.ref_avant || '')}</td><td>${_vEsc(eur(r.prix_avant))} → ${_vEsc(eur(r.prix))}</td><td>${_vEsc(String(r.photos != null ? r.photos : ''))}</td><td>${_vEsc(r.etat || '')}</td></tr>`).join('');
     return `<div class="card an-robot-passage">
       <div class="an-robot-titre"><b>${_vEsc(jourTxt(x.jour))}</b><span>${_vEsc(heure(x.debut))}${x.fin ? ' – ' + _vEsc(heure(x.fin)) : ''}</span></div>
+      ${(x.detail || []).length ? `<button class="btn btn-ghost btn-sm an-robot-btn" onclick="anRobotVilles(${+x.id})">Villes (${new Set(x.detail.map(r => r.ville || '?')).size})</button>` : ''}
       <ul>${lignes}</ul>
       ${det ? `<details class="an-plus"><summary>Détail des ${(x.detail || []).length} annonce(s)</summary><div class="an-robot-table"><table><tr><th>Ville</th><th>Référence</th><th>Prix</th><th>Photos</th><th>État</th></tr>${det}</table></div></details>` : ''}
     </div>`;
