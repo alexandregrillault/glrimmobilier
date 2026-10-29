@@ -1586,7 +1586,7 @@
           <div class="card-header">
             <div>
               <div class="card-title" id="comm-vendeur-title">Vendeur</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:2px" id="comm-vendeur-sub">Commission = honoraires × taux, par vente</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px" id="comm-vendeur-sub">Commission = (honoraires − offre GLR) × taux, par vente</div>
             </div>
             <div style="text-align:right">
               <div style="font-family:var(--font-head);font-size:18px;font-weight:700;color:var(--accent2)" id="comm-vendeur-tot">0&nbsp;€</div>
@@ -2606,14 +2606,20 @@
       <div class="form-group">
         <label>Honoraires HT (€) — calculé auto</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="number" id="v-honoraires" step="0.01" placeholder="calculé automatiquement" style="flex:1">
+          <input type="number" id="v-honoraires" step="0.01" placeholder="calculé automatiquement" style="flex:1" oninput="venteOffreHint()">
           <button type="button" id="btn-otaree" onclick="toggleOtaree()" style="background: var(--surface2); border-color: var(--border); border-radius: 9px; padding: 8px 12px; color: var(--muted); font-size: 12px; font-family: var(--font-body); cursor: pointer; white-space: nowrap; transition: 0.15s;" title="Frais plateforme Otaree : -629 € HT">Otaree</button>
         </div>
         <div style="font-size: 11px; color: var(--accent); margin-top: 2px;" id="otaree-hint"></div>
       </div>
       <div class="form-group">
         <label>Taux commission vendeur (%)</label>
-        <input type="number" id="v-taux" placeholder="ex: 1.5" step="0.1">
+        <input type="number" id="v-taux" placeholder="ex: 1.5" step="0.1" oninput="venteOffreHint()">
+      </div>
+      <div class="form-group full">
+        <label>Offre GLR à l'acquéreur (€) — optionnel</label>
+        <input type="number" id="v-offre-glr" step="0.01" min="0" placeholder="ex: 1000 (ticket cadeau, geste commercial…)" oninput="venteOffreHint()" style="max-width:260px">
+        <div style="font-size:11.5px;color:var(--muted);margin-top:4px">Payée par GLR, jamais sur la facture au promoteur. Déduite de nos honoraires dans les chiffres, et de la base de commission du vendeur.</div>
+        <div id="v-offre-hint" style="font-size:11.5px;color:var(--accent);margin-top:3px"></div>
       </div>
       <div class="form-group">
         <label>Date de réservation</label>
@@ -3568,6 +3574,7 @@ function venteToRow(v) {
   if (!r.date) r.date = null;
   if (!r.dateActe) r.dateActe = null;
   if (!r.dateSignatureNotaire) r.dateSignatureNotaire = null;
+  if (!r.offreGlr) r.offreGlr = null;
   return r;
 }
 
@@ -3576,6 +3583,7 @@ function rowToVente(r) {
   return Object.assign({}, r, {
     prix:            r.prix == null ? 0 : Number(r.prix),
     honoraires:      r.honoraires == null ? 0 : Number(r.honoraires),
+    offreGlr:        r.offreGlr == null ? 0 : Number(r.offreGlr),
     taux:            r.taux == null ? 0 : Number(r.taux),
     tauxHonoraires:  r.tauxHonoraires == null ? 0 : Number(r.tauxHonoraires),
     dateActe:        r.dateActe || '',
@@ -4818,7 +4826,7 @@ function openModal(type) {
     setChargeType('fixe');
   }
   if (type === 'vendeur') { window._editingVendeurId = null; vdFactRemplir(null); }
-  if (type === 'vente') { const av = document.getElementById('v-avance'); if (av) av.checked = false; venteAvanceChange(); }
+  if (type === 'vente') { const av = document.getElementById('v-avance'); if (av) av.checked = false; venteAvanceChange(); venteOffreHint(); }
   document.getElementById('modal-' + type).classList.add('open');
 }
 
@@ -4864,6 +4872,7 @@ function calcHonoraires() {
     const base = r2(prix * tauxH / 100);
     document.getElementById('v-honoraires').value = otareeActif ? r2(base - 629) : base;
   }
+  venteOffreHint();
 }
 
 function toggleOtaree() {
@@ -4922,6 +4931,7 @@ function saveVente() {
     prix,
     tauxHonoraires: parseFloat(document.getElementById('v-taux-honoraires').value) || 0,
     honoraires: parseFloat(document.getElementById('v-honoraires').value) || 0,
+    offreGlr: Math.max(0, r2(parseFloat(document.getElementById('v-offre-glr').value) || 0)),
     taux: isNaN(taux) ? 0 : taux,
     date,
     dateActe: document.getElementById('v-date-acte').value || '',
@@ -5127,6 +5137,7 @@ function openEditVente(id) {
   document.getElementById('v-prix').value = v.prix || '';
   document.getElementById('v-taux-honoraires').value = v.tauxHonoraires || '';
   document.getElementById('v-honoraires').value = v.honoraires || '';
+  document.getElementById('v-offre-glr').value = v.offreGlr || '';
   document.getElementById('v-taux').value = v.taux || '';
   document.getElementById('v-date').value = v.date || '';
   document.getElementById('v-date-acte').value = v.dateActe || '';
@@ -5136,8 +5147,9 @@ function openEditVente(id) {
   const avEl = document.getElementById('v-avance'); if (avEl) avEl.checked = !!v.avanceAccordee;
   const avM = document.getElementById('v-avance-montant'), avP = document.getElementById('v-avance-pct');
   if (avM) avM.value = v.avanceMontant ? Number(v.avanceMontant) : '';
-  if (avP) { const c0 = r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100); avP.value = (v.avanceMontant && c0 > 0) ? r2(Number(v.avanceMontant) / c0 * 100) : ''; }
+  if (avP) { const c0 = commissionVente(v); avP.value = (v.avanceMontant && c0 > 0) ? r2(Number(v.avanceMontant) / c0 * 100) : ''; }
   venteAvanceChange();
+  venteOffreHint();
 
   // Changer le titre du modal
   document.querySelector('#modal-vente .modal-title').textContent = '✎ Modifier la vente';
@@ -5187,7 +5199,7 @@ function refresh() {
 function renderPerformance() {
   const all = data.ventes || [];
   const setP = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const sumHT = (arr) => arr.reduce((s,v) => s + (Number(v.honoraires)||0), 0);
+  const sumHT = (arr) => arr.reduce((s,v) => s + honoNet(v), 0);
   const vResa  = all.filter(v => v.statut === 'reservation');
   const vActes = all.filter(v => v.statut === 'acte' || v.statut === 'facture-payee');
   const vFact  = all.filter(v => v.statut === 'facture');
@@ -5200,7 +5212,7 @@ function renderPerformance() {
 
   const agg = (arr) => {
     const m = {};
-    arr.forEach(v => { const id = v.vendeurId || '?'; if (!m[id]) m[id] = { n: 0, ca: 0 }; m[id].n++; m[id].ca += (Number(v.honoraires) || 0); });
+    arr.forEach(v => { const id = v.vendeurId || '?'; if (!m[id]) m[id] = { n: 0, ca: 0 }; m[id].n++; m[id].ca += honoNet(v); });
     return Object.entries(m).sort((a, b) => b[1].ca - a[1].ca);
   };
   const initFromName = (nom) => (nom || '?').split(/\s+/).map(w => w[0] || '').slice(0, 2).join('').toUpperCase();
@@ -5337,10 +5349,10 @@ function renderKPIs() {
   const toutes = getFilteredVentes();
   const actes = toutes.filter(v => v.statut === 'acte');
   const resaCount = toutes.filter(v => v.statut === 'reservation').length;
-  const ca = toutes.reduce((s, v) => s + (v.honoraires || 0), 0);
-  const volume = r2(toutes.reduce((s, v) => s + r2((v.honoraires||0) * (v.taux/100)), 0));
+  const ca = toutes.reduce((s, v) => s + honoNet(v), 0);
+  const volume = r2(toutes.reduce((s, v) => s + commissionVente(v), 0));
   const totalCharges = getFilteredChargesTotal();
-  const commissions = r2(actes.reduce((s,v) => s + r2((v.honoraires||0) * (v.taux/100)), 0));
+  const commissions = r2(actes.reduce((s,v) => s + commissionVente(v), 0));
   const net = ca - totalCharges - commissions;
 
   document.getElementById('kpi-ca').textContent = fmtEur(ca);
@@ -5367,7 +5379,7 @@ function renderCommissions() {
   const rows = data.vendeurs.map(v => {
     const ventesV = actes.filter(x => x.vendeurId === v.id);
     const ca = ventesV.reduce((s,x) => s+x.prix, 0);
-    const comm = r2(ventesV.reduce((s,x) => s + r2((x.honoraires||0)*(x.taux/100)), 0));
+    const comm = r2(ventesV.reduce((s,x) => s + commissionVente(x), 0));
     totalComm = r2(totalComm + comm);
     if (ventesV.length === 0) return '';
     return `<tr>
@@ -5464,7 +5476,7 @@ function renderAllVentes() {
     else if (venteSortCol === 'vendeur') { valA = vendeurName(a.vendeurId).toLowerCase(); valB = vendeurName(b.vendeurId).toLowerCase(); }
     else if (venteSortCol === 'prix') { valA = a.prix||0; valB = b.prix||0; }
     else if (venteSortCol === 'statut') { valA = a.statut||''; valB = b.statut||''; }
-    else if (venteSortCol === 'commission') { valA = r2((a.honoraires||0)*(a.taux/100))||0; valB = r2((b.honoraires||0)*(b.taux/100))||0; }
+    else if (venteSortCol === 'commission') { valA = commissionVente(a); valB = commissionVente(b); }
     else if (venteSortCol === 'actabilite') { valA = a.dateActe||''; valB = b.dateActe||''; }
     else { valA = a.date||''; valB = b.date||''; }
     if (valA < valB) return venteSortDir === 'asc' ? -1 : 1;
@@ -5478,7 +5490,7 @@ function renderAllVentes() {
     <td style="color:var(--muted)">${v.promoteur || '—'}</td>
     <td>${vendeurName(v.vendeurId)}</td>
     <td>${fmtEur(v.prix)}</td>
-    <td style="color:var(--accent)">${v.taux ? fmtEur2((v.honoraires||0) * v.taux/100) + ' (' + v.taux + '%)' : '—'}</td>
+    <td style="color:var(--accent)">${v.taux ? fmtEur2(commissionVente(v)) + ' (' + v.taux + '%)' : '—'}</td>
     <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
     ${actabiliteCell(v)}
     <td>
@@ -5537,7 +5549,7 @@ function renderActabilites() {
   const retard = pipeline.filter(v => joursDiff(v.dateActe) < 0);
   const ceMois = pipeline.filter(v => { const d = joursDiff(v.dateActe); return d >= 0 && d <= 30; });
   const aVenir = pipeline.filter(v => joursDiff(v.dateActe) > 30);
-  const honos = [...retard, ...ceMois].reduce((s, v) => s + (v.honoraires || 0), 0);
+  const honos = [...retard, ...ceMois].reduce((s, v) => s + honoNet(v), 0);
 
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
   set('acta-kpi-retard', retard.length);
@@ -5573,7 +5585,7 @@ function sectionActa(titre, arr, color) {
       <td style="color:var(--muted)">${v.promoteur || '—'}</td>
       <td>${vendeurName(v.vendeurId)}</td>
       <td style="white-space:nowrap;font-weight:600;color:${color}">${dstr}<br><span style="font-size:11px;font-weight:500">${compte}</span></td>
-      <td style="color:var(--accent)">${v.honoraires ? fmtEur(v.honoraires) : '—'}</td>
+      <td style="color:var(--accent)">${v.honoraires ? fmtEur(honoNet(v)) : '—'}</td>
       <td><button class="btn btn-primary btn-sm" onclick="openRelance('${v.id}')">Relancer</button></td>
     </tr>`;
   }).join('');
@@ -5723,7 +5735,7 @@ function renderCommissionsVendeurs() {
   const vendeurs = (data.vendeurs || []);
   if (!vendeurs.length) { tabsBox.innerHTML = '<div style="color:var(--muted);font-size:13px">Aucun vendeur.</div>'; return; }
   // commission par vendeur (toutes ventes)
-  const commOf = v => r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100);
+  const commOf = v => commissionVente(v);
   const stat = {};
   vendeurs.forEach(vd => stat[vd.id] = { total: 0, encaisse: 0, avenir: 0, n: 0, ventes: [] });
   (data.ventes || []).forEach(v => {
@@ -5744,7 +5756,7 @@ function renderCommissionsVendeurs() {
   const vd = vendeurs.find(v => v.id === currentCommVendeur);
   const s = stat[currentCommVendeur];
   document.getElementById('comm-vendeur-title').textContent = ((vd.prenom || '') + ' ' + (vd.nom || '')).trim();
-  document.getElementById('comm-vendeur-sub').textContent = s.n + ' vente(s) · commission = honoraires × taux';
+  document.getElementById('comm-vendeur-sub').textContent = s.n + ' vente(s) · commission = (honoraires − offre GLR) × taux';
   document.getElementById('comm-vendeur-tot').textContent = fmtEur2(s.total);
   document.getElementById('comm-vendeur-split').textContent = 'encaissé ' + fmtEur2(s.encaisse) + ' · à venir ' + fmtEur2(s.avenir);
   const tb = document.getElementById('tbody-comm-vendeur');
@@ -5752,7 +5764,7 @@ function renderCommissionsVendeurs() {
   const rank = { 'facture-payee': 0, 'facture': 1, 'acte': 2, 'reservation': 3 };
   tb.innerHTML = s.ventes.slice().sort((a, b) => (rank[a.statut] ?? 9) - (rank[b.statut] ?? 9)).map(v => `<tr>
     <td><strong>${v.programme || '—'}</strong><div style="font-size:11px;color:var(--muted)">${v.clientNom || v.client || ''}</div></td>
-    <td style="text-align:right">${fmtEur(Number(v.honoraires) || 0)}</td>
+    <td style="text-align:right">${fmtEur(honoNet(v))}</td>
     <td style="text-align:right;color:var(--muted)">${Number(v.taux) || 0}%</td>
     <td style="text-align:right;font-family:var(--font-head);font-weight:700;color:var(--accent2)">${fmtEur2(commOf(v))}</td>
     <td style="text-align:right">${statutBadge(v.statut)}</td>
@@ -6417,7 +6429,7 @@ function renderTresoPrev() {
   const chFixesTot = (data.chargesFixes || []).reduce((s, cf) => s + getTotalFixeSurPeriode(cf, '2024-01', nowMois), 0);
   const chVarTot = (data.charges || []).reduce((s, c) => s + (Number(c.montant) || 0), 0);
   const recettesTot = ((data.objectifs && data.objectifs.recettes) || []).reduce((s, r) => s + (Number(r.montant) || 0), 0);
-  const honoTTC = (data.ventes || []).filter(v => v.statut === 'facture-payee').reduce((s, v) => s + (Number(v.honoraires) || 0) * 1.2, 0);
+  const honoTTC = (data.ventes || []).filter(v => v.statut === 'facture-payee').reduce((s, v) => s + (Number(v.honoraires) || 0) * 1.2 - (Number(v.offreGlr) || 0), 0);
   const depart = honoTTC + recettesTot - chVarTot - chFixesTot;
   const depEl = document.getElementById('tp-depart'); if (depEl) depEl.value = Math.round(depart);
   const seuil  = tpNum('tp-seuil', 40000);
@@ -6454,9 +6466,9 @@ function renderTresoPrev() {
     const reporte = enc < startMonth;
     if (enc < startMonth) enc = startMonth; // en retard -> reporté au 1er mois
     if (enc <= endMonth) {
-      encByMonth[enc] = (encByMonth[enc] || 0) + htv * 1.2;
-      commByMonth[enc] = r2((commByMonth[enc] || 0) + r2(htv * (Number(v.taux) || 0) / 100));
-      (encDetailByMonth[enc] = encDetailByMonth[enc] || []).push({ v, acteMonth, delai, reporte, ht: htv, ttc: htv * 1.2 });
+      encByMonth[enc] = (encByMonth[enc] || 0) + htv * 1.2 - (Number(v.offreGlr) || 0);   // l'offre GLR sort de notre poche
+      commByMonth[enc] = r2((commByMonth[enc] || 0) + commissionVente(v));
+      (encDetailByMonth[enc] = encDetailByMonth[enc] || []).push({ v, acteMonth, delai, reporte, ht: htv, ttc: htv * 1.2 - (Number(v.offreGlr) || 0) });
     }
   });
 
@@ -6630,9 +6642,11 @@ function toggleSalaireCharge() {
   salaireCharge = chk ? chk.checked : false;
   renderRemuneration();
 }
-// Commission vendeur d'une vente = honoraires × taux %
+// Ce que GLR gagne sur une vente = honoraires − offre GLR (ticket cadeau…) ; la facture promoteur reste sur les honoraires
+function honoNet(v) { return r2((Number(v.honoraires) || 0) - (Number(v.offreGlr) || 0)); }
+// Commission vendeur d'une vente = (honoraires − offre GLR) × taux %
 function commissionVente(v) {
-  return r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100);
+  return r2(Math.max(0, honoNet(v)) * (Number(v.taux) || 0) / 100);
 }
 function renderRemuneration() {
   const box = document.getElementById('remun-gauges');
@@ -6680,8 +6694,8 @@ function renderVendeurs() {
   grid.innerHTML = data.vendeurs.map(v => {
     const ventes = data.ventes.filter(x => x.vendeurId === v.id); // toujours tout l'historique
     const actes = ventes.filter(x => x.statut === 'acte' || x.statut === 'facture-payee');
-    const ca = ventes.reduce((s,x)=>s+(x.honoraires||0),0); // honoraires sur toutes les ventes
-    const comm = r2(ventes.reduce((s,x)=>s+r2((x.honoraires||0)*(x.taux/100)),0));
+    const ca = ventes.reduce((s,x)=>s+honoNet(x),0); // honoraires sur toutes les ventes
+    const comm = r2(ventes.reduce((s,x)=>s+commissionVente(x),0));
     const color = vendeurColor(v.id);
     return `<div class="vendeur-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between">
@@ -6791,8 +6805,8 @@ function renderEquipeDashboard() {
   if (!selectedVendeurId) return;
   const ventes = data.ventes.filter(v => v.vendeurId === selectedVendeurId);
   const actes = ventes.filter(v => v.statut === 'acte');
-  const totalHonoraires = ventes.reduce((s,v) => s + (v.honoraires||0), 0);
-  const totalComm = r2(ventes.reduce((s,v) => s + r2((v.honoraires||0)*(v.taux/100)), 0));
+  const totalHonoraires = ventes.reduce((s,v) => s + honoNet(v), 0);
+  const totalComm = r2(ventes.reduce((s,v) => s + commissionVente(v), 0));
   const resa = ventes.filter(v => v.statut === 'reservation').length;
 
   document.getElementById('eq-honoraires').textContent = fmtEur(totalHonoraires);
@@ -6812,8 +6826,8 @@ function renderEquipeDashboard() {
         <td><strong>${v.programme||'—'}</strong>${v.ville?'<br><span style="font-size:11px;color:var(--muted)">'+v.ville+'</span>':''}</td>
         <td>${v.client||'—'}</td>
         <td>${fmtEur(v.prix)}</td>
-        <td style="color:var(--accent)">${fmtEur(v.honoraires||0)}</td>
-        <td style="color:var(--success);font-weight:600">${fmtEur2((v.honoraires||0)*(v.taux/100))}</td>
+        <td style="color:var(--accent)">${fmtEur(honoNet(v))}</td>
+        <td style="color:var(--success);font-weight:600">${fmtEur2(commissionVente(v))}</td>
         <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
         <td>${statutBadge(v.statut)}</td>
       </tr>`).join('');
@@ -6834,8 +6848,8 @@ function renderEquipeVentes() {
         <td>${v.client||'—'}</td>
         <td style="color:var(--accent);font-weight:600">${v.lot||'—'}</td>
         <td>${fmtEur(v.prix)}</td>
-        <td style="color:var(--accent)">${fmtEur(v.honoraires||0)}</td>
-        <td style="color:var(--success);font-weight:600">${fmtEur2((v.honoraires||0)*(v.taux/100))}</td>
+        <td style="color:var(--accent)">${fmtEur(honoNet(v))}</td>
+        <td style="color:var(--success);font-weight:600">${fmtEur2(commissionVente(v))}</td>
         <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
         <td>${statutBadge(v.statut)}</td>
       </tr>`).join('');
@@ -19245,7 +19259,7 @@ function soldeTresoProjeteAu(endMonth) {
   const chFixesTot = (data.chargesFixes || []).reduce((s, cf) => s + getTotalFixeSurPeriode(cf, '2024-01', nowMois), 0);
   const chVarTot = (data.charges || []).reduce((s, c) => s + (Number(c.montant) || 0), 0);
   const recettesTot = ((data.objectifs && data.objectifs.recettes) || []).reduce((s, r) => s + (Number(r.montant) || 0), 0);
-  const honoTTC = (data.ventes || []).filter(v => v.statut === 'facture-payee').reduce((s, v) => s + (Number(v.honoraires) || 0) * 1.2, 0);
+  const honoTTC = (data.ventes || []).filter(v => v.statut === 'facture-payee').reduce((s, v) => s + (Number(v.honoraires) || 0) * 1.2 - (Number(v.offreGlr) || 0), 0);
   let solde = honoTTC + recettesTot - chVarTot - chFixesTot;
 
   const startMonth = nowMois;
@@ -19261,8 +19275,8 @@ function soldeTresoProjeteAu(endMonth) {
     if (enc < startMonth) enc = startMonth;
     if (enc <= endMonth) {
       const htv = Number(v.honoraires) || 0;
-      encByMonth[enc] = (encByMonth[enc] || 0) + htv * 1.2;
-      commByMonth[enc] = r2((commByMonth[enc] || 0) + r2(htv * (Number(v.taux) || 0) / 100));
+      encByMonth[enc] = (encByMonth[enc] || 0) + htv * 1.2 - (Number(v.offreGlr) || 0);   // l'offre GLR sort de notre poche
+      commByMonth[enc] = r2((commByMonth[enc] || 0) + commissionVente(v));
     }
   });
   const tvaDedMois = (fixe + autres) / 6;
@@ -19290,11 +19304,11 @@ function renderGerantChiffres() {
   const actes        = ventes.filter(v => v.statut === 'acte' || v.statut === 'facture-payee');
   const resa = reservations.length;
 
-  const ca   = ventes.reduce((s,v) => s+(v.honoraires||0), 0);
-  const comm = r2(ventes.reduce((s,v) => s+r2((v.honoraires||0)*(v.taux/100)), 0));
-  const caEncaisse   = encaissees.reduce((s,v) => s+(v.honoraires||0), 0);
-  const caPrev       = reservations.reduce((s,v) => s+(v.honoraires||0), 0);
-  const commEncaisse = r2(encaissees.reduce((s,v) => s+r2((v.honoraires||0)*(v.taux/100)), 0));
+  const ca   = ventes.reduce((s,v) => s+honoNet(v), 0);
+  const comm = r2(ventes.reduce((s,v) => s+commissionVente(v), 0));
+  const caEncaisse   = encaissees.reduce((s,v) => s+honoNet(v), 0);
+  const caPrev       = reservations.reduce((s,v) => s+honoNet(v), 0);
+  const commEncaisse = r2(encaissees.reduce((s,v) => s+commissionVente(v), 0));
 
   const chargesVar    = getFilteredCharges().filter(c => c.categorie === 'variable').reduce((s,c) => s+c.montant, 0);
   const chargesUrssaf = getFilteredCharges().filter(c => c.categorie === 'urssaf').reduce((s,c) => s+c.montant, 0);
@@ -19318,8 +19332,8 @@ function renderGerantChiffres() {
   // CA HT (facture payée) − honoraires dus à tous − charges fixes HT − charges société HT − IS
   const _nowTr = new Date().toISOString().slice(0,7);
   const _fp = (data.ventes || []).filter(v => v.statut === 'facture-payee');
-  const _caFactHT  = _fp.reduce((s,v) => s + (Number(v.honoraires)||0), 0);
-  const _commDues  = _fp.reduce((s,v) => s + (Number(v.honoraires)||0)*(Number(v.taux)||0)/100, 0);
+  const _caFactHT  = _fp.reduce((s,v) => s + honoNet(v), 0);
+  const _commDues  = _fp.reduce((s,v) => s + commissionVente(v), 0);
   const _chFixesHT = (data.chargesFixes||[]).reduce((s,cf) => s + htFromTTC(getTotalFixeSurPeriode(cf,'2024-01',_nowTr), tvaRateForFixe(cf)), 0);
   const _chSocHT   = (data.charges||[]).filter(c => c.categorie==='variable' && c.sousSection==='societe')
     .reduce((s,c) => s + htFromTTC(Number(c.montant)||0, tauxTVASociete(c)), 0);
@@ -19344,8 +19358,8 @@ function renderGerantChiffres() {
     rnIsDu = (data.charges||[]).filter(c => c.categorie==='urssaf' && c.libelle==='Impôt société (IS)' && (c.mois||'').slice(0,4)===rnAnnee)
       .reduce((s,c) => s + (Number(c.montant)||0), 0);
   }
-  const _caFacturedHT = _fact.reduce((s,v) => s + (Number(v.honoraires)||0), 0);
-  const _honoDus      = _fact.reduce((s,v) => s + (Number(v.honoraires)||0)*(Number(v.taux)||0)/100, 0);
+  const _caFacturedHT = _fact.reduce((s,v) => s + honoNet(v), 0);
+  const _honoDus      = _fact.reduce((s,v) => s + commissionVente(v), 0);
   const resultatNet   = _caFacturedHT - _honoDus - rnChFixesHT - rnChSocHT - rnIsDu;
   const rnEl = document.getElementById('gc-resultat-net');
   if (rnEl) { rnEl.textContent = fmtEur(resultatNet); rnEl.style.color = resultatNet >= 0 ? 'var(--success)' : 'var(--danger)'; }
@@ -19368,8 +19382,8 @@ function renderGerantChiffres() {
   set('gc-solde-projete-sub', 'À fin ' + gcEndLbl);
 
   // Totaux CA & Charges (cases au-dessus des camemberts)
-  const caActeTot = ventes.filter(v => v.statut === 'acte').reduce((s,v) => s+(v.honoraires||0), 0);
-  const caFactTot = ventes.filter(v => v.statut === 'facture').reduce((s,v) => s+(v.honoraires||0), 0);
+  const caActeTot = ventes.filter(v => v.statut === 'acte').reduce((s,v) => s+honoNet(v), 0);
+  const caFactTot = ventes.filter(v => v.statut === 'facture').reduce((s,v) => s+honoNet(v), 0);
   set('gc-ca-total', fmtEur(caEncaisse + caFactTot + caActeTot + caPrev));
   set('gc-charges-total', fmtEur(totalCharges));
 
@@ -19393,8 +19407,8 @@ function renderGerantChiffres() {
   const pageChiffres = document.getElementById('page-gerant-chiffres');
   if (typeof Chart !== 'undefined' && pageChiffres && pageChiffres.classList.contains('active')) {
     try {
-      const caActe = ventes.filter(v => v.statut === 'acte').reduce((s,v) => s+(v.honoraires||0), 0);
-      const caFacture = ventes.filter(v => v.statut === 'facture').reduce((s,v) => s+(v.honoraires||0), 0);
+      const caActe = ventes.filter(v => v.statut === 'acte').reduce((s,v) => s+honoNet(v), 0);
+      const caFacture = ventes.filter(v => v.statut === 'facture').reduce((s,v) => s+honoNet(v), 0);
       const _gold = '#c8a96e', _amber = '#f5a623', _blue = '#4f7fe8', _green = '#3ecf8e';
       const ctxR = document.getElementById('gc-chart-repartition');
       if (ctxR) {
@@ -19413,7 +19427,7 @@ function renderGerantChiffres() {
         '<span style="display:flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:2px;background:'+_amber+'"></span>À venir<span style="margin-left:auto;font-weight:700;color:'+_amber+'">'+fmtEur(caPrev)+'</span></span>';
       const anneeChart = (document.getElementById('gc-compare-annee') && document.getElementById('gc-compare-annee').value) || String(new Date().getFullYear());
       const _mn = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
-      const moisData = _mn.map((_, i) => { const m = anneeChart + '-' + String(i+1).padStart(2,'0'); return data.ventes.filter(v => v.date && v.date.startsWith(m)).reduce((s,v) => s+(v.honoraires||0), 0); });
+      const moisData = _mn.map((_, i) => { const m = anneeChart + '-' + String(i+1).padStart(2,'0'); return data.ventes.filter(v => v.date && v.date.startsWith(m)).reduce((s,v) => s+honoNet(v), 0); });
       const anEl = document.getElementById('gc-mois-annee'); if (anEl) anEl.textContent = anneeChart;
       const ctxM = document.getElementById('gc-chart-mois');
       if (ctxM) {
@@ -19484,8 +19498,8 @@ function renderGerantChiffres() {
       const moisStr = annee + '-' + String(i+1).padStart(2,'0');
       const mv = data.ventes.filter(v => v.date && v.date.startsWith(moisStr));
       const mc = data.charges.filter(c => c.mois === moisStr || (c.recurrence === 'mensuelle' && c.mois <= moisStr));
-      const mca = mv.reduce((s,v) => s+(v.honoraires||0), 0);
-      const mcomm = mv.reduce((s,v) => s+(v.honoraires||0)*((v.taux||0)/100), 0);
+      const mca = mv.reduce((s,v) => s+honoNet(v), 0);
+      const mcomm = mv.reduce((s,v) => s+commissionVente(v), 0);
       const mcharges = mc.reduce((s,c) => s+c.montant, 0);
       const mnet = mca - mcomm - mcharges;
       if (mca === 0 && mcharges === 0) return `<tr style="opacity:.35"><td>${nom}</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>`;
@@ -20119,10 +20133,18 @@ async function facComLoad() {
 function _facAujourdhui() { return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' }); }
 function facComActives(id) { return _facCom.filter(f => f.vente_id === id && f.statut !== 'annulee'); }
 function facComDeVente(id) { return facComActives(id)[0] || null; }
-function _venteCommission(v) { return r2((Number(v.honoraires) || 0) * (Number(v.taux) || 0) / 100); }
+function _venteCommission(v) { return commissionVente(v); }
 function _pctTxt(x) { return String(r2(x)).replace('.', ','); }
 // Formulaire de vente : commission calculée avec les champs saisis
-function venteCommissionForm() { return r2((parseFloat(document.getElementById('v-honoraires').value) || 0) * (parseFloat(document.getElementById('v-taux').value) || 0) / 100); }
+function venteCommissionForm() { return commissionVente({ honoraires: parseFloat(document.getElementById('v-honoraires').value) || 0, offreGlr: parseFloat(document.getElementById('v-offre-glr').value) || 0, taux: parseFloat(document.getElementById('v-taux').value) || 0 }); }
+function venteOffreHint() {
+  const el = document.getElementById('v-offre-hint'); if (!el) return;
+  const o = parseFloat(document.getElementById('v-offre-glr').value) || 0;
+  const h = parseFloat(document.getElementById('v-honoraires').value) || 0;
+  if (o <= 0) { el.textContent = ''; return; }
+  const t = parseFloat(document.getElementById('v-taux').value) || 0;
+  el.textContent = 'Ce que GLR gagne : ' + fmtEur2(r2(h - o)) + ' HT' + (t ? ' · commission vendeur : ' + fmtEur2(venteCommissionForm()) : '');
+}
 function venteAvanceChange() {
   const on = document.getElementById('v-avance').checked;
   document.getElementById('v-avance-detail').style.display = on ? '' : 'none';
@@ -20159,7 +20181,7 @@ function facComProchaine(v) {
 }
 function _facTypeLib(f) {
   const vv = f.vente || {};
-  const tot = Number(vv.commissionTotale) || (Number(vv.honoraires) * Number(vv.taux) / 100) || 0;
+  const tot = Number(vv.commissionTotale) || commissionVente(vv) || 0;
   if (f.type === 'solde') return 'Solde';
   if (f.type === 'avance') return (tot && Number(f.ht) < tot - 0.004) ? 'Avance' : 'Avance (totalité)';
   return '';
@@ -20363,7 +20385,7 @@ function _ouvrirFactureComPDF(f) {
     + '<div class="card"><h4>Facturé à</h4><strong>' + esc(P.nom) + '</strong><br>' + esc(P.forme) + '<br>' + esc(P.adresse) + '<br>SIREN ' + esc(P.siren) + '<br>TVA ' + esc(P.tva) + '</div></div>'
     + '<table><thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">P.U. HT</th><th class="num">Montant HT</th></tr></thead>'
     + '<tbody><tr><td>' + esc(f.designation)
-    + '<div class="sub">Honoraires de la vente : ' + eur(V.honoraires) + ' HT — commission ' + esc(String(V.taux == null ? '' : V.taux)) + ' %</div>'
+    + '<div class="sub">Honoraires de la vente : ' + eur(V.honoraires) + ' HT' + (Number(V.offreGlr) > 0 ? ' − offre GLR ' + eur(V.offreGlr) : '') + ' — commission ' + esc(String(V.taux == null ? '' : V.taux)) + ' %</div>'
     + (V.dateSignatureNotaire ? '<div class="sub">Acte signé chez le notaire le <b>' + d(V.dateSignatureNotaire) + '</b></div>' : '')
     + recapCommission
     + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
