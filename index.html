@@ -11915,11 +11915,13 @@ function eqActCocher(id, coche){
 function eqActToutDeselectionner(){ _eqActSel.clear(); renderEqNotifs(); }
 
 // Tous les leads qui produisent une ligne d'activité cochable : un rappel
-// programmé, ou un premier appel jamais fait et non retiré de la liste.
+// programmé, un premier appel jamais fait et non retiré de la liste, ou une
+// relance d'appel tant que le 3e essai n'est pas fait.
 function _eqActLeadsActifs(){
   return _eqMiens().filter(l => {
     if (STATUTS_FINAUX.includes(eqLeadStatut(l))) return false;
     if (l.rappel_le) return true;
+    if (eqEssaiAFaire(l)) return true;
     return eqLeadStatut(l) === 'Nouveau' && !l.activite_masquee_le;
   });
 }
@@ -11928,7 +11930,11 @@ function _eqActLeadsActifs(){
 function _eqActRetardIds(){
   const jour = new Date().toISOString().slice(0, 10);
   return _eqActLeadsActifs()
-    .filter(l => l.rappel_le ? l.rappel_le < jour : (typeof _eqLeadFlags === 'function' && _eqLeadFlags(l).alerte48))
+    .filter(l => {
+      if (l.rappel_le) return l.rappel_le < jour;
+      const essai = eqEssaiAFaire(l);
+      return essai ? essai.le < jour : (typeof _eqLeadFlags === 'function' && _eqLeadFlags(l).alerte48);
+    })
     .map(l => l.id);
 }
 // Coche ou décoche d'un coup tout ce qui est en retard, sans toucher aux
@@ -11946,7 +11952,7 @@ function eqActRetardToutCocher(){
 const EQ_ACT_ACTIONS = {
   reporter:    { titre: 'Reporter', verbe: 'reportée' },
   sansreponse: { titre: 'Passer en « Sans réponse »', verbe: 'passée en Sans réponse',
-                 texte: 'Le client reste dans ton fichier mais sort des activités : plus de rappel programmé, statut « Sans réponse ». Tu pourras le reprendre quand tu veux depuis Mes leads.' },
+                 texte: 'Le client reste dans ton fichier : plus de rappel programmé, statut « Sans réponse ». Il revient dans tes activités jusqu\'au 3e essai.' },
   nonqualifie: { titre: 'Passer en « Non qualifié »', verbe: 'passée en Non qualifié',
                  texte: 'Hors cible ou sans projet réel : le lead est fermé et ne réapparaîtra plus dans les activités. Sa fiche et son historique ne bougent pas.' },
   retirer:     { titre: 'Retirer de la liste', verbe: 'retirée',
@@ -11969,17 +11975,24 @@ function _eqActCorps(action, l){
 function _eqActLigne(l){
   const h = l.rappel_heure ? String(l.rappel_heure).slice(0, 5).replace(':', 'h') + ' · ' : '';
   const nom = (typeof nomComplet === 'function' && nomComplet(l)) || '—';
-  const quoi = l.rappel_le ? (l.rappel_titre || ('Rappeler ' + nom)) : ('Premier appel — ' + nom);
+  const essai = eqEssaiAFaire(l);
+  const quoi = l.rappel_le ? (l.rappel_titre || ('Rappeler ' + nom)) : (essai ? 'Rappeler ' + nom : 'Premier appel — ' + nom);
   const quand = l.rappel_le
     ? new Date(l.rappel_le + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
-    : 'lead jamais appelé';
+    : (essai ? essai.n + ' essai' + (essai.n > 1 ? 's' : '') + ' sur ' + EQ_ESSAIS_MAX : 'lead jamais appelé');
   return { id: l.id, texte: quoi, detail: h + quand + (l.rappel_titre ? ' · ' + nom : '') };
 }
 
 // Point d'entrée unique : action groupée (sans id) ou sur une seule ligne (avec id)
 function eqActAction(action, idUnique){
   const ids = idUnique ? [idUnique] : [..._eqActSel];
-  const leads = ids.map(id => (_eqLeads || []).find(x => x.id === id)).filter(Boolean);
+  let leads = ids.map(id => (_eqLeads || []).find(x => x.id === id)).filter(Boolean);
+  // Une relance d'appel ne se retire pas et ne se note pas en groupe : chaque essai est un vrai appel
+  if (action === 'retirer' || action === 'sansreponse') {
+    const avant = leads.length;
+    leads = leads.filter(l => !eqEssaiAFaire(l));
+    if (leads.length < avant && typeof toast === 'function') toast('Relance d\'appel : note l\'essai fiche par fiche, pose un rappel ou classe le client', 'var(--warning)');
+  }
   if (!leads.length) return;
 
   if (action === 'reporter'){
@@ -12314,9 +12327,9 @@ function eqActMenu(id, ev){
   const left = r ? Math.min(r.left, window.innerWidth - 230) : 40;
   div.innerHTML = `<div style="position:absolute;top:${top}px;left:${Math.max(8, left)}px;width:220px;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden">
     ${ligne('reporter', 'Reporter à une date…')}
-    ${ligne('sansreponse', 'Passer en Sans réponse')}
+    ${eqEssaiAFaire(l) ? '' : ligne('sansreponse', 'Passer en Sans réponse')}
     ${ligne('nonqualifie', 'Passer en Non qualifié')}
-    ${ligne('retirer', 'Retirer de la liste', 'var(--danger)')}
+    ${eqEssaiAFaire(l) ? '' : ligne('retirer', 'Retirer de la liste', 'var(--danger)')}
   </div>`;
   div.addEventListener('click', function(e){ if (e.target === div) eqActMenuFermer(); });
   document.body.appendChild(div);
@@ -12529,6 +12542,24 @@ function renderEqNotifs() {
         aujourdhui.push({ t: recu ? new Date(recu).getTime() : 0, g: 'premier', d: jour, html: item('rappel', 'Premier appel — ' + esc(nomComplet(l) || '—') + eqReperesLead(l),
           'Nouveau lead reçu le ' + fmtJ(recu) + ' — à appeler dans les 48 h', boutonsNew, 'var(--accent)', l.id) });
       }
+    } else if (eqEssaiAFaire(l)) {
+      // Pas encore trois jours d'essai : le lead reste à appeler
+      const essai = eqEssaiAFaire(l);
+      const rang = essai.n + 1;
+      const titreEssai = 'Rappeler ' + esc(nomComplet(l) || '—') + eqReperesLead(l);
+      const detailEssai = (rang === 1 ? '1er' : rang + 'e') + ' essai sur ' + EQ_ESSAIS_MAX
+        + (essai.dernier ? ' · dernier essai ' + fmtJ(essai.dernier + 'T12:00:00') : '');
+      const boutonsEssai = btnFiche(l.id)
+        + `<button class="btn btn-sm btn-primary" onclick="eqAppelSansReponse('${l.id}')" style="font-size:11px" title="Il n'a pas décroché : on note l'essai du jour, et le lead revient au prochain jour ouvré">Pas de réponse</button>`
+        + btnActions(l.id);
+      if (essai.le < jour) {
+        retard.push({ t: new Date(essai.le + 'T00:00:00').getTime(), g: 'essai', d: essai.le, html: item('alerte', titreEssai,
+          detailEssai + ' · prévu le ' + fmtJ(essai.le + 'T12:00:00') + ' (il y a ' + joursRetard(essai.le) + ' j)', boutonsEssai, 'var(--danger)', l.id) });
+      } else if (essai.le === jour) {
+        aujourdhui.push({ t: 2, g: 'essai', d: jour, html: item('rappel', titreEssai, detailEssai, boutonsEssai, 'var(--accent)', l.id) });
+      } else {
+        avenir.push({ t: new Date(essai.le + 'T00:00:00').getTime(), g: 'essai', d: essai.le, html: item('prevu', titreEssai, detailEssai, boutonsEssai, null, l.id) });
+      }
     }
   });
 
@@ -12624,6 +12655,7 @@ function renderEqNotifs() {
     ['horaire',  'Prévu à heure fixe'],
     ['demande',  'Demandes de rendez-vous'],
     ['premier',  'Premiers appels'],
+    ['essai',    'À rappeler jusqu\'au 3e essai'],
     ['rappel',   'Rappels et relances'],
     ['attente',  'En attente du client']
   ];
@@ -13133,6 +13165,29 @@ function eqAppelsEnCours(l) {
   const a = eqAppelsListe(l);
   const t = l && l.derniere_action_le ? new Date(l.derniere_action_le).getTime() : NaN;
   return isNaN(t) ? a : a.filter(x => new Date(x.le).getTime() > t);
+}
+
+// Relance jusqu'au 3e essai (décision d'Alex du 02/11/2026) : un lead en « Sans
+// réponse » reste dans les activités tant qu'il n'a pas été essayé sur trois
+// jours différents. Rien n'est écrit sur la fiche, comme pour « Premier appel » :
+// la ligne se déduit des tentatives, donc la paternité ne bouge pas. Elle ne se
+// retire pas : on note l'essai, on pose un rappel ou on classe le client.
+const EQ_ESSAIS_MAX = 3;         // jours d'essai différents
+const EQ_ESSAI_FENETRE_J = 14;   // au-delà, plus de relance : c'est la durée de la paternité
+function eqEssaiAFaire(l) {
+  if (!l || l._conserve || l.rappel_le || eqLeadStatut(l) !== 'Sans réponse') return null;
+  const jourDe = (d) => { const t = new Date(d); return new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const jours = [...new Set(eqAppelsEnCours(l).map(x => jourDe(x.le)))].sort();
+  if (jours.length >= EQ_ESSAIS_MAX) return null;
+  const tout = eqAppelsListe(l);
+  const ref = tout.length ? tout[tout.length - 1].le : (l.statut_maj || l.recu_le);
+  if (!ref || Date.now() - new Date(ref).getTime() > EQ_ESSAI_FENETRE_J * 864e5) return null;
+  const dernier = jours[jours.length - 1] || null;
+  if (!dernier) return { n: 0, dernier, le: jourDe(new Date()) };
+  // Un autre jour que le dernier essai : le jour ouvré suivant
+  const d = new Date(dernier + 'T12:00:00');
+  do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+  return { n: jours.length, dernier, le: jourDe(d) };
 }
 
 function eqAppelsHtml(l) {
