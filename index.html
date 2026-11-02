@@ -6987,6 +6987,8 @@ function eqSelStatut(sel){
   if (!statut || !_eqSelected.size) return;
   const n = _eqSelected.size;
   const besoinRappel = ['Sélections','Retour documentation','Finaliser la vente'].includes(statut);
+  // Une vente a son lot et son taux : elle se passe fiche par fiche, jamais en groupe
+  if (statut === 'Vendu') { toast('Une vente se passe depuis la fiche du client : il faut le lot et le taux de commission', 'var(--warning)'); return; }
   if (!confirm('Passer ' + n + ' client' + (n > 1 ? 's' : '') + ' en « ' + statut + ' » ?')) return;
   const nowIso = new Date().toISOString();
   if (besoinRappel){
@@ -7784,6 +7786,7 @@ async function eqLeadStatutChange(id, statut) {
 function eqLeadAppele(id) { eqLeadStatutChange(id, 'Sélections'); }
 
 // ---- Vendu : quel lot ? (obligatoire — sert à comparer aux critères d'origine) ----
+const EQ_VENTE_TAUX_MAX = 15;   // au-delà c'est une faute de frappe : 8 % est le plus haut taux connu
 let _eqVenteLotId = null;
 let _eqVenteLotsListe = [];
 function eqVenteLotOuvrir(id) {
@@ -7799,7 +7802,16 @@ function eqVenteLotOuvrir(id) {
   const champStyle = 'background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box;width:100%';
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:480px;max-width:94vw">
     <div style="font-family:var(--font-head);font-size:16px;font-weight:700;margin-bottom:4px">Quel lot ${esc(nomComplet(l) || 'ce client')} a-t-il acheté ?</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Nécessaire pour finaliser en « Vendu » — sert à comparer le lot acheté aux critères d'origine de la fiche.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Nécessaire pour finaliser en « Vendu » — sert à comparer le lot acheté aux critères d'origine de la fiche et à calculer les honoraires.</div>
+    <div style="border:2px solid var(--accent);border-radius:11px;padding:12px 14px;margin-bottom:14px">
+      <label for="vl-taux" style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">Taux de commission de la vente (obligatoire)</label>
+      <div style="display:flex;align-items:center;gap:9px">
+        <input id="vl-taux" inputmode="decimal" autocomplete="off" placeholder="ex : 5,25" oninput="_eqVenteTauxMaj()" style="${champStyle};flex:0 0 120px;width:120px;font-size:20px;font-weight:700;text-align:right">
+        <span style="font-size:20px;font-weight:700">%</span>
+        <span id="vl-taux-apercu" style="flex:1;font-size:12px;color:var(--muted)">à la virgule près, celui du contrat promoteur</span>
+      </div>
+      <div id="vl-taux-erreur" style="display:none;font-size:12px;color:var(--danger);margin-top:6px"></div>
+    </div>
     ${_eqVenteLotsListe.length ? `<label style="font-size:12px;color:var(--muted)">Un lot déjà envoyé dans une sélection</label>
     <select id="vl-choix" onchange="_eqVenteLotToggle()" style="${champStyle};margin:4px 0 14px;cursor:pointer">
       <option value="">— Choisir —</option>
@@ -7809,7 +7821,7 @@ function eqVenteLotOuvrir(id) {
     <div id="vl-libre" style="display:${_eqVenteLotsListe.length ? 'none' : 'grid'};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
       <input id="vl-titre" placeholder="Programme — Lot (ex : Alter Ego — A106)" style="${champStyle};grid-column:1/-1">
       <input id="vl-ville" placeholder="Ville" style="${champStyle}">
-      <input id="vl-prix" placeholder="Prix (ex : 320 000 €)" style="${champStyle}">
+      <input id="vl-prix" placeholder="Prix (ex : 320 000 €)" oninput="_eqVenteTauxMaj()" style="${champStyle}">
       <input id="vl-type" placeholder="Typologie (ex : T3)" style="${champStyle}">
       <input id="vl-surface" placeholder="Surface (ex : 65)" style="${champStyle}">
     </div>
@@ -7825,6 +7837,30 @@ function _eqVenteLotToggle() {
   const sel = document.getElementById('vl-choix');
   const zone = document.getElementById('vl-libre');
   if (zone) zone.style.display = (sel && sel.value === 'libre') ? 'grid' : 'none';
+  _eqVenteTauxMaj();
+}
+// Le taux tapé (« 5,25 » ou « 5.25 ») ; null s'il n'est pas lisible
+function _eqVenteTauxLu() {
+  const t = String((document.getElementById('vl-taux') || {}).value || '').replace(/\s|%/g, '').replace(',', '.');
+  return /^\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+}
+// Le prix du lot choisi ou saisi, pour montrer les honoraires que donne ce taux
+function _eqVentePrixLu() {
+  const sel = document.getElementById('vl-choix');
+  const x = sel && sel.value && sel.value !== 'libre' ? _eqVenteLotsListe[parseInt(sel.value, 10)] : null;
+  const brut = x ? (x.lot && x.lot.prix) : (document.getElementById('vl-prix') || {}).value;
+  const n = parseFloat(String(brut || '').replace(/[^\d.,]/g, '').replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+function _eqVenteTauxMaj() {
+  const box = document.getElementById('vl-taux-apercu');
+  const err = document.getElementById('vl-taux-erreur');
+  if (err) err.style.display = 'none';
+  if (!box) return;
+  const taux = _eqVenteTauxLu(), prix = _eqVentePrixLu();
+  box.textContent = taux && prix
+    ? 'soit ' + Math.round(prix * taux / 100).toLocaleString('fr-FR') + ' € d\'honoraires HT'
+    : 'à la virgule près, celui du contrat promoteur';
 }
 function eqVenteLotAnnuler() {
   const m = document.getElementById('eq-vente-lot-modal'); if (m) m.remove();
@@ -7837,6 +7873,14 @@ async function eqVenteLotValider() {
   const id = _eqVenteLotId;
   const l = _eqLeads.find(x => x.id === id);
   if (!l) return;
+  // Sans taux, la vente partirait à 0 € d'honoraires
+  const tauxVente = _eqVenteTauxLu();
+  if (!(tauxVente > 0 && tauxVente <= EQ_VENTE_TAUX_MAX)) {
+    const errT = document.getElementById('vl-taux-erreur');
+    if (errT) { errT.textContent = 'Indique le taux de commission de la vente, entre 0 et ' + EQ_VENTE_TAUX_MAX + ' % (ex : 5,25).'; errT.style.display = 'block'; }
+    const ch = document.getElementById('vl-taux'); if (ch) ch.focus();
+    return;
+  }
   const sel = document.getElementById('vl-choix');
   let lot = null, source = 'saisie_libre', token = null;
   if (sel && sel.value && sel.value !== 'libre') {
@@ -7867,6 +7911,7 @@ async function eqVenteLotValider() {
     titre: titreLot, ville: lot.ville || '', prix: lot.prix || '',
     programme: programmeLot, lot: numeroLot, promoteur: String(lot.promoteur || '').trim(),
     typologie: (Array.isArray(lot.typologies) && lot.typologies[0]) || '', surface: lot.surface || '',
+    taux_honoraires: tauxVente,
     source, token: token || null, ecarts, enregistre_le: new Date().toISOString()
   };
   const m = document.getElementById('eq-vente-lot-modal'); if (m) m.remove();
