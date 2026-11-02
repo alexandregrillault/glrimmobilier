@@ -12521,12 +12521,14 @@ function renderEqNotifs() {
       const titreAct = (l.rappel_titre ? esc(l.rappel_titre) : ('Rappeler ' + nomCli)) + eqReperesLead(l);
       const avantH = hAct ? '<strong>' + esc(hAct.replace(':', 'h')) + '</strong> · ' : '';
       const avantCli = l.rappel_titre ? nomCli + ' · ' : '';
+      const dejaTxt = eqDejaAppeleTxt(l);
+      const deja = dejaTxt ? ' · <strong style="color:var(--success)">' + esc(dejaTxt) + '</strong>' : '';
       if (l.rappel_le < jour) {
         retard.push({ t: tAct, g: 'rappel', e: s, d: l.rappel_le, html: item('rappel', titreAct,
-          avantH + avantCli + 'prévu le ' + fmtJ(l.rappel_le) + ' (il y a ' + joursRetard(l.rappel_le) + ' j) · étape : ' + esc(s), boutons, 'var(--danger)', l.id) });
+          avantH + avantCli + 'prévu le ' + fmtJ(l.rappel_le) + ' (il y a ' + joursRetard(l.rappel_le) + ' j) · étape : ' + esc(s) + deja, boutons, 'var(--danger)', l.id) });
       } else if (l.rappel_le === jour) {
         aujourdhui.push({ t: tAct, g: hAct ? 'horaire' : 'rappel', e: s, d: jour, html: item('rappel', titreAct,
-          avantH + avantCli + 'aujourd\'hui · étape : ' + esc(s), boutons, hAct ? 'var(--success)' : 'var(--accent)', l.id) });
+          avantH + avantCli + 'aujourd\'hui · étape : ' + esc(s) + deja, boutons, hAct ? 'var(--success)' : 'var(--accent)', l.id) });
       } else {
         avenir.push({ t: tAct, g: hAct ? 'horaire' : 'rappel', e: s, d: l.rappel_le, html: item('prevu', titreAct,
           avantH + avantCli + fmtJ(l.rappel_le) + ' · étape : ' + esc(s), boutons, hAct ? 'var(--success)' : null, l.id) });
@@ -12550,9 +12552,15 @@ function renderEqNotifs() {
       const detailEssai = (rang === 1 ? '1er' : rang + 'e') + ' essai sur ' + EQ_ESSAIS_MAX
         + (essai.dernier ? ' · dernier essai ' + fmtJ(essai.dernier + 'T12:00:00') : '');
       const boutonsEssai = btnFiche(l.id)
-        + `<button class="btn btn-sm btn-primary" onclick="eqAppelSansReponse('${l.id}')" style="font-size:11px" title="Il n'a pas décroché : on note l'essai du jour, et le lead revient au prochain jour ouvré">Pas de réponse</button>`
+        + `<button class="btn btn-sm btn-${essai.appele ? 'secondary' : 'primary'}" onclick="eqAppelSansReponse('${l.id}')" style="font-size:11px" title="Il n'a pas décroché : on note l'appel, et le lead revient au prochain jour ouvré">Pas de réponse</button>`
         + btnActions(l.id);
-      if (essai.le < jour) {
+      if (essai.appele) {
+        // Déjà appelé aujourd'hui : la ligne reste, en bas de liste, sans faire sonner la pastille
+        const suite = essai.fini ? essai.n + ' essais faits sur ' + EQ_ESSAIS_MAX
+          : essai.n + ' essai' + (essai.n > 1 ? 's' : '') + ' sur ' + EQ_ESSAIS_MAX + (essai.le > jour ? ' · prochain essai ' + fmtJ(essai.le + 'T12:00:00') : '');
+        aujourdhui.push({ t: 9e15, g: 'essai', d: jour, calme: true, html: item('rappel', titreEssai,
+          '<strong style="color:var(--success)">' + esc(eqDejaAppeleTxt(l)) + '</strong> · ' + suite, boutonsEssai, 'var(--success)', l.id) });
+      } else if (essai.le < jour) {
         retard.push({ t: new Date(essai.le + 'T00:00:00').getTime(), g: 'essai', d: essai.le, html: item('alerte', titreEssai,
           detailEssai + ' · prévu le ' + fmtJ(essai.le + 'T12:00:00') + ' (il y a ' + joursRetard(essai.le) + ' j)', boutonsEssai, 'var(--danger)', l.id) });
       } else if (essai.le === jour) {
@@ -13174,20 +13182,37 @@ function eqAppelsEnCours(l) {
 // retire pas : on note l'essai, on pose un rappel ou on classe le client.
 const EQ_ESSAIS_MAX = 3;         // jours d'essai différents
 const EQ_ESSAI_FENETRE_J = 14;   // au-delà, plus de relance : c'est la durée de la paternité
+function eqAppelsDuJour(l) {
+  const auj = new Date().toDateString();
+  return eqAppelsListe(l).filter(x => new Date(x.le).toDateString() === auj);
+}
+// « Déjà appelé aujourd'hui à 10h30 et 15h10 », avec le nom si c'est un collègue
+function eqDejaAppeleTxt(l) {
+  const a = eqAppelsDuJour(l);
+  if (!a.length) return '';
+  const heures = a.map(x => new Date(x.le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h'));
+  const autres = [...new Set(a.map(x => x.vendeur).filter(v => v && v !== l.vendeur))];
+  return 'Déjà appelé aujourd\'hui à ' + heures.join(' et ') + (autres.length ? ' par ' + autres.join(', ') : '');
+}
 function eqEssaiAFaire(l) {
   if (!l || l._conserve || l.rappel_le || eqLeadStatut(l) !== 'Sans réponse') return null;
   const jourDe = (d) => { const t = new Date(d); return new Date(t.getTime() - t.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
   const jours = [...new Set(eqAppelsEnCours(l).map(x => jourDe(x.le)))].sort();
-  if (jours.length >= EQ_ESSAIS_MAX) return null;
+  // Un lead appelé aujourd'hui reste jusqu'au soir : on peut le rappeler le jour
+  // même et on voit qu'il l'a déjà été. Ce 2e appel est noté mais reste le même jour d'essai.
+  const appele = eqAppelsDuJour(l).length > 0;
+  if (jours.length >= EQ_ESSAIS_MAX && !appele) return null;
   const tout = eqAppelsListe(l);
   const ref = tout.length ? tout[tout.length - 1].le : (l.statut_maj || l.recu_le);
   if (!ref || Date.now() - new Date(ref).getTime() > EQ_ESSAI_FENETRE_J * 864e5) return null;
   const dernier = jours[jours.length - 1] || null;
-  if (!dernier) return { n: 0, dernier, le: jourDe(new Date()) };
+  const auj = jourDe(new Date());
+  if (!dernier) return { n: 0, dernier, le: auj, appele };
+  if (jours.length >= EQ_ESSAIS_MAX) return { n: jours.length, dernier, le: auj, appele, fini: true };
   // Un autre jour que le dernier essai : le jour ouvré suivant
   const d = new Date(dernier + 'T12:00:00');
   do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
-  return { n: jours.length, dernier, le: jourDe(d) };
+  return { n: jours.length, dernier, le: jourDe(d), appele };
 }
 
 function eqAppelsHtml(l) {

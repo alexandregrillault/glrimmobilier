@@ -26,9 +26,14 @@ LEADS = [
     lead('g', 'Avec Rappel', [5], rappel_le=AUJ.isoformat()),    # le rappel posé l'emporte
     lead('h', 'Masque Avant', [5], activite_masquee_le=il_y_a(2)),  # déjà retiré autrefois : revient quand même
     lead('i', 'Client Joint', [5], statut='Sélections'),         # joint : plus de relance
-    lead('j', 'Appele Aujourdhui', [0]),                         # essayé ce matin : pas avant le jour ouvré suivant
+    lead('j', 'Appele Aujourdhui', [0]),                         # essayé ce matin : reste affiché, prochain essai un autre jour
+    lead('k', 'Deux Fois Ce Jour', [0]),                         # rappelé le jour même : même jour d'essai
+    lead('l', 'Troisieme Ce Jour', [7, 5, 0]),                   # 3e essai fait aujourd'hui : reste jusqu'au soir
+    lead('m', 'Rappel Deja Appele', [0], rappel_le=AUJ.isoformat()),  # un rappel du jour le dit aussi
 ]
-ATTENDU_ESSAI = {'a': 0, 'b': 1, 'c': 2, 'd': 1, 'h': 1, 'j': 1}
+LEADS[-3]['appels'].append({'le': il_y_a(0, 15), 'vendeur': 'Louis'})
+LEADS[-2]['appels'][-1]['vendeur'] = 'Jules'
+ATTENDU_ESSAI = {'a': 0, 'b': 1, 'c': 2, 'd': 1, 'h': 1, 'j': 1, 'k': 1, 'l': 3}
 
 erreurs = []
 with sync_playwright() as p:
@@ -65,7 +70,17 @@ with sync_playwright() as p:
         t = page.evaluate("() => document.getElementById('eq-notif-liste').innerText")
         for attendu in ('Rappeler Sans Appel', '1er essai sur 3', 'Rappeler Un Essai Ancien', '2e essai sur 3', '3e essai sur 3', 'Rappeler Masque Avant', 'Pas de réponse'):
             if attendu not in t: erreurs.append(f'{nom} : absent des activités : {attendu}')
-        for absent in ('Trois Faits', 'Trop Ancien', 'Client Joint', 'Appele Aujourdhui'):
+        for attendu in ("Déjà appelé aujourd'hui à 10h00 · 1 essai sur 3 · prochain essai", "Déjà appelé aujourd'hui à 10h00 et 15h00", "Déjà appelé aujourd'hui à 10h00 par Jules · 3 essais faits sur 3"):
+            if attendu not in t: erreurs.append(f'{nom} : absent des activités : {attendu}')
+        n = t.count("Déjà appelé aujourd'hui")
+        if n != 4: erreurs.append(f'{nom} : {n} mentions au lieu de 4')
+        if t.count('Rappeler Rappel Deja Appele') != 1: erreurs.append(f'{nom} : rappel du jour')
+        # Un lead déjà appelé peut être rappelé, passe après les autres et ne fait pas sonner la pastille
+        if t.index('Rappeler Sans Appel') > t.index('Rappeler Appele Aujourdhui'): erreurs.append(f'{nom} : les leads déjà appelés doivent passer après')
+        ligne = page.evaluate("() => [...document.querySelectorAll('#eq-notif-liste button')].filter(b => b.textContent.trim() === 'Pas de réponse').map(b => b.className)")
+        if not any('btn-secondary' in c for c in ligne): erreurs.append(f'{nom} : pas de bouton pour rappeler un lead déjà appelé')
+        if page.evaluate("() => +document.getElementById('eq-notif-badge').textContent") != 7: erreurs.append(f'{nom} : pastille : ' + page.evaluate("() => document.getElementById('eq-notif-badge').textContent"))
+        for absent in ('Trois Faits', 'Trop Ancien', 'Client Joint'):
             if absent in t: erreurs.append(f'{nom} : ne devrait pas être affiché : {absent}')
         if t.count('Rappeler Avec Rappel') != 1: erreurs.append(f'{nom} : le rappel posé doit apparaître une fois')
 
