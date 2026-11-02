@@ -847,6 +847,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7z"></path></svg>
         Performance
       </div>
+      <div class="nav-item" onclick="goTo(&#39;reporting&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z"></path><path d="M8 15v-3M12 15V9M16 15v-5"></path></svg>
+        Reporting
+      </div>
       <div class="nav-item" onclick="goTo(&#39;gerant-villes&#39;, this); renderGerantVilles();">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
         Villes &amp; leads
@@ -1105,6 +1109,19 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- ==================== PAGE: REPORTING ==================== -->
+    <div class="page" id="page-reporting">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+        <select id="rp-mois" onchange="rpCharger()" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px"></select>
+        <button id="rp-btn-equipe" class="btn btn-sm" onclick="rpVue('equipe')">Équipe</button>
+        <button id="rp-btn-perso" class="btn btn-sm btn-secondary" onclick="rpVue('perso')">Cas par cas</button>
+        <select id="rp-vendeur" onchange="rpRendre()" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px"></select>
+        <button class="btn btn-sm btn-secondary" onclick="rpImprimer()">Imprimer</button>
+        <span id="rp-maj" style="font-size:12px;color:var(--muted);margin-left:auto"></span>
+      </div>
+      <div id="rp-corps"></div>
     </div>
 
     <!-- ==================== PAGE: GERANT KPI ==================== -->
@@ -3456,7 +3473,7 @@ async function chargerMonRole() {
 
 // Pages réservées aux gérants
 const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
-                      'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage'];
+                      'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage', 'reporting'];
 
 function appliquerRole() {
   // Création manuelle d'un contact : gérants seulement (les commerciaux
@@ -3742,7 +3759,7 @@ const pages = {
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'veille': 'Réveil veille', 'pilotage': 'Pilotage commercial',
   'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'rapport-promoteurs': 'Rapport promoteurs', 'marche': 'Marché',
-  'gerant-annonces': 'Annonces'
+  'gerant-annonces': 'Annonces', 'reporting': 'Reporting'
 };
 
 let currentSpace = 'gerant';
@@ -4790,6 +4807,7 @@ function goTo(id, el) {
   else if (id === 'journal') loadJournal();
   else if (id === 'veille') renderVeillePage();
   else if (id === 'pilotage') pilInit();
+  else if (id === 'reporting') rpInit();
   else if (id === 'factures') { renderFactures(); renderFacCom(); }
   else refresh();
 }
@@ -7621,6 +7639,7 @@ async function eqMajVue(force){
     }
     else if (page === 'equipe-planning' && typeof renderEquipePlanning === 'function') await renderEquipePlanning();
     else if (page === 'contacts' && typeof loadContacts === 'function') await loadContacts();
+    else if (page === 'reporting') await rpCharger();
     else if (typeof refresh === 'function') refresh();
     _majDerniere = Date.now();
   } catch(e){ /* un rafraîchissement raté ne doit jamais bloquer l'écran */ }
@@ -21936,6 +21955,299 @@ const JOURNAL_ACTIONS = {
   'modification': 'Modification',
   'activite': 'Activité'
 };
+
+// ============================================================
+//  REPORTING — le bilan du mois, équipe ou cas par cas (gérants)
+//  Demande d'Alex, 02/11/2026. Tout vient de la fonction SQL reporting_mois,
+//  recalculée à chaque ouverture : rien n'est figé. Les points forts, les sujets
+//  d'amélioration et les priorités se déduisent des chiffres selon les règles
+//  de rpForts, rpAxes et rpPrios. Comparaison entre commerciaux actifs du mois.
+// ============================================================
+const RP_DEBUT = '2026-09-01';   // avant, le journal d'activité n'existe pas
+const RP_NOMS = { Anais: 'Anaïs' };
+const RP_COUL = ['#1E3A32', '#A7C0B1', '#DAD3C3', '#EBD6A8', '#C9A567', '#8A6A2F'];
+const RP_LAB = ['joints', 'classés sans joindre', 'aucun appel noté', 'essayés 1 seul jour', 'essayés 2 jours', 'essayés 3 jours ou plus'];
+const RP_LIGNES = [
+  ['touche', 'Leads touchés sous 24 h'], ['direct', 'Leads directs joints'], ['relance', 'Non joints rappelés sur 2 jours ou plus'],
+  ['suite', 'Clients vus, suite sous 7 jours'], ['ajour', 'Leads actifs à jour']
+];
+const RP_CSS = `
+.rp{background:#FBF8F1;color:#1E3A32;border:1px solid #E6DECD;border-radius:14px;padding:28px;font-family:var(--font-body,Inter,sans-serif);display:flex;flex-direction:column;gap:26px;box-sizing:border-box}
+.rp *{box-sizing:border-box}
+.rp h2{font-size:24px;line-height:1.2;font-weight:700;margin:4px 0 0;color:#1E3A32}
+.rp-lab{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:#6F5324;font-weight:600}
+.rp-tete{display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:flex-end}
+.rp-tete h1{font-size:56px;line-height:1;font-weight:800;margin:6px 0 0;color:#1E3A32}
+.rp-tete p{font-size:20px;line-height:1.3;margin:8px 0 0;max-width:640px;color:#1E3A32}
+.rp-ventes{background:#1E3A32;color:#FBF8F1;border-radius:14px;padding:16px 20px;min-width:220px}
+.rp-ventes .rp-lab{color:#E4CFA3}.rp-ventes b{display:block;font-size:52px;line-height:1.1}.rp-ventes span{font-size:14px;color:#F1EADB}
+.rp-g4{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.rp-g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:26px}
+.rp-carte{background:#fff;border:1px solid #E6DECD;border-radius:12px;padding:16px 18px;min-width:0}
+.rp-carte.fort{border:2px solid #B0894C}
+.rp-carte b.n{display:block;font-size:44px;line-height:1;font-weight:800}
+.rp-carte strong{display:block;font-size:15px;margin-top:6px}.rp-carte small{display:block;font-size:13px;color:#566259;margin-top:2px}
+.rp-step{display:grid;grid-template-columns:140px minmax(0,1fr) 46px;gap:10px;align-items:center;height:38px;font-size:14.5px}
+.rp-step i{display:block;height:22px;border-radius:0 5px 5px 0;background:#1E3A32;min-width:2px}
+.rp-step i.a{background:#B0894C}.rp-step b{text-align:right;font-size:18px}
+.rp-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px}
+.rp-cal div{height:44px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
+.rp-cal .e{font-size:11.5px;font-weight:400;color:#566259;height:20px}
+.rp-j0{background:#F3EEE2;color:#8B8676;font-weight:400!important}.rp-j1{background:#D8E3D9}.rp-j2{background:#A7C0B1}.rp-j3{background:#4A7563;color:#fff}.rp-j4{background:#1E3A32;color:#fff}
+.rp-stack{display:flex;gap:2px;height:40px;margin-top:14px}.rp-stack span{display:block;min-width:4px}
+.rp-stack span:first-child{border-radius:6px 0 0 6px}.rp-stack span:last-child{border-radius:0 6px 6px 0}
+.rp-leg{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px;margin-top:12px}
+.rp-leg i{display:block;height:6px;border-radius:3px}.rp-leg b{display:block;font-size:30px;line-height:1.1;margin-top:7px}.rp-leg span{font-size:13px;color:#3D4A43}
+.rp-faits{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid #E6DECD;font-size:14.5px;color:#3D4A43}
+.rp-ligne{display:grid;grid-template-columns:minmax(150px,250px) minmax(90px,1fr) 62px 40px;gap:12px;align-items:center;min-height:42px;font-size:14.5px;font-weight:600}
+.rp-piste{position:relative;height:26px}.rp-piste:before{content:"";position:absolute;left:0;right:0;top:12px;height:2px;background:#E6DECD}
+.rp-piste span{position:absolute;top:7px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:#B5B1A3;box-shadow:0 0 0 2px #fff}
+.rp-piste span.moi{top:3px;width:20px;height:20px;margin-left:-10px;background:#B0894C;box-shadow:0 0 0 3px #fff}
+.rp-ligne em{font-style:normal;font-size:19px;text-align:right;white-space:nowrap}.rp-ligne u{text-decoration:none;font-size:12px;font-weight:400;color:#566259;text-align:right}
+.rp-it{margin-top:13px}.rp-it h3{font-size:18px;margin:0;color:#1E3A32}.rp-it p{font-size:14.5px;line-height:1.4;margin:3px 0 0;color:#3D4A43}
+.rp-prios{background:#F3EEE2;border-radius:12px;padding:16px 20px}
+.rp-prios>div:last-child{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:8px}
+.rp-prios b{font-size:32px;color:#7E5F2A;margin-right:8px}.rp-prios p{margin:0;font-size:14.5px;line-height:1.35}
+.rp-table{overflow-x:auto}.rp-table table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+.rp-table th{font-size:11.5px;text-align:right;color:#566259;font-weight:600;padding:6px 8px;border-bottom:2px solid #E6DECD}
+.rp-table td{text-align:right;padding:9px 8px;border-bottom:1px solid #E6DECD}.rp-table th:first-child,.rp-table td:first-child{text-align:left;font-weight:600}
+.rp-note{font-size:12px;line-height:1.4;color:#566259}
+@media (max-width:600px){.rp{padding:16px;gap:20px}.rp-tete h1{font-size:44px}.rp-ligne{grid-template-columns:minmax(0,1fr) 62px 40px}.rp-ligne .rp-piste{grid-column:1/-1;grid-row:2}}
+`;
+let _rp = { data: null, vue: 'equipe', jeton: 0 };
+
+function _rpMoisIso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-01'; }
+function _rpMoisLib(iso) { const t = new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); return t.charAt(0).toUpperCase() + t.slice(1); }
+function _rpPct(a, b) { return Number(b) > 0 ? Number(a) / Number(b) * 100 : null; }
+function _rpPl(n, mot) { return n + ' ' + mot + (n > 1 ? 's' : ''); }
+function _rpNom(x) { return _vEsc(RP_NOMS[x.v] || x.v); }
+function _rpRang(r) { return r === 1 ? 'n°1' : r + '<sup>e</sup>'; }
+
+function rpInit() {
+  const sel = document.getElementById('rp-mois');
+  if (!sel) return;
+  if (!sel.options.length) {
+    const auj = new Date(), liste = [];
+    for (let d = new Date(RP_DEBUT + 'T12:00:00'); d <= auj; d.setMonth(d.getMonth() + 1)) liste.push(_rpMoisIso(d));
+    sel.innerHTML = liste.reverse().map(m => `<option value="${m}">${_rpMoisLib(m)}</option>`).join('');
+    // Les premiers jours du mois, le bilan utile est celui du mois écoulé
+    if (auj.getDate() < 8 && liste.length > 1) sel.value = liste[1];
+  }
+  rpCharger();
+}
+
+async function rpCharger() {
+  const box = document.getElementById('rp-corps');
+  const mois = document.getElementById('rp-mois').value;
+  if (!_rp.data) box.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted)">Calcul en cours…</div>';
+  const jeton = ++_rp.jeton;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/reporting_mois', {
+      method: 'POST', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_mois: mois })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (jeton !== _rp.jeton) return;   // un autre mois a été choisi entre-temps
+    _rp.data = _rpPreparer(d, mois);
+    const sel = document.getElementById('rp-vendeur'), avant = sel.value;
+    sel.innerHTML = _rp.data.actifs.map(x => `<option value="${_vEsc(x.v)}">${_rpNom(x)}</option>`).join('');
+    if (_rp.data.actifs.some(x => x.v === avant)) sel.value = avant;
+    document.getElementById('rp-maj').textContent = 'Mis à jour à ' + new Date(d.calcule_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+    rpRendre();
+  } catch (e) {
+    if (jeton === _rp.jeton) box.innerHTML = '<div style="padding:30px;text-align:center;color:var(--danger)">Chiffres indisponibles pour le moment. Recharge la page.</div>';
+  }
+}
+
+// Ratios de chaque commercial, et son rang parmi ceux qui ont travaillé ce mois-là
+function _rpPreparer(d, mois) {
+  const actifs = (d.vendeurs || []).filter(x => x.recus + x.tr + x.pool + x.actions > 0);
+  actifs.forEach(x => {
+    const c = x.coh = Object.assign({ ent: 0, joints: 0, sel: 0, rdv: 0, av: 0, ve: 0, cl: 0, zero: 0, j1: 0, j2: 0, j3: 0, oub: 0, touche24: 0, dir_n: 0, dir_j: 0, tr_n: 0, tr_j: 0, pool_n: 0, pool_j: 0, delai2: null }, x.coh);
+    const essayes = c.j1 + c.j2 + c.j3;
+    x.essayes = essayes;
+    x.m = { touche: _rpPct(c.touche24, c.ent), direct: _rpPct(c.dir_j, c.dir_n), relance: _rpPct(c.j2 + c.j3, essayes),
+            suite: _rpPct(x.suite7, x.vus), ajour: _rpPct(x.pf.actifs - x.pf.retards, x.pf.actifs) };
+    let total = 0, debut = 0;
+    Object.entries(x.cal || {}).forEach(([j, n]) => { total += n; const w = new Date(j + 'T12:00:00').getDay(); if (w === 1 || w === 2) debut += n; });
+    x.lunMar = _rpPct(debut, total);
+    x.ouvertes = _rpPct(x.selections.ouv, x.selections.env);
+    x.reaction = _rpPct(x.selections.reac, x.selections.env);
+  });
+  const rang = (x, f) => {
+    const v = f(x);
+    return v == null ? null : 1 + actifs.filter(y => f(y) != null && f(y) > v).length;
+  };
+  actifs.forEach(x => {
+    x.r = {};
+    RP_LIGNES.forEach(([k]) => { x.r[k] = rang(x, y => y.m[k]); });
+    x.r.ventes = rang(x, y => y.ventes);
+    x.r.pool = rang(x, y => y.pool);
+    x.r.recus = rang(x, y => y.recus);
+    x.r.clients = rang(x, y => y.clients);
+    x.r.sel = rang(x, y => y.selections.env);
+    x.r.ouvertes = rang(x, y => y.ouvertes);
+    x.r.regulier = rang(x, y => y.lunMar == null ? null : -y.lunMar);
+  });
+  return { mois, actifs, coupure: d.coupure };
+}
+
+function rpForts(x) {
+  const c = x.coh, o = [];
+  if (x.r.ventes === 1 && x.ventes > 0) o.push(['N°1 sur les ventes', _rpPl(x.ventes, 'vente') + ' ce mois-ci, et ' + _rpPl(x.rdv_mois, 'rendez-vous').replace('rendez-vouss', 'rendez-vous') + '.']);
+  if (x.r.relance === 1 && x.essayes >= 5) o.push(['N°1 de la relance', (c.j2 + c.j3) + ' leads non joints essayés sur au moins 2 jours, soit ' + Math.round(x.m.relance) + ' %.']);
+  if (x.r.direct === 1 && c.dir_n >= 10) o.push(['Le meilleur taux de contact', Math.round(x.m.direct) + ' % des leads directs joints.']);
+  if (x.r.pool === 1 && x.pool > 0) o.push(['N°1 du pool', _rpPl(x.pool, 'lead') + ' repris ce mois-ci.']);
+  if (x.vus >= 5 && !x.sans_suite) o.push(['Aucun client vu laissé sans suite', x.suite7 + ' clients sur ' + x.vus + ' relancés sous 7 jours après le rendez-vous.']);
+  if (x.r.ajour <= 2) o.push(['Un portefeuille à jour', _rpPl(x.pf.retards, 'retard') + ' sur ' + _rpPl(x.pf.actifs, 'lead') + ' actifs.']);
+  if (x.r.sel === 1) o.push(['N°1 des sélections', x.selections.env + ' sélections envoyées à ' + x.selections.clients + ' clients.']);
+  if (x.r.ouvertes === 1 && x.selections.env >= 10) o.push(['Les sélections les plus ouvertes', Math.round(x.ouvertes) + ' % ouvertes par les clients.']);
+  if (x.r.touche <= 2) o.push(['Les nouveaux leads sont vite pris', Math.round(x.m.touche) + ' % des leads touchés sous 24 h.']);
+  if (x.ventes > 0 && x.r.ventes !== 1) o.push(['Une vente au bout', _rpPl(x.ventes, 'vente') + ' ce mois-ci.']);
+  if (x.r.clients === 1) o.push(['Le plus gros volume', x.clients + ' clients travaillés dans le mois.']);
+  if (x.r.regulier === 1) o.push(['Une vraie régularité', x.jours_actifs + ' jours actifs, et ' + Math.round(x.lunMar) + ' % des actions le lundi et le mardi.']);
+  o.push(['Du travail fourni', x.clients + ' clients travaillés sur ' + x.jours_actifs + ' jours actifs.']);
+  return o.slice(0, 3);
+}
+function rpAxes(x) {
+  const c = x.coh, o = [];
+  if (!x.ventes) o.push(['Aller chercher la vente', 'Pas de vente ce mois-ci, pour ' + _rpPl(x.pf.rd + x.pf.fin, 'dossier') + ' avancés.']);
+  if (x.sans_suite >= 5) o.push(['Ne pas laisser filer les clients vus', x.sans_suite + ' clients vus sur ' + x.vus + ' n\'ont ni action depuis 14 jours ni rappel à venir.']);
+  if (x.essayes >= 5 && x.m.relance < 25) o.push(['Rappeler au-delà du premier jour', 'Sur ' + x.essayes + ' leads essayés et non joints, ' + c.j1 + ' ne l\'ont été qu\'un seul jour.']);
+  if (x.m.ajour != null && x.m.ajour < 85) o.push(['Reprendre la main sur le portefeuille', x.pf.retards + ' retards sur ' + x.pf.actifs + ' leads actifs.']);
+  if (x.r.touche >= 4) o.push(['Répondre plus vite aux nouveaux leads', Math.round(x.m.touche) + ' % des leads touchés sous 24 h.']);
+  if (x.selections.env >= 10 && x.ouvertes < 75) o.push(['Des sélections plus ciblées', Math.round(x.ouvertes) + ' % ouvertes, et ' + Math.round(x.reaction) + ' % font réagir le client.']);
+  if (x.ech >= 5) o.push(['Garder ses leads', x.ech + ' leads partis à l\'échéance des 14 jours.']);
+  if (x.pf.rd7 >= 10) o.push(['Faire avancer les dossiers', x.pf.rd7 + ' retours documentation sur ' + x.pf.rd + ' n\'ont pas bougé depuis 7 jours.']);
+  if (x.recus + x.tr + x.pool < 30) o.push(['Remettre du flux', 'Seulement ' + (x.recus + x.tr + x.pool) + ' leads entrés ce mois-ci.']);
+  if (x.pf.actifs >= 10 && x.pf.sr / x.pf.actifs >= .75) o.push(['Sortir du Sans réponse', x.pf.sr + ' leads actifs sur ' + x.pf.actifs + ' sont en Sans réponse.']);
+  if (c.delai2 >= 4) o.push(['Rappeler plus tôt', 'Le 2e essai arrive en général ' + Math.round(c.delai2) + ' jours après le premier.']);
+  if (x.lunMar >= 65) o.push(['Lisser la semaine', Math.round(x.lunMar) + ' % des actions tiennent sur le lundi et le mardi.']);
+  return o.slice(0, 3);
+}
+function rpPrios(x) {
+  return [[x.pf.fin7, 'dossiers en finalisation à relancer'], [x.sans_suite, 'clients vus à recontacter en premier'],
+    [x.coh.oub, 'leads sans nouvelle depuis 7 jours à rappeler ou à classer'], [x.pf.rd7, 'retours documentation sans action depuis 7 jours'],
+    [x.pf.retards, 'leads en retard à remettre à jour'], [x.pf.pat7, 'leads à traiter avant de les perdre : paternité finie sous 7 jours'],
+    [x.pf.sr0, 'leads en Sans réponse à appeler une première fois']].filter(p => p[0] > 0).slice(0, 3);
+}
+
+function _rpParcours(c, ventes) {
+  const st = [['Leads entrés', c.ent], ['Joints', c.joints], ['En sélection', c.sel], ['En rendez-vous', c.rdv], ['Dossiers avancés', c.av, 1], ['Ventes', ventes, 1]];
+  return st.map(([l, v, a]) => `<div class="rp-step"><span>${l}</span><div><i class="${a ? 'a' : ''}" style="width:${c.ent ? (v / c.ent * 100).toFixed(1) : 0}%"></i></div><b>${v}</b></div>`).join('');
+}
+function _rpDevenir(c) {
+  const vals = [c.joints, c.cl, c.zero, c.j1, c.j2, c.j3];
+  return `<div class="rp-stack">${vals.map((v, i) => v ? `<span title="${v} ${RP_LAB[i]}" style="flex:${v} 1 0;background:${RP_COUL[i]}"></span>` : '').join('')}</div>
+    <div class="rp-leg">${vals.map((v, i) => `<div><i style="background:${RP_COUL[i]}"></i><b>${v}</b><span>${RP_LAB[i]}</span></div>`).join('')}</div>`;
+}
+function _rpCalendrier(x) {
+  const d0 = new Date(_rp.data.mois + 'T12:00:00'), nb = new Date(d0.getFullYear(), d0.getMonth() + 1, 0).getDate();
+  const vide = (d0.getDay() + 6) % 7;
+  const cases = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'].map(j => `<div class="e">${j}</div>`);
+  for (let i = 0; i < vide; i++) cases.push('<div style="background:none"></div>');
+  for (let j = 1; j <= nb; j++) {
+    const n = (x.cal || {})[_rp.data.mois.slice(0, 8) + String(j).padStart(2, '0')] || 0;
+    cases.push(`<div class="rp-j${n === 0 ? 0 : n <= 20 ? 1 : n <= 40 ? 2 : n <= 60 ? 3 : 4}" title="${j} : ${n} actions">${n}</div>`);
+  }
+  return `<div class="rp-cal">${cases.join('')}</div>`;
+}
+function _rpCoupure() {
+  return new Date(new Date(_rp.data.coupure).getTime() - 1).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+}
+function _rpNoteBas() {
+  return `<div class="rp-note">Source : CRM GLR, chiffres recalculés à l'ouverture. Parcours : leads entrés depuis le début du mois jusqu'au ${_rpCoupure()}, pour leur laisser au moins une semaine ; une vente du mois peut venir d'un lead plus ancien. Joint : sélection, rendez-vous ou passage en Sélections et au-delà. Dossiers avancés : retour documentation ou finalisation. Un appel abouti n'est noté que par ce qu'il déclenche ensuite. Portefeuille et priorités : situation du jour. Suite sous 7 jours : action ou sélection dans la semaine suivant le dernier rendez-vous (rendez-vous du mois et du mois précédent).</div>`;
+}
+
+function _rpPerso(x) {
+  const c = x.coh, tous = _rp.data.actifs, forts = rpForts(x), axes = rpAxes(x), prios = rpPrios(x);
+  const it = (L) => L.map(([t, p]) => `<div class="rp-it"><h3>${t}</h3><p>${p}</p></div>`).join('');
+  const lignes = RP_LIGNES.map(([k, lib]) => {
+    const v = x.m[k];
+    const pts = tous.filter(y => y !== x && y.m[k] != null).map(y => `<span style="left:${y.m[k].toFixed(1)}%"></span>`).join('');
+    return `<div class="rp-ligne"><div>${lib}</div><div class="rp-piste">${pts}${v == null ? '' : `<span class="moi" style="left:${v.toFixed(1)}%"></span>`}</div><em>${v == null ? '—' : Math.round(v) + ' %'}</em><u>${x.r[k] ? _rpRang(x.r[k]) : ''}</u></div>`;
+  }).join('');
+  return `<div class="rp">
+    <div class="rp-tete"><div><div class="rp-lab">Bilan individuel · ${_rpMoisLib(_rp.data.mois)}</div><h1>${_rpNom(x)}</h1>
+      <p>${_vEsc(forts[0][0])}${axes[0] ? '. Priorité : ' + _vEsc(axes[0][0].toLowerCase()) : ''}.</p></div>
+      <div class="rp-ventes"><div class="rp-lab">Ventes du mois</div><b>${x.ventes}</b><span>${x.pf.rd + x.pf.fin} dossiers avancés aujourd'hui</span></div></div>
+    <div class="rp-g4">
+      <div class="rp-carte fort"><b class="n">${x.recus}</b><strong>leads reçus</strong><small>${_rpRang(x.r.recus)} de l'équipe</small></div>
+      <div class="rp-carte"><b class="n">${x.tr}</b><strong>leads transférés reçus</strong><small>dont ${x.trg} par les gérants</small></div>
+      <div class="rp-carte"><b class="n">${x.pool}</b><strong>repris au pool</strong><small>${_rpRang(x.r.pool)} de l'équipe</small></div>
+      <div class="rp-carte"><b class="n">${x.env + x.ech}</b><strong>leads partis</strong><small>${x.env} transféré${x.env > 1 ? 's' : ''} · ${x.ech} échu${x.ech > 1 ? 's' : ''} à 14 jours</small></div>
+    </div>
+    <div class="rp-g2">
+      <div><div class="rp-lab">Le parcours de tes leads</div><h2>${c.joints} leads joints sur ${c.ent}</h2><div style="margin-top:10px">${_rpParcours(c, c.ve)}</div></div>
+      <div><div class="rp-lab">Actions par jour dans le CRM</div><h2>${x.actions} actions sur ${x.jours_actifs} jours</h2>${_rpCalendrier(x)}</div>
+    </div>
+    <div class="rp-carte"><div class="rp-lab">Ce que deviennent tes ${c.ent} leads</div><h2>${x.essayes} leads essayés sans être joints, ${c.j2 + c.j3} rappelés un autre jour</h2>${_rpDevenir(c)}
+      <div class="rp-faits"><div><b>${x.ess}</b> essais sans réponse notés dans le mois</div><div><b>${x.app ? (x.ess / x.app).toFixed(1).replace('.', ',') : '0'}</b> essai par lead appelé (${x.app} leads)</div><div><b>${c.oub}</b> leads non joints sans nouvelle depuis 7 jours</div></div></div>
+    <div class="rp-carte"><div class="rp-lab">Ta place parmi les ${tous.length} commerciaux actifs · à droite, c'est mieux</div><div style="margin-top:8px">${lignes}</div></div>
+    <div class="rp-g2"><div><div class="rp-lab">Tes points forts</div>${it(forts)}</div><div><div class="rp-lab">Tes sujets d'amélioration</div>${axes.length ? it(axes) : '<div class="rp-it"><p>Rien de marquant ce mois-ci.</p></div>'}</div></div>
+    ${prios.length ? `<div class="rp-prios"><div class="rp-lab">Tes priorités</div><div>${prios.map(([n, t]) => `<p><b>${n}</b>${t}</p>`).join('')}</div></div>` : ''}
+    ${_rpNoteBas()}</div>`;
+}
+
+function _rpEquipe() {
+  const tous = _rp.data.actifs;
+  const som = (f) => tous.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+  const c = {};
+  ['ent', 'joints', 'sel', 'rdv', 'av', 've', 'cl', 'zero', 'j1', 'j2', 'j3', 'dir_n', 'dir_j', 'tr_n', 'tr_j', 'pool_n', 'pool_j', 'oub'].forEach(k => { c[k] = som(x => x.coh[k]); });
+  const meilleur = (f, min) => tous.filter(x => f(x) != null && (!min || min(x))).sort((a, b) => f(b) - f(a))[0];
+  const cartes = [
+    ['Ventes', meilleur(x => x.ventes, x => x.ventes > 0), x => _rpPl(x.ventes, 'vente')],
+    ['Contact', meilleur(x => x.m.direct, x => x.coh.dir_n >= 10), x => Math.round(x.m.direct) + ' % des leads directs joints'],
+    ['Relance', meilleur(x => x.m.relance, x => x.essayes >= 5), x => Math.round(x.m.relance) + ' % des non joints rappelés'],
+    ['Sélections', meilleur(x => x.selections.env), x => x.selections.env + ' envoyées']
+  ].filter(l => l[1]);
+  const lignes = tous.slice().sort((a, b) => b.recus - a.recus).map(x => `<tr><td>${_rpNom(x)}</td><td>${x.recus}</td><td>${x.tr}</td><td>${x.pool}</td><td>${x.env + x.ech}</td><td>${x.m.direct == null ? '—' : Math.round(x.m.direct) + ' %'}</td><td>${x.selections.env}</td><td>${x.rdv_mois}</td><td>${x.ventes}</td></tr>`).join('');
+  return `<div class="rp">
+    <div class="rp-tete"><div><div class="rp-lab">Bilan d'équipe · ${_rpMoisLib(_rp.data.mois)}</div><h1>L'équipe</h1><p>${tous.length} commerciaux actifs, ${som(x => x.recus + x.tr + x.pool)} leads entrés, ${som(x => x.rdv_mois)} rendez-vous.</p></div>
+      <div class="rp-ventes"><div class="rp-lab">Ventes du mois</div><b>${som(x => x.ventes)}</b><span>${Math.round(som(x => x.hono)).toLocaleString('fr-FR')} € d'honoraires après offre GLR</span></div></div>
+    <div class="rp-g4">
+      <div class="rp-carte fort"><b class="n">${som(x => x.recus)}</b><strong>leads reçus</strong></div>
+      <div class="rp-carte"><b class="n">${som(x => x.tr)}</b><strong>leads transférés reçus</strong></div>
+      <div class="rp-carte"><b class="n">${som(x => x.pool)}</b><strong>repris au pool</strong></div>
+      <div class="rp-carte"><b class="n">${som(x => x.selections.env)}</b><strong>sélections envoyées</strong></div>
+    </div>
+    ${cartes.length ? `<div><div class="rp-lab">Les meilleurs du mois</div><div class="rp-g4" style="margin-top:8px">${cartes.map(([t, x, txt]) => `<div class="rp-carte"><small>${t}</small><strong style="font-size:20px;margin-top:2px">${_rpNom(x)}</strong><small>${txt(x)}</small></div>`).join('')}</div></div>` : ''}
+    <div class="rp-g2">
+      <div><div class="rp-lab">Le parcours des leads</div><h2>${c.joints} leads joints sur ${c.ent}</h2><div style="margin-top:10px">${_rpParcours(c, c.ve)}</div></div>
+      <div><div class="rp-lab">Leads joints selon leur origine</div><h2>Le pool se joint moins bien qu'un lead direct</h2>
+        <div class="rp-g4" style="margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr))">
+          <div class="rp-carte"><b class="n" style="font-size:32px">${c.dir_n ? Math.round(c.dir_j / c.dir_n * 100) : 0} %</b><small>directs</small></div>
+          <div class="rp-carte"><b class="n" style="font-size:32px">${c.tr_n ? Math.round(c.tr_j / c.tr_n * 100) : 0} %</b><small>transférés</small></div>
+          <div class="rp-carte"><b class="n" style="font-size:32px">${c.pool_n ? Math.round(c.pool_j / c.pool_n * 100) : 0} %</b><small>pool</small></div>
+        </div></div>
+    </div>
+    <div class="rp-carte"><div class="rp-lab">Ce que deviennent les ${c.ent} leads de l'équipe</div>${_rpDevenir(c)}</div>
+    <div class="rp-carte rp-table"><div class="rp-lab" style="margin-bottom:8px">Le mois de chacun</div><table><thead><tr><th>Commercial</th><th>Reçus</th><th>Transférés</th><th>Pool</th><th>Partis</th><th>Directs joints</th><th>Sélections</th><th>RDV</th><th>Ventes</th></tr></thead><tbody>${lignes}</tbody></table></div>
+    ${_rpNoteBas()}</div>`;
+}
+
+function rpVue(v) {
+  _rp.vue = v;
+  document.getElementById('rp-btn-equipe').className = 'btn btn-sm' + (v === 'equipe' ? '' : ' btn-secondary');
+  document.getElementById('rp-btn-perso').className = 'btn btn-sm' + (v === 'perso' ? '' : ' btn-secondary');
+  document.getElementById('rp-vendeur').style.display = v === 'perso' ? '' : 'none';
+  rpRendre();
+}
+function rpRendre() {
+  const box = document.getElementById('rp-corps');
+  if (!_rp.data) return;
+  if (!_rp.data.actifs.length) { box.innerHTML = '<div style="padding:30px;text-align:center;color:var(--muted)">Aucune activité sur ce mois.</div>'; return; }
+  const v = document.getElementById('rp-vendeur').value;
+  const x = _rp.data.actifs.find(y => y.v === v) || _rp.data.actifs[0];
+  box.innerHTML = '<style>' + RP_CSS + '</style>' + (_rp.vue === 'perso' ? _rpPerso(x) : _rpEquipe());
+}
+function rpImprimer() {
+  const w = window.open('', '_blank');
+  if (!w) return;
+  w.document.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Reporting GLR</title><style>body{margin:12px;font-family:Inter,Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>' + document.getElementById('rp-corps').innerHTML + '</body></html>');
+  w.document.close(); w.focus(); w.print();
+}
 
 // ============================================================
 //  PILOTAGE COMMERCIAL — analyser le travail de chaque vendeur (gérants)
