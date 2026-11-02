@@ -8965,7 +8965,7 @@ function renderEquipeLeadsTable() {
         const nq = eqQualifRemplie(l);
         const qualifBadge = `<br><span style="font-size:10px;color:${nq.n===nq.total?'var(--success)':'var(--muted)'}">${nq.n===nq.total?'✓ Fiche complète':'Fiche '+nq.n+'/'+nq.total}</span>`
           + (f.sansReponse && eqAppelsEnCours(l).some(x => new Date(x.le).toDateString() === new Date().toDateString()) ? `<br><span title="Au moins une tentative d'appel aujourd'hui" style="display:inline-block;background:var(--surface2);border:1px solid var(--accent);color:var(--accent);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">Appelé aujourd'hui</span>` : '')
-          + (() => { const ra = eqActivitesDe(l).find(x => x.id === 'reaction_client'); if (!ra) { const rt = eqActivitesDe(l).find(x => x.id === 'retour_client'); return rt ? `<br><span title="${esc(rt.titre || 'Le client est revenu sur sa sélection')}" style="display:inline-block;background:var(--accent2)18;border:1px solid var(--accent2);color:var(--accent2);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">Revenu sur sa sélection</span>` : ''; } const LIB = { option: 'option demandée', interesse: 'intéressé', commentaire: 'commentaire', discuter: 'à discuter', infos: 'demande d\'infos', adresse: 'adresse demandée', pasmoi: 'pas pour moi' }; const k0 = Array.isArray(ra.reactions) && ra.reactions.length ? ra.reactions[0] : ''; const fort = k0 === 'option' || k0 === 'interesse'; return `<br><span title="${esc(ra.titre || 'Le client est revenu sur sa sélection')}" style="display:inline-block;background:${fort ? 'var(--accent2)' : 'var(--accent2)18'};border:1px solid var(--accent2);color:${fort ? '#fff' : 'var(--accent2)'};border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">Réaction client${LIB[k0] ? ' · ' + LIB[k0] : ''}</span>`; })()
+          + (() => { const ra = eqActivitesDe(l).find(x => x.id === 'reaction_client'); if (!ra) { const rt = eqActivitesDe(l).find(x => x.id === 'retour_client'); return rt ? `<br><span title="${esc(rt.titre || 'Le client est revenu sur sa sélection')}" style="display:inline-block;background:var(--accent2)18;border:1px solid var(--accent2);color:var(--accent2);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">${eqDernierPassageTxt(l) ? 'Revenu le ' + eqDernierPassageTxt(l) : 'Revenu sur sa sélection'}</span>` : ''; } const LIB = { option: 'option demandée', interesse: 'intéressé', commentaire: 'commentaire', discuter: 'à discuter', infos: 'demande d\'infos', adresse: 'adresse demandée', pasmoi: 'pas pour moi' }; const k0 = Array.isArray(ra.reactions) && ra.reactions.length ? ra.reactions[0] : ''; const fort = k0 === 'option' || k0 === 'interesse'; return `<br><span title="${esc(ra.titre || 'Le client est revenu sur sa sélection')}" style="display:inline-block;background:${fort ? 'var(--accent2)' : 'var(--accent2)18'};border:1px solid var(--accent2);color:${fort ? '#fff' : 'var(--accent2)'};border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">Réaction client${LIB[k0] ? ' · ' + LIB[k0] : ''}${eqDernierPassageTxt(l) ? ' · revenu le ' + eqDernierPassageTxt(l) : ''}</span>`; })()
           + (estEnVeille(l) ? `<br><span title="En veille — ressortira au prochain lancement" style="display:inline-block;background:var(--surface2);border:1px solid var(--accent2);color:var(--accent2);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:3px">En veille</span>` : '');
         return `<tr onclick="eqOuvrirFiche('${l.id}')" style="cursor:pointer${tr ? ';background:var(--accent2)12' : f.rappelDue||f.alerte48 ? ';background:var(--accent)08' : ''}">
         <td onclick="event.stopPropagation()"><input type="checkbox" ${_eqSelected.has(l.id)?'checked':''} onchange="eqToggleSelect('${l.id}', this.checked)" style="cursor:pointer;accent-color:var(--accent)"></td>
@@ -10597,7 +10597,7 @@ function eqFicheSelectionsHtml(l) {
         <button onclick="eqModifierSelection('${s.token}')" title="Retirer ou ajouter des lots, sans changer le lien" style="background:none;border:1px solid var(--border);border-radius:20px;padding:1px 10px;color:var(--text);font-size:11px;cursor:pointer">Modifier</button>
       </div>
       <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px">
-        ${biens.length} lot(s) · ${s.opened_at ? 'ouverte le ' + fmtDH(s.opened_at) : 'jamais ouverte'}${s.maj_at ? ' · <span style="color:var(--accent)">modifiée le ' + fmtD(s.maj_at) + '</span>' : ''}${total ? ' · ' + fmtDuree(total) + ' de lecture' + (Number(s.visites) > 1 ? ' sur ' + s.visites + ' visites' : '') : ''}
+        ${biens.length} lot(s) · ${s.opened_at ? 'ouverte le ' + fmtDH(s.opened_at) : 'jamais ouverte'}${Number(s.visites) > 1 && s.dernier_vu ? ' · <strong style="color:var(--accent)">dernier passage le ' + fmtDH(s.dernier_vu) + '</strong>' : ''}${s.maj_at ? ' · <span style="color:var(--accent)">modifiée le ' + fmtD(s.maj_at) + '</span>' : ''}${total ? ' · ' + fmtDuree(total) + ' de lecture' + (Number(s.visites) > 1 ? ' sur ' + s.visites + ' visites' : '') : ''}
       </div>
       ${lots}
     </div>`;
@@ -12552,7 +12552,9 @@ function renderEqNotifs() {
         : '';
       const titreAct = (a.titre ? esc(a.titre) : ('Rappeler ' + nomCli)) + eqReperesLead(l) + suiviPar;
       const avantH = hAct ? '<strong>' + esc(hAct.replace(':', 'h')) + '</strong> · ' : '';
-      const avantCli = a.titre ? nomCli + ' · ' : '';
+      // Client revenu sur sa sélection : la date de son passage à côté de son nom
+      const passage = (a.id === 'retour_client' || a.id === 'reaction_client') ? eqDernierPassageTxt(l) : '';
+      const avantCli = a.titre ? nomCli + (passage ? ' <strong style="color:var(--accent)">revenu le ' + passage + '</strong>' : '') + ' · ' : '';
       const boutonsA = btnFiche(l.id)
         + `<button class="btn btn-sm btn-secondary" onclick="eqActiviteEditer('${l.id}','${a.id}')" style="font-size:11px" title="Changer l'intitulé, le jour ou l'heure">Modifier</button>`
         + `<button class="btn btn-sm btn-primary" onclick="eqActiviteFaite('${l.id}','${a.id}')" style="font-size:11px" title="Terminée : elle disparaît de la liste, la fiche ne bouge pas">Fait</button>`;
@@ -15535,6 +15537,17 @@ function selProposerRetourDoc(contactId, apresEnvoi) {
       + 'Avec une heure, il se pose dans ton planning. J+1 à J+3 en un clic, ou une date plus lointaine dans le champ — mais une sélection ne reste jamais sans relance.',
     proposerStatut: dejaEnRetour ? null : { client, vers: 'Retour documentation', de: s }
   });
+}
+
+// Dernier passage du client sur ses sélections, en « 02/11 à 11h53 ». Il faut au moins
+// deux visites : une première ouverture n'est pas un retour. L'aperçu vendeur ne compte pas.
+function eqDernierPassageTxt(l) {
+  const d = (_eqSelectionsAll || [])
+    .filter(s => s.contact_id === l.id && Number(s.visites) > 1 && s.dernier_vu)
+    .reduce((max, s) => (s.dernier_vu > max ? s.dernier_vu : max), '');
+  if (!d) return '';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' à ' + dt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
 }
 
 // ---- Suivi : icône dans le tableau + détail des avis
