@@ -21,7 +21,7 @@ LEADS = [
     lead('b', 'Un Essai Ancien', [5]),                           # 2e essai, en retard
     lead('c', 'Deux Essais', [7, 5]),                            # 3e essai, en retard
     lead('d', 'Meme Jour', [5, 5]),                              # deux appels le même jour = un seul essai
-    lead('e', 'Trois Faits', [6, 4, 3]),                         # terminé : sort de la liste
+    lead('e', 'Trois Faits', [6, 4, 3], telephone='06 12 34 56 78'),  # terminé : ligne « Décider »
     lead('f', 'Trop Ancien', [20]),                              # paternité passée : pas de relance
     lead('g', 'Avec Rappel', [5], rappel_le=AUJ.isoformat()),    # le rappel posé l'emporte
     lead('h', 'Masque Avant', [5], activite_masquee_le=il_y_a(2)),  # déjà retiré autrefois : revient quand même
@@ -79,13 +79,24 @@ with sync_playwright() as p:
         if t.index('Rappeler Sans Appel') > t.index('Rappeler Appele Aujourdhui'): erreurs.append(f'{nom} : les leads déjà appelés doivent passer après')
         ligne = page.evaluate("() => [...document.querySelectorAll('#eq-notif-liste button')].filter(b => b.textContent.trim() === 'Pas de réponse').map(b => b.className)")
         if not any('btn-secondary' in c for c in ligne): erreurs.append(f'{nom} : pas de bouton pour rappeler un lead déjà appelé')
-        if page.evaluate("() => +document.getElementById('eq-notif-badge').textContent") != 7: erreurs.append(f'{nom} : pastille : ' + page.evaluate("() => document.getElementById('eq-notif-badge').textContent"))
-        for absent in ('Trois Faits', 'Trop Ancien', 'Client Joint'):
+        if page.evaluate("() => +document.getElementById('eq-notif-badge').textContent") != 8: erreurs.append(f'{nom} : pastille : ' + page.evaluate("() => document.getElementById('eq-notif-badge').textContent"))
+        for absent in ('Rappeler Trois Faits', 'Trop Ancien', 'Client Joint'):
             if absent in t: erreurs.append(f'{nom} : ne devrait pas être affiché : {absent}')
         if t.count('Rappeler Avec Rappel') != 1: erreurs.append(f'{nom} : le rappel posé doit apparaître une fois')
 
+        # Après le 3e essai : une ligne « Décider » et ses quatre choix
+        r = page.evaluate("() => Object.fromEntries(_eqLeads.map(l => [l.id, (eqDecisionAFaire(l) || {n: null}).n]))")
+        for i, n in r.items():
+            if n != ({'e': 3}).get(i): erreurs.append(f'{nom} : {i} : décision {n}')
+        for attendu in ('À décider après 3 essais', 'Décider pour Trois Faits', '3 essais sans réponse', 'SMS ou mail', 'Rappeler plus tard', 'En veille', 'Non qualifié'):
+            if attendu not in t: erreurs.append(f'{nom} : absent de la ligne Décider : {attendu}')
+        page.evaluate("eqActMenu('e', null)")
+        m = page.evaluate("() => document.getElementById('eq-act-menu').innerText")
+        if 'Retirer' in m or 'Passer en Sans réponse' in m: erreurs.append(f'{nom} : menu décision : {m}')
+        page.evaluate("eqActMenuFermer()")
+
         # Les retards se comptent et se cochent
-        if not {'b', 'c', 'd', 'h'} <= set(page.evaluate("_eqActRetardIds()")): erreurs.append(f'{nom} : retards incomplets')
+        if not {'b', 'c', 'd', 'e', 'h'} <= set(page.evaluate("_eqActRetardIds()")): erreurs.append(f'{nom} : retards incomplets')
 
         # Aucune action de retrait sur une relance
         page.evaluate("eqActMenu('b', null)")
@@ -104,6 +115,28 @@ with sync_playwright() as p:
         page.evaluate("eqAppelSansReponse('b')")
         page.wait_for_timeout(200)
         if not any('Sans réponse' in (e or '') for e in ecritures): erreurs.append(f'{nom} : l\'essai n\'a pas été envoyé : {ecritures}')
+
+        # « SMS ou mail » : message tout prêt, puis seulement un rappel à 3 jours
+        page.evaluate("eqDecisionMessage('e')")
+        txt = page.evaluate("() => document.getElementById('eq-decision-texte').value")
+        if "J'ai essayé de vous joindre" not in txt or 'Louis' not in txt: erreurs.append(f'{nom} : message : {txt}')
+        bt = page.evaluate("() => document.getElementById('eq-decision-modal').innerText")
+        if 'Envoyer par SMS' not in bt or 'Envoyer par mail' in bt: erreurs.append(f'{nom} : boutons du message : {bt}')
+        if nom == 'iphone':
+            page.screenshot(path=str(SORTIE / 'decision_message_iphone.png'))
+        avant = len(ecritures)
+        page.evaluate("eqDecisionEnvoyer('copie')")
+        page.wait_for_timeout(200)
+        nouv = [json.loads(e) for e in ecritures[avant:]]
+        if not nouv or set(nouv[-1]) != {'rappel_le', 'rappel_titre', 'rappel_heure'} or not nouv[-1]['rappel_le']:
+            erreurs.append(f'{nom} : écriture après le message : {nouv}')
+        else:
+            d = datetime.date.fromisoformat(nouv[-1]['rappel_le'])
+            if (d - AUJ).days < 3 or d.weekday() > 4: erreurs.append(f'{nom} : rappel mal placé : {d}')
+        if page.evaluate("eqDecisionAFaire(_eqLeads.find(l => l.id === 'e'))"): erreurs.append(f'{nom} : la ligne Décider reste après le message')
+        page.evaluate("eqDecisionPlusTard('c')")
+        if 'plus tard' not in page.evaluate("() => document.getElementById('eq-rappel-picker').innerText"): erreurs.append(f'{nom} : fenêtre Rappeler plus tard')
+        page.evaluate("eqRappelAnnule()")
 
         page.evaluate("_eqActVoirRetard = true; renderEqNotifs()")
         page.evaluate("""() => { const b = document.createElement('div'); b.id = 'bloc-test';
