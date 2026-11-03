@@ -44,10 +44,14 @@ const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPAB
 
 type Secrets = Record<string, { value: string; updated_at: string }>;
 
+// Clés gardées 5 minutes en mémoire : une lecture de base en moins à chaque message (réponses plus rapides).
+let CLES: { s: Secrets; t: number } | null = null;
 async function secrets(): Promise<Secrets> {
+  if (CLES && Date.now() - CLES.t < 300000) return CLES.s;
   const { data } = await supabase.from("app_secrets").select("name, value, updated_at").in("name", ["ig_app_secret", "ig_verify_token", "ig_access_token", "lead_inbound_token"]);
   const s: Secrets = {};
   (data || []).forEach((r: any) => (s[r.name] = { value: r.value, updated_at: r.updated_at }));
+  if (s.ig_app_secret && s.ig_access_token) CLES = { s, t: Date.now() };
   return s;
 }
 
@@ -194,8 +198,10 @@ async function traiterCommentaire(compte: string, v: any, jt: string) {
   const ok = await nouveau({ id: String(v.id), type: "commentaire", ig_user: auteur, ig_pseudo: pseudo, texte: texte.slice(0, 500), media_id: v.media?.id || null });
   if (!ok) return;
   const r = demarrerDepuisCommentaire(pseudo);
-  const prive = await appel(`${compte}/messages`, jt, { recipient: { comment_id: String(v.id) }, message: formatMessage(r.messages[0]) });
-  const pub = await appel(`${v.id}/replies`, jt, { message: REPONSES_PUBLIQUES[Math.floor(Math.random() * REPONSES_PUBLIQUES.length)] });
+  const [prive, pub] = await Promise.all([
+    appel(`${compte}/messages`, jt, { recipient: { comment_id: String(v.id) }, message: formatMessage(r.messages[0]) }),
+    appel(`${v.id}/replies`, jt, { message: REPONSES_PUBLIQUES[Math.floor(Math.random() * REPONSES_PUBLIQUES.length)] }),
+  ]);
   if (prive.ok) {
     await ecrireConversation(auteur, r.conv, { origine: "commentaire", media_id: v.media?.id || null, debut_le: new Date().toISOString(), contact_id: null });
   }
@@ -207,33 +213,36 @@ async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
   const msg = m?.message;
   if (!exp || exp === compte || !msg?.mid || msg.is_echo) return;
   // Le texte des messages n'est pas gardé dans le journal : il peut contenir un téléphone ou un e-mail.
-  const ok = await nouveau({ id: String(msg.mid), type: "message", ig_user: exp, texte: null });
+  // Journal et conversation lus en même temps (une attente au lieu de deux).
+  const [ok, ligne] = await Promise.all([nouveau({ id: String(msg.mid), type: "message", ig_user: exp, texte: null }), lireConversation(exp)]);
   if (!ok) return;
 
-  const ligne = await lireConversation(exp);
   const conv: Conversation | null = ligne ? { etape: ligne.etape, reponses: ligne.reponses || {}, essais: ligne.essais || 0 } : null;
   const expire = ligne ? Date.now() - new Date(ligne.maj_le).getTime() > FENETRE_H * 3600000 : false;
   const r = repondre(conv, String(msg.text || ""), msg.quick_reply?.payload || null, expire);
 
-  let extra: Record<string, unknown> = ligne ? {} : { origine: "message", debut_le: new Date().toISOString() };
-  let conv2 = r.conv;
-  let messages = r.messages;
-  if (r.creerFiche) {
-    // La fiche entre dans le CRM d'abord, puis la personne reçoit son lien pour choisir le créneau d'appel.
-    const contact = await creerFiche(s, r.conv.reponses);
-    const jetonRdv = contact ? await lienRdv(contact) : null;
-    if (jetonRdv) messages = [Q.merci(r.conv.reponses.prenom || ""), Q.planning(lienPlanningPersonnel(jetonRdv))];
-    // Une fois la fiche créée, on ne garde ici que le prénom et le pseudo.
-    conv2 = { ...r.conv, reponses: { prenom: r.conv.reponses.prenom || "", pseudo: r.conv.reponses.pseudo || "" } };
-    extra = { ...extra, contact_id: contact };
-  }
-
-  const envois = [];
-  for (const mm of messages) {
+  const envois: { ok: boolean; statut: number }[] = [];
+  const envoyer = async (mm: Message) => {
     let e = await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: formatMessage(mm) });
     // Carte refusée par Instagram : on retombe sur le texte avec le lien du premier bouton.
     if (!e.ok && mm.carte) e = await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: { text: `${mm.text} ${mm.carte.boutons[0].url}` } });
     envois.push(e);
+  };
+
+  let extra: Record<string, unknown> = ligne ? {} : { origine: "message", debut_le: new Date().toISOString() };
+  let conv2 = r.conv;
+  if (r.creerFiche) {
+    // Le merci part tout de suite ; la fiche entre dans le CRM pendant ce temps (l'accusé par e-mail prend
+    // plusieurs secondes), puis la carte du planning arrive avec le lien personnel de la fiche.
+    await envoyer(r.messages[0]);
+    const contact = await creerFiche(s, r.conv.reponses);
+    const jetonRdv = contact ? await lienRdv(contact) : null;
+    await envoyer(jetonRdv ? Q.planning(lienPlanningPersonnel(jetonRdv)) : r.messages[1]);
+    // Une fois la fiche créée, on ne garde ici que le prénom et le pseudo.
+    conv2 = { ...r.conv, reponses: { prenom: r.conv.reponses.prenom || "", pseudo: r.conv.reponses.pseudo || "" } };
+    extra = { ...extra, contact_id: contact };
+  } else {
+    for (const mm of r.messages) await envoyer(mm);
   }
   if (r.messages.length || r.conv !== conv) await ecrireConversation(exp, conv2, extra);
   await noter(String(msg.mid), envois.every((e) => e.ok), { envois: envois.map((e) => ({ ok: e.ok, statut: e.statut })), etape: conv2.etape, fiche: !!r.creerFiche });
@@ -274,15 +283,18 @@ Deno.serve(async (req: Request) => {
       try { await traiterMessage(compte, m, jt, s); } catch (_) { /* idem */ }
     }
   }
-  // Conservation annoncée dans les mentions légales : 12 mois au plus.
-  try {
+  // Conservation annoncée dans les mentions légales : 12 mois au plus. Faite un appel sur vingt
+  // seulement (inutile à chaque message, et elle retardait la réponse suivante).
+  if (Math.random() < 0.05) try {
     const limite = new Date(Date.now() - CONSERVATION_J * 86400000).toISOString();
-    await supabase.from("qdn_instagram_evenements").delete().lt("recu_le", limite);
-    await supabase.from("qdn_instagram_conversations").delete().lt("maj_le", limite);
-    // Questionnaire abandonné en cours de route : rien n'est gardé au-delà de 7 jours.
-    await supabase.from("qdn_instagram_conversations").delete()
-      .not("etape", "in", "(fini,refus,ferme)").lt("maj_le", new Date(Date.now() - ABANDON_J * 86400000).toISOString());
-  } catch (_) { /* on réessaiera au prochain appel */ }
+    await Promise.all([
+      supabase.from("qdn_instagram_evenements").delete().lt("recu_le", limite),
+      supabase.from("qdn_instagram_conversations").delete().lt("maj_le", limite),
+      // Questionnaire abandonné en cours de route : rien n'est gardé au-delà de 7 jours.
+      supabase.from("qdn_instagram_conversations").delete()
+        .not("etape", "in", "(fini,refus,ferme)").lt("maj_le", new Date(Date.now() - ABANDON_J * 86400000).toISOString()),
+    ]);
+  } catch (_) { /* on réessaiera à un prochain appel */ }
   // Toujours 200 : sinon Meta renvoie l'événement et finit par couper l'abonnement.
   return new Response("ok", { status: 200 });
 });

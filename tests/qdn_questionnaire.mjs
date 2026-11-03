@@ -1,10 +1,14 @@
 // Test du questionnaire Instagram de Quoi de neuf (supabase/functions/qdn-instagram/questionnaire.ts).
 // Lancer : ~/.local/bin/node tests/qdn_questionnaire.mjs
-import { demarrerDepuisCommentaire, repondre, coordonnees, BUDGETS } from "../supabase/functions/qdn-instagram/questionnaire.ts";
+import { demarrerDepuisCommentaire, repondre, coordonnees, BUDGETS, parleDePlans } from "../supabase/functions/qdn-instagram/questionnaire.ts";
 
 let echecs = 0;
 const ok = (cond, msg) => { if (!cond) { echecs++; console.log("ÉCHEC :", msg); } else console.log("ok :", msg); };
 const dire = (r) => r.messages.map((m) => m.text + (m.quick_replies ? " [" + m.quick_replies.map((b) => b.title).join(" | ") + "]" : "")).join(" / ");
+
+// 0. Le commentaire déclencheur : « plans » comme « plan », quelle que soit l'écriture (demande d'Alex du 03/11/2026)
+ok(["PLANS", "Plans", "plan", "Plan.", "PLAN !", "#plans", "plans🙏", "les plans svp"].every(parleDePlans), "« plan » et « plans » déclenchent le robot");
+ok(!["planning", "explanation"].some(parleDePlans), "« planning » ne déclenche pas");
 
 // 1. Parcours complet depuis un commentaire
 let r = demarrerDepuisCommentaire("camille_93");
