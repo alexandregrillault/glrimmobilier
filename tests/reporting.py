@@ -60,6 +60,7 @@ with sync_playwright() as p:
         for a in ('TRANSFERTS REÇUS', 'TRANSFERTS ENVOYÉS', 'transférés reçus'):
             if a not in t: erreurs.append(f'{nom} : équipe, sens des transferts absent : {a}')
         if 'Nour' in t: erreurs.append(f'{nom} : commercial inactif affiché')
+        if page.evaluate("document.querySelectorAll('#rp-corps .rp-aide').length") != 6: erreurs.append(f'{nom} : équipe, légendes')
         if 'Théo' in t or '57 404' in t.replace('\u202f', ' ').replace('\xa0', ' '): erreurs.append(f'{nom} : gérant compté dans l\'équipe')
         if 'retards sur' in t: erreurs.append(f'{nom} : retards individuels visibles en équipe')
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : équipe déborde')
@@ -78,6 +79,7 @@ with sync_playwright() as p:
             if a not in t: erreurs.append(f'{nom} : Jules, absent : {a}')
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : cas par cas déborde')
         if page.evaluate("document.querySelectorAll('.rp-cal > div').length") != 7 + 3 + 31: erreurs.append(f'{nom} : calendrier')
+        if page.evaluate("document.querySelectorAll('#rp-corps .rp-aide').length") != 7: erreurs.append(f'{nom} : cas par cas, légendes')
         page.screenshot(path=str(SORTIE / f'reporting_perso_{nom}.png'), full_page=True)
 
         # Théo, gérant : en Cas par cas, classé face aux commerciaux, transferts envoyés
