@@ -9,7 +9,7 @@ const dire = (r) => r.messages.map((m) => m.text + (m.quick_replies ? " [" + m.q
 // 1. Parcours complet depuis un commentaire
 let r = demarrerDepuisCommentaire("camille_93");
 ok(r.conv.etape === "intro" && /5 petites questions/.test(r.messages[0].text) && /GLR Immobilier/.test(r.messages[0].text) && !/https?:/.test(r.messages[0].text), "commentaire : démarche expliquée, GLR nommé, aucun lien au premier message");
-ok(r.messages[0].quick_replies?.map((b) => b.title).join("|") === "C'est parti|Non merci", "boutons « C'est parti » / « Non merci »");
+ok(r.messages[0].quick_replies?.map((b) => b.title).join("|") === "✅ C'est parti|Non merci", "boutons « ✅ C'est parti » / « Non merci »");
 r = repondre(r.conv, "", "PLANS_OUI", false); ok(r.conv.etape === "zone" && /^1\/5 · Dans quelle ville/.test(r.messages[0].text), "C'est parti : question 1/5");
 r = repondre(r.conv, "Aubervilliers, Pantin et Bobigny", null, false);
 ok(r.conv.reponses.zone === "Aubervilliers, Pantin, Bobigny" && r.conv.etape === "typologie" && /^2\/5/.test(r.messages[0].text), "plusieurs villes d'un coup, puis 2/5");

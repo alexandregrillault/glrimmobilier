@@ -43,7 +43,8 @@ const TYPO_TEXTE: Record<string, string> = {
 
 const DEMARCHE = "Pour recevoir les plans : 5 petites questions (30 secondes), puis un conseiller de GLR Immobilier, " +
   "notre partenaire, t'appelle au moment que tu choisis avec les plans des programmes neufs de ton secteur. Ça te va ?";
-const OK_NON: Bouton[] = [{ title: "C'est parti", payload: "PLANS_OUI" }, { title: "Non merci", payload: "PLANS_NON" }];
+// Seul bouton avec un émoji (décision d'Alex du 03/11/2026) : il signale qu'il faut toucher les bulles.
+const OK_NON: Bouton[] = [{ title: "✅ C'est parti", payload: "PLANS_OUI" }, { title: "Non merci", payload: "PLANS_NON" }];
 
 export const Q = {
   // Après un commentaire « PLANS ».
