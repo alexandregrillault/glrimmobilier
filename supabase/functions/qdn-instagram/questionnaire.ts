@@ -51,7 +51,8 @@ export const Q = {
   }),
   relance: (): Message => ({ text: "Pour commencer, touche « C'est parti ». Sinon, « Non merci ».", quick_replies: OK_NON }),
   zone: (): Message => ({ text: "1/5 · Dans quelle ville tu cherches ? Tu peux en mettre plusieurs." }),
-  typologie: (): Message => ({ text: "2/5 · Quel type de logement ?", quick_replies: TYPOLOGIES }),
+  // Un bouton ne permet qu'un choix : pour plusieurs, la personne les écrit (« T2 ou T3 »).
+  typologie: (): Message => ({ text: "2/5 · Quel type de logement ? Si tu hésites, écris-en plusieurs (ex. T2 ou T3).", quick_replies: TYPOLOGIES }),
   budget: (): Message => ({ text: "3/5 · Ton budget ?", quick_replies: BUDGETS }),
   coordonnees: (): Message => ({ text: "4/5 · Ton prénom et ton numéro ?" }),
   prenom: (): Message => ({ text: "Et ton prénom ?" }),
@@ -95,12 +96,16 @@ export function coordonnees(t: string): { prenom: string | null; telephone: stri
   return { prenom, telephone };
 }
 
+// « T2 ou T3 », « 3 ou 4 pièces », « studio, T2 » : une ou plusieurs typologies, dans l'ordre.
 function typologieDepuis(t: string): string {
   const s = t.toLowerCase();
-  if (/studio|t1\b|f1\b|1 ?pi/.test(s)) return "Studio / T1";
-  const m = s.match(/[tf]\s?([2-9])\b|([2-9])\s?pi/);
-  if (m) { const n = Number(m[1] || m[2]); return n >= 5 ? "T5 et plus" : "T" + n; }
-  return t.trim().slice(0, 30);
+  const trouvees: string[] = [];
+  const ajoute = (v: string) => { if (!trouvees.includes(v)) trouvees.push(v); };
+  for (const m of s.matchAll(/studio|[tf]\s?([1-9])\b|\b([1-9])\s?(?=(?:\s*(?:,|ou|et|\/|-)\s*[1-9])*\s*pi)/g)) {
+    const n = m[0].startsWith("studio") ? 1 : Number(m[1] || m[2]);
+    ajoute(n <= 1 ? "Studio / T1" : n >= 5 ? "T5 et plus" : "T" + n);
+  }
+  return trouvees.length ? trouvees.join(", ") : t.trim().slice(0, 30);
 }
 
 // « Aubervilliers, Pantin et Bobigny » → trois villes, sans doublon, 5 au plus.

@@ -66,6 +66,12 @@ r = repondre(c, "06 11 22 33 44", null, true); ok(r.conv.etape === "telephone" &
 c = { etape: "typologie", reponses: {}, essais: 0 };
 ok(repondre(c, "un 4 pièces", null, false).conv.reponses.typologie === "T4", "« un 4 pièces » → T4");
 ok(repondre(c, "studio", null, false).conv.reponses.typologie === "Studio / T1", "« studio » → Studio / T1");
+ok(repondre(c, "T2 ou T3", null, false).conv.reponses.typologie === "T2, T3", "« T2 ou T3 » → T2, T3");
+ok(repondre(c, "3 ou 4 pièces", null, false).conv.reponses.typologie === "T3, T4", "« 3 ou 4 pièces » → T3, T4");
+ok(repondre(c, "studio, t2", null, false).conv.reponses.typologie === "Studio / T1, T2", "« studio, t2 » → Studio / T1, T2");
+ok(repondre(c, "T4/T5", null, false).conv.reponses.typologie === "T4, T5 et plus", "« T4/T5 » → T4, T5 et plus");
+ok(repondre(c, "", "TYPO_T3", false).conv.reponses.typologie === "T3", "bouton : un seul choix");
+ok(/écris-en plusieurs/.test(repondre({ etape: "zone", reponses: {}, essais: 0 }, "Pantin", null, false).messages[0].text), "la question dit qu'on peut en écrire plusieurs");
 
 console.log("\nExemple :", dire(demarrerDepuisCommentaire(null)));
 console.log(echecs ? `\n${echecs} échec(s)` : "\nTout est bon.");
