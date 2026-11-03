@@ -13,7 +13,7 @@ export type Conversation = { etape: string; reponses: Record<string, string>; es
 export type Resultat = { conv: Conversation; messages: Message[]; creerFiche?: boolean };
 
 export const DONNEES = "https://www.glrimmobilier.com/mentions-legales/";
-export const LIEN_PLANNING = "https://www.glrimmobilier.com/rdv/?v=alexandre&f=appel";
+export const LIEN_PLANNING = "https://www.glrimmobilier.com/rdv/?v=theophile&f=appel";
 export const lienPlanningPersonnel = (jeton: string) => `https://www.glrimmobilier.com/rdv/?t=${encodeURIComponent(jeton)}&f=appel`;
 
 export const TYPOLOGIES: Bouton[] = [

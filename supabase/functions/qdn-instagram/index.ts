@@ -8,7 +8,7 @@
 //  - un message privé : la réponse à la question en cours, ou, sans conversation,
 //    une invitation à recevoir les plans.
 // À la fin, avec l'accord de la personne, la fiche est créée dans le CRM par lead-inbound
-// (vendeur alexandre, source « Quoi de neuf Instagram »), comme le formulaire du site.
+// (vendeur theophile, source « Quoi de neuf Instagram »), comme le formulaire du site.
 //
 // Clés lues dans app_secrets (jamais dans ce dépôt public) :
 //   ig_app_secret      secret de l'application Meta (signature des appels)
@@ -31,7 +31,7 @@ const RENOUVELER_APRES_J = 30;
 const CONSERVATION_J = 365;
 const FENETRE_H = 24;
 const ABANDON_J = 7;
-const VENDEUR = "alexandre";
+const VENDEUR = "theophile"; // leads Quoi de neuf chez Théophile (décision d'Alex du 03/11/2026)
 const SOURCE = "Quoi de neuf Instagram";
 
 const REPONSES_PUBLIQUES = [
@@ -159,7 +159,7 @@ async function creerFiche(s: Secrets, r: Record<string, string>): Promise<string
 
 // Lien de rendez-vous personnel de la fiche (créé avec le lead, table rdv_liens) : la page montre
 // le planning du conseiller et la personne n'a pas à retaper ses coordonnées. Sans lien valable,
-// le message garde le lien public du planning d'Alexandre.
+// le message garde le lien public du planning de Théophile.
 async function lienRdv(contactId: string): Promise<string | null> {
   try {
     const { data } = await supabase.from("rdv_liens").select("token, contexte").eq("contact_id", contactId)

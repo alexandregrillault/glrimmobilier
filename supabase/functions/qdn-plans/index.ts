@@ -5,11 +5,11 @@
 // à lead-inbound (dédoublonnage par téléphone / e-mail, fusion, paternité).
 // Le jeton de lead-inbound est lu dans app_secrets, jamais écrit ici (dépôt public).
 //
-// Décision d'Alex du 03/11/2026 : tous ces leads arrivent chez lui d'abord.
+// Décision d'Alex du 03/11/2026 : tous ces leads arrivent chez Théophile, comme ceux du robot Instagram.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const VENDEUR = "alexandre";
+const VENDEUR = "theophile"; // leads Quoi de neuf chez Théophile (décision d'Alex du 03/11/2026)
 const SOURCE = "Quoi de neuf Instagram";
 
 const ORIGINES_AUTORISEES = [
