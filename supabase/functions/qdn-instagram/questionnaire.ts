@@ -18,11 +18,12 @@ export const TYPOLOGIES: Bouton[] = [
   { title: "T5 et plus", payload: "TYPO_T5" },
 ];
 export const BUDGETS: Bouton[] = [
-  { title: "Moins de 200 k€", payload: "BUDGET_1" },
-  { title: "200 à 300 k€", payload: "BUDGET_2" },
-  { title: "300 à 400 k€", payload: "BUDGET_3" },
-  { title: "400 à 550 k€", payload: "BUDGET_4" },
-  { title: "Plus de 550 k€", payload: "BUDGET_5" },
+  // Jauge dessinée (Instagram n'a pas de curseur) : 20 caractères au plus par bouton.
+  { title: "▰▱▱▱▱ < 200 k€", payload: "BUDGET_1" },
+  { title: "▰▰▱▱▱ 200–300 k€", payload: "BUDGET_2" },
+  { title: "▰▰▰▱▱ 300–400 k€", payload: "BUDGET_3" },
+  { title: "▰▰▰▰▱ 400–550 k€", payload: "BUDGET_4" },
+  { title: "▰▰▰▰▰ > 550 k€", payload: "BUDGET_5" },
 ];
 const BUDGET_TEXTE: Record<string, string> = {
   BUDGET_1: "Moins de 200 000 €", BUDGET_2: "200 000 à 300 000 €", BUDGET_3: "300 000 à 400 000 €",
@@ -129,7 +130,7 @@ export function repondre(conv: Conversation | null, texteBrut: string, payload: 
       return { conv: { etape: "budget", reponses: r, essais: 0 }, messages: [Q.budget()] };
     case "budget":
       if (!payload && !texte) return { conv, messages: [Q.budget()] };
-      r.budget = (payload && BUDGET_TEXTE[payload]) || texte.slice(0, 60);
+      r.budget = (payload && BUDGET_TEXTE[payload]) || texte.replace(/[▰▱]/g, "").trim().slice(0, 60);
       return { conv: { etape: "prenom", reponses: r, essais: 0 }, messages: [Q.prenom()] };
     case "prenom": {
       const prenom = texte.replace(/^(je m'appelle|moi c'est|c'est)\s+/i, "").split(/[\s,.!]+/)[0]?.slice(0, 60) || "";
