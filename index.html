@@ -21964,7 +21964,7 @@ const JOURNAL_ACTIONS = {
 //  de rpForts, rpAxes et rpPrios. Comparaison entre commerciaux actifs du mois.
 // ============================================================
 const RP_DEBUT = '2026-09-01';   // avant, le journal d'activité n'existe pas
-const RP_NOMS = { Anais: 'Anaïs' };
+const RP_NOMS = { Anais: 'Anaïs', 'Théophile': 'Théo' };
 const RP_COUL = ['#1E3A32', '#A7C0B1', '#DAD3C3', '#EBD6A8', '#C9A567', '#8A6A2F'];
 const RP_LAB = ['joints', 'classés sans joindre', 'aucun appel noté', 'essayés 1 seul jour', 'essayés 2 jours', 'essayés 3 jours ou plus'];
 const RP_LIGNES = [
@@ -22051,7 +22051,8 @@ async function rpCharger() {
     if (jeton !== _rp.jeton) return;   // un autre mois a été choisi entre-temps
     _rp.data = _rpPreparer(d, mois);
     const sel = document.getElementById('rp-vendeur'), avant = sel.value;
-    sel.innerHTML = _rp.data.actifs.map(x => `<option value="${_vEsc(x.v)}">${_rpNom(x)}</option>`).join('');
+    // Les gérants actifs viennent après les commerciaux, en Cas par cas seulement
+    sel.innerHTML = _rp.data.comms.concat(_rp.data.actifs.filter(x => x.gerant)).map(x => `<option value="${_vEsc(x.v)}">${_rpNom(x)}${x.gerant ? ' (gérant)' : ''}</option>`).join('');
     if (_rp.data.actifs.some(x => x.v === avant)) sel.value = avant;
     document.getElementById('rp-maj').textContent = 'Mis à jour à ' + new Date(d.calcule_le).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
     rpRendre();
@@ -22060,9 +22061,11 @@ async function rpCharger() {
   }
 }
 
-// Ratios de chaque commercial, et son rang parmi ceux qui ont travaillé ce mois-là
+// Ratios de chaque commercial, et son rang parmi ceux qui ont travaillé ce mois-là.
+// Un gérant est classé face aux commerciaux, sans entrer dans leur classement ni dans l'équipe.
 function _rpPreparer(d, mois) {
   const actifs = (d.vendeurs || []).filter(x => x.recus + x.tr + x.pool + x.actions > 0);
+  const comms = actifs.filter(x => !x.gerant);
   actifs.forEach(x => {
     const c = x.coh = Object.assign({ ent: 0, joints: 0, sel: 0, rdv: 0, av: 0, ve: 0, cl: 0, zero: 0, j1: 0, j2: 0, j3: 0, oub: 0, touche24: 0, dir_n: 0, dir_j: 0, tr_n: 0, tr_j: 0, pool_n: 0, pool_j: 0, delai2: null }, x.coh);
     const essayes = c.j1 + c.j2 + c.j3;
@@ -22077,7 +22080,7 @@ function _rpPreparer(d, mois) {
   });
   const rang = (x, f) => {
     const v = f(x);
-    return v == null ? null : 1 + actifs.filter(y => f(y) != null && f(y) > v).length;
+    return v == null ? null : 1 + (x.gerant ? comms.concat(x) : comms).filter(y => f(y) != null && f(y) > v).length;
   };
   actifs.forEach(x => {
     x.r = {};
@@ -22090,7 +22093,7 @@ function _rpPreparer(d, mois) {
     x.r.ouvertes = rang(x, y => y.ouvertes);
     x.r.regulier = rang(x, y => y.lunMar == null ? null : -y.lunMar);
   });
-  return { mois, actifs, coupure: d.coupure };
+  return { mois, actifs, comms, coupure: d.coupure };
 }
 
 function rpForts(x) {
@@ -22161,7 +22164,7 @@ function _rpNoteBas() {
 }
 
 function _rpPerso(x) {
-  const c = x.coh, tous = _rp.data.actifs, forts = rpForts(x), axes = rpAxes(x), prios = rpPrios(x);
+  const c = x.coh, tous = _rp.data.comms, forts = rpForts(x), axes = rpAxes(x), prios = rpPrios(x), g = x.gerant;
   const it = (L) => L.map(([t, p]) => `<div class="rp-it"><h3>${t}</h3><p>${p}</p></div>`).join('');
   const lignes = RP_LIGNES.map(([k, lib]) => {
     const v = x.m[k];
@@ -22174,24 +22177,25 @@ function _rpPerso(x) {
       <div class="rp-ventes"><div class="rp-lab">Ventes du mois</div><b>${x.ventes}</b><span>${x.pf.rd + x.pf.fin} dossiers avancés aujourd'hui</span></div></div>
     <div class="rp-g4">
       <div class="rp-carte fort"><b class="n">${x.recus}</b><strong>leads reçus</strong><small>${_rpRang(x.r.recus)} de l'équipe</small></div>
-      <div class="rp-carte"><b class="n">${x.tr}</b><strong>leads transférés reçus</strong><small>dont ${x.trg} par les gérants</small></div>
+      ${g ? `<div class="rp-carte"><b class="n">${x.env}</b><strong>leads transférés envoyés</strong><small>à un commercial</small></div>`
+        : `<div class="rp-carte"><b class="n">${x.tr}</b><strong>leads transférés reçus</strong><small>dont ${x.trg} par les gérants</small></div>`}
       <div class="rp-carte"><b class="n">${x.pool}</b><strong>repris au pool</strong><small>${_rpRang(x.r.pool)} de l'équipe</small></div>
-      <div class="rp-carte"><b class="n">${x.env + x.ech}</b><strong>leads partis</strong><small>${x.env} transféré${x.env > 1 ? 's' : ''} à un collègue · ${x.ech} échu${x.ech > 1 ? 's' : ''} à 14 jours</small></div>
+      ${g ? `<div class="rp-carte"><b class="n">${x.ech}</b><strong>leads échus</strong><small>repartis au pool à 14 jours</small></div>` : `<div class="rp-carte"><b class="n">${x.env + x.ech}</b><strong>leads partis</strong><small>${x.env} transféré${x.env > 1 ? 's' : ''} à un collègue · ${x.ech} échu${x.ech > 1 ? 's' : ''} à 14 jours</small></div>`}
     </div>
     <div class="rp-g2">
-      <div><div class="rp-lab">Le parcours de tes leads</div><h2>${c.joints} leads joints sur ${c.ent}</h2><div style="margin-top:10px">${_rpParcours(c, c.ve)}</div></div>
+      <div><div class="rp-lab">${g ? 'Le parcours des leads que tu as gardés' : 'Le parcours de tes leads'}</div><h2>${c.joints} leads joints sur ${c.ent}</h2><div style="margin-top:10px">${_rpParcours(c, c.ve)}</div></div>
       <div><div class="rp-lab">Actions par jour dans le CRM</div><h2>${x.actions} actions sur ${x.jours_actifs} jours</h2>${_rpCalendrier(x)}</div>
     </div>
-    <div class="rp-carte"><div class="rp-lab">Ce que deviennent tes ${c.ent} leads</div><h2>${x.essayes} leads essayés sans être joints, ${c.j2 + c.j3} rappelés un autre jour</h2>${_rpDevenir(c)}
+    <div class="rp-carte"><div class="rp-lab">Ce que deviennent ${g ? 'les ' + c.ent + ' leads gardés' : 'tes ' + c.ent + ' leads'}</div><h2>${x.essayes} leads essayés sans être joints, ${c.j2 + c.j3} rappelés un autre jour</h2>${_rpDevenir(c)}
       <div class="rp-faits"><div><b>${x.ess}</b> essais sans réponse notés dans le mois</div><div><b>${x.app ? (x.ess / x.app).toFixed(1).replace('.', ',') : '0'}</b> essai par lead appelé (${x.app} leads)</div><div><b>${c.oub}</b> leads non joints sans nouvelle depuis 7 jours</div></div></div>
-    <div class="rp-carte"><div class="rp-lab">Ta place parmi les ${tous.length} commerciaux actifs · à droite, c'est mieux</div><div style="margin-top:8px">${lignes}</div></div>
+    <div class="rp-carte"><div class="rp-lab">Ta place ${g ? 'face aux' : 'parmi les'} ${tous.length} commerciaux actifs · à droite, c'est mieux</div><div style="margin-top:8px">${lignes}</div></div>
     <div class="rp-g2"><div><div class="rp-lab">Tes points forts</div>${it(forts)}</div><div><div class="rp-lab">Tes sujets d'amélioration</div>${axes.length ? it(axes) : '<div class="rp-it"><p>Rien de marquant ce mois-ci.</p></div>'}</div></div>
     ${prios.length ? `<div class="rp-prios"><div class="rp-lab">Tes priorités</div><div>${prios.map(([n, t]) => `<p><b>${n}</b>${t}</p>`).join('')}</div></div>` : ''}
     ${_rpNoteBas()}</div>`;
 }
 
 function _rpEquipe() {
-  const tous = _rp.data.actifs;
+  const tous = _rp.data.comms;
   const som = (f) => tous.reduce((s, x) => s + (Number(f(x)) || 0), 0);
   const c = {};
   ['ent', 'joints', 'sel', 'rdv', 'av', 've', 'cl', 'zero', 'j1', 'j2', 'j3', 'dir_n', 'dir_j', 'tr_n', 'tr_j', 'pool_n', 'pool_j', 'oub'].forEach(k => { c[k] = som(x => x.coh[k]); });

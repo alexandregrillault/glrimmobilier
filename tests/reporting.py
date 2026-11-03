@@ -23,6 +23,7 @@ DONNEES = {'debut': '2026-09-30T22:00:00Z', 'fin': '2026-10-31T23:00:00Z', 'coup
     v('Jules', 67, 28, 25, 60, 1, 6, coh(131, 44, 35, 25, 20, 0, 5, 14, 40, 20, 8, 51, 73, 57, 31, 19, 8, 55, 5, 4.1), vus=54, suite7=52),
     v('Nour', 0, 0, 0, 0, 0, 17, {}, actions=0, cal={}, clients=0, ess=0, app=0, selections={'env': 0, 'clients': 0, 'ouv': 0, 'reac': 0}),
     v('Madina', 37, 43, 41, 20, 5, 0, coh(78, 54, 28, 16, 4, 0, 4, 8, 9, 3, 0, 9, 59, 29, 22, 29, 21, 20, 11)),
+    v('Théophile', 116, 0, 0, 2, 47, 12, coh(69, 34, 21, 22, 6, 2, 8, 22, 5, 0, 0, 12, 32, 67, 32, 0, 0, 2, 2), gerant=True, ventes=3, hono=57404),
 ]}
 
 erreurs = []
@@ -59,6 +60,7 @@ with sync_playwright() as p:
         for a in ('TRANSFERTS REÇUS', 'TRANSFERTS ENVOYÉS', 'transférés reçus'):
             if a not in t: erreurs.append(f'{nom} : équipe, sens des transferts absent : {a}')
         if 'Nour' in t: erreurs.append(f'{nom} : commercial inactif affiché')
+        if 'Théo' in t or '57 404' in t.replace('\u202f', ' ').replace('\xa0', ' '): erreurs.append(f'{nom} : gérant compté dans l\'équipe')
         if 'retards sur' in t: erreurs.append(f'{nom} : retards individuels visibles en équipe')
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : équipe déborde')
         page.screenshot(path=str(SORTIE / f'reporting_equipe_{nom}.png'), full_page=True)
@@ -66,7 +68,7 @@ with sync_playwright() as p:
         # Cas par cas : Anaïs, puis Jules
         page.evaluate("rpVue('perso')")
         opts = page.evaluate("[...document.getElementById('rp-vendeur').options].map(o => o.textContent)")
-        if opts != ['Anaïs', 'Jules', 'Madina']: erreurs.append(f'{nom} : liste : {opts}')
+        if opts != ['Anaïs', 'Jules', 'Madina', 'Théo (gérant)']: erreurs.append(f'{nom} : liste : {opts}')
         t = page.inner_text('#rp-corps')
         for a in ('146', 'N°1 sur les ventes', 'Rappeler au-delà du premier jour', 'Ne pas laisser filer les clients vus', '73', 'leads sans nouvelle', '4 transférés à un collègue'):
             if a not in t: erreurs.append(f'{nom} : Anaïs, absent : {a}')
@@ -77,6 +79,15 @@ with sync_playwright() as p:
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : cas par cas déborde')
         if page.evaluate("document.querySelectorAll('.rp-cal > div').length") != 7 + 3 + 31: erreurs.append(f'{nom} : calendrier')
         page.screenshot(path=str(SORTIE / f'reporting_perso_{nom}.png'), full_page=True)
+
+        # Théo, gérant : en Cas par cas, classé face aux commerciaux, transferts envoyés
+        page.select_option('#rp-vendeur', 'Théophile')
+        t = page.inner_text('#rp-corps')
+        for a in ('Théo', 'leads transférés envoyés', '47', 'leads échus', 'que tu as gardés'.upper(), 'face aux 3 commerciaux'.upper(), 'N°1 sur les ventes'):
+            if a not in t: erreurs.append(f'{nom} : Théo, absent : {a}')
+        if 'transférés reçus' in t: erreurs.append(f'{nom} : Théo, transferts reçus affichés')
+        if page.evaluate("document.querySelectorAll('.rp-piste span:not(.moi)').length") != 5 * 3: erreurs.append(f'{nom} : Théo, points de comparaison')
+        page.screenshot(path=str(SORTIE / f'reporting_gerant_{nom}.png'), full_page=True)
         page.close()
     nav.close()
 
