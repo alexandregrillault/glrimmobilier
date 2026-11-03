@@ -22,7 +22,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { demarrerDepuisCommentaire, repondre, parleDePlans } from "./questionnaire.ts";
 import type { Conversation, Message } from "./questionnaire.ts";
 
-const GRAPH = "https://graph.instagram.com/v24.0";
+// Connexion unifiée (seule voie ouverte aux nouvelles applications depuis 2026) : jeton
+// d'utilisateur système « EAA… » sans expiration, sur graph.facebook.com. Un jeton Instagram
+// « IG… » (ancienne connexion Instagram) passe par graph.instagram.com. Mêmes chemins d'appel.
+const VERSION = "v24.0";
+const graph = (jt: string) => `https://graph.${jt.startsWith("IG") ? "instagram" : "facebook"}.com/${VERSION}`;
 const RENOUVELER_APRES_J = 30;
 const CONSERVATION_J = 365;
 const FENETRE_H = 24;
@@ -59,10 +63,12 @@ async function signatureValide(brut: string, entete: string | null, secret: stri
   return diff === 0;
 }
 
-// Le jeton longue durée expire au bout de 60 jours : on le renouvelle passé 30 jours.
+// Un jeton Instagram expire au bout de 60 jours : on le renouvelle passé 30 jours.
+// Le jeton d'utilisateur système de la connexion unifiée n'expire pas.
 async function jeton(s: Secrets): Promise<string | null> {
   const t = s.ig_access_token;
   if (!t?.value) return null;
+  if (!t.value.startsWith("IG")) return t.value;
   const age = (Date.now() - new Date(t.updated_at).getTime()) / 86400000;
   if (age > RENOUVELER_APRES_J) {
     try {
@@ -78,7 +84,7 @@ async function jeton(s: Secrets): Promise<string | null> {
 }
 
 async function appel(chemin: string, jt: string, corps: unknown) {
-  const r = await fetch(`${GRAPH}/${chemin}`, {
+  const r = await fetch(`${graph(jt)}/${chemin}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${jt}` },
     body: JSON.stringify(corps),
