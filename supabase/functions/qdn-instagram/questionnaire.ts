@@ -8,7 +8,9 @@
 // bouton ; puis 5 questions numérotées : villes, typologie, budget, prénom et téléphone, e-mail.
 
 export type Bouton = { title: string; payload: string };
-export type Message = { text: string; quick_replies?: Bouton[] };
+// `carte` : une carte Instagram avec des boutons qui ouvrent une page (pas de lien brut dans le texte).
+export type Carte = { titre: string; sousTitre: string; boutons: { title: string; url: string }[] };
+export type Message = { text: string; quick_replies?: Bouton[]; carte?: Carte };
 export type Conversation = { etape: string; reponses: Record<string, string>; essais: number };
 export type Resultat = { conv: Conversation; messages: Message[]; creerFiche?: boolean };
 
@@ -40,7 +42,7 @@ const TYPO_TEXTE: Record<string, string> = {
 };
 
 const DEMARCHE = "Pour recevoir les plans : 5 petites questions (30 secondes), puis un conseiller de GLR Immobilier, " +
-  "notre partenaire, t'appelle au moment que tu choisis avec les plans des programmes neufs de ton secteur. Ça te va ? Tes données : " + DONNEES;
+  "notre partenaire, t'appelle au moment que tu choisis avec les plans des programmes neufs de ton secteur. Ça te va ?";
 const OK_NON: Bouton[] = [{ title: "C'est parti", payload: "PLANS_OUI" }, { title: "Non merci", payload: "PLANS_NON" }];
 
 export const Q = {
@@ -62,11 +64,19 @@ export const Q = {
   telephoneEncore: (): Message => ({ text: "Je n'ai pas reconnu un numéro de téléphone. Tu peux l'écrire comme ça : 06 12 34 56 78 ?" }),
   email: (): Message => ({ text: "5/5 · Et ton e-mail, pour recevoir les plans du secteur ?" }),
   emailEncore: (): Message => ({ text: "Je n'ai pas reconnu une adresse e-mail. Par exemple : prenom@gmail.com" }),
-  // Fin (décision d'Alex du 03/11/2026) : la fiche est déjà dans le CRM ; la personne choisit
-  // elle-même quand le conseiller l'appelle. index.ts remplace le lien public par son lien personnel.
-  merci: (prenom: string, lien = LIEN_PLANNING): Message => ({
-    text: `Merci ${prenom}, c'est noté. Un conseiller de GLR Immobilier va t'appeler pour te présenter les programmes ` +
-      `du secteur et t'envoyer les plans. Choisis le moment qui t'arrange : ${lien}`,
+  // Fin (décisions d'Alex du 03/11/2026) : la fiche est déjà dans le CRM ; un dernier message,
+  // à part, propose de réserver le créneau d'appel par un bouton qui ouvre le planning (aucun lien
+  // brut dans les messages). index.ts remplace le lien public par le lien personnel de la fiche.
+  merci: (prenom: string): Message => ({
+    text: `Merci ${prenom}, c'est noté. Un conseiller de GLR Immobilier va t'appeler pour te présenter les programmes du secteur et t'envoyer les plans.`,
+  }),
+  planning: (lien = LIEN_PLANNING): Message => ({
+    text: "Si tu veux réserver ton appel aux horaires qui t'arrangent, choisis ton créneau directement dans le planning du conseiller.",
+    carte: {
+      titre: "Réserve ton appel avec le conseiller",
+      sousTitre: "Choisis le créneau qui t'arrange, directement dans son planning.",
+      boutons: [{ title: "Voir le planning", url: lien }, { title: "Tes données", url: DONNEES }],
+    },
   }),
   pasPlans: (): Message => ({ text: "Pas de souci. Si tu as une question, écris-la ici, on te répond très vite." }),
   stop: (): Message => ({ text: "C'est noté, je m'arrête là. Tes réponses ne sont pas enregistrées." }),
@@ -206,7 +216,7 @@ export function repondre(conv: Conversation | null, texteBrut: string, payload: 
         ? { conv: nouvelle("ferme", { pseudo: r.pseudo || "" }), messages: [Q.formulaire()] }
         : { conv: { ...conv, essais: conv.essais + 1 }, messages: [Q.emailEncore()] };
       r.email = email;
-      return { conv: { etape: "fini", reponses: r, essais: 0 }, messages: [Q.merci(r.prenom || "")], creerFiche: true };
+      return { conv: { etape: "fini", reponses: r, essais: 0 }, messages: [Q.merci(r.prenom || ""), Q.planning()], creerFiche: true };
     }
   }
   return { conv, messages: [] };

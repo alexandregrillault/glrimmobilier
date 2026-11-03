@@ -8,7 +8,7 @@ const dire = (r) => r.messages.map((m) => m.text + (m.quick_replies ? " [" + m.q
 
 // 1. Parcours complet depuis un commentaire
 let r = demarrerDepuisCommentaire("camille_93");
-ok(r.conv.etape === "intro" && /5 petites questions/.test(r.messages[0].text) && /GLR Immobilier/.test(r.messages[0].text) && /mentions-legales/.test(r.messages[0].text), "commentaire : démarche expliquée, GLR nommé, lien des données");
+ok(r.conv.etape === "intro" && /5 petites questions/.test(r.messages[0].text) && /GLR Immobilier/.test(r.messages[0].text) && !/https?:/.test(r.messages[0].text), "commentaire : démarche expliquée, GLR nommé, aucun lien au premier message");
 ok(r.messages[0].quick_replies?.map((b) => b.title).join("|") === "C'est parti|Non merci", "boutons « C'est parti » / « Non merci »");
 r = repondre(r.conv, "", "PLANS_OUI", false); ok(r.conv.etape === "zone" && /^1\/5 · Dans quelle ville/.test(r.messages[0].text), "C'est parti : question 1/5");
 r = repondre(r.conv, "Aubervilliers, Pantin et Bobigny", null, false);
@@ -19,7 +19,10 @@ r = repondre(r.conv, "300 à 400 k€", "BUDGET_3", false); ok(r.conv.reponses.b
 r = repondre(r.conv, "Camille 06 12 34 56 78", null, false); ok(r.conv.reponses.prenom === "Camille" && r.conv.reponses.telephone === "06 12 34 56 78" && /^5\/5 · Et ton e-mail, pour recevoir les plans du secteur/.test(r.messages[0].text), "prénom et numéro dans un message, puis 5/5");
 r = repondre(r.conv, "Camille.D @ Gmail.com", null, false);
 ok(r.creerFiche === true && r.conv.etape === "fini" && r.conv.reponses.email === "camille.d@gmail.com", "e-mail : fiche à créer");
-ok(/Merci Camille/.test(r.messages[0].text) && /va t'appeler/.test(r.messages[0].text) && /glrimmobilier\.com\/rdv\/\?v=theophile&f=appel/.test(r.messages[0].text), "fin : appel annoncé et lien du planning (public par défaut)");
+ok(r.messages.length === 2 && /Merci Camille/.test(r.messages[0].text) && /va t'appeler/.test(r.messages[0].text) && !/https?:/.test(r.messages[0].text), "fin : appel annoncé, sans lien dans le texte");
+const carte = r.messages[1].carte;
+ok(carte && /réserver ton appel/.test(r.messages[1].text) && carte.boutons[0].title === "Voir le planning" && /rdv\/\?v=theophile&f=appel/.test(carte.boutons[0].url) && /mentions-legales/.test(carte.boutons[1].url), "dernier message à part : carte « Voir le planning » + « Tes données »");
+ok(carte.titre.length <= 80 && carte.sousTitre.length <= 80 && carte.boutons.every((b) => b.title.length <= 20), "carte dans les limites d'Instagram");
 ok(r.conv.reponses.pseudo === "camille_93", "pseudo gardé pour la fiche");
 const fini = r.conv;
 r = repondre(fini, "merci !", null, false); ok(r.messages.length === 0, "après la fin, un message ordinaire : le robot se tait");

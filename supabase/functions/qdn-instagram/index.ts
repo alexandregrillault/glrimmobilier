@@ -94,6 +94,12 @@ async function appel(chemin: string, jt: string, corps: unknown) {
 }
 
 function formatMessage(m: Message) {
+  if (m.carte) {
+    return { attachment: { type: "template", payload: { template_type: "generic", elements: [{
+      title: m.carte.titre, subtitle: m.carte.sousTitre,
+      buttons: m.carte.boutons.map((b) => ({ type: "web_url", url: b.url, title: b.title })),
+    }] } } };
+  }
   return m.quick_replies
     ? { text: m.text, quick_replies: m.quick_replies.map((b) => ({ content_type: "text", title: b.title, payload: b.payload })) }
     : { text: m.text };
@@ -207,14 +213,19 @@ async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
     // La fiche entre dans le CRM d'abord, puis la personne reçoit son lien pour choisir le créneau d'appel.
     const contact = await creerFiche(s, r.conv.reponses);
     const jetonRdv = contact ? await lienRdv(contact) : null;
-    if (jetonRdv) messages = [Q.merci(r.conv.reponses.prenom || "", lienPlanningPersonnel(jetonRdv))];
+    if (jetonRdv) messages = [Q.merci(r.conv.reponses.prenom || ""), Q.planning(lienPlanningPersonnel(jetonRdv))];
     // Une fois la fiche créée, on ne garde ici que le prénom et le pseudo.
     conv2 = { ...r.conv, reponses: { prenom: r.conv.reponses.prenom || "", pseudo: r.conv.reponses.pseudo || "" } };
     extra = { ...extra, contact_id: contact };
   }
 
   const envois = [];
-  for (const mm of messages) envois.push(await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: formatMessage(mm) }));
+  for (const mm of messages) {
+    let e = await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: formatMessage(mm) });
+    // Carte refusée par Instagram : on retombe sur le texte avec le lien du premier bouton.
+    if (!e.ok && mm.carte) e = await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: { text: `${mm.text} ${mm.carte.boutons[0].url}` } });
+    envois.push(e);
+  }
   if (r.messages.length || r.conv !== conv) await ecrireConversation(exp, conv2, extra);
   await noter(String(msg.mid), envois.every((e) => e.ok), { envois: envois.map((e) => ({ ok: e.ok, statut: e.statut })), etape: conv2.etape, fiche: !!r.creerFiche });
 }
