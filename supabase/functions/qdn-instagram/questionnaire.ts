@@ -13,6 +13,8 @@ export type Conversation = { etape: string; reponses: Record<string, string>; es
 export type Resultat = { conv: Conversation; messages: Message[]; creerFiche?: boolean };
 
 export const DONNEES = "https://www.glrimmobilier.com/mentions-legales/";
+export const LIEN_PLANNING = "https://www.glrimmobilier.com/rdv/?v=alexandre&f=appel";
+export const lienPlanningPersonnel = (jeton: string) => `https://www.glrimmobilier.com/rdv/?t=${encodeURIComponent(jeton)}&f=appel`;
 
 export const TYPOLOGIES: Bouton[] = [
   { title: "Studio / T1", payload: "TYPO_T1" },
@@ -38,7 +40,7 @@ const TYPO_TEXTE: Record<string, string> = {
 };
 
 const DEMARCHE = "Pour recevoir les plans : 5 petites questions (30 secondes), puis un conseiller de GLR Immobilier, " +
-  "notre partenaire, t'envoie par e-mail les plans des programmes neufs de ton secteur. Ça te va ? Tes données : " + DONNEES;
+  "notre partenaire, t'appelle au moment que tu choisis avec les plans des programmes neufs de ton secteur. Ça te va ? Tes données : " + DONNEES;
 const OK_NON: Bouton[] = [{ title: "C'est parti", payload: "PLANS_OUI" }, { title: "Non merci", payload: "PLANS_NON" }];
 
 export const Q = {
@@ -60,8 +62,11 @@ export const Q = {
   telephoneEncore: (): Message => ({ text: "Je n'ai pas reconnu un numéro de téléphone. Tu peux l'écrire comme ça : 06 12 34 56 78 ?" }),
   email: (): Message => ({ text: "5/5 · Et ton e-mail, pour recevoir les plans du secteur ?" }),
   emailEncore: (): Message => ({ text: "Je n'ai pas reconnu une adresse e-mail. Par exemple : prenom@gmail.com" }),
-  merci: (prenom: string): Message => ({
-    text: `Merci ${prenom}, c'est noté. Un conseiller de GLR Immobilier te contacte sous 24 h ouvrées avec les plans du secteur.`,
+  // Fin (décision d'Alex du 03/11/2026) : la fiche est déjà dans le CRM ; la personne choisit
+  // elle-même quand le conseiller l'appelle. index.ts remplace le lien public par son lien personnel.
+  merci: (prenom: string, lien = LIEN_PLANNING): Message => ({
+    text: `Merci ${prenom}, c'est noté. Un conseiller de GLR Immobilier va t'appeler pour te présenter les programmes ` +
+      `du secteur et t'envoyer les plans. Choisis le moment qui t'arrange : ${lien}`,
   }),
   pasPlans: (): Message => ({ text: "Pas de souci. Si tu as une question, écris-la ici, on te répond très vite." }),
   stop: (): Message => ({ text: "C'est noté, je m'arrête là. Tes réponses ne sont pas enregistrées." }),

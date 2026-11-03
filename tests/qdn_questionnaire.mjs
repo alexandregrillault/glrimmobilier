@@ -18,7 +18,8 @@ ok(!BUDGETS.some((b) => /[▰▱]/.test(b.title)) && BUDGETS.length === 6 && BUD
 r = repondre(r.conv, "300 à 400 k€", "BUDGET_3", false); ok(r.conv.reponses.budget === "300 000 à 400 000 €" && /^4\/5 · Ton prénom et ton numéro/.test(r.messages[0].text), "budget par bouton, puis 4/5");
 r = repondre(r.conv, "Camille 06 12 34 56 78", null, false); ok(r.conv.reponses.prenom === "Camille" && r.conv.reponses.telephone === "06 12 34 56 78" && /^5\/5 · Et ton e-mail, pour recevoir les plans du secteur/.test(r.messages[0].text), "prénom et numéro dans un message, puis 5/5");
 r = repondre(r.conv, "Camille.D @ Gmail.com", null, false);
-ok(r.creerFiche === true && r.conv.etape === "fini" && /Merci Camille/.test(r.messages[0].text) && /plans du secteur/.test(r.messages[0].text) && r.conv.reponses.email === "camille.d@gmail.com", "e-mail : fiche créée, merci");
+ok(r.creerFiche === true && r.conv.etape === "fini" && r.conv.reponses.email === "camille.d@gmail.com", "e-mail : fiche à créer");
+ok(/Merci Camille/.test(r.messages[0].text) && /va t'appeler/.test(r.messages[0].text) && /glrimmobilier\.com\/rdv\/\?v=alexandre&f=appel/.test(r.messages[0].text), "fin : appel annoncé et lien du planning (public par défaut)");
 ok(r.conv.reponses.pseudo === "camille_93", "pseudo gardé pour la fiche");
 const fini = r.conv;
 r = repondre(fini, "merci !", null, false); ok(r.messages.length === 0, "après la fin, un message ordinaire : le robot se tait");

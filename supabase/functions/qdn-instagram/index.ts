@@ -19,7 +19,7 @@
 // qdn_instagram_conversations (étape et réponses de chaque personne).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { demarrerDepuisCommentaire, repondre, parleDePlans } from "./questionnaire.ts";
+import { demarrerDepuisCommentaire, repondre, parleDePlans, Q, lienPlanningPersonnel } from "./questionnaire.ts";
 import type { Conversation, Message } from "./questionnaire.ts";
 
 // Connexion unifiée (seule voie ouverte aux nouvelles applications depuis 2026) : jeton
@@ -157,6 +157,20 @@ async function creerFiche(s: Secrets, r: Record<string, string>): Promise<string
   return resultat.id;
 }
 
+// Lien de rendez-vous personnel de la fiche (créé avec le lead, table rdv_liens) : la page montre
+// le planning du conseiller et la personne n'a pas à retaper ses coordonnées. Sans lien valable,
+// le message garde le lien public du planning d'Alexandre.
+async function lienRdv(contactId: string): Promise<string | null> {
+  try {
+    const { data } = await supabase.from("rdv_liens").select("token, contexte").eq("contact_id", contactId)
+      .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(1);
+    const l: any = data?.[0];
+    if (!l?.token) return null;
+    await supabase.from("rdv_liens").update({ contexte: { ...(l.contexte || {}), source: SOURCE } }).eq("token", l.token);
+    return l.token;
+  } catch (_) { return null; }
+}
+
 async function traiterCommentaire(compte: string, v: any, jt: string) {
   const texte = String(v?.text || "");
   const auteur = v?.from?.id ? String(v.from.id) : null;
@@ -186,17 +200,21 @@ async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
   const expire = ligne ? Date.now() - new Date(ligne.maj_le).getTime() > FENETRE_H * 3600000 : false;
   const r = repondre(conv, String(msg.text || ""), msg.quick_reply?.payload || null, expire);
 
-  const envois = [];
-  for (const mm of r.messages) envois.push(await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: formatMessage(mm) }));
-
   let extra: Record<string, unknown> = ligne ? {} : { origine: "message", debut_le: new Date().toISOString() };
   let conv2 = r.conv;
+  let messages = r.messages;
   if (r.creerFiche) {
+    // La fiche entre dans le CRM d'abord, puis la personne reçoit son lien pour choisir le créneau d'appel.
     const contact = await creerFiche(s, r.conv.reponses);
+    const jetonRdv = contact ? await lienRdv(contact) : null;
+    if (jetonRdv) messages = [Q.merci(r.conv.reponses.prenom || "", lienPlanningPersonnel(jetonRdv))];
     // Une fois la fiche créée, on ne garde ici que le prénom et le pseudo.
     conv2 = { ...r.conv, reponses: { prenom: r.conv.reponses.prenom || "", pseudo: r.conv.reponses.pseudo || "" } };
     extra = { ...extra, contact_id: contact };
   }
+
+  const envois = [];
+  for (const mm of messages) envois.push(await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: formatMessage(mm) }));
   if (r.messages.length || r.conv !== conv) await ecrireConversation(exp, conv2, extra);
   await noter(String(msg.mid), envois.every((e) => e.ok), { envois: envois.map((e) => ({ ok: e.ok, statut: e.statut })), etape: conv2.etape, fiche: !!r.creerFiche });
 }
