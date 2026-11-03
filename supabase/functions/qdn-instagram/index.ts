@@ -1,27 +1,34 @@
 // Robot Instagram de Quoi de neuf (demande d'Alex du 03/11/2026)
 //
 // Webhook de l'API Instagram (connexion Instagram, accès standard : le compte
-// @quoideneuf.immo seulement). Deux cas :
-//  - un commentaire qui contient « plans » sous une publication : réponse publique
-//    courte + message privé avec le lien du formulaire www.glrimmobilier.com/plans/ ;
-//  - un message privé reçu : le lien du formulaire, une seule fois par personne
-//    et par semaine (ou chaque fois que le message parle de plans).
-// Le formulaire crée la fiche dans le CRM (edge function qdn-plans). Ici, aucune
-// donnée personnelle n'est envoyée au CRM.
+// @quoideneuf.immo seulement). Le questionnaire se fait dans les messages privés,
+// question par question (questionnaire.ts) :
+//  - un commentaire qui contient « plans » : réponse publique courte + première question
+//    en réponse privée au commentaire ;
+//  - un message privé : la réponse à la question en cours, ou, sans conversation,
+//    une invitation à recevoir les plans.
+// À la fin, avec l'accord de la personne, la fiche est créée dans le CRM par lead-inbound
+// (vendeur alexandre, source « Quoi de neuf Instagram »), comme le formulaire du site.
 //
 // Clés lues dans app_secrets (jamais dans ce dépôt public) :
 //   ig_app_secret      secret de l'application Meta (signature des appels)
 //   ig_verify_token    mot de passe choisi pour l'abonnement au webhook
 //   ig_access_token    jeton longue durée du compte Instagram (60 jours, renouvelé ici)
-// Journal : table qdn_instagram_evenements.
+//   lead_inbound_token jeton de lead-inbound
+// Tables : qdn_instagram_evenements (ne jamais traiter deux fois le même événement),
+// qdn_instagram_conversations (étape et réponses de chaque personne).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { demarrerDepuisCommentaire, repondre, parleDePlans } from "./questionnaire.ts";
+import type { Conversation, Message } from "./questionnaire.ts";
 
 const GRAPH = "https://graph.instagram.com/v24.0";
-const LIEN = "https://www.glrimmobilier.com/plans/?src=instagram";
 const RENOUVELER_APRES_J = 30;
-const RELANCE_MESSAGE_J = 7;
 const CONSERVATION_J = 365;
+const FENETRE_H = 24;
+const ABANDON_J = 7;
+const VENDEUR = "alexandre";
+const SOURCE = "Quoi de neuf Instagram";
 
 const REPONSES_PUBLIQUES = [
   "C'est envoyé en message privé.",
@@ -29,19 +36,13 @@ const REPONSES_PUBLIQUES = [
   "Regarde tes messages privés, c'est parti.",
 ];
 
-const MESSAGE_COMMENTAIRE = (lien: string) =>
-  "Salut, c'est Alto de Quoi de neuf. Voici le lien pour recevoir les plans des programmes neufs de ton secteur : " + lien +
-  "\n\nTu indiques ta ville et ton numéro, et un conseiller de GLR Immobilier, notre partenaire, t'envoie la sélection.";
-
-const MESSAGE_PRIVE = (lien: string) =>
-  "Salut, merci pour ton message. Si tu veux les plans des programmes neufs de ton secteur, c'est ici : " + lien +
-  "\n\nUn conseiller de GLR Immobilier, notre partenaire, te recontacte. Pour le reste, on te répond ici très vite.";
-
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-async function secrets(): Promise<Record<string, { value: string; updated_at: string }>> {
-  const { data } = await supabase.from("app_secrets").select("name, value, updated_at").like("name", "ig_%");
-  const s: Record<string, { value: string; updated_at: string }> = {};
+type Secrets = Record<string, { value: string; updated_at: string }>;
+
+async function secrets(): Promise<Secrets> {
+  const { data } = await supabase.from("app_secrets").select("name, value, updated_at").in("name", ["ig_app_secret", "ig_verify_token", "ig_access_token", "lead_inbound_token"]);
+  const s: Secrets = {};
   (data || []).forEach((r: any) => (s[r.name] = { value: r.value, updated_at: r.updated_at }));
   return s;
 }
@@ -59,7 +60,7 @@ async function signatureValide(brut: string, entete: string | null, secret: stri
 }
 
 // Le jeton longue durée expire au bout de 60 jours : on le renouvelle passé 30 jours.
-async function jeton(s: Record<string, { value: string; updated_at: string }>): Promise<string | null> {
+async function jeton(s: Secrets): Promise<string | null> {
   const t = s.ig_access_token;
   if (!t?.value) return null;
   const age = (Date.now() - new Date(t.updated_at).getTime()) / 86400000;
@@ -86,7 +87,11 @@ async function appel(chemin: string, jt: string, corps: unknown) {
   return { ok: r.ok, statut: r.status, reponse: j };
 }
 
-const parleDePlans = (t: string) => /(^|[^a-z])plans?([^a-z]|$)/i.test(t);
+function formatMessage(m: Message) {
+  return m.quick_replies
+    ? { text: m.text, quick_replies: m.quick_replies.map((b) => ({ content_type: "text", title: b.title, payload: b.payload })) }
+    : { text: m.text };
+}
 
 // Enregistre l'événement ; renvoie false s'il a déjà été traité (Meta renvoie parfois deux fois).
 async function nouveau(ev: Record<string, unknown>): Promise<boolean> {
@@ -98,33 +103,96 @@ async function noter(id: string, repondu: boolean, resultat: unknown) {
   await supabase.from("qdn_instagram_evenements").update({ repondu, resultat }).eq("id", id);
 }
 
+async function lireConversation(igUser: string) {
+  const { data } = await supabase.from("qdn_instagram_conversations").select("*").eq("ig_user", igUser).maybeSingle();
+  return data;
+}
+
+async function ecrireConversation(igUser: string, conv: Conversation, extra: Record<string, unknown> = {}) {
+  await supabase.from("qdn_instagram_conversations").upsert({
+    ig_user: igUser, etape: conv.etape, reponses: conv.reponses, essais: conv.essais, maj_le: new Date().toISOString(), ...extra,
+  });
+}
+
+// Fin du questionnaire avec accord : la fiche part au CRM par lead-inbound (dédoublonnage, paternité).
+async function creerFiche(s: Secrets, r: Record<string, string>): Promise<string | null> {
+  if (!s.lead_inbound_token?.value) return null;
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const corps = [
+    `Demande reçue en message privé Instagram (questionnaire Quoi de neuf${r.pseudo ? ", @" + r.pseudo : ""})`,
+    ``,
+    `Prénom : ${r.prenom}`,
+    `Téléphone : ${r.telephone}`,
+    `Email : ${r.email}`,
+    `Secteur recherché : ${r.zone}`,
+    r.typologie ? `Typologie : ${r.typologie}` : null,
+    r.budget ? `Budget : ${r.budget}` : null,
+    ``,
+    `Accord de recontact par GLR Immobilier donné le ${aujourdhui}.`,
+  ].filter((l) => l !== null).join("\n");
+  const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/lead-inbound?token=${s.lead_inbound_token.value}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      vendeur: VENDEUR, from: r.email, from_name: r.prenom, subject: `Instagram Quoi de neuf — ${r.prenom}`, plain: corps,
+      nom: r.prenom, email: r.email, telephone: r.telephone, budget: r.budget || null, lieu: r.zone, typologie: r.typologie || null,
+    }),
+  });
+  const resultat: any = await res.json().catch(() => null);
+  if (!resultat?.id) return null;
+  try {
+    const { data: actuel } = await supabase.from("contacts").select("notes").eq("id", resultat.id).single();
+    const maj: Record<string, unknown> = {};
+    if (resultat.status === "created") maj.source = SOURCE;
+    const trace = `[${aujourdhui}] Questionnaire Instagram Quoi de neuf${r.pseudo ? " (@" + r.pseudo + ")" : ""} : ${r.zone}${r.typologie ? ", " + r.typologie : ""}${r.budget ? ", " + r.budget : ""}. Accord de recontact donné.`;
+    maj.notes = actuel?.notes ? actuel.notes + "\n" + trace : trace;
+    await supabase.from("contacts").update(maj).eq("id", resultat.id);
+  } catch (_) { /* la fiche existe : on n'échoue pas pour un affinage */ }
+  return resultat.id;
+}
+
 async function traiterCommentaire(compte: string, v: any, jt: string) {
   const texte = String(v?.text || "");
   const auteur = v?.from?.id ? String(v.from.id) : null;
   if (!v?.id || !auteur || auteur === compte || !parleDePlans(texte)) return;
-  const ok = await nouveau({ id: String(v.id), type: "commentaire", ig_user: auteur, ig_pseudo: v.from?.username || null, texte: texte.slice(0, 500), media_id: v.media?.id || null });
+  const pseudo = v.from?.username || null;
+  const ok = await nouveau({ id: String(v.id), type: "commentaire", ig_user: auteur, ig_pseudo: pseudo, texte: texte.slice(0, 500), media_id: v.media?.id || null });
   if (!ok) return;
-  const lien = LIEN + (v.media?.id ? "&ref=" + encodeURIComponent(v.media.id) : "");
-  const prive = await appel(`${compte}/messages`, jt, { recipient: { comment_id: String(v.id) }, message: { text: MESSAGE_COMMENTAIRE(lien) } });
+  const r = demarrerDepuisCommentaire(pseudo);
+  const prive = await appel(`${compte}/messages`, jt, { recipient: { comment_id: String(v.id) }, message: formatMessage(r.messages[0]) });
   const pub = await appel(`${v.id}/replies`, jt, { message: REPONSES_PUBLIQUES[Math.floor(Math.random() * REPONSES_PUBLIQUES.length)] });
+  if (prive.ok) {
+    await ecrireConversation(auteur, r.conv, { origine: "commentaire", media_id: v.media?.id || null, debut_le: new Date().toISOString(), contact_id: null });
+  }
   await noter(String(v.id), prive.ok, { prive, public: pub });
 }
 
-async function traiterMessage(compte: string, m: any, jt: string) {
+async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
   const exp = m?.sender?.id ? String(m.sender.id) : null;
   const msg = m?.message;
   if (!exp || exp === compte || !msg?.mid || msg.is_echo) return;
-  const texte = String(msg.text || "");
-  // Une fois par personne et par semaine, sauf si elle parle de plans.
-  if (!parleDePlans(texte)) {
-    const depuis = new Date(Date.now() - RELANCE_MESSAGE_J * 86400000).toISOString();
-    const { data } = await supabase.from("qdn_instagram_evenements").select("id").eq("ig_user", exp).eq("repondu", true).gte("recu_le", depuis).limit(1);
-    if (data?.length) return;
-  }
-  const ok = await nouveau({ id: String(msg.mid), type: "message", ig_user: exp, texte: texte.slice(0, 500) });
+  // Le texte des messages n'est pas gardé dans le journal : il peut contenir un téléphone ou un e-mail.
+  const ok = await nouveau({ id: String(msg.mid), type: "message", ig_user: exp, texte: null });
   if (!ok) return;
-  const r = await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: { text: MESSAGE_PRIVE(LIEN) } });
-  await noter(String(msg.mid), r.ok, r);
+
+  const ligne = await lireConversation(exp);
+  const conv: Conversation | null = ligne ? { etape: ligne.etape, reponses: ligne.reponses || {}, essais: ligne.essais || 0 } : null;
+  const expire = ligne ? Date.now() - new Date(ligne.maj_le).getTime() > FENETRE_H * 3600000 : false;
+  const r = repondre(conv, String(msg.text || ""), msg.quick_reply?.payload || null, expire);
+
+  const envois = [];
+  for (const mm of r.messages) envois.push(await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: formatMessage(mm) }));
+
+  let extra: Record<string, unknown> = ligne ? {} : { origine: "message", debut_le: new Date().toISOString() };
+  let conv2 = r.conv;
+  if (r.creerFiche) {
+    const contact = await creerFiche(s, r.conv.reponses);
+    // Une fois la fiche créée, on ne garde ici que le prénom et le pseudo.
+    conv2 = { ...r.conv, reponses: { prenom: r.conv.reponses.prenom || "", pseudo: r.conv.reponses.pseudo || "" } };
+    extra = { ...extra, contact_id: contact };
+  }
+  if (r.messages.length || r.conv !== conv) await ecrireConversation(exp, conv2, extra);
+  await noter(String(msg.mid), envois.every((e) => e.ok), { envois: envois.map((e) => ({ ok: e.ok, statut: e.statut })), etape: conv2.etape, fiche: !!r.creerFiche });
 }
 
 Deno.serve(async (req: Request) => {
@@ -159,12 +227,17 @@ Deno.serve(async (req: Request) => {
       }
     }
     for (const m of entry.messaging || []) {
-      try { await traiterMessage(compte, m, jt); } catch (_) { /* idem */ }
+      try { await traiterMessage(compte, m, jt, s); } catch (_) { /* idem */ }
     }
   }
   // Conservation annoncée dans les mentions légales : 12 mois au plus.
   try {
-    await supabase.from("qdn_instagram_evenements").delete().lt("recu_le", new Date(Date.now() - CONSERVATION_J * 86400000).toISOString());
+    const limite = new Date(Date.now() - CONSERVATION_J * 86400000).toISOString();
+    await supabase.from("qdn_instagram_evenements").delete().lt("recu_le", limite);
+    await supabase.from("qdn_instagram_conversations").delete().lt("maj_le", limite);
+    // Questionnaire abandonné en cours de route : rien n'est gardé au-delà de 7 jours.
+    await supabase.from("qdn_instagram_conversations").delete()
+      .not("etape", "in", "(fini,refus,ferme)").lt("maj_le", new Date(Date.now() - ABANDON_J * 86400000).toISOString());
   } catch (_) { /* on réessaiera au prochain appel */ }
   // Toujours 200 : sinon Meta renvoie l'événement et finit par couper l'abonnement.
   return new Response("ok", { status: 200 });
