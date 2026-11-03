@@ -1,6 +1,7 @@
-# Test de la TVA au passage en Vendu (demande d'Alex du 03/11/2026) : choix TVA 20 % / 5,5 %,
-# prix repris des régimes de la sélection, prix 5,5 % demandé quand la sélection ne le donne pas,
-# TVA et prix transmis dans vente_lot ; fiche vente du gérant (liste TVA, préremplissage). Bureau et iPhone.
+# Test de la TVA et du prix après négo au passage en Vendu (demandes d'Alex du 03/11/2026) : choix
+# TVA 20 % / 5,5 %, prix grille repris des régimes de la sélection et prérempli dans « Prix après
+# négociation », prix 5,5 % demandé quand la sélection ne le donne pas, TVA, prix signé et prix grille
+# transmis dans vente_lot ; fiche vente du gérant (liste TVA, préremplissage). Bureau et iPhone.
 # Lancer : ~/glr-pige-robot/.venv/bin/python tests/vente_tva.py [dossier des captures]
 import json, pathlib, sys
 from playwright.sync_api import sync_playwright
@@ -46,13 +47,16 @@ with sync_playwright() as p:
         page.click('#vl-tva-55')
         if '10 150 €' not in net(page.inner_text('#vl-taux-apercu')): erreurs.append(f'{nom} : aperçu 5,5 % : {page.inner_text("#vl-taux-apercu")}')
         if not page.is_visible('#vl-tva-note'): erreurs.append(f'{nom} : pas de note TVA réduite')
-        if page.is_visible('#vl-prix-tva'): erreurs.append(f'{nom} : prix demandé alors qu il est connu')
+        if net(page.input_value('#vl-prix-nego')) != '203 000 €': erreurs.append(f'{nom} : prix négo prérempli : {page.input_value("#vl-prix-nego")!r}')
+        page.fill('#vl-prix-nego', '198 000')
+        if '9 900 €' not in net(page.inner_text('#vl-taux-apercu')): erreurs.append(f'{nom} : aperçu négo : {page.inner_text("#vl-taux-apercu")}')
+        if 'négo de 5 000 €' not in net(page.inner_text('#vl-prix-nego-aide')): erreurs.append(f'{nom} : aide négo : {page.inner_text("#vl-prix-nego-aide")}')
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : déborde en largeur')
         page.screenshot(path=str(SORTIE / f'vente_tva_{nom}.png'))
         page.evaluate("eqVenteLotValider()")
         page.wait_for_timeout(200)
         vl = ecrits[-1]['vente_lot'] if ecrits else {}
-        if vl.get('tva') != 5.5 or net(vl.get('prix')) != '203 000 €' or vl.get('prix_tva20') != 230900:
+        if vl.get('tva') != 5.5 or net(vl.get('prix')) != '198 000 €' or vl.get('prix_grille') != 203000 or vl.get('prix_tva20') != 230900:
             erreurs.append(f'{nom} : vente 5,5 % envoyée : {vl}')
 
         # 2. Lot sans prix 5,5 % connu : le prix est demandé, la vente bloquée sans lui
@@ -62,15 +66,15 @@ with sync_playwright() as p:
         page.select_option('#vl-choix', '1')
         page.fill('#vl-taux', '5')
         page.click('#vl-tva-55')
-        if not page.is_visible('#vl-prix-tva'): erreurs.append(f'{nom} : prix 5,5 % non demandé')
+        if page.input_value('#vl-prix-nego') or 'obligatoire' not in page.inner_text('#vl-prix-nego-titre'): erreurs.append(f'{nom} : prix 5,5 % non demandé')
         page.evaluate("eqVenteLotValider()")
         if ecrits: erreurs.append(f'{nom} : vente 5,5 % acceptée sans prix')
         if 'TVA 5,5' not in page.inner_text('#vl-erreur'): erreurs.append(f'{nom} : message sans prix 5,5 %')
-        page.fill('#vl-prix-tva', '290 000')
+        page.fill('#vl-prix-nego', '290 000')
         page.evaluate("eqVenteLotValider()")
         page.wait_for_timeout(200)
         vl = ecrits[-1]['vente_lot'] if ecrits else {}
-        if vl.get('tva') != 5.5 or net(vl.get('prix')) != '290 000 €': erreurs.append(f'{nom} : vente saisie : {vl}')
+        if vl.get('tva') != 5.5 or net(vl.get('prix')) != '290 000 €' or vl.get('prix_grille') is not None: erreurs.append(f'{nom} : vente saisie : {vl}')
 
         # 3. Par défaut : TVA 20 % au prix de la sélection, comme avant
         ecrits.clear()
@@ -81,18 +85,27 @@ with sync_playwright() as p:
         page.evaluate("eqVenteLotValider()")
         page.wait_for_timeout(200)
         vl = ecrits[-1]['vente_lot'] if ecrits else {}
-        if vl.get('tva') != 20 or net(vl.get('prix')) != '320 000 €' or vl.get('prix_tva20') is not None: erreurs.append(f'{nom} : vente 20 % : {vl}')
+        if vl.get('tva') != 20 or net(vl.get('prix')) != '320 000 €' or vl.get('prix_grille') != 320000 or vl.get('prix_tva20') is not None: erreurs.append(f'{nom} : vente 20 % : {vl}')
+
+        # 3 bis. Changer de TVA remet le prix grille de la nouvelle TVA dans le champ
+        page.evaluate("eqLeadStatutChange('c1', 'Vendu')")
+        page.wait_for_selector('#vl-taux')
+        page.select_option('#vl-choix', '0')
+        page.fill('#vl-prix-nego', '225 000')
+        page.click('#vl-tva-55')
+        if net(page.input_value('#vl-prix-nego')) != '203 000 €': erreurs.append(f'{nom} : bascule TVA : {page.input_value("#vl-prix-nego")!r}')
+        page.evaluate("eqVenteLotAnnuler()")
 
         # 4. Fiche vente du gérant : la TVA se relit, se garde et s'affiche dans la liste
         r = page.evaluate("""() => {
-            const v = rowToVente({ id: 'v1', programme: 'Scène 3', prix: '203000', tva: '5.5', vendeurId: '', date: '2026-11-03', statut: 'reservation' });
+            const v = rowToVente({ id: 'v1', programme: 'Scène 3', prix: '198000', prixGrille: '203000', tva: '5.5', vendeurId: '', date: '2026-11-03', statut: 'reservation' });
             data.ventes = [v];
             openEditVente('v1');
-            const lu = document.getElementById('v-tva').value;
+            const lu = document.getElementById('v-tva').value + '/' + document.getElementById('v-prix-grille').value;
             closeModal('vente');
             return { tva: v.tva, lu, apresReset: document.getElementById('v-tva').value, mention: venteTvaMention(v), ancien: rowToVente({ prix: 1 }).tva };
         }""")
-        if r != {'tva': 5.5, 'lu': '5.5', 'apresReset': '20', 'mention': r.get('mention'), 'ancien': 20} or 'TVA 5,5' not in r.get('mention', ''):
+        if r != {'tva': 5.5, 'lu': '5.5/203000', 'apresReset': '20', 'mention': r.get('mention'), 'ancien': 20} or 'TVA 5,5' not in r.get('mention', '') or 'grille' not in r.get('mention', ''):
             erreurs.append(f'{nom} : fiche vente gérant : {r}')
         page.close()
     nav.close()

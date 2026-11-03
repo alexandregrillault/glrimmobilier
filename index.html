@@ -2613,7 +2613,7 @@
         <select id="v-vendeur"><option value="">— Sélectionner —</option><option value="theo001">Théophile Rouyer</option><option value="alex001">Alexandre Grillault</option><option value="mpcoaxvdej48bq8cc8g">Louis Grillault</option><option value="mpcohtv8568btlyxq5n">Anais Mellan</option></select>
       </div>
       <div class="form-group">
-        <label>Prix du bien (€)</label>
+        <label>Prix signé, après négo (€)</label>
         <div style="display:flex;gap:8px">
           <input type="number" id="v-prix" placeholder="ex: 350000" oninput="calcHonoraires()" style="flex:1;min-width:0">
           <select id="v-tva" title="TVA de la vente : les honoraires se calculent sur le prix à cette TVA" style="flex:0 0 auto;width:auto">
@@ -2621,6 +2621,10 @@
             <option value="5.5">TVA 5,5 %</option>
           </select>
         </div>
+      </div>
+      <div class="form-group">
+        <label>Prix grille avant négo (€) — optionnel</label>
+        <input type="number" id="v-prix-grille" placeholder="prix de la pige, si négocié">
       </div>
       <div class="form-group">
         <label>% Honoraires société</label>
@@ -3598,6 +3602,7 @@ function venteToRow(v) {
   if (!r.dateActe) r.dateActe = null;
   if (!r.dateSignatureNotaire) r.dateSignatureNotaire = null;
   if (!r.offreGlr) r.offreGlr = null;
+  if (!r.prixGrille) r.prixGrille = null;
   return r;
 }
 
@@ -3610,6 +3615,7 @@ function rowToVente(r) {
     taux:            r.taux == null ? 0 : Number(r.taux),
     tauxHonoraires:  r.tauxHonoraires == null ? 0 : Number(r.tauxHonoraires),
     tva:             Number(r.tva) === 5.5 ? 5.5 : 20,
+    prixGrille:      r.prixGrille == null ? null : Number(r.prixGrille),
     dateActe:        r.dateActe || '',
     dateSignatureNotaire: r.dateSignatureNotaire || ''
   });
@@ -4956,6 +4962,7 @@ function saveVente() {
     vendeurId,
     prix,
     tva: document.getElementById('v-tva').value === '5.5' ? 5.5 : 20,
+    prixGrille: parseFloat(document.getElementById('v-prix-grille').value) || null,
     tauxHonoraires: parseFloat(document.getElementById('v-taux-honoraires').value) || 0,
     honoraires: parseFloat(document.getElementById('v-honoraires').value) || 0,
     offreGlr: Math.max(0, r2(parseFloat(document.getElementById('v-offre-glr').value) || 0)),
@@ -5163,6 +5170,7 @@ function openEditVente(id) {
   document.getElementById('v-promoteur').value = v.promoteur || '';
   document.getElementById('v-prix').value = v.prix || '';
   document.getElementById('v-tva').value = Number(v.tva) === 5.5 ? '5.5' : '20';
+  document.getElementById('v-prix-grille').value = v.prixGrille || '';
   document.getElementById('v-taux-honoraires').value = v.tauxHonoraires || '';
   document.getElementById('v-honoraires').value = v.honoraires || '';
   document.getElementById('v-offre-glr').value = v.offreGlr || '';
@@ -6671,8 +6679,13 @@ function toggleSalaireCharge() {
   renderRemuneration();
 }
 // Ce que GLR gagne sur une vente = honoraires − offre GLR (ticket cadeau…) ; la facture promoteur reste sur les honoraires
-// Vente en TVA réduite : prix et honoraires sont à 5,5 % (colonne ventes."tva", 03/11/2026)
-function venteTvaMention(v) { return Number(v && v.tva) === 5.5 ? '<br><span style="font-size:11px;color:var(--muted)">TVA 5,5 %</span>' : ''; }
+// Sous le prix signé : TVA réduite (ventes."tva") et négo par rapport au prix grille (ventes."prixGrille"), 03/11/2026
+function venteTvaMention(v) {
+  const m = [];
+  if (Number(v && v.tva) === 5.5) m.push('TVA 5,5 %');
+  if (v && Number(v.prixGrille) > Number(v.prix)) m.push('grille ' + fmtEur(v.prixGrille));
+  return m.length ? '<br><span style="font-size:11px;color:var(--muted)">' + m.join(' · ') + '</span>' : '';
+}
 function honoNet(v) { return r2((Number(v.honoraires) || 0) - (Number(v.offreGlr) || 0)); }
 // Commission vendeur d'une vente = (honoraires − offre GLR) × taux %
 function commissionVente(v) {
@@ -7821,11 +7834,13 @@ const EQ_VENTE_TAUX_MAX = 15;   // au-delà c'est une faute de frappe : 8 % est 
 let _eqVenteLotId = null;
 let _eqVenteLotsListe = [];
 let _eqVenteTva = 20;           // TVA de la vente : 20 ou 5,5 (demande d'Alex du 03/11/2026)
+let _eqVenteNegoTouche = false; // le vendeur a tapé un prix négocié : on ne le réécrit plus
 function eqVenteLotOuvrir(id) {
   const l = _eqLeads.find(x => x.id === id);
   if (!l) return;
   _eqVenteLotId = id;
   _eqVenteTva = 20;
+  _eqVenteNegoTouche = false;
   _eqVenteLotsListe = _eqLotsEnvoyes(id);
   const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const old = document.getElementById('eq-vente-lot-modal'); if (old) old.remove();
@@ -7854,7 +7869,7 @@ function eqVenteLotOuvrir(id) {
     <div id="vl-libre" style="display:${_eqVenteLotsListe.length ? 'none' : 'grid'};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
       <input id="vl-titre" placeholder="Programme — Lot (ex : Alter Ego — A106)" style="${champStyle};grid-column:1/-1">
       <input id="vl-ville" placeholder="Ville" style="${champStyle}">
-      <input id="vl-prix" placeholder="Prix à la TVA choisie (ex : 320 000 €)" oninput="_eqVenteTauxMaj()" style="${champStyle}">
+      <input id="vl-prix" placeholder="Prix grille à la TVA choisie (ex : 320 000 €)" oninput="_eqVenteTvaMaj()" style="${champStyle}">
       <input id="vl-type" placeholder="Typologie (ex : T3)" style="${champStyle}">
       <input id="vl-surface" placeholder="Surface (ex : 65)" style="${champStyle}">
     </div>
@@ -7864,8 +7879,10 @@ function eqVenteLotOuvrir(id) {
         <button type="button" id="vl-tva-20" onclick="_eqVenteTvaChoisir(20)" style="${champStyle};cursor:pointer;text-align:left"></button>
         <button type="button" id="vl-tva-55" onclick="_eqVenteTvaChoisir(5.5)" style="${champStyle};cursor:pointer;text-align:left"></button>
       </div>
-      <div id="vl-tva-note" style="display:none;font-size:11.5px;color:var(--muted);margin-top:6px">TVA réduite : zone ANRU / QPV et acquéreur éligible. Les honoraires se calculent sur ce prix.</div>
-      <input id="vl-prix-tva" inputmode="decimal" autocomplete="off" placeholder="Prix TVA 5,5 % (ex : 290 000 €)" oninput="_eqVenteTauxMaj()" style="${champStyle};display:none;margin-top:8px">
+      <div id="vl-tva-note" style="display:none;font-size:11.5px;color:var(--muted);margin-top:6px">TVA réduite : zone ANRU / QPV et acquéreur éligible.</div>
+      <label for="vl-prix-nego" id="vl-prix-nego-titre" style="display:block;font-size:12px;color:var(--muted);margin:10px 0 4px">Prix après négociation (facultatif)</label>
+      <input id="vl-prix-nego" inputmode="decimal" autocomplete="off" placeholder="ex : 225 000 €" oninput="_eqVenteNegoTouche = true; _eqVenteTauxMaj()" style="${champStyle}">
+      <div id="vl-prix-nego-aide" style="font-size:11.5px;color:var(--muted);margin-top:4px"></div>
     </div>
     <div id="vl-erreur" style="display:none;font-size:12px;color:var(--danger);margin:6px 0">Indique au moins le programme/lot.</div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
@@ -7900,7 +7917,11 @@ function _eqVentePrixTva(lot, tva) {
   if (!opts.length && tva === 20) return _eqVenteNombre(lot && lot.prix);
   return null;
 }
-function _eqVenteTvaChoisir(tva) { _eqVenteTva = tva; _eqVenteTvaMaj(); }
+// Prix grille du lot retenu à la TVA choisie (null si inconnu) — gardé sur la vente à côté du prix signé
+function _eqVentePrixGrilleLot(lot, source) {
+  return source === 'selection' ? _eqVentePrixTva(lot, _eqVenteTva) : _eqVenteNombre(lot && lot.prix);
+}
+function _eqVenteTvaChoisir(tva) { _eqVenteTva = tva; _eqVenteNegoTouche = false; _eqVenteTvaMaj(); }
 function _eqVenteTvaMaj() {
   const x = _eqVenteLotChoisi();
   const fmt = (n) => Math.round(n).toLocaleString('fr-FR') + ' €';
@@ -7915,25 +7936,29 @@ function _eqVenteTvaMaj() {
   });
   const note = document.getElementById('vl-tva-note');
   if (note) note.style.display = _eqVenteTva === 5.5 ? 'block' : 'none';
-  // Lot de sélection sans prix connu à cette TVA : on le demande
-  const ch = document.getElementById('vl-prix-tva');
-  if (ch) {
-    const aSaisir = !!(x && !_eqVentePrixTva(x.lot, _eqVenteTva));
-    ch.style.display = aSaisir ? 'block' : 'none';
-    ch.placeholder = 'Prix ' + (_eqVenteTva === 5.5 ? 'TVA 5,5 %' : 'TVA 20 %') + ' (ex : 290 000 €)';
-  }
+  // Prix signé : prérempli avec le prix grille de la TVA choisie, que le vendeur baisse s'il y a eu une négo
+  // (demande d'Alex du 03/11/2026). Sans prix grille connu à cette TVA, c'est lui qui le donne.
+  const grille = _eqVentePrixGrille();
+  const ch = document.getElementById('vl-prix-nego');
+  if (ch && !_eqVenteNegoTouche) ch.value = grille ? fmt(grille) : '';
+  const titreNego = document.getElementById('vl-prix-nego-titre');
+  if (titreNego) titreNego.textContent = grille || !x ? 'Prix après négociation (facultatif)'
+    : 'Prix ' + (_eqVenteTva === 5.5 ? 'TVA 5,5 %' : 'TVA 20 %') + ' signé' + (_eqVenteTva === 5.5 ? ' (obligatoire)' : '');
   _eqVenteTauxMaj();
+}
+// Prix grille (pige) à la TVA choisie : régimes du lot de sélection, sinon le prix saisi pour un autre lot
+function _eqVentePrixGrille() {
+  const x = _eqVenteLotChoisi();
+  return x ? _eqVentePrixTva(x.lot, _eqVenteTva) : _eqVenteNombre((document.getElementById('vl-prix') || {}).value);
 }
 // Le taux tapé (« 5,25 » ou « 5.25 ») ; null s'il n'est pas lisible
 function _eqVenteTauxLu() {
   const t = String((document.getElementById('vl-taux') || {}).value || '').replace(/\s|%/g, '').replace(',', '.');
   return /^\d+(\.\d+)?$/.test(t) ? Number(t) : null;
 }
-// Le prix de la vente à la TVA choisie (lot de sélection ou saisi) : base des honoraires
+// Le prix signé (après négo, à la TVA choisie) : base des honoraires (décision d'Alex du 03/11/2026)
 function _eqVentePrixLu() {
-  const x = _eqVenteLotChoisi();
-  if (!x) return _eqVenteNombre((document.getElementById('vl-prix') || {}).value);
-  return _eqVentePrixTva(x.lot, _eqVenteTva) || _eqVenteNombre((document.getElementById('vl-prix-tva') || {}).value);
+  return _eqVenteNombre((document.getElementById('vl-prix-nego') || {}).value) || _eqVentePrixGrille();
 }
 function _eqVenteTauxMaj() {
   const box = document.getElementById('vl-taux-apercu');
@@ -7941,6 +7966,10 @@ function _eqVenteTauxMaj() {
   if (err) err.style.display = 'none';
   if (!box) return;
   const taux = _eqVenteTauxLu(), prix = _eqVentePrixLu();
+  const aide = document.getElementById('vl-prix-nego-aide'), grille = _eqVentePrixGrille();
+  if (aide) aide.textContent = grille
+    ? 'Prix grille : ' + Math.round(grille).toLocaleString('fr-FR') + ' €' + (prix && prix < grille ? ' · négo de ' + Math.round(grille - prix).toLocaleString('fr-FR') + ' €' : '') + '. Les honoraires se calculent sur le prix signé.'
+    : '';
   box.textContent = taux && prix
     ? 'soit ' + Math.round(prix * taux / 100).toLocaleString('fr-FR') + ' € d\'honoraires HT'
     : 'à la virgule près, celui du contrat promoteur';
@@ -7968,7 +7997,7 @@ async function eqVenteLotValider() {
   const prixVente = _eqVentePrixLu();
   if (_eqVenteTva === 5.5 && !prixVente) {
     const err = document.getElementById('vl-erreur');
-    if (err) { err.textContent = 'Indique le prix TVA 5,5 % du lot.'; err.style.display = 'block'; }
+    if (err) { err.textContent = 'Indique le prix TVA 5,5 % signé.'; err.style.display = 'block'; }
     return;
   }
   const sel = document.getElementById('vl-choix');
@@ -7990,6 +8019,7 @@ async function eqVenteLotValider() {
   }
   const prixTxt = prixVente ? Math.round(prixVente).toLocaleString('fr-FR') + ' €' : (lot.prix || '');
   const prix20 = source === 'selection' ? _eqVentePrixTva(lot, 20) : null;
+  const prixGrille = _eqVentePrixGrilleLot(lot, source);
   const ecarts = venteEcarts(l, Object.assign({}, lot, { prix: prixTxt }));
   // Programme / lot / promoteur explicites quand on les connaît (lot venu d'une
   // sélection) : la vente créée automatiquement en base (trigger
@@ -8001,7 +8031,7 @@ async function eqVenteLotValider() {
     || (programmeLot && titreLot.indexOf(programmeLot) === 0 ? titreLot.slice(programmeLot.length).replace(/^\s[—–-]\s*(Lot\s*)?/i, '').trim() : '');
   const venteLot = {
     titre: titreLot, ville: lot.ville || '', prix: prixTxt,
-    tva: _eqVenteTva, prix_tva20: _eqVenteTva === 5.5 && prix20 ? prix20 : null,
+    tva: _eqVenteTva, prix_tva20: _eqVenteTva === 5.5 && prix20 ? prix20 : null, prix_grille: prixGrille,
     programme: programmeLot, lot: numeroLot, promoteur: String(lot.promoteur || '').trim(),
     typologie: (Array.isArray(lot.typologies) && lot.typologies[0]) || '', surface: lot.surface || '',
     taux_honoraires: tauxVente,
