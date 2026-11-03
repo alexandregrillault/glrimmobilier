@@ -2614,7 +2614,13 @@
       </div>
       <div class="form-group">
         <label>Prix du bien (€)</label>
-        <input type="number" id="v-prix" placeholder="ex: 350000" oninput="calcHonoraires()">
+        <div style="display:flex;gap:8px">
+          <input type="number" id="v-prix" placeholder="ex: 350000" oninput="calcHonoraires()" style="flex:1;min-width:0">
+          <select id="v-tva" title="TVA de la vente : les honoraires se calculent sur le prix à cette TVA" style="flex:0 0 auto;width:auto">
+            <option value="20">TVA 20 %</option>
+            <option value="5.5">TVA 5,5 %</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
         <label>% Honoraires société</label>
@@ -3603,6 +3609,7 @@ function rowToVente(r) {
     offreGlr:        r.offreGlr == null ? 0 : Number(r.offreGlr),
     taux:            r.taux == null ? 0 : Number(r.taux),
     tauxHonoraires:  r.tauxHonoraires == null ? 0 : Number(r.tauxHonoraires),
+    tva:             Number(r.tva) === 5.5 ? 5.5 : 20,
     dateActe:        r.dateActe || '',
     dateSignatureNotaire: r.dateSignatureNotaire || ''
   });
@@ -4855,6 +4862,7 @@ function closeModal(type) {
   // reset edit mode
   if (type === 'vente') {
     editingVenteId = null;
+    const tvaEl = document.getElementById('v-tva'); if (tvaEl) tvaEl.value = '20';
     const title = document.querySelector('#modal-vente .modal-title');
     if (title) title.textContent = 'Nouvelle vente';
   }
@@ -4947,6 +4955,7 @@ function saveVente() {
     promoteur: document.getElementById('v-promoteur').value.trim(),
     vendeurId,
     prix,
+    tva: document.getElementById('v-tva').value === '5.5' ? 5.5 : 20,
     tauxHonoraires: parseFloat(document.getElementById('v-taux-honoraires').value) || 0,
     honoraires: parseFloat(document.getElementById('v-honoraires').value) || 0,
     offreGlr: Math.max(0, r2(parseFloat(document.getElementById('v-offre-glr').value) || 0)),
@@ -5153,6 +5162,7 @@ function openEditVente(id) {
   document.getElementById('v-lot').value = v.lot || '';
   document.getElementById('v-promoteur').value = v.promoteur || '';
   document.getElementById('v-prix').value = v.prix || '';
+  document.getElementById('v-tva').value = Number(v.tva) === 5.5 ? '5.5' : '20';
   document.getElementById('v-taux-honoraires').value = v.tauxHonoraires || '';
   document.getElementById('v-honoraires').value = v.honoraires || '';
   document.getElementById('v-offre-glr').value = v.offreGlr || '';
@@ -5450,7 +5460,7 @@ function renderLastVentes() {
     <td><strong>${v.programme}</strong>${v.ville ? '<br><span style="font-size:11px;color:var(--muted)">'+v.ville+'</span>' : ''}</td>
     <td>${v.client || '—'}</td>
     <td>${vendeurName(v.vendeurId)}</td>
-    <td>${fmtEur(v.prix)}</td>
+    <td>${fmtEur(v.prix)}${venteTvaMention(v)}</td>
     <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
     <td>${statutBadge(v.statut)}</td>
   </tr>`).join('');
@@ -5507,7 +5517,7 @@ function renderAllVentes() {
     <td style="color:var(--accent);font-family:var(--font-head);font-weight:600">${v.lot || '—'}</td>
     <td style="color:var(--muted)">${v.promoteur || '—'}</td>
     <td>${vendeurName(v.vendeurId)}</td>
-    <td>${fmtEur(v.prix)}</td>
+    <td>${fmtEur(v.prix)}${venteTvaMention(v)}</td>
     <td style="color:var(--accent)">${v.taux ? fmtEur2(commissionVente(v)) + ' (' + v.taux + '%)' : '—'}</td>
     <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
     ${actabiliteCell(v)}
@@ -6661,6 +6671,8 @@ function toggleSalaireCharge() {
   renderRemuneration();
 }
 // Ce que GLR gagne sur une vente = honoraires − offre GLR (ticket cadeau…) ; la facture promoteur reste sur les honoraires
+// Vente en TVA réduite : prix et honoraires sont à 5,5 % (colonne ventes."tva", 03/11/2026)
+function venteTvaMention(v) { return Number(v && v.tva) === 5.5 ? '<br><span style="font-size:11px;color:var(--muted)">TVA 5,5 %</span>' : ''; }
 function honoNet(v) { return r2((Number(v.honoraires) || 0) - (Number(v.offreGlr) || 0)); }
 // Commission vendeur d'une vente = (honoraires − offre GLR) × taux %
 function commissionVente(v) {
@@ -6843,7 +6855,7 @@ function renderEquipeDashboard() {
     : recent.map(v => `<tr>
         <td><strong>${v.programme||'—'}</strong>${v.ville?'<br><span style="font-size:11px;color:var(--muted)">'+v.ville+'</span>':''}</td>
         <td>${v.client||'—'}</td>
-        <td>${fmtEur(v.prix)}</td>
+        <td>${fmtEur(v.prix)}${venteTvaMention(v)}</td>
         <td style="color:var(--accent)">${fmtEur(honoNet(v))}</td>
         <td style="color:var(--success);font-weight:600">${fmtEur2(commissionVente(v))}</td>
         <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
@@ -6865,7 +6877,7 @@ function renderEquipeVentes() {
         <td><strong>${v.programme||'—'}</strong>${v.ville?'<br><span style="font-size:11px;color:var(--muted)">'+v.ville+'</span>':''}</td>
         <td>${v.client||'—'}</td>
         <td style="color:var(--accent);font-weight:600">${v.lot||'—'}</td>
-        <td>${fmtEur(v.prix)}</td>
+        <td>${fmtEur(v.prix)}${venteTvaMention(v)}</td>
         <td style="color:var(--accent)">${fmtEur(honoNet(v))}</td>
         <td style="color:var(--success);font-weight:600">${fmtEur2(commissionVente(v))}</td>
         <td>${new Date(v.date).toLocaleDateString('fr-FR')}</td>
@@ -7808,10 +7820,12 @@ function eqLeadAppele(id) { eqLeadStatutChange(id, 'Sélections'); }
 const EQ_VENTE_TAUX_MAX = 15;   // au-delà c'est une faute de frappe : 8 % est le plus haut taux connu
 let _eqVenteLotId = null;
 let _eqVenteLotsListe = [];
+let _eqVenteTva = 20;           // TVA de la vente : 20 ou 5,5 (demande d'Alex du 03/11/2026)
 function eqVenteLotOuvrir(id) {
   const l = _eqLeads.find(x => x.id === id);
   if (!l) return;
   _eqVenteLotId = id;
+  _eqVenteTva = 20;
   _eqVenteLotsListe = _eqLotsEnvoyes(id);
   const esc = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   const old = document.getElementById('eq-vente-lot-modal'); if (old) old.remove();
@@ -7840,9 +7854,18 @@ function eqVenteLotOuvrir(id) {
     <div id="vl-libre" style="display:${_eqVenteLotsListe.length ? 'none' : 'grid'};grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
       <input id="vl-titre" placeholder="Programme — Lot (ex : Alter Ego — A106)" style="${champStyle};grid-column:1/-1">
       <input id="vl-ville" placeholder="Ville" style="${champStyle}">
-      <input id="vl-prix" placeholder="Prix (ex : 320 000 €)" oninput="_eqVenteTauxMaj()" style="${champStyle}">
+      <input id="vl-prix" placeholder="Prix à la TVA choisie (ex : 320 000 €)" oninput="_eqVenteTauxMaj()" style="${champStyle}">
       <input id="vl-type" placeholder="Typologie (ex : T3)" style="${champStyle}">
       <input id="vl-surface" placeholder="Surface (ex : 65)" style="${champStyle}">
+    </div>
+    <div style="margin-top:12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">TVA de la vente</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button type="button" id="vl-tva-20" onclick="_eqVenteTvaChoisir(20)" style="${champStyle};cursor:pointer;text-align:left"></button>
+        <button type="button" id="vl-tva-55" onclick="_eqVenteTvaChoisir(5.5)" style="${champStyle};cursor:pointer;text-align:left"></button>
+      </div>
+      <div id="vl-tva-note" style="display:none;font-size:11.5px;color:var(--muted);margin-top:6px">TVA réduite : zone ANRU / QPV et acquéreur éligible. Les honoraires se calculent sur ce prix.</div>
+      <input id="vl-prix-tva" inputmode="decimal" autocomplete="off" placeholder="Prix TVA 5,5 % (ex : 290 000 €)" oninput="_eqVenteTauxMaj()" style="${champStyle};display:none;margin-top:8px">
     </div>
     <div id="vl-erreur" style="display:none;font-size:12px;color:var(--danger);margin:6px 0">Indique au moins le programme/lot.</div>
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:14px">
@@ -7851,11 +7874,54 @@ function eqVenteLotOuvrir(id) {
     </div>
   </div>`;
   document.body.appendChild(div);
+  _eqVenteTvaMaj();
 }
 function _eqVenteLotToggle() {
   const sel = document.getElementById('vl-choix');
   const zone = document.getElementById('vl-libre');
   if (zone) zone.style.display = (sel && sel.value === 'libre') ? 'grid' : 'none';
+  _eqVenteTvaMaj();
+}
+// Le lot choisi dans la liste des sélections (null = lot saisi à la main)
+function _eqVenteLotChoisi() {
+  const sel = document.getElementById('vl-choix');
+  return sel && sel.value && sel.value !== 'libre' ? _eqVenteLotsListe[parseInt(sel.value, 10)] || null : null;
+}
+function _eqVenteNombre(brut) {
+  const n = parseFloat(String(brut == null ? '' : brut).replace(/[^\d.,]/g, '').replace(',', '.'));
+  return isNaN(n) || n <= 0 ? null : n;
+}
+// Prix d'un lot de sélection à une TVA donnée, lu dans ses régimes de prix (prixOptions,
+// repris de la pige) ; null si la sélection ne le donne pas
+function _eqVentePrixTva(lot, tva) {
+  const opts = Array.isArray(lot && lot.prixOptions) ? lot.prixOptions : [];
+  const o = opts.find(x => Number(x && x.tva) === tva);
+  if (o) return _eqVenteNombre(o.prix);
+  if (!opts.length && tva === 20) return _eqVenteNombre(lot && lot.prix);
+  return null;
+}
+function _eqVenteTvaChoisir(tva) { _eqVenteTva = tva; _eqVenteTvaMaj(); }
+function _eqVenteTvaMaj() {
+  const x = _eqVenteLotChoisi();
+  const fmt = (n) => Math.round(n).toLocaleString('fr-FR') + ' €';
+  [[20, 'vl-tva-20', 'TVA 20 %'], [5.5, 'vl-tva-55', 'TVA 5,5 %']].forEach(([tva, id, titre]) => {
+    const b = document.getElementById(id); if (!b) return;
+    const p = x ? _eqVentePrixTva(x.lot, tva) : null;
+    const actif = _eqVenteTva === tva;
+    b.style.border = actif ? '2px solid var(--accent)' : '1px solid var(--border)';
+    b.style.fontWeight = actif ? '700' : '400';
+    b.innerHTML = titre + '<div style="font-size:11.5px;font-weight:400;color:var(--muted);margin-top:2px">'
+      + (p ? fmt(p) : x ? 'prix à saisir' : 'prix saisi ci-dessus') + '</div>';
+  });
+  const note = document.getElementById('vl-tva-note');
+  if (note) note.style.display = _eqVenteTva === 5.5 ? 'block' : 'none';
+  // Lot de sélection sans prix connu à cette TVA : on le demande
+  const ch = document.getElementById('vl-prix-tva');
+  if (ch) {
+    const aSaisir = !!(x && !_eqVentePrixTva(x.lot, _eqVenteTva));
+    ch.style.display = aSaisir ? 'block' : 'none';
+    ch.placeholder = 'Prix ' + (_eqVenteTva === 5.5 ? 'TVA 5,5 %' : 'TVA 20 %') + ' (ex : 290 000 €)';
+  }
   _eqVenteTauxMaj();
 }
 // Le taux tapé (« 5,25 » ou « 5.25 ») ; null s'il n'est pas lisible
@@ -7863,13 +7929,11 @@ function _eqVenteTauxLu() {
   const t = String((document.getElementById('vl-taux') || {}).value || '').replace(/\s|%/g, '').replace(',', '.');
   return /^\d+(\.\d+)?$/.test(t) ? Number(t) : null;
 }
-// Le prix du lot choisi ou saisi, pour montrer les honoraires que donne ce taux
+// Le prix de la vente à la TVA choisie (lot de sélection ou saisi) : base des honoraires
 function _eqVentePrixLu() {
-  const sel = document.getElementById('vl-choix');
-  const x = sel && sel.value && sel.value !== 'libre' ? _eqVenteLotsListe[parseInt(sel.value, 10)] : null;
-  const brut = x ? (x.lot && x.lot.prix) : (document.getElementById('vl-prix') || {}).value;
-  const n = parseFloat(String(brut || '').replace(/[^\d.,]/g, '').replace(',', '.'));
-  return isNaN(n) ? null : n;
+  const x = _eqVenteLotChoisi();
+  if (!x) return _eqVenteNombre((document.getElementById('vl-prix') || {}).value);
+  return _eqVentePrixTva(x.lot, _eqVenteTva) || _eqVenteNombre((document.getElementById('vl-prix-tva') || {}).value);
 }
 function _eqVenteTauxMaj() {
   const box = document.getElementById('vl-taux-apercu');
@@ -7900,6 +7964,13 @@ async function eqVenteLotValider() {
     const ch = document.getElementById('vl-taux'); if (ch) ch.focus();
     return;
   }
+  // Prix à la TVA choisie : obligatoire en 5,5 %, sinon la vente garderait le prix TVA 20 %
+  const prixVente = _eqVentePrixLu();
+  if (_eqVenteTva === 5.5 && !prixVente) {
+    const err = document.getElementById('vl-erreur');
+    if (err) { err.textContent = 'Indique le prix TVA 5,5 % du lot.'; err.style.display = 'block'; }
+    return;
+  }
   const sel = document.getElementById('vl-choix');
   let lot = null, source = 'saisie_libre', token = null;
   if (sel && sel.value && sel.value !== 'libre') {
@@ -7908,7 +7979,7 @@ async function eqVenteLotValider() {
   }
   if (!lot) {
     const titre = (document.getElementById('vl-titre').value || '').trim();
-    if (!titre) { const err = document.getElementById('vl-erreur'); if (err) err.style.display = 'block'; return; }
+    if (!titre) { const err = document.getElementById('vl-erreur'); if (err) { err.textContent = 'Indique au moins le programme/lot.'; err.style.display = 'block'; } return; }
     lot = {
       titre,
       ville: (document.getElementById('vl-ville').value || '').trim(),
@@ -7917,7 +7988,9 @@ async function eqVenteLotValider() {
       surface: (document.getElementById('vl-surface').value || '').trim()
     };
   }
-  const ecarts = venteEcarts(l, lot);
+  const prixTxt = prixVente ? Math.round(prixVente).toLocaleString('fr-FR') + ' €' : (lot.prix || '');
+  const prix20 = source === 'selection' ? _eqVentePrixTva(lot, 20) : null;
+  const ecarts = venteEcarts(l, Object.assign({}, lot, { prix: prixTxt }));
   // Programme / lot / promoteur explicites quand on les connaît (lot venu d'une
   // sélection) : la vente créée automatiquement en base (trigger
   // trg_contacts_vente_auto, 02/10/2026) s'en sert, sinon elle découpe le titre.
@@ -7927,7 +8000,8 @@ async function eqVenteLotValider() {
   const numeroLot = String(lot.lot || '').trim()
     || (programmeLot && titreLot.indexOf(programmeLot) === 0 ? titreLot.slice(programmeLot.length).replace(/^\s[—–-]\s*(Lot\s*)?/i, '').trim() : '');
   const venteLot = {
-    titre: titreLot, ville: lot.ville || '', prix: lot.prix || '',
+    titre: titreLot, ville: lot.ville || '', prix: prixTxt,
+    tva: _eqVenteTva, prix_tva20: _eqVenteTva === 5.5 && prix20 ? prix20 : null,
     programme: programmeLot, lot: numeroLot, promoteur: String(lot.promoteur || '').trim(),
     typologie: (Array.isArray(lot.typologies) && lot.typologies[0]) || '', surface: lot.surface || '',
     taux_honoraires: tauxVente,
@@ -20073,7 +20147,7 @@ function onVenteLieeChange() {
   const id = document.getElementById('fac-vente').value;
   const v = (data.ventes || []).find(x => x.id === id); if (!v) return;
   const setV = (i, val) => { const el = document.getElementById(i); if (el) el.value = val; };
-  setV('fac-designation', 'Honoraires de commercialisation — ' + (v.programme || '') + (v.lot ? (' (lot ' + v.lot + ')') : '') + (v.ville ? (' — ' + v.ville) : '') + (v.client ? (' — acquéreur : ' + v.client) : ''));
+  setV('fac-designation', 'Honoraires de commercialisation — ' + (v.programme || '') + (v.lot ? (' (lot ' + v.lot + ')') : '') + (v.ville ? (' — ' + v.ville) : '') + (v.client ? (' — acquéreur : ' + v.client) : '') + (Number(v.tva) === 5.5 ? ' — vente en TVA 5,5 %' : ''));
   setV('fac-prix', Number(v.prix) || '');
   setV('fac-taux-hono', Number(v.tauxHonoraires) || '');
   setV('fac-ht', _facHtRetenu(v.prix, v.tauxHonoraires, Number(v.honoraires) || 0));
