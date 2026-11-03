@@ -148,5 +148,7 @@ Deno.serve(async (req: Request) => {
     } catch (_) { /* le lead est enregistré : on n'échoue pas pour un affinage */ }
   }
 
-  return repondre({ ok: true, statut: resultat.status }, 200, cors);
+  // Jamais « fiche créée » ou « déjà en base » dans la réponse : la page n'en a pas besoin, et
+  // n'importe qui pourrait s'en servir pour savoir si une adresse est cliente GLR (03/11/2026).
+  return repondre({ ok: true }, 200, cors);
 });

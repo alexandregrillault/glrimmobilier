@@ -131,7 +131,8 @@ async function ecrireConversation(igUser: string, conv: Conversation, extra: Rec
 }
 
 // Fin du questionnaire avec accord : la fiche part au CRM par lead-inbound (dédoublonnage, paternité).
-async function creerFiche(s: Secrets, r: Record<string, string>): Promise<string | null> {
+// `nouvelle` : la fiche vient d'être créée. Sinon l'e-mail ou le téléphone donnés étaient déjà en base.
+async function creerFiche(s: Secrets, r: Record<string, string>): Promise<{ id: string; nouvelle: boolean } | null> {
   if (!s.lead_inbound_token?.value) return null;
   const aujourdhui = new Date().toISOString().slice(0, 10);
   const corps = [
@@ -164,7 +165,7 @@ async function creerFiche(s: Secrets, r: Record<string, string>): Promise<string
     maj.notes = actuel?.notes ? actuel.notes + "\n" + trace : trace;
     await supabase.from("contacts").update(maj).eq("id", resultat.id);
   } catch (_) { /* la fiche existe : on n'échoue pas pour un affinage */ }
-  return resultat.id;
+  return { id: resultat.id, nouvelle: resultat.status === "created" };
 }
 
 // Lien de rendez-vous personnel de la fiche (créé avec le lead, table rdv_liens) : la page montre
@@ -235,12 +236,16 @@ async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
     // Le merci part tout de suite ; la fiche entre dans le CRM pendant ce temps (l'accusé par e-mail prend
     // plusieurs secondes), puis la carte du planning arrive avec le lien personnel de la fiche.
     await envoyer(r.messages[0]);
-    const contact = await creerFiche(s, r.conv.reponses);
-    const jetonRdv = contact ? await lienRdv(contact) : null;
+    const fiche = await creerFiche(s, r.conv.reponses);
+    // Lien personnel seulement pour une fiche neuve (03/11/2026) : rien ne prouve que la personne sur
+    // Instagram est la propriétaire de l'e-mail ou du téléphone donnés. Le lien d'une fiche existante
+    // montrerait le prénom, le projet, le rendez-vous et la visio d'un client à n'importe qui.
+    // Fiche existante : planning public de Théophile, qui ne montre rien sur personne.
+    const jetonRdv = fiche?.nouvelle ? await lienRdv(fiche.id) : null;
     await envoyer(jetonRdv ? Q.planning(lienPlanningPersonnel(jetonRdv)) : r.messages[1]);
     // Une fois la fiche créée, on ne garde ici que le prénom et le pseudo.
     conv2 = { ...r.conv, reponses: { prenom: r.conv.reponses.prenom || "", pseudo: r.conv.reponses.pseudo || "" } };
-    extra = { ...extra, contact_id: contact };
+    extra = { ...extra, contact_id: fiche?.id || null };
   } else {
     for (const mm of r.messages) await envoyer(mm);
   }
