@@ -42,6 +42,11 @@ export const Q = {
     quick_replies: [{ title: "Oui, envoie-les", payload: "PLANS_OUI" }, { title: "Non merci", payload: "PLANS_NON" }],
   }),
   zone: (): Message => ({ text: "Tu cherches dans quelle ville ou quel secteur ?" }),
+  zonePlus: (zone: string): Message => ({
+    text: `Noté : ${zone}. Tu regardes aussi une autre ville ? Écris-la, ou touche « C'est tout ».`,
+    quick_replies: [{ title: "C'est tout", payload: "ZONE_FINI" }],
+  }),
+  laquelle: (): Message => ({ text: "Laquelle ?" }),
   typologie: (): Message => ({ text: "Quel type de logement ?", quick_replies: TYPOLOGIES }),
   budget: (): Message => ({ text: "Ton budget, environ ?", quick_replies: BUDGETS }),
   prenom: (): Message => ({ text: "Et ton prénom ?" }),
@@ -86,6 +91,17 @@ function typologieDepuis(t: string): string {
   return t.trim().slice(0, 30);
 }
 
+// « Aubervilliers, Pantin et Bobigny » → trois villes, ajoutées à celles déjà notées, sans doublon.
+const MAX_VILLES = 5;
+function villes(deja: string[], t: string): string[] {
+  const liste = [...deja];
+  for (const v of t.split(/\s*(?:,|;|\/|\+|\bet\b|\bou\b|\n)\s*/i)) {
+    const propre = v.trim().replace(/[.!?]+$/, "").slice(0, 60);
+    if (propre.length >= 2 && !liste.some((x) => x.toLowerCase() === propre.toLowerCase())) liste.push(propre);
+  }
+  return liste.slice(0, MAX_VILLES);
+}
+
 function nouvelle(etape: string, reponses: Record<string, string> = {}): Conversation {
   return { etape, reponses, essais: 0 };
 }
@@ -122,8 +138,23 @@ export function repondre(conv: Conversation | null, texteBrut: string, payload: 
       return { conv: nouvelle("ferme"), messages: [Q.pasPlans()] };
     case "zone":
       if (texte.length < 2) return { conv, messages: [Q.zone()] };
-      r.zone = texte.slice(0, 160);
-      return { conv: { etape: "typologie", reponses: r, essais: 0 }, messages: [Q.typologie()] };
+      r.zone = villes([], texte).join(", ");
+      return villes([], texte).length >= MAX_VILLES
+        ? { conv: { etape: "typologie", reponses: r, essais: 0 }, messages: [Q.typologie()] }
+        : { conv: { etape: "zone_plus", reponses: r, essais: 0 }, messages: [Q.zonePlus(r.zone)] };
+    case "zone_plus": {
+      // Plusieurs villes possibles (demande d'Alex du 03/11/2026) : on en ajoute jusqu'à « C'est tout ».
+      if (payload === "ZONE_FINI" || ditNon(texte) || /^\s*(c['’]est tout|rien|[cç]a suffit|c['’]est bon|tout)\b/i.test(texte)) {
+        return { conv: { etape: "typologie", reponses: r, essais: 0 }, messages: [Q.typologie()] };
+      }
+      if (ditOui(texte) && texte.split(/\s+/).length <= 2) return { conv, messages: [Q.laquelle()] };
+      if (texte.length < 2) return { conv, messages: [Q.zonePlus(r.zone || "")] };
+      const liste = villes((r.zone || "").split(", ").filter(Boolean), texte);
+      r.zone = liste.join(", ");
+      return liste.length >= MAX_VILLES
+        ? { conv: { etape: "typologie", reponses: r, essais: 0 }, messages: [Q.typologie()] }
+        : { conv: { etape: "zone_plus", reponses: r, essais: 0 }, messages: [Q.zonePlus(r.zone)] };
+    }
     case "typologie":
       if (!payload && !texte) return { conv, messages: [Q.typologie()] };
       r.typologie = (payload && TYPO_TEXTE[payload]) || typologieDepuis(texte);
@@ -168,6 +199,7 @@ function question(conv: Conversation): Message {
   switch (conv.etape) {
     case "invitation": return Q.invitation();
     case "zone": return Q.zone();
+    case "zone_plus": return Q.zonePlus(conv.reponses.zone || "");
     case "typologie": return Q.typologie();
     case "budget": return Q.budget();
     case "prenom": return Q.prenom();

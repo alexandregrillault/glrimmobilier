@@ -9,7 +9,11 @@ const dire = (r) => r.messages.map((m) => m.text + (m.quick_replies ? " [" + m.q
 // 1. Parcours complet depuis un commentaire, avec boutons et une erreur de téléphone
 let r = demarrerDepuisCommentaire("camille_93");
 ok(r.conv.etape === "zone" && /quelle ville/.test(r.messages[0].text), "commentaire : première question = secteur");
-r = repondre(r.conv, "Aubervilliers", null, false); ok(r.conv.etape === "typologie" && r.messages[0].quick_replies?.length === 5, "secteur noté, typologie avec 5 boutons");
+r = repondre(r.conv, "Aubervilliers", null, false); ok(r.conv.etape === "zone_plus" && /Noté : Aubervilliers\. Tu regardes aussi une autre ville/.test(r.messages[0].text), "secteur noté, propose une autre ville");
+r = repondre(r.conv, "Pantin et Bobigny", null, false); ok(r.conv.reponses.zone === "Aubervilliers, Pantin, Bobigny" && r.conv.etape === "zone_plus", "plusieurs villes dans un message");
+r = repondre(r.conv, "oui", null, false); ok(/Laquelle/.test(r.messages[0].text), "« oui » seul : demande laquelle");
+r = repondre(r.conv, "pantin", null, false); ok(r.conv.reponses.zone === "Aubervilliers, Pantin, Bobigny", "ville en double ignorée");
+r = repondre(r.conv, "", "ZONE_FINI", false); ok(r.conv.etape === "typologie" && r.messages[0].quick_replies?.length === 5, "« C'est tout » : typologie avec 5 boutons");
 r = repondre(r.conv, "T3", "TYPO_T3", false); ok(r.conv.reponses.typologie === "T3" && r.conv.etape === "budget", "typologie par bouton");
 ok(r.messages[0].quick_replies.every((b) => b.title.length <= 20), "boutons de la jauge : 20 caractères au plus");
 r = repondre(r.conv, "▰▰▰▱▱ 300–400 k€", "BUDGET_3", false); ok(r.conv.reponses.budget === "300 000 à 400 000 €", "budget par bouton");
@@ -48,6 +52,11 @@ ok(r.conv.etape === "ferme" && /glrimmobilier\.com\/plans/.test(r.messages[0].te
 // 7. Conversation laissée plus de 24 h : la question en cours est reposée
 c = { etape: "telephone", reponses: { prenom: "Léa" }, essais: 1 };
 r = repondre(c, "06 11 22 33 44", null, true); ok(r.conv.etape === "telephone" && /Merci Léa/.test(r.messages[0].text), "après 24 h : on repose la question");
+
+// 7 bis. Cinq villes d'un coup : on passe directement à la suite
+c = { etape: "zone", reponses: {}, essais: 0 };
+r = repondre(c, "Saint-Ouen, Clichy, Pantin, Montreuil, Vincennes, Ivry", null, false);
+ok(r.conv.etape === "typologie" && r.conv.reponses.zone.split(", ").length === 5 && r.conv.reponses.zone.startsWith("Saint-Ouen"), "5 villes au plus, puis la suite");
 
 // 8. Typologie écrite à la main
 c = { etape: "typologie", reponses: {}, essais: 0 };
