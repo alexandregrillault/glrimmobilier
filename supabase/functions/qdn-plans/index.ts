@@ -81,7 +81,7 @@ Deno.serve(async (req: Request) => {
   const origine = texte(body.origine, 30);
   const accord = body.accord === true;
 
-  if (!prenom || !zone || telephone.replace(/\D/g, "").length < 9 || !accord || (email && !RE_EMAIL.test(email))) {
+  if (!prenom || !zone || telephone.replace(/\D/g, "").length < 9 || !accord || !RE_EMAIL.test(email)) {
     return repondre({ error: "champs_manquants" }, 422, cors);
   }
 
