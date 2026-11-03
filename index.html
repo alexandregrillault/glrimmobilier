@@ -22176,7 +22176,7 @@ function _rpPerso(x) {
       <div class="rp-carte fort"><b class="n">${x.recus}</b><strong>leads reçus</strong><small>${_rpRang(x.r.recus)} de l'équipe</small></div>
       <div class="rp-carte"><b class="n">${x.tr}</b><strong>leads transférés reçus</strong><small>dont ${x.trg} par les gérants</small></div>
       <div class="rp-carte"><b class="n">${x.pool}</b><strong>repris au pool</strong><small>${_rpRang(x.r.pool)} de l'équipe</small></div>
-      <div class="rp-carte"><b class="n">${x.env + x.ech}</b><strong>leads partis</strong><small>${x.env} transféré${x.env > 1 ? 's' : ''} · ${x.ech} échu${x.ech > 1 ? 's' : ''} à 14 jours</small></div>
+      <div class="rp-carte"><b class="n">${x.env + x.ech}</b><strong>leads partis</strong><small>${x.env} transféré${x.env > 1 ? 's' : ''} à un collègue · ${x.ech} échu${x.ech > 1 ? 's' : ''} à 14 jours</small></div>
     </div>
     <div class="rp-g2">
       <div><div class="rp-lab">Le parcours de tes leads</div><h2>${c.joints} leads joints sur ${c.ent}</h2><div style="margin-top:10px">${_rpParcours(c, c.ve)}</div></div>
@@ -22202,7 +22202,7 @@ function _rpEquipe() {
     ['Relance', meilleur(x => x.m.relance, x => x.essayes >= 5), x => Math.round(x.m.relance) + ' % des non joints rappelés'],
     ['Sélections', meilleur(x => x.selections.env), x => x.selections.env + ' envoyées']
   ].filter(l => l[1]);
-  const lignes = tous.slice().sort((a, b) => b.recus - a.recus).map(x => `<tr><td>${_rpNom(x)}</td><td>${x.recus}</td><td>${x.tr}</td><td>${x.pool}</td><td>${x.env + x.ech}</td><td>${x.m.direct == null ? '—' : Math.round(x.m.direct) + ' %'}</td><td>${x.selections.env}</td><td>${x.rdv_mois}</td><td>${x.ventes}</td></tr>`).join('');
+  const lignes = tous.slice().sort((a, b) => b.recus - a.recus).map(x => `<tr><td>${_rpNom(x)}</td><td>${x.recus}</td><td>${x.tr}</td><td>${x.env}</td><td>${x.pool}</td><td>${x.ech}</td><td>${x.m.direct == null ? '—' : Math.round(x.m.direct) + ' %'}</td><td>${x.selections.env}</td><td>${x.rdv_mois}</td><td>${x.ventes}</td></tr>`).join('');
   return `<div class="rp">
     <div class="rp-tete"><div><div class="rp-lab">Bilan d'équipe · ${_rpMoisLib(_rp.data.mois)}</div><h1>L'équipe</h1><p>${tous.length} commerciaux actifs, ${som(x => x.recus + x.tr + x.pool)} leads entrés, ${som(x => x.rdv_mois)} rendez-vous.</p></div>
       <div class="rp-ventes"><div class="rp-lab">Ventes du mois</div><b>${som(x => x.ventes)}</b><span>${Math.round(som(x => x.hono)).toLocaleString('fr-FR')} € d'honoraires après offre GLR</span></div></div>
@@ -22218,12 +22218,12 @@ function _rpEquipe() {
       <div><div class="rp-lab">Leads joints selon leur origine</div><h2>Le pool se joint moins bien qu'un lead direct</h2>
         <div class="rp-g4" style="margin-top:12px;grid-template-columns:repeat(3,minmax(0,1fr))">
           <div class="rp-carte"><b class="n" style="font-size:32px">${c.dir_n ? Math.round(c.dir_j / c.dir_n * 100) : 0} %</b><small>directs</small></div>
-          <div class="rp-carte"><b class="n" style="font-size:32px">${c.tr_n ? Math.round(c.tr_j / c.tr_n * 100) : 0} %</b><small>transférés</small></div>
+          <div class="rp-carte"><b class="n" style="font-size:32px">${c.tr_n ? Math.round(c.tr_j / c.tr_n * 100) : 0} %</b><small>transférés reçus</small></div>
           <div class="rp-carte"><b class="n" style="font-size:32px">${c.pool_n ? Math.round(c.pool_j / c.pool_n * 100) : 0} %</b><small>pool</small></div>
         </div></div>
     </div>
     <div class="rp-carte"><div class="rp-lab">Ce que deviennent les ${c.ent} leads de l'équipe</div>${_rpDevenir(c)}</div>
-    <div class="rp-carte rp-table"><div class="rp-lab" style="margin-bottom:8px">Le mois de chacun</div><table><thead><tr><th>Commercial</th><th>Reçus</th><th>Transférés</th><th>Pool</th><th>Partis</th><th>Directs joints</th><th>Sélections</th><th>RDV</th><th>Ventes</th></tr></thead><tbody>${lignes}</tbody></table></div>
+    <div class="rp-carte rp-table"><div class="rp-lab" style="margin-bottom:8px">Le mois de chacun</div><table><thead><tr><th>Commercial</th><th>Reçus</th><th>Transferts reçus</th><th>Transferts envoyés</th><th>Pool</th><th>Échus</th><th>Directs joints</th><th>Sélections</th><th>RDV</th><th>Ventes</th></tr></thead><tbody>${lignes}</tbody></table></div>
     ${_rpNoteBas()}</div>`;
 }
 

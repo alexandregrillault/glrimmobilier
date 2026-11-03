@@ -56,6 +56,8 @@ with sync_playwright() as p:
         t = page.inner_text('#rp-corps')
         for a in ('250', 'leads reçus', 'LES MEILLEURS DU MOIS', 'Anaïs', 'LE MOIS DE CHACUN', '12 000 €'):
             if a.replace(' ', '') not in t.replace(' ', '').replace(' ', '').replace('\xa0', ''): erreurs.append(f'{nom} : équipe, absent : {a}')
+        for a in ('TRANSFERTS REÇUS', 'TRANSFERTS ENVOYÉS', 'transférés reçus'):
+            if a not in t: erreurs.append(f'{nom} : équipe, sens des transferts absent : {a}')
         if 'Nour' in t: erreurs.append(f'{nom} : commercial inactif affiché')
         if 'retards sur' in t: erreurs.append(f'{nom} : retards individuels visibles en équipe')
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : équipe déborde')
@@ -66,7 +68,7 @@ with sync_playwright() as p:
         opts = page.evaluate("[...document.getElementById('rp-vendeur').options].map(o => o.textContent)")
         if opts != ['Anaïs', 'Jules', 'Madina']: erreurs.append(f'{nom} : liste : {opts}')
         t = page.inner_text('#rp-corps')
-        for a in ('146', 'N°1 sur les ventes', 'Rappeler au-delà du premier jour', 'Ne pas laisser filer les clients vus', '73', 'leads sans nouvelle'):
+        for a in ('146', 'N°1 sur les ventes', 'Rappeler au-delà du premier jour', 'Ne pas laisser filer les clients vus', '73', 'leads sans nouvelle', '4 transférés à un collègue'):
             if a not in t: erreurs.append(f'{nom} : Anaïs, absent : {a}')
         page.select_option('#rp-vendeur', 'Jules')
         t = page.inner_text('#rp-corps')
