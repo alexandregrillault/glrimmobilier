@@ -166,14 +166,23 @@ async function creerFiche(s: Secrets, r: Record<string, string>): Promise<string
 // Lien de rendez-vous personnel de la fiche (créé avec le lead, table rdv_liens) : la page montre
 // le planning du conseiller et la personne n'a pas à retaper ses coordonnées. Sans lien valable,
 // le message garde le lien public du planning de Théophile.
+// Un lien qui porte déjà un rendez-vous passé (fiche existante, test du 03/11/2026 : la page proposait
+// de valider un ancien rendez-vous de septembre) n'est pas renvoyé : on crée un lien neuf pour la fiche.
 async function lienRdv(contactId: string): Promise<string | null> {
   try {
-    const { data } = await supabase.from("rdv_liens").select("token, contexte").eq("contact_id", contactId)
+    const { data } = await supabase.from("rdv_liens").select("token, contexte, vendeur, rdv").eq("contact_id", contactId)
       .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(1);
     const l: any = data?.[0];
     if (!l?.token) return null;
-    await supabase.from("rdv_liens").update({ contexte: { ...(l.contexte || {}), source: SOURCE } }).eq("token", l.token);
-    return l.token;
+    const contexte = { ...(l.contexte || {}), source: SOURCE };
+    const debut = l.rdv?.debut ? new Date(l.rdv.debut).getTime() : null;
+    if (debut === null || debut > Date.now()) {
+      await supabase.from("rdv_liens").update({ contexte }).eq("token", l.token);
+      return l.token;
+    }
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(12))).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const { error } = await supabase.from("rdv_liens").insert({ token, contact_id: contactId, vendeur: l.vendeur, origine: "auto_lead", contexte });
+    return error ? null : token;
   } catch (_) { return null; }
 }
 
