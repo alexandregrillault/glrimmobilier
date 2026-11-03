@@ -41,17 +41,19 @@ const TYPO_TEXTE: Record<string, string> = {
   TYPO_T1: "Studio / T1", TYPO_T2: "T2", TYPO_T3: "T3", TYPO_T4: "T4", TYPO_T5: "T5 et plus",
 };
 
-const DEMARCHE = "Pour recevoir les plans : 5 petites questions (30 secondes), puis un conseiller de GLR Immobilier, " +
-  "notre partenaire, t'appelle au moment que tu choisis avec les plans des programmes neufs de ton secteur. Ça te va ?";
+// Quoi de neuf se présente comme le média de GLR Immobilier (décision d'Alex du 03/11/2026).
+const QUI = "c'est Alto de Quoi de neuf, le média de GLR Immobilier.";
+const DEMARCHE = "Pour recevoir les plans : 5 petites questions (30 secondes), puis un conseiller GLR t'appelle " +
+  "au moment que tu choisis avec les plans des programmes neufs de ton secteur. Ça te va ?";
 // Seul bouton avec un émoji (décision d'Alex du 03/11/2026) : il signale qu'il faut toucher les bulles.
 const OK_NON: Bouton[] = [{ title: "✅ C'est parti", payload: "PLANS_OUI" }, { title: "Non merci", payload: "PLANS_NON" }];
 
 export const Q = {
   // Après un commentaire « PLANS ».
-  debut: (): Message => ({ text: "Salut, c'est Alto de Quoi de neuf. " + DEMARCHE, quick_replies: OK_NON }),
+  debut: (): Message => ({ text: `Salut, ${QUI} ${DEMARCHE}`, quick_replies: OK_NON }),
   // Message privé qui ne parle pas de plans.
   invitation: (): Message => ({
-    text: "Salut, merci pour ton message, c'est Alto de Quoi de neuf. Tu veux recevoir les plans des programmes neufs de ton secteur ? " + DEMARCHE,
+    text: `Salut, merci pour ton message, ${QUI} Tu veux recevoir les plans des programmes neufs de ton secteur ? ${DEMARCHE}`,
     quick_replies: OK_NON,
   }),
   relance: (): Message => ({ text: "Pour commencer, touche « C'est parti ». Sinon, « Non merci ».", quick_replies: OK_NON }),
