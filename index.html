@@ -3158,12 +3158,14 @@ Nous avons le plaisir de vous annoncer le lancement de..."></textarea>
       <div class="form-group"><label>Honoraires (% du prix)</label><input type="number" step="0.01" id="fac-taux-hono" placeholder="ex: 5" oninput="_facCalcHT()"></div>
       <div class="form-group"><label>Montant HT (€)</label><input type="number" step="0.01" id="fac-ht" oninput="_facMajTotaux()"></div>
       <div class="form-group"><label>TVA (%)</label><input type="number" step="0.1" id="fac-tva-taux" value="20" oninput="_facMajTotaux()"></div>
+      <div class="form-group full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="fac-otaree" onchange="_facMajTotaux()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"><label for="fac-otaree" style="margin:0;cursor:pointer">Vente via Otaree (Otaree nous verse le montant − 629 € HT)</label></div>
     </div>
     <div id="fac-base-hint" style="font-size:12px;color:var(--muted);margin:6px 4px 0"></div>
     <div style="display:flex;justify-content:flex-end;gap:26px;margin:10px 4px 0;font-size:13px">
       <div>TVA : <strong id="fac-tva-montant">—</strong></div>
       <div>Total TTC : <strong id="fac-ttc" style="color:var(--accent)">—</strong></div>
     </div>
+    <div id="fac-otaree-bloc" style="display:none;margin:10px 4px 0;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface2);font-size:13px"></div>
     <div style="font-size:11px;color:var(--muted);margin:8px 4px 0">Saisis les coordonnées du promoteur telles qu'il te les donne — modifiables à chaque facture. Toute facture validée est enregistrée dans l'onglet Factures avec son numéro.</div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal(&#39;facture&#39;)">Annuler</button>
@@ -20309,12 +20311,31 @@ function _nextFactureNumero() {
   const n = Math.max(st.dernier || 0, ...st.emises.map(x => _numFacture(x.numero))) + 1;
   return { numero: String(n), n: n };
 }
+// Vente via Otaree : la facture garde le montant plein, et Otaree nous verse
+// ce montant moins ses frais (629 € HT) — c'est ce qui arrive sur le compte.
+const OTAREE_FRAIS_HT = 629;
+function _facOtaree(ht, taux) {
+  const h = r2((Number(ht) || 0) - OTAREE_FRAIS_HT);
+  const tva = r2(h * (Number(taux) || 0) / 100);
+  return { ht: h, tva: tva, ttc: r2(h + tva) };
+}
 function _facMajTotaux() {
   const ht = parseFloat((document.getElementById('fac-ht') || {}).value) || 0;
   const taux = parseFloat((document.getElementById('fac-tva-taux') || {}).value) || 0;
   const tva = r2(ht * taux / 100);
   const mEl = document.getElementById('fac-tva-montant'); if (mEl) mEl.textContent = fmtEur2(tva);
   const tEl = document.getElementById('fac-ttc'); if (tEl) tEl.textContent = fmtEur2(r2(ht + tva));
+  const oBloc = document.getElementById('fac-otaree-bloc');
+  if (oBloc) {
+    const viaOtaree = (document.getElementById('fac-otaree') || {}).checked && ht > 0;
+    oBloc.style.display = viaOtaree ? '' : 'none';
+    if (viaOtaree) {
+      const o = _facOtaree(ht, taux);
+      oBloc.innerHTML = '<div style="font-weight:700;margin-bottom:4px">Montant avec Otaree</div>'
+        + '<div>Montant HT − 629 € HT : <strong>' + fmtEur2(o.ht) + ' HT</strong> \u00b7 TVA : ' + fmtEur2(o.tva) + ' \u00b7 TTC : <strong>' + fmtEur2(o.ttc) + '</strong></div>'
+        + '<div style="margin-top:4px">Montant reçu sur le compte : <strong style="color:var(--accent)">' + fmtEur2(o.ttc) + '</strong></div>';
+    }
+  }
   const hint = document.getElementById('fac-base-hint');
   if (hint) {
     const prix = parseFloat((document.getElementById('fac-prix') || {}).value) || 0;
@@ -20365,7 +20386,10 @@ function onVenteLieeChange() {
   setV('fac-designation', 'Honoraires de commercialisation — ' + (v.programme || '') + (v.lot ? (' (lot ' + v.lot + ')') : '') + (v.ville ? (' — ' + v.ville) : '') + (v.client ? (' — acquéreur : ' + v.client) : '') + (Number(v.tva) === 5.5 ? ' — vente en TVA 5,5 %' : ''));
   setV('fac-prix', Number(v.prix) || '');
   setV('fac-taux-hono', Number(v.tauxHonoraires) || '');
-  setV('fac-ht', _facHtRetenu(v.prix, v.tauxHonoraires, Number(v.honoraires) || 0));
+  const base = r2((Number(v.prix) || 0) * (Number(v.tauxHonoraires) || 0) / 100);
+  const viaOtaree = base > 0 && Math.abs(base - OTAREE_FRAIS_HT - (Number(v.honoraires) || 0)) < 1;
+  setV('fac-ht', viaOtaree ? base : _facHtRetenu(v.prix, v.tauxHonoraires, Number(v.honoraires) || 0));
+  const oEl = document.getElementById('fac-otaree'); if (oEl) oEl.checked = viaOtaree;
   const nomEl = document.getElementById('fac-promo-nom');
   if (nomEl && !nomEl.value) nomEl.value = v.promoteur || '';
   _facMajTotaux();
@@ -20375,6 +20399,7 @@ function _resetFactureModal() {
   ['fac-promo-nom', 'fac-promo-adresse', 'fac-promo-siren', 'fac-promo-tva', 'fac-designation'].forEach(i => setV(i, ''));
   setV('fac-ht', ''); setV('fac-tva-taux', 20);
   setV('fac-prix', ''); setV('fac-taux-hono', '');
+  const oEl = document.getElementById('fac-otaree'); if (oEl) oEl.checked = false;
   const bh = document.getElementById('fac-base-hint'); if (bh) bh.innerHTML = '';
   const m = document.getElementById('fac-tva-montant'); if (m) m.textContent = '—';
   const t = document.getElementById('fac-ttc'); if (t) t.textContent = '—';
@@ -20418,6 +20443,7 @@ function editFacture(fid) {
   setV('fac-taux-hono', rec.tauxHono || '');
   setV('fac-ht', _facHtRetenu(rec.prixBien, rec.tauxHono, rec.ht || 0));
   setV('fac-tva-taux', rec.taux != null ? rec.taux : 20);
+  document.getElementById('fac-otaree').checked = !!rec.otaree;
   _facMajTotaux();
   document.querySelector('#modal-facture .modal-title').textContent = '✎ Facture ' + rec.numero;
   document.getElementById('modal-facture').classList.add('open');
@@ -20440,11 +20466,12 @@ function saveFacture(withPdf) {
   const tauxHono = parseFloat(document.getElementById('fac-taux-hono').value) || 0;
   const taux = parseFloat(document.getElementById('fac-tva-taux').value) || 0;
   const venteId = document.getElementById('fac-vente').value || null;
+  const otaree = document.getElementById('fac-otaree').checked;
   if (!numero || !dateF || !promo.nom) { toast('⚠ Numéro, date et promoteur requis', 'var(--warning)'); return; }
   const tva = r2(ht * taux / 100), ttc = r2(ht + tva);
   const venteLiee = venteId ? (data.ventes || []).find(x => x.id === venteId) : null;
   const dateSignature = (venteLiee && venteLiee.dateSignatureNotaire) || '';
-  const rec = { id: fid || uid(), numero: numero, date: dateF, echeance: ech, venteId: venteId, dateSignature: dateSignature, promoteur: promo, designation: designation, prixBien: prixBien, tauxHono: tauxHono, ht: ht, taux: taux, tva: tva, ttc: ttc, updatedAt: new Date().toISOString() };
+  const rec = { id: fid || uid(), numero: numero, date: dateF, echeance: ech, venteId: venteId, dateSignature: dateSignature, promoteur: promo, designation: designation, prixBien: prixBien, tauxHono: tauxHono, ht: ht, taux: taux, tva: tva, ttc: ttc, otaree: otaree, updatedAt: new Date().toISOString() };
   if (fid) {
     const idx = st.emises.findIndex(x => x.id === fid);
     if (idx !== -1) rec.createdAt = st.emises[idx].createdAt, st.emises[idx] = rec;
@@ -20475,7 +20502,7 @@ function _recToFacture(rec) {
   // Date de signature chez le notaire : lue sur la vente liée (à jour), sinon celle gardée à l'enregistrement
   const vl = rec.venteId ? (data.ventes || []).find(x => x.id === rec.venteId) : null;
   const dateSignature = (vl && vl.dateSignatureNotaire) || rec.dateSignature || '';
-  return { dateSignature: dateSignature, numero: rec.numero, dateF: rec.date, ech: rec.echeance, promo: rec.promoteur || {}, designation: rec.designation, prixBien: rec.prixBien, tauxHono: rec.tauxHono, ht: rec.ht, taux: rec.taux, tva: rec.tva, ttc: rec.ttc };
+  return { dateSignature: dateSignature, numero: rec.numero, dateF: rec.date, ech: rec.echeance, promo: rec.promoteur || {}, designation: rec.designation, prixBien: rec.prixBien, tauxHono: rec.tauxHono, ht: rec.ht, taux: rec.taux, tva: rec.tva, ttc: rec.ttc, otaree: !!rec.otaree };
 }
 function renderFactures() {
   const st = _facturationState();
@@ -20492,7 +20519,7 @@ function renderFactures() {
     + '<td>' + _esc((r.promoteur && r.promoteur.nom) || '—') + '</td>'
     + '<td style="color:var(--muted);font-size:12px">' + _esc(r.designation || '') + '</td>'
     + '<td class="num">' + fmtEur(r.ht) + '</td>'
-    + '<td class="num" style="color:var(--accent);font-weight:700">' + fmtEur(r.ttc) + '</td>'
+    + '<td class="num" style="color:var(--accent);font-weight:700">' + fmtEur(r.ttc) + (r.otaree ? '<div style="font-size:11px;color:var(--muted);font-weight:400">Otaree : reçu ' + fmtEur(_facOtaree(r.ht, r.taux).ttc) + '</div>' : '') + '</td>'
     + '<td><div style="display:flex;gap:5px;justify-content:flex-end">'
     + '<button class="btn btn-ghost btn-sm" onclick="regenFacturePDF(\'' + r.id + '\')" title="PDF"></button>'
     + '<button class="btn btn-ghost btn-sm" onclick="editFacture(\'' + r.id + '\')" title="Modifier">✎</button>'
@@ -20538,6 +20565,10 @@ function _ouvrirFacturePDF(f) {
     + '.totes{width:280px;margin-left:auto;margin-top:8px}'
     + '.totes div{display:flex;justify-content:space-between;padding:5px 0}'
     + '.totes .grand{border-top:2px solid #0d0f14;margin-top:4px;padding-top:8px;font-size:15px;font-weight:800}'
+    + '.otaree{width:280px;margin:14px 0 0 auto;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px}'
+    + '.otaree h5{font-size:11px;margin-bottom:4px}'
+    + '.otaree div{display:flex;justify-content:space-between;padding:3px 0}'
+    + '.otaree .recu{border-top:1px solid #e5e7eb;margin-top:4px;padding-top:6px;font-weight:800}'
     + '.pay{margin-top:22px;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;background:#faf9f7}'
     + '.legal{margin-top:18px;font-size:9.5px;color:#6b7280;line-height:1.5;border-top:1px solid #e5e7eb;padding-top:10px}'
     + '.btnbar{text-align:center;margin-bottom:20px}'
@@ -20552,6 +20583,7 @@ function _ouvrirFacturePDF(f) {
     + '<table><thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">P.U. HT</th><th class="num">Montant HT</th></tr></thead>'
     + '<tbody><tr><td>' + esc(f.designation) + _ligneBaseFacture(f, eur) + (f.dateSignature ? '<div class="sub">Acte signé chez le notaire le <b>' + d(f.dateSignature) + '</b></div>' : '') + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
     + '<div class="totes"><div><span>Total HT</span><span>' + eur(f.ht) + '</span></div><div><span>TVA (' + f.taux + ' %)</span><span>' + eur(f.tva) + '</span></div><div class="grand"><span>Total TTC</span><span>' + eur(f.ttc) + '</span></div></div>'
+    + (f.otaree ? (o => '<div class="otaree"><h5>Montant avec Otaree</h5><div><span>Montant HT − 629 € HT</span><span>' + eur(o.ht) + '</span></div><div><span>TVA (' + f.taux + ' %)</span><span>' + eur(o.tva) + '</span></div><div><span>Montant TTC</span><span>' + eur(o.ttc) + '</span></div><div class="recu"><span>Reçu sur le compte</span><span>' + eur(o.ttc) + '</span></div></div>')(_facOtaree(f.ht, f.taux)) : '')
     + '<div class="pay"><strong>Modalités de règlement</strong><br>Paiement à ' + E.delaiJours + ' jours — échéance le ' + d(f.ech) + '.<br>Par virement : IBAN ' + esc(E.iban) + ' — BIC ' + esc(E.bic) + '.</div>'
     + '<div class="legal">' + esc(E.nom) + ' — ' + esc(E.forme) + ' — Siège : ' + esc(E.adresse) + ' — ' + esc(E.rcs) + ' — SIREN ' + esc(E.siren) + ' — TVA intracommunautaire ' + esc(E.tva) + ' — Carte professionnelle Transactions ' + esc(E.cpi) + '.<br>TVA acquittée d\'après les encaissements. Facture émise conformément aux articles 289 et suivants du CGI.</div>'
     + '</body></html>';
