@@ -18,8 +18,8 @@ def v(nom, recus, tr, trg, pool, env, ech, coh, **k):
 def coh(ent, joints, sel, rdv, av, ve, cl, zero, j1, j2, j3, oub, t, dn, dj, tn=0, tj=0, pn=0, pj=0, delai=None):
     return dict(ent=ent, joints=joints, sel=sel, rdv=rdv, av=av, ve=ve, cl=cl, zero=zero, j1=j1, j2=j2, j3=j3, oub=oub, touche24=t, dir_n=dn, dir_j=dj, tr_n=tn, tr_j=tj, pool_n=pn, pool_j=pj, delai2=delai)
 DONNEES = {'debut': '2026-09-30T22:00:00Z', 'fin': '2026-10-31T23:00:00Z', 'coupure': '2026-10-26T00:00:00+01:00', 'calcule_le': '2026-11-02T14:05:00Z', 'vendeurs': [
-    v('Anais', 146, 42, 40, 22, 4, 27, coh(157, 56, 31, 33, 24, 3, 7, 30, 58, 5, 1, 73, 105, 113, 48, 27, 6, 17, 2), ventes=3, hono=12000, sans_suite=37, vus=77, suite7=60,
-      pf={'actifs': 355, 'retards': 101, 'sr': 187, 'sr0': 28, 'fin': 0, 'fin7': 0, 'rd': 58, 'rd7': 48, 'pat7': 57, 'veille': 44}),
+    v('Anais', 146, 42, 40, 22, 4, 27, coh(157, 56, 31, 33, 24, 3, 7, 30, 58, 5, 1, 73, 105, 113, 48, 27, 6, 17, 2), ventes=3, hono=12000, sans_suite=37, vus=77, suite7=60, reports=200,
+      pf={'actifs': 355, 'retards': 101, 'repousses': 12, 'sr': 187, 'sr0': 28, 'fin': 0, 'fin7': 0, 'rd': 58, 'rd7': 48, 'pat7': 57, 'veille': 44}),
     v('Jules', 67, 28, 25, 60, 1, 6, coh(131, 44, 35, 25, 20, 0, 5, 14, 40, 20, 8, 51, 73, 57, 31, 19, 8, 55, 5, 4.1), vus=54, suite7=52),
     v('Nour', 0, 0, 0, 0, 0, 17, {}, actions=0, cal={}, clients=0, ess=0, app=0, selections={'env': 0, 'clients': 0, 'ouv': 0, 'reac': 0}),
     v('Madina', 37, 43, 41, 20, 5, 0, coh(78, 54, 28, 16, 4, 0, 4, 8, 9, 3, 0, 9, 59, 29, 22, 29, 21, 20, 11)),
@@ -71,7 +71,8 @@ with sync_playwright() as p:
         opts = page.evaluate("[...document.getElementById('rp-vendeur').options].map(o => o.textContent)")
         if opts != ['Anaïs', 'Jules', 'Madina', 'Théo (gérant)']: erreurs.append(f'{nom} : liste : {opts}')
         t = page.inner_text('#rp-corps')
-        for a in ('146', 'N°1 sur les ventes', 'Rappeler au-delà du premier jour', 'Ne pas laisser filer les clients vus', '73', 'leads sans nouvelle', '4 transférés à un collègue'):
+        for a in ('146', 'N°1 sur les ventes', 'Rappeler au-delà du premier jour', 'Ne pas laisser filer les clients vus', '73', 'leads sans nouvelle', '4 transférés à un collègue', 'CLIENTS TRAVAILLÉS PAR JOUR', '163 passages sur des clients',
+              '200 dates de rappel repoussées', 'Appeler plutôt que repousser', 'leads repoussés 3 fois sans contact'):
             if a not in t: erreurs.append(f'{nom} : Anaïs, absent : {a}')
         page.select_option('#rp-vendeur', 'Jules')
         t = page.inner_text('#rp-corps')

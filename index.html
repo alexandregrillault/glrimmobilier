@@ -22443,7 +22443,8 @@ function rpAxes(x) {
   if (!x.ventes) o.push(['Aller chercher la vente', 'Pas de vente ce mois-ci, pour ' + _rpPl(x.pf.rd + x.pf.fin, 'dossier') + ' avancés.']);
   if (x.sans_suite >= 5) o.push(['Ne pas laisser filer les clients vus', x.sans_suite + ' clients vus sur ' + x.vus + ' n\'ont ni action depuis 14 jours ni rappel à venir.']);
   if (x.essayes >= 5 && x.m.relance < 25) o.push(['Rappeler au-delà du premier jour', 'Sur ' + x.essayes + ' leads essayés et non joints, ' + c.j1 + ' ne l\'ont été qu\'un seul jour.']);
-  if (x.m.ajour != null && x.m.ajour < 85) o.push(['Reprendre la main sur le portefeuille', x.pf.retards + ' retards sur ' + x.pf.actifs + ' leads actifs.']);
+  if (x.reports >= 30 && x.reports > x.actions / 2) o.push(['Appeler plutôt que repousser', x.reports + ' dates de rappel repoussées sans contact noté, pour ' + x.actions + ' passages sur des clients.']);
+  if (x.m.ajour != null && x.m.ajour < 85) o.push(['Reprendre la main sur le portefeuille', x.pf.retards + ' retards sur ' + x.pf.actifs + ' leads actifs' + (x.pf.repousses ? ', dont ' + x.pf.repousses + ' repoussés 3 fois sans contact' : '') + '.']);
   if (x.r.touche >= 4) o.push(['Répondre plus vite aux nouveaux leads', Math.round(x.m.touche) + ' % des leads touchés sous 24 h.']);
   if (x.selections.env >= 10 && x.ouvertes < 75) o.push(['Des sélections plus ciblées', Math.round(x.ouvertes) + ' % ouvertes, et ' + Math.round(x.reaction) + ' % font réagir le client.']);
   if (x.ech >= 5) o.push(['Garder ses leads', x.ech + ' leads partis à l\'échéance des 14 jours.']);
@@ -22455,7 +22456,7 @@ function rpAxes(x) {
   return o.slice(0, 3);
 }
 function rpPrios(x) {
-  return [[x.pf.fin7, 'dossiers en finalisation à relancer'], [x.sans_suite, 'clients vus à recontacter en premier'],
+  return [[x.pf.fin7, 'dossiers en finalisation à relancer'], [x.pf.repousses, 'leads repoussés 3 fois sans contact à appeler'], [x.sans_suite, 'clients vus à recontacter en premier'],
     [x.coh.oub, 'leads sans nouvelle depuis 7 jours à rappeler ou à classer'], [x.pf.rd7, 'retours documentation sans action depuis 7 jours'],
     [x.pf.retards, 'leads en retard à remettre à jour'], [x.pf.pat7, 'leads à traiter avant de les perdre : paternité finie sous 7 jours'],
     [x.pf.sr0, 'leads en Sans réponse à appeler une première fois']].filter(p => p[0] > 0).slice(0, 3);
@@ -22477,7 +22478,7 @@ function _rpCalendrier(x) {
   for (let i = 0; i < vide; i++) cases.push('<div style="background:none"></div>');
   for (let j = 1; j <= nb; j++) {
     const n = (x.cal || {})[_rp.data.mois.slice(0, 8) + String(j).padStart(2, '0')] || 0;
-    cases.push(`<div class="rp-j${n === 0 ? 0 : n <= 20 ? 1 : n <= 40 ? 2 : n <= 60 ? 3 : 4}" title="${j} : ${n} actions">${n}</div>`);
+    cases.push(`<div class="rp-j${n === 0 ? 0 : n <= 10 ? 1 : n <= 20 ? 2 : n <= 30 ? 3 : 4}" title="${j} : ${n} client${n > 1 ? 's' : ''} travaillé${n > 1 ? 's' : ''}">${n}</div>`);
   }
   return `<div class="rp-cal">${cases.join('')}</div>`;
 }
@@ -22518,11 +22519,13 @@ function _rpPerso(x) {
     ${_rpAide('<b>Leads reçus</b> : nouveaux leads arrivés directement dans le mois. ' + (g ? '<b>Transférés envoyés</b> : leads réattribués à un commercial. ' : '<b>Transférés reçus</b> : leads réattribués par un collègue ou un gérant. ') + '<b>Repris au pool</b> : leads libres repris. ' + (g ? '<b>Échus</b>' : '<b>Partis</b> : transférés à un collègue, ou échus') + ' : repartis au pool faute de suite sous 14 jours.')}
     <div class="rp-g2">
       <div><div class="rp-lab">${g ? 'Le parcours des leads que tu as gardés' : 'Le parcours de tes leads'}</div><h2>${c.joints} leads joints sur ${c.ent}</h2><div style="margin-top:10px">${_rpParcours(c, c.ve)}</div>${_rpAideParcours(g)}</div>
-      <div><div class="rp-lab">Actions par jour dans le CRM</div><h2>${x.actions} actions sur ${x.jours_actifs} jours</h2>${_rpCalendrier(x)}${_rpAide('Changements de statut et activités notés dans le CRM, jour par jour. Plus la case est foncée, plus la journée a été chargée.')}</div>
+      <div><div class="rp-lab">Clients travaillés par jour</div><h2>${x.actions} passages sur des clients en ${x.jours_actifs} jours</h2>${_rpCalendrier(x)}
+        <div class="rp-faits"><div><b>${x.reports || 0}</b> dates de rappel repoussées sans contact noté</div></div>
+        ${_rpAide('Un client compte une fois par jour s\'il a eu un changement de statut, un « Pas de réponse » noté ou une sélection envoyée. Repousser une date de rappel sans rien d\'autre ne compte pas : c\'est le chiffre à part, sous le calendrier. Plus la case est foncée, plus la journée a été chargée.')}</div>
     </div>
     <div class="rp-carte"><div class="rp-lab">Ce que deviennent ${g ? 'les ' + c.ent + ' leads gardés' : 'tes ' + c.ent + ' leads'}</div><h2>${x.essayes} leads essayés sans être joints, ${c.j2 + c.j3} rappelés un autre jour</h2>${_rpDevenir(c)}
       <div class="rp-faits"><div><b>${x.ess}</b> essais sans réponse notés dans le mois</div><div><b>${x.app ? (x.ess / x.app).toFixed(1).replace('.', ',') : '0'}</b> essai par lead appelé (${x.app} leads)</div><div><b>${c.oub}</b> leads non joints sans nouvelle depuis 7 jours</div></div>${_rpAideDevenir()}</div>
-    <div class="rp-carte"><div class="rp-lab">Ta place ${g ? 'face aux' : 'parmi les'} ${tous.length} commerciaux actifs · à droite, c'est mieux</div><div style="margin-top:8px">${lignes}</div>${_rpAide(`Point doré : ${_rpNom(x)} ; points gris : les commerciaux actifs du mois. Le rang est à droite. <b>Touchés sous 24 h</b> : première action ou appel noté dans la journée. <b>Directs joints</b> : part des leads reçus directement qui ont été joints. <b>Rappelés sur 2 jours</b> : part des non joints essayés au moins deux jours différents. <b>Suite sous 7 jours</b> : action ou sélection dans la semaine après le dernier rendez-vous. <b>À jour</b> : leads actifs sans date de rappel dépassée.`)}</div>
+    <div class="rp-carte"><div class="rp-lab">Ta place ${g ? 'face aux' : 'parmi les'} ${tous.length} commerciaux actifs · à droite, c'est mieux</div><div style="margin-top:8px">${lignes}</div>${_rpAide(`Point doré : ${_rpNom(x)} ; points gris : les commerciaux actifs du mois. Le rang est à droite. <b>Touchés sous 24 h</b> : premier changement de statut, « Pas de réponse » noté ou sélection dans la journée ; poser une date ne suffit pas. <b>Directs joints</b> : part des leads reçus directement qui ont été joints. <b>Rappelés sur 2 jours</b> : part des non joints essayés au moins deux jours différents. <b>Suite sous 7 jours</b> : changement de statut, « Pas de réponse » noté ou sélection dans la semaine après le dernier rendez-vous. <b>À jour</b> : leads actifs dont la date de rappel n\'est pas dépassée et qui n\'ont pas été repoussés 3 fois sans contact.`)}</div>
     <div class="rp-g2"><div><div class="rp-lab">Tes points forts</div>${it(forts)}</div><div><div class="rp-lab">Tes sujets d'amélioration</div>${axes.length ? it(axes) : '<div class="rp-it"><p>Rien de marquant ce mois-ci.</p></div>'}</div></div>
     ${_rpAide('Choisis automatiquement à partir des chiffres du mois : ce qui place en tête de l\'équipe d\'un côté, ce qui reste sous les seuils de l\'autre.')}
     ${prios.length ? `<div class="rp-prios"><div class="rp-lab">Tes priorités</div><div>${prios.map(([n, t]) => `<p><b>${n}</b>${t}</p>`).join('')}</div>${_rpAide('Situation du jour dans le portefeuille : les trois chantiers les plus urgents.')}</div>` : ''}
