@@ -3158,7 +3158,7 @@ Nous avons le plaisir de vous annoncer le lancement de..."></textarea>
       <div class="form-group"><label>Honoraires (% du prix)</label><input type="number" step="0.01" id="fac-taux-hono" placeholder="ex: 5" oninput="_facCalcHT()"></div>
       <div class="form-group"><label>Montant HT (€)</label><input type="number" step="0.01" id="fac-ht" oninput="_facMajTotaux()"></div>
       <div class="form-group"><label>TVA (%)</label><input type="number" step="0.1" id="fac-tva-taux" value="20" oninput="_facMajTotaux()"></div>
-      <div class="form-group full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="fac-otaree" onchange="_facMajTotaux()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"><label for="fac-otaree" style="margin:0;cursor:pointer">Vente via Otaree (Otaree nous verse le montant − 629 € HT)</label></div>
+      <div class="form-group full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="fac-otaree" onchange="_facMajTotaux()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)"><label for="fac-otaree" style="margin:0;cursor:pointer">Vente via Otaree (frais Otaree : 629 € HT)</label></div>
     </div>
     <div id="fac-base-hint" style="font-size:12px;color:var(--muted);margin:6px 4px 0"></div>
     <div style="display:flex;justify-content:flex-end;gap:26px;margin:10px 4px 0;font-size:13px">
@@ -20311,13 +20311,16 @@ function _nextFactureNumero() {
   const n = Math.max(st.dernier || 0, ...st.emises.map(x => _numFacture(x.numero))) + 1;
   return { numero: String(n), n: n };
 }
-// Vente via Otaree : la facture garde le montant plein, et Otaree nous verse
-// ce montant moins ses frais (629 € HT) — c'est ce qui arrive sur le compte.
+// Vente via Otaree : la facture garde le montant plein (HT + TVA = TTC) ;
+// Otaree retient ses frais (629 € HT + TVA = TTC Otaree) et nous verse
+// TTC facture − TTC Otaree : c'est ce qui arrive sur le compte.
 const OTAREE_FRAIS_HT = 629;
 function _facOtaree(ht, taux) {
-  const h = r2((Number(ht) || 0) - OTAREE_FRAIS_HT);
-  const tva = r2(h * (Number(taux) || 0) / 100);
-  return { ht: h, tva: tva, ttc: r2(h + tva) };
+  const t = Number(taux) || 0;
+  const ttc = r2((Number(ht) || 0) * (1 + t / 100));
+  const fTva = r2(OTAREE_FRAIS_HT * t / 100);
+  const fTtc = r2(OTAREE_FRAIS_HT + fTva);
+  return { ttc: ttc, fraisHt: OTAREE_FRAIS_HT, fraisTva: fTva, fraisTtc: fTtc, recu: r2(ttc - fTtc) };
 }
 function _facMajTotaux() {
   const ht = parseFloat((document.getElementById('fac-ht') || {}).value) || 0;
@@ -20331,9 +20334,8 @@ function _facMajTotaux() {
     oBloc.style.display = viaOtaree ? '' : 'none';
     if (viaOtaree) {
       const o = _facOtaree(ht, taux);
-      oBloc.innerHTML = '<div style="font-weight:700;margin-bottom:4px">Montant avec Otaree</div>'
-        + '<div>Montant HT − 629 € HT : <strong>' + fmtEur2(o.ht) + ' HT</strong> \u00b7 TVA : ' + fmtEur2(o.tva) + ' \u00b7 TTC : <strong>' + fmtEur2(o.ttc) + '</strong></div>'
-        + '<div style="margin-top:4px">Montant reçu sur le compte : <strong style="color:var(--accent)">' + fmtEur2(o.ttc) + '</strong></div>';
+      oBloc.innerHTML = '<div>Frais Otaree : ' + fmtEur2(o.fraisHt) + ' HT + ' + fmtEur2(o.fraisTva) + ' TVA = <strong>' + fmtEur2(o.fraisTtc) + ' TTC</strong></div>'
+        + '<div style="margin-top:4px">Montant reçu sur le compte : ' + fmtEur2(o.ttc) + ' − ' + fmtEur2(o.fraisTtc) + ' = <strong style="color:var(--accent)">' + fmtEur2(o.recu) + '</strong></div>';
     }
   }
   const hint = document.getElementById('fac-base-hint');
@@ -20519,7 +20521,7 @@ function renderFactures() {
     + '<td>' + _esc((r.promoteur && r.promoteur.nom) || '—') + '</td>'
     + '<td style="color:var(--muted);font-size:12px">' + _esc(r.designation || '') + '</td>'
     + '<td class="num">' + fmtEur(r.ht) + '</td>'
-    + '<td class="num" style="color:var(--accent);font-weight:700">' + fmtEur(r.ttc) + (r.otaree ? '<div style="font-size:11px;color:var(--muted);font-weight:400">Otaree : reçu ' + fmtEur(_facOtaree(r.ht, r.taux).ttc) + '</div>' : '') + '</td>'
+    + '<td class="num" style="color:var(--accent);font-weight:700">' + fmtEur(r.ttc) + (r.otaree ? '<div style="font-size:11px;color:var(--muted);font-weight:400">Otaree : reçu ' + fmtEur(_facOtaree(r.ht, r.taux).recu) + '</div>' : '') + '</td>'
     + '<td><div style="display:flex;gap:5px;justify-content:flex-end">'
     + '<button class="btn btn-ghost btn-sm" onclick="regenFacturePDF(\'' + r.id + '\')" title="PDF"></button>'
     + '<button class="btn btn-ghost btn-sm" onclick="editFacture(\'' + r.id + '\')" title="Modifier">✎</button>'
@@ -20583,7 +20585,7 @@ function _ouvrirFacturePDF(f) {
     + '<table><thead><tr><th>Désignation</th><th class="num">Qté</th><th class="num">P.U. HT</th><th class="num">Montant HT</th></tr></thead>'
     + '<tbody><tr><td>' + esc(f.designation) + _ligneBaseFacture(f, eur) + (f.dateSignature ? '<div class="sub">Acte signé chez le notaire le <b>' + d(f.dateSignature) + '</b></div>' : '') + '</td><td class="num">1</td><td class="num">' + eur(f.ht) + '</td><td class="num">' + eur(f.ht) + '</td></tr></tbody></table>'
     + '<div class="totes"><div><span>Total HT</span><span>' + eur(f.ht) + '</span></div><div><span>TVA (' + f.taux + ' %)</span><span>' + eur(f.tva) + '</span></div><div class="grand"><span>Total TTC</span><span>' + eur(f.ttc) + '</span></div></div>'
-    + (f.otaree ? (o => '<div class="otaree"><h5>Montant avec Otaree</h5><div><span>Montant HT − 629 € HT</span><span>' + eur(o.ht) + '</span></div><div><span>TVA (' + f.taux + ' %)</span><span>' + eur(o.tva) + '</span></div><div><span>Montant TTC</span><span>' + eur(o.ttc) + '</span></div><div class="recu"><span>Reçu sur le compte</span><span>' + eur(o.ttc) + '</span></div></div>')(_facOtaree(f.ht, f.taux)) : '')
+    + (f.otaree ? (o => '<div class="otaree"><div><span>Frais Otaree HT</span><span>' + eur(o.fraisHt) + '</span></div><div><span>TVA (' + f.taux + ' %)</span><span>' + eur(o.fraisTva) + '</span></div><div><span>Frais Otaree TTC</span><span>' + eur(o.fraisTtc) + '</span></div><div class="recu"><span>Reçu sur le compte (TTC − frais)</span><span>' + eur(o.recu) + '</span></div></div>')(_facOtaree(f.ht, f.taux)) : '')
     + '<div class="pay"><strong>Modalités de règlement</strong><br>Paiement à ' + E.delaiJours + ' jours — échéance le ' + d(f.ech) + '.<br>Par virement : IBAN ' + esc(E.iban) + ' — BIC ' + esc(E.bic) + '.</div>'
     + '<div class="legal">' + esc(E.nom) + ' — ' + esc(E.forme) + ' — Siège : ' + esc(E.adresse) + ' — ' + esc(E.rcs) + ' — SIREN ' + esc(E.siren) + ' — TVA intracommunautaire ' + esc(E.tva) + ' — Carte professionnelle Transactions ' + esc(E.cpi) + '.<br>TVA acquittée d\'après les encaissements. Facture émise conformément aux articles 289 et suivants du CGI.</div>'
     + '</body></html>';
