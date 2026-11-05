@@ -3355,7 +3355,8 @@ window.addEventListener('beforeunload', function(e){
   e.returnValue = '';
 });
 
-function signOut(){ _clearSession(); location.reload(); }
+// La carte des programmes garde la pige dans le navigateur (05/11/2026) : on l'efface à la déconnexion.
+function signOut(){ _clearSession(); try { indexedDB.deleteDatabase('glr-carte'); } catch (e) {} location.reload(); }
 
 function _showLogin(msg){
   const ov = document.getElementById('login-overlay');

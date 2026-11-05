@@ -338,11 +338,31 @@ const SB_URL = 'https://hydqfbxdtpmbuooexekp.supabase.co', SB_KEY = 'eyJhbGciOiJ
 const __ov = document.createElement('div'); __ov.id = 'chargement'; __ov.innerHTML = '<div><b>Carte des programmes</b><br>Chargement du stock promoteurs…</div>';
 __ov.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:#f5f6f8;font:15px/1.5 system-ui,sans-serif;color:#1f2937;text-align:center';
 document.body.appendChild(__ov);
+// Mémoire du navigateur (05/11/2026) : la carte (12 Mo) est gardée sur l'appareil tant que la pige
+// n'a pas changé. À chaque ouverture, on demande seulement l'étiquette de la copie prête de la base
+// (pige_carte_version, quelques octets) ; si elle est identique, rien n'est retéléchargé.
+// Sans session valide (401/403), la mémoire est effacée et rien n'est affiché.
+const __IDB = 'glr-carte', __ST = 'donnees';
+function __idb() { return new Promise((ok, ko) => { const r = indexedDB.open(__IDB, 1); r.onupgradeneeded = () => r.result.createObjectStore(__ST); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); }); }
+async function __memLire() { try { const db = await __idb(); return await new Promise(ok => { const q = db.transaction(__ST).objectStore(__ST).get('carte'); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); } catch (e) { return null; } }
+async function __memEcrire(v) { try { const db = await __idb(); db.transaction(__ST, 'readwrite').objectStore(__ST).put(v, 'carte'); } catch (e) {} }
+function __memEffacer() { try { indexedDB.deleteDatabase(__IDB); } catch (e) {} }
+async function __rpc(nom, bearer) {
+  const r = await fetch(SB_URL + '/rest/v1/rpc/' + nom, { method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + bearer, 'Content-Type': 'application/json' }, body: '{}' });
+  if (r.status === 401 || r.status === 403) { __memEffacer(); throw new Error('Session expirée, reconnecte-toi au CRM'); }
+  if (!r.ok) throw new Error('Supabase ' + r.status);
+  return r.text();
+}
 async function __loadData() {
   const bearer = (await jetonSession()) || SB_KEY;  // session du CRM, renouvelée si besoin (map_template.html, 26/10/2026)
-  const r = await fetch(SB_URL + '/rest/v1/rpc/pige_carte', { method: 'POST', headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + bearer, 'Content-Type': 'application/json' }, body: '{}' });
-  if (!r.ok) throw new Error('Supabase ' + r.status);
-  const d = await r.json(); d.meta = d.meta || {}; return d;
+  const [mem, version] = await Promise.all([__memLire(), __rpc('pige_carte_version', bearer).then(t => JSON.parse(t))]);
+  let texte;
+  if (mem && version && mem.version === version) texte = mem.texte;
+  else {
+    texte = await __rpc('pige_carte', bearer);
+    if (version) __memEcrire({ version, texte });
+  }
+  const d = JSON.parse(texte); d.meta = d.meta || {}; return d;
 }
 async function __loadGeo() {
   const g = {};
