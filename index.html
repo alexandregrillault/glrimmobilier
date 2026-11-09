@@ -9617,6 +9617,7 @@ function eqOuvrirFiche(id) {
     return;
   }
   _eqFicheId = id;
+  delete _denonc[id];  // dénonciations relues à chaque ouverture de la fiche
   let panel = document.getElementById('eq-fiche-panel');
   if (!panel) {
     panel = document.createElement('div');
@@ -10392,6 +10393,8 @@ ${(() => {
 
     ${eqFicheSelectionsHtml(l)}
 
+    ${eqFicheDenonciationsHtml(l)}
+
     ${eqSimulationsHtml(l)}
 
     <div onclick="eqCriteresBasculer()" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:14px 0 8px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">
@@ -10672,6 +10675,108 @@ function plaqGenerer(contactId) {
 }
 
 // Bloc "Sélections envoyées" de la fiche client : lien reçu, aperçu sans fausser le suivi, détail des avis
+// ---- Dénonciations (demande d'Alex du 09/11/2026)
+// Le robot (glr-pige/robot/denonciation_auto.py) dénonce chaque lead sur les programmes Immo-Lead
+// de ses villes et note tout dans la table denonciations. Le CRM le montre là où ça compte :
+// sur la fiche du client, et sur chaque lot à la composition d'une sélection — l'envoi n'est
+// jamais bloqué, on prévient seulement (décision d'Alex du 09/11/2026).
+let _denonc = {};               // contact_id → lignes du registre (hors essais)
+const _denoncEnCours = {};
+function denoncCharger(contactId, apres) {
+  if (!contactId || _denoncEnCours[contactId]) return;
+  _denoncEnCours[contactId] = true;
+  fetch(SUPABASE_URL + '/rest/v1/denonciations?select=compte,promoteur,programme,ville,statut,fait_le,suivi_le,detail&statut=neq.essai&contact_id=eq.' + encodeURIComponent(contactId) + '&order=fait_le.desc&limit=200',
+    { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER } })
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => { _denonc[contactId] = Array.isArray(rows) ? rows : []; if (apres) apres(); })
+    .catch(() => { _denonc[contactId] = []; })
+    .finally(() => { _denoncEnCours[contactId] = false; });
+}
+// Nom de programme comparable (accents, apostrophes, « (92) » des listes Wemo)
+function _denoncNorm(t) {
+  return _pnorm(t).replace(/[’`]/g, "'").replace(/\s*\(\d{2,5}\)\s*$/, '').replace(/[^a-z0-9']+/g, ' ').trim();
+}
+const DENONC_RANG = { acceptee: 6, envoyee: 5, deja_connu: 4, refusee: 4, a_faire_main: 3, echec: 1 };
+// Par programme, la dénonciation qui compte quand il y a eu plusieurs tentatives
+function denoncParProgramme(contactId) {
+  const m = {};
+  (_denonc[contactId] || []).forEach(d => {
+    const k = _denoncNorm(d.programme);
+    if (k && (!m[k] || (DENONC_RANG[d.statut] || 0) > (DENONC_RANG[m[k].statut] || 0))) m[k] = d;
+  });
+  return m;
+}
+function denoncEtat(d) {   // [libellé, couleur]
+  if (!d || d.statut === 'echec') return ['Pas encore dénoncé', 'var(--warning)'];
+  const j = d.fait_le ? new Date(d.fait_le).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
+  if (d.statut === 'acceptee') return ['Dénoncé le ' + j + ', pris en charge', 'var(--success)'];
+  if (d.statut === 'envoyee') return ['Dénoncé le ' + j, 'var(--success)'];
+  if (d.statut === 'deja_connu' || d.statut === 'refusee') return ['Déjà connu du promoteur', 'var(--danger)'];
+  if (d.statut === 'a_faire_main') return ['À dénoncer à la main', 'var(--warning)'];
+  return ['Pas encore dénoncé', 'var(--warning)'];
+}
+function denoncPastille(d) {
+  const [txt, c] = denoncEtat(d);
+  const titre = d ? (d.statut === 'envoyee' ? 'Envoyée au promoteur, en attente de sa prise en charge' : (d.detail || '')) : 'Aucune dénonciation enregistrée pour ce programme';
+  return `<span title="${_vEsc(titre)}" style="display:inline-block;font-size:10.5px;line-height:1.5;padding:0 8px;border-radius:20px;border:1px solid ${c};color:${c};white-space:nowrap;vertical-align:middle">${_vEsc(txt)}</span>`;
+}
+function eqFicheDenonciationsHtml(l) {
+  if (!(l.id in _denonc)) {
+    denoncCharger(l.id, () => { if (_eqFicheId === l.id && (_denonc[l.id] || []).length) _eqFicheRender(); });
+    return '';
+  }
+  const liste = Object.values(denoncParProgramme(l.id))
+    .sort((a, b) => (a.ville || '').localeCompare(b.ville || '', 'fr') || (a.programme || '').localeCompare(b.programme || '', 'fr'));
+  if (!liste.length) return '';
+  const n = (st) => liste.filter(d => st.includes(d.statut)).length;
+  const resume = [
+    n(['envoyee', 'acceptee']) ? n(['envoyee', 'acceptee']) + ' dénoncé' + (n(['envoyee', 'acceptee']) > 1 ? 's' : '') : '',
+    n(['deja_connu', 'refusee']) ? n(['deja_connu', 'refusee']) + ' déjà connu' + (n(['deja_connu', 'refusee']) > 1 ? 's' : '') : '',
+    n(['a_faire_main']) ? n(['a_faire_main']) + ' à faire à la main' : ''
+  ].filter(Boolean).join(' · ');
+  return `<div style="margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px">
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <span style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">Dénonciations</span>
+      <span style="font-size:11.5px;color:var(--muted)">${_vEsc(resume)}</span>
+    </div>
+    ${liste.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:12.5px;padding:6px 0;border-top:1px solid var(--border)">
+      <span><strong>${_vEsc(d.programme || '')}</strong> <span style="color:var(--muted)">· ${_vEsc(d.promoteur || d.compte || '')}${d.ville ? ' · ' + _vEsc(d.ville) : ''}</span></span>
+      ${denoncPastille(d)}
+    </div>`).join('')}
+  </div>`;
+}
+// Sélection : pastille sur chaque lot, et résumé au-dessus des boutons (prévient, ne bloque pas)
+function _selDenoncPastille(b) {
+  const id = _selCtx && _selCtx.lead && _selCtx.lead.id;
+  if (!id || !(id in _denonc)) return '';
+  return ' ' + denoncPastille(denoncParProgramme(id)[_denoncNorm(_selNomProgramme(b))]);
+}
+function _selDenoncResume() {
+  const el = document.getElementById('sel-denonc-resume');
+  const id = _selCtx && _selCtx.lead && _selCtx.lead.id;
+  if (!el) return;
+  if (!id || !(id in _denonc) || !_selCtx.libres.length) { el.innerHTML = ''; return; }
+  const m = denoncParProgramme(id);
+  const vus = {}, manquants = [], connus = [];
+  _selCtx.libres.forEach(b => {
+    const nom = _selNomProgramme(b), k = _denoncNorm(nom);
+    if (!k || vus[k]) return;
+    vus[k] = true;
+    const d = m[k];
+    if (d && (d.statut === 'deja_connu' || d.statut === 'refusee')) connus.push(nom);
+    else if (!d || !['envoyee', 'acceptee'].includes(d.statut)) manquants.push(nom);
+  });
+  if (!manquants.length && !connus.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--success);margin:0 0 12px">Tous les programmes de cette sélection sont dénoncés.</div>';
+    return;
+  }
+  const lignes = [];
+  if (manquants.length) lignes.push((manquants.length > 1 ? manquants.length + ' programmes pas encore dénoncés : ' : 'Programme pas encore dénoncé : ') + manquants.map(_vEsc).join(', ') + '.');
+  if (connus.length) lignes.push('Déjà connu du promoteur, commission non garantie : ' + connus.map(_vEsc).join(', ') + '.');
+  el.innerHTML = `<div style="font-size:12px;color:var(--warning);border:1px solid var(--warning);border-radius:9px;padding:9px 12px;margin:0 0 12px;line-height:1.5">
+    ${lignes.join('<br>')}<br><span style="color:var(--muted)">L'envoi reste possible.</span></div>`;
+}
+
 function eqFicheSelectionsHtml(l) {
   const sels = (_eqSelectionsAll || []).filter(s => s.contact_id === l.id);
   if (!sels.length) return `<div style="margin-top:14px;padding:12px 14px;border:1px dashed var(--border);border-radius:11px;font-size:12.5px;color:var(--muted)">
@@ -14040,6 +14145,7 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
       </label>
     </div>
     <button onclick="selAjouterLibre()" style="background:var(--surface2);border:1px dashed var(--border);border-radius:9px;padding:7px 14px;color:var(--text);font-size:12px;cursor:pointer;margin-bottom:18px">+ Ajouter ce lot</button>
+    <div id="sel-denonc-resume"></div>
     <div style="display:flex;justify-content:flex-end;gap:10px">
       <button onclick="_selAnnuler()" class="btn btn-secondary">Annuler</button>
       <button id="sel-btn-valider" onclick="selCreer()" class="btn">Créer la sélection</button>
@@ -14047,6 +14153,9 @@ async function eqOuvrirSelection(contactId, tokenEdition) {
   </div>`;
   // Clic à côté : on ne ferme pas — une sélection en cours ne doit pas sauter
   document.body.appendChild(div);
+  // Dénonciations du client, relues à chaque ouverture : pastille sur chaque lot (09/11/2026)
+  delete _denonc[l.id];
+  denoncCharger(l.id, () => { if (_selCtx && _selCtx.lead && _selCtx.lead.id === l.id) selAjouterLibreRefresh(); });
   _selCtx.adresse = _selAdresseInit(l, _selCtx.edition ? selEdit : null);
   _selAdresseRender();
   if (_selCtx.edition) {
@@ -15242,6 +15351,7 @@ function _selFleche(sens, actif, onclick, titre) {
 function selAjouterLibreRefresh() {
   const el = document.getElementById('sel-libres');
   if (!el) return;
+  _selDenoncResume();
   const groupes = _selOrdreNormaliser();
   const plusieurs = groupes.length > 1;
   let i = -1;
@@ -15264,7 +15374,7 @@ function selAjouterLibreRefresh() {
         ? _selDocsCarteBadges(b, i)
         : (nDocs ? '<span title="' + _vEsc((Array.isArray(b.docs) ? b.docs : [{ nom: 'Fiche du lot' }]).map(d => d.nom).join('\n')) + '" style="color:var(--muted)">' + nDocs + ' document' + (nDocs > 1 ? 's' : '') + '</span>' : '<span style="color:var(--warning)">aucun document</span>');
       return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)">
-      <span>${fleches}<strong>${_vEsc(b.titre)}</strong>${b.ville ? ' — ' + _vEsc(b.ville) : ''}${b.prix ? ' · ' + _vEsc(b.prix) : ''}${b.typologies && b.typologies.length ? ' · ' + _vEsc(b.typologies[0]) : ''}${b.surface ? ' · ' + _vEsc(b.surface) : ''}${b.prixOptions && b.prixOptions.length > 1 ? ' · <span style="color:var(--success)">' + b.prixOptions.length + ' régimes de TVA</span>' : ''}${eqRemisesListe(b).length ? ' · <span style="color:var(--accent)">' + eqRemisesListe(b).map(_selRemiseTexte).join(' · ') + '</span>' : ''} <span style="font-size:11px;opacity:.8">${badges}</span></span>
+      <span>${fleches}<strong>${_vEsc(b.titre)}</strong>${b.ville ? ' — ' + _vEsc(b.ville) : ''}${b.prix ? ' · ' + _vEsc(b.prix) : ''}${b.typologies && b.typologies.length ? ' · ' + _vEsc(b.typologies[0]) : ''}${b.surface ? ' · ' + _vEsc(b.surface) : ''}${b.prixOptions && b.prixOptions.length > 1 ? ' · <span style="color:var(--success)">' + b.prixOptions.length + ' régimes de TVA</span>' : ''}${eqRemisesListe(b).length ? ' · <span style="color:var(--accent)">' + eqRemisesListe(b).map(_selRemiseTexte).join(' · ') + '</span>' : ''} <span style="font-size:11px;opacity:.8">${badges}</span>${_selDenoncPastille(b)}</span>
       <span style="white-space:nowrap">
         <button onclick="selAdresseLot(${i})" title="Adresse du programme" style="background:none;border:1px dashed ${b.adresseOk ? 'var(--success)' : 'var(--warning)'};border-radius:20px;padding:1px 9px;color:${b.adresseOk ? 'var(--success)' : 'var(--warning)'};font-size:11px;cursor:pointer;margin-right:4px">${b.adresseOk ? 'Adresse ✓' : 'Adresse ?'}</button>
         <button onclick="selRemiseLot(${i})" title="Remise ou avantage négocié" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:1px 9px;color:var(--muted);font-size:11px;cursor:pointer;margin-right:4px">Remise</button>
