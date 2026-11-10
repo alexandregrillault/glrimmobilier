@@ -27,10 +27,12 @@ LEADS.append({'id': 'c5', 'nom': 'Morgane Lafargue', 'prenom': 'Morgane', 'nom_f
 DENONC_C2 = [{'plateforme': 'iselection', 'compte': 'iselection', 'promoteur': 'ISELECTION', 'programme': 'Opus', 'ville': 'Colombes',
               'statut': 'envoyee', 'fait_le': '2026-11-10T10:00:00+00:00', 'civilite': 'Mme'}]
 DENONC = [
-    {'compte': 'care', 'promoteur': 'CARE PROMOTION', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'statut': 'envoyee', 'fait_le': '2026-11-09T15:14:00+00:00'},
+    {'compte': 'care', 'promoteur': 'CARE PROMOTION', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'statut': 'envoyee', 'fait_le': '2026-11-09T15:14:00+00:00',
+     'nom_promoteur': 'Client Test', 'nom_verif': 'ok', 'nom_verifie_le': '2026-11-10T19:30:00+00:00'},
     {'compte': 'care', 'promoteur': 'CARE PROMOTION', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'statut': 'echec', 'fait_le': '2026-11-09T14:14:00+00:00', 'detail': 'essai raté'},
     {'compte': 'wemo', 'promoteur': 'wemo', 'programme': 'Icone', 'ville': 'Aubervilliers', 'statut': 'deja_connu', 'fait_le': '2026-11-09T15:20:00+00:00', 'detail': 'Refus du promoteur'},
-    {'compte': 'logih', 'promoteur': 'LOGI H', 'programme': "Le Jardin d'Hélène", 'ville': 'Aubervilliers', 'statut': 'acceptee', 'fait_le': '2026-11-09T15:30:00+00:00'},
+    {'compte': 'logih', 'promoteur': 'LOGI H', 'programme': "Le Jardin d'Hélène", 'ville': 'Aubervilliers', 'statut': 'acceptee', 'fait_le': '2026-11-09T15:30:00+00:00',
+     'nom_promoteur': 'CLIENT', 'nom_verif': 'different', 'nom_verifie_le': '2026-11-10T19:30:00+00:00'},
 ]
 BIENS = [
     {'titre': 'Stand Up — lot A12', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'prix': '250 000 €'},
@@ -80,7 +82,8 @@ with sync_playwright() as p:
         page.evaluate("eqOuvrirFiche('c1')")
         page.wait_for_function("document.getElementById('eq-fiche-corps') && document.getElementById('eq-fiche-corps').innerText.includes('DÉNONCIATIONS') || (document.getElementById('eq-fiche-corps')||{innerText:''}).innerText.toLowerCase().includes('dénonciations')", timeout=5000)
         txt = page.inner_text('#eq-fiche-corps')
-        for attendu in ('Stand Up', 'Dénoncé le 09/11', 'Déjà connu du promoteur', 'pris en charge', '2 dénoncés · 1 déjà connu'):
+        for attendu in ('Stand Up', 'Dénoncé le 09/11', 'Déjà connu du promoteur', 'pris en charge', '2 dénoncés · 1 déjà connu',
+                        'Au nom de « Client Test », vérifié chez le promoteur le 10/11', 'Chez le promoteur : « CLIENT »'):
             if attendu not in txt: erreurs.append(f'{nom} : fiche sans « {attendu} »')
         if 'Pas encore dénoncé' in txt: erreurs.append(f'{nom} : l\'échec de Stand Up l\'emporte sur l\'envoi')
         if not lus or 'statut=neq.essai' not in lus[0] or 'contact_id=eq.c1' not in lus[0]: erreurs.append(f'{nom} : lecture du registre : {lus[:1]}')
