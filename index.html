@@ -10520,9 +10520,13 @@ function eqRemisesListe(b) {
   return (Array.isArray(b && b.remises) ? b.remises : [])
     .filter(r => r && (String(r.libelle || '').trim() || Number(r.montant) > 0));
 }
-function eqRemisesLigne(token, i, b) {
+function eqRemisesLigne(token, i, b, sansProgramme) {
   const rs = eqRemisesListe(b);
-  const pastilles = rs.map((r, j) => `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:20px;padding:2px 6px 2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}
+  // Une remise du programme se gère sur l'en-tête du programme (une seule fois
+  // pour tous ses lots) : quand cet en-tête est affiché, on ne la répète pas ici.
+  const pastilles = rs.map((r, j) => r.programme
+    ? (sansProgramme ? '' : `<span title="Remise du programme : elle se retire depuis la fenêtre « Remise programme »" style="display:inline-flex;align-items:center;background:var(--accent);color:#fff;border-radius:20px;padding:2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}</span>`)
+    : `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:20px;padding:2px 6px 2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}
     <button onclick="eqRemiseSupprimer('${token}',${i},${j})" title="Retirer cette remise" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 3px;opacity:.85">✕</button></span>`).join(' ');
   const note = String((b && b.note) || '').trim();
   return `<div style="margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${pastilles}
@@ -10634,6 +10638,69 @@ async function eqRemiseValider(token, i) {
   biens[i].remises = rs;
   document.getElementById('eq-remise-modal')?.remove();
   await _eqRemisesEnregistrer(token, biens);
+}
+
+// Remise sur tout un programme, sur une sélection déjà envoyée (demande d'Alex
+// du 10/11/2026) : saisie une fois sur l'en-tête du programme, recopiée sur
+// chacun de ses lots (marquée programme: true). La page du client l'affiche
+// donc sous chaque lot, comme une remise de lot, sans rien changer à la page.
+function eqRemisesProgrammeLigne(token, idx, biens) {
+  const rp = _selRemisesProgramme(idx.map(i => biens[i]));
+  const liste = idx.join('-');
+  const pastilles = rp.map((r, j) => `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:20px;padding:2px 6px 2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}
+    <button onclick="eqRemiseProgrammeRetirer('${token}','${liste}',${j})" title="Retirer cette remise de tous les lots du programme" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 3px;opacity:.85">✕</button></span>`).join(' ');
+  return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:2px 0 4px">${pastilles}
+    <button onclick="eqRemiseProgrammeOuvrir('${token}','${liste}')" title="Une remise appliquée à tous les lots de ce programme" style="background:none;border:1px dashed var(--border);border-radius:20px;padding:2px 11px;color:var(--muted);font-size:11.5px;cursor:pointer">+ Remise programme</button>
+  </div>`;
+}
+function _eqIdxListe(liste) {
+  return String(liste || '').split('-').map(Number).filter(n => Number.isInteger(n) && n >= 0);
+}
+function eqRemiseProgrammeOuvrir(token, liste) {
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  const idx = _eqIdxListe(liste);
+  if (!s || !Array.isArray(s.biens) || !idx.length || !s.biens[idx[0]]) return;
+  const nom = _selNomProgramme(s.biens[idx[0]]);
+  document.getElementById('eq-remise-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'eq-remise-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1600;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:430px;max-width:95vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Remise sur tout le programme ${_vEsc(nom)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Elle s'applique aux ${idx.length} lot${idx.length > 1 ? 's' : ''} de ce programme dans cette sélection, et le client la voit sous chacun d'eux, tout de suite.</div>
+    <input id="eq-remise-lib" placeholder="Libellé (ex: Remise promoteur, Frais de notaire offerts)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:8px">
+    <input id="eq-remise-montant" placeholder="Montant en € par lot (optionnel)" inputmode="numeric" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:16px">
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-secondary" onclick="document.getElementById('eq-remise-modal').remove()">Annuler</button>
+      <button class="btn" onclick="eqRemiseProgrammeValider('${token}','${liste}')">Appliquer à tous les lots</button>
+    </div>
+  </div>`;
+  div.addEventListener('click', (e) => { if (e.target === div) div.remove(); });
+  document.body.appendChild(div);
+  document.getElementById('eq-remise-lib').focus();
+}
+async function eqRemiseProgrammeValider(token, liste) {
+  const libelle = (document.getElementById('eq-remise-lib')?.value || '').trim();
+  const montant = _selMontantRemise(document.getElementById('eq-remise-montant')?.value || '');
+  if (!libelle && !montant) { if (typeof toast === 'function') toast('⚠ Renseigne au moins un libellé ou un montant', 'var(--warning)'); return; }
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  const idx = _eqIdxListe(liste);
+  if (!s || !Array.isArray(s.biens) || !idx.length) return;
+  const biens = JSON.parse(JSON.stringify(s.biens));
+  _selRemiseProgrammeAjouter(idx.map(i => biens[i]).filter(Boolean), libelle, montant);
+  document.getElementById('eq-remise-modal')?.remove();
+  await _eqRemisesEnregistrer(token, biens, 'Remise appliquée aux ' + idx.length + ' lots du programme');
+}
+async function eqRemiseProgrammeRetirer(token, liste, j) {
+  const s = (_eqSelectionsAll || []).find(x => x.token === token);
+  const idx = _eqIdxListe(liste);
+  if (!s || !Array.isArray(s.biens) || !idx.length) return;
+  const biens = JSON.parse(JSON.stringify(s.biens));
+  const lots = idx.map(i => biens[i]).filter(Boolean);
+  const r = _selRemisesProgramme(lots)[j];
+  if (!r) return;
+  _selRemiseProgrammeRetirer(lots, r);
+  await _eqRemisesEnregistrer(token, biens, 'Remise retirée de tous les lots du programme');
 }
 
 // ============================================================
@@ -11061,7 +11128,7 @@ function eqFicheSelectionsHtml(l) {
         ${a.option ? `<div style="font-size:11.5px;color:var(--success);margin-top:3px;font-weight:700">Souhaite qu\'on pose une option sur ce lot${a.option_date ? ' <span style="font-weight:400;color:var(--muted)">(' + fmtD(a.option_date) + ')</span>' : ''}</div>` : ''}
         ${a.infos ? `<div style="font-size:11.5px;color:var(--accent);margin-top:3px;font-weight:600">${selIc('infos', 12)} a demandé plus d\'infos</div>` : ''}
         ${a.adresse_demandee ? `<div style="font-size:11.5px;color:var(--warning);margin-top:3px;font-weight:600">A demandé l\'adresse exacte du programme</div>` : ''}
-        ${eqRemisesLigne(s.token, i, b)}
+        ${eqRemisesLigne(s.token, i, b, groupe)}
       </div>`;
     };
     const lots = !groupe ? biens.map(lotHtml).join('') : groupes.map(g => {
@@ -11075,6 +11142,7 @@ function eqFicheSelectionsHtml(l) {
           <span style="font-size:11px;color:var(--muted)">${g.idx.length} lot${g.idx.length > 1 ? 's' : ''}</span>
           ${lien0 ? `<a href="${_esc(lien0)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px">${lienFiche0 ? 'Fiche programme' : 'Intranet promoteur'}</a>` : ''}
         </div>
+        ${eqRemisesProgrammeLigne(s.token, g.idx, biens)}
         ${g.idx.map(i => lotHtml(biens[i], i)).join('')}
       </div>`;
     }).join('');
@@ -15425,6 +15493,50 @@ function _selRemiseTexte(r) {
   return t + (Number.isFinite(m) && m > 0 ? ' − ' + new Intl.NumberFormat('fr-FR').format(m) + ' €' : '');
 }
 
+// Remise programme (demande d'Alex du 10/11/2026) : une remise posée sur un
+// programme est recopiée sur chacun de ses lots, marquée programme: true. La
+// feuille du client n'a rien de spécial à faire : elle montre les remises de
+// chaque lot. Un lot du même programme ajouté ensuite la reçoit aussi
+// (_selRemisesProgrammePropager, à chaque rafraîchissement de la composition).
+function _selRemiseCle(r) {
+  return String((r && r.libelle) || 'Remise').trim().toLowerCase() + '|' + (Number(r && r.montant) || 0);
+}
+function _selRemisesProgramme(lots) {
+  const vu = {}, out = [];
+  (lots || []).forEach(b => eqRemisesListe(b).forEach(r => {
+    if (!r.programme) return;
+    const k = _selRemiseCle(r);
+    if (vu[k]) return;
+    vu[k] = 1;
+    out.push({ libelle: String(r.libelle || 'Remise').trim() || 'Remise', montant: Number(r.montant) > 0 ? Number(r.montant) : null, programme: true });
+  }));
+  return out;
+}
+function _selRemisesProgrammePropager(lots) {
+  const rp = _selRemisesProgramme(lots);
+  if (!rp.length) return;
+  lots.forEach(b => {
+    const rs = eqRemisesListe(b);
+    const cles = rs.map(_selRemiseCle);
+    rp.forEach(r => { if (!cles.includes(_selRemiseCle(r))) rs.push(Object.assign({}, r)); });
+    b.remises = rs;
+  });
+}
+function _selRemiseProgrammeAjouter(lots, libelle, montant) {
+  const r = { libelle: libelle || 'Remise', montant: montant || null, programme: true };
+  const k = _selRemiseCle(r);
+  lots.forEach(b => {
+    // Une remise de lot identique devient la remise du programme (pas de doublon)
+    const rs = eqRemisesListe(b).filter(x => _selRemiseCle(x) !== k);
+    rs.push(Object.assign({}, r));
+    b.remises = rs;
+  });
+}
+function _selRemiseProgrammeRetirer(lots, r) {
+  const k = _selRemiseCle(r);
+  lots.forEach(b => { b.remises = eqRemisesListe(b).filter(x => !(x.programme && _selRemiseCle(x) === k)); });
+}
+
 async function selAjouterLibre() {
   const val = (id) => { const el = document.getElementById('sel-l-' + id); return el ? el.value.trim() : ''; };
   const titreSaisi = val('titre');
@@ -15568,16 +15680,21 @@ function selAjouterLibreRefresh() {
   _selDenoncResume();
   const groupes = _selOrdreNormaliser();
   const plusieurs = groupes.length > 1;
+  // Une remise programme suit tout lot ajouté ensuite au même programme
+  groupes.forEach(g => _selRemisesProgrammePropager(g.lots));
   let i = -1;
   el.innerHTML = _selCtx.libres.length === 0
     ? '<div style="font-size:12px;color:var(--muted)">Aucun lot pour le moment</div>'
     : groupes.map((g, k) => {
-      const tete = plusieurs
-        ? `<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:7px 0 3px;color:var(--muted)">
-        <span><strong style="color:var(--text)">${_vEsc(_selNomProgramme(g.lots[0]))}</strong> · ${g.lots.length} lot${g.lots.length > 1 ? 's' : ''}${g.lots[0].ville ? ' · ' + _vEsc(g.lots[0].ville) : ''}</span>
-        <span style="white-space:nowrap;display:inline-flex;gap:3px">${_selFleche('↑', k > 0, 'selOrdreProgramme(' + k + ',-1)', 'Présenter ce programme avant le précédent')}${_selFleche('↓', k < groupes.length - 1, 'selOrdreProgramme(' + k + ',1)', 'Présenter ce programme après le suivant')}</span>
-      </div>`
-        : '';
+      // En-tête du programme : toujours affiché, pour la remise programme
+      const rp = _selRemisesProgramme(g.lots);
+      const tete = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;padding:7px 0 3px;color:var(--muted)">
+        <span><strong style="color:var(--text)">${_vEsc(_selNomProgramme(g.lots[0]))}</strong> · ${g.lots.length} lot${g.lots.length > 1 ? 's' : ''}${g.lots[0].ville ? ' · ' + _vEsc(g.lots[0].ville) : ''}${rp.map(r => ' <span style="display:inline-block;background:var(--accent);color:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:700">' + _vEsc(_selRemiseTexte(r)) + '</span>').join('')}</span>
+        <span style="white-space:nowrap;display:inline-flex;gap:3px;align-items:center">
+          <button onclick="selRemiseProgramme(${k})" title="Une remise appliquée à tous les lots de ce programme" style="background:none;border:1px ${rp.length ? 'solid var(--accent)' : 'dashed var(--border)'};border-radius:20px;padding:1px 9px;color:${rp.length ? 'var(--accent)' : 'var(--muted)'};font-size:11px;cursor:pointer;margin-right:4px">Remise programme</button>
+          ${plusieurs ? _selFleche('↑', k > 0, 'selOrdreProgramme(' + k + ',-1)', 'Présenter ce programme avant le précédent') + _selFleche('↓', k < groupes.length - 1, 'selOrdreProgramme(' + k + ',1)', 'Présenter ce programme après le suivant') : ''}
+        </span>
+      </div>`;
       return tete + g.lots.map((b, n) => {
       i++;
       const fleches = g.lots.length > 1
@@ -15791,7 +15908,9 @@ function selRemiseLot(i) {
   div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:430px;max-width:95vw">
     <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Remise sur ${_vEsc(b.titre || 'ce lot')}</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Pastille dorée sous le prix, sur la page du client.</div>
-    ${rs.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + rs.map((r, j) => `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:20px;padding:2px 6px 2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}<button onclick="selRemiseRetirer(${i},${j})" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 3px;opacity:.85">✕</button></span>`).join('') + '</div>' : ''}
+    ${rs.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + rs.map((r, j) => r.programme
+      ? `<span title="Remise du programme : elle se retire depuis « Remise programme »" style="display:inline-flex;align-items:center;background:var(--accent);color:#fff;border-radius:20px;padding:2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))} · programme</span>`
+      : `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:20px;padding:2px 6px 2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}<button onclick="selRemiseRetirer(${i},${j})" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 3px;opacity:.85">✕</button></span>`).join('') + '</div>' : ''}
     <input id="sel-remise-lib" placeholder="Libellé (ex: Remise promoteur, Frais de notaire offerts)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:8px">
     <input id="sel-remise-montant" placeholder="Montant en € (optionnel)" inputmode="numeric" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:16px">
     <div style="display:flex;justify-content:flex-end;gap:10px">
@@ -15821,6 +15940,49 @@ function selRemiseRetirer(i, j) {
   b.remises = rs;
   selAjouterLibreRefresh();
   selRemiseLot(i);
+}
+
+// Remise sur tout un programme pendant la composition (k = rang du programme)
+function selRemiseProgramme(k) {
+  const g = _selOrdreNormaliser()[k];
+  if (!g) return;
+  const rp = _selRemisesProgramme(g.lots);
+  document.getElementById('sel-remise-modal')?.remove();
+  const div = document.createElement('div');
+  div.id = 'sel-remise-modal';
+  div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:430px;max-width:95vw">
+    <div style="font-family:var(--font-head);font-size:15px;font-weight:700;margin-bottom:2px">Remise sur tout le programme ${_vEsc(_selNomProgramme(g.lots[0]))}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Elle s'applique à tous les lots de ce programme dans la sélection, y compris ceux que tu ajouteras ensuite. Le client la voit sous chaque lot.</div>
+    ${rp.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' + rp.map((r, j) => `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent);color:#fff;border-radius:20px;padding:2px 6px 2px 11px;font-size:11.5px;font-weight:700">${_vEsc(_selRemiseTexte(r))}<button onclick="selRemiseProgrammeRetirer(${k},${j})" title="Retirer de tous les lots du programme" style="background:none;border:none;color:#fff;cursor:pointer;font-size:12px;padding:0 3px;opacity:.85">✕</button></span>`).join('') + '</div>' : ''}
+    <input id="sel-remise-lib" placeholder="Libellé (ex: Remise promoteur, Frais de notaire offerts)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:8px">
+    <input id="sel-remise-montant" placeholder="Montant en € par lot (optionnel)" inputmode="numeric" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-size:13px;margin-bottom:16px">
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-secondary" onclick="document.getElementById('sel-remise-modal').remove()">Fermer</button>
+      <button class="btn" onclick="selRemiseProgrammeValider(${k})">Appliquer à tous les lots</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+  document.getElementById('sel-remise-lib').focus();
+}
+function selRemiseProgrammeValider(k) {
+  const g = _selOrdreNormaliser()[k];
+  if (!g) return;
+  const libelle = (document.getElementById('sel-remise-lib')?.value || '').trim();
+  const montant = _selMontantRemise(document.getElementById('sel-remise-montant')?.value || '');
+  if (!libelle && !montant) { if (typeof toast === 'function') toast('⚠ Renseigne au moins un libellé ou un montant', 'var(--warning)'); return; }
+  _selRemiseProgrammeAjouter(g.lots, libelle, montant);
+  selAjouterLibreRefresh();
+  selRemiseProgramme(k);
+}
+function selRemiseProgrammeRetirer(k, j) {
+  const g = _selOrdreNormaliser()[k];
+  if (!g) return;
+  const r = _selRemisesProgramme(g.lots)[j];
+  if (!r) return;
+  _selRemiseProgrammeRetirer(g.lots, r);
+  selAjouterLibreRefresh();
+  selRemiseProgramme(k);
 }
 
 // Note du vendeur sur un lot en cours de composition (même chose après envoi
@@ -15869,10 +16031,14 @@ function selEditerLot(i) {
   setV('plan', b.plan); setV('masse', b.masse);
   setV('adresse', b.adresseBrute || b.adresse || (b.geo && b.geo.label) || '');
   _selAdresseChoisie = null;
-  const r0 = (Array.isArray(b.remises) && b.remises[0]) ? b.remises[0] : null;
+  // Le champ « Remise » du formulaire ne reprend qu'une remise du lot : une
+  // remise programme reste telle quelle (sinon elle perdrait sa marque et
+  // reviendrait en double)
+  const _rsLot = Array.isArray(b.remises) ? b.remises : [];
+  const r0 = _rsLot.find(r => r && !r.programme) || null;
   setV('remise', r0 ? r0.libelle : '');
   setV('remiseMontant', r0 && r0.montant ? String(r0.montant) : '');
-  _selCtx.remisesExistantes = Array.isArray(b.remises) ? b.remises.slice(1) : [];
+  _selCtx.remisesExistantes = _rsLot.filter(r => r !== r0);
   _selCtx.lotOrigine = JSON.parse(JSON.stringify(b));
   _selCtx.pdfExistant = b.pdf || '';
   _selCtx.imageExistante = b.image || '';
