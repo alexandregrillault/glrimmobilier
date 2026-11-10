@@ -443,6 +443,12 @@
   .an-tab th { text-align: left; font-weight: 600; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .3px; padding: 4px 6px 4px 0; }
   .an-tab td { padding: 6px 6px 6px 0; border-top: 1px dashed var(--border); vertical-align: top; }
   .an-tab td small { display: block; color: var(--muted); }
+  .an-vend-intro { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .an-vend td { font-size: 13px; }
+  .an-vend-btn { display: block; margin-top: 4px; padding: 2px 8px; font-size: 11.5px; }
+  .an-vend-detail > td { background: var(--surface); padding: 4px 10px 8px; }
+  .an-vend-total td { border-top: 1px solid var(--border); }
+  @media (max-width: 600px) { .an-vend-cache { display: none; } }
   .an-classe { font-size: 13px; display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--border); cursor: pointer; }
   .an-classe:hover b { color: var(--accent); }
   .an-retour { border: 1px solid var(--border); background: var(--surface2); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; cursor: pointer; align-self: flex-start; }
@@ -1217,11 +1223,13 @@
         <div class="mk-chips" id="an-onglets">
           <button data-o="faire" class="on" onclick="anOnglet('faire')">À faire</button>
           <button data-o="annonces" onclick="anOnglet('annonces')">Carte</button>
+          <button data-o="vendeurs" onclick="anOnglet('vendeurs')">Par vendeur</button>
           <button data-o="robot" onclick="anOnglet('robot')">Robot SeLoger</button>
         </div>
         <div class="mk-chips" id="an-periode"></div>
       </div>
       <div id="an-vue-faire"><div class="card an-faire" id="an-faire"></div></div>
+      <div id="an-vue-vendeurs" style="display:none"><div class="card an-faire" id="an-vendeurs"></div></div>
       <div id="an-vue-robot" style="display:none"><div id="an-robot"></div></div>
       <div id="an-vue-annonces" style="display:none">
       <div class="an-reglages">
@@ -17579,7 +17587,7 @@ async function loadAnnonces(force) {
     const depuis = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10);
     try {
       const [leads, progs, stock] = await Promise.all([
-        _sbTout(SUPABASE_URL + '/rest/v1/contacts?select=reference_annonce,prix_annonce,date_lead,statut,source,lieu,typologie&or=(source.ilike.*loger*,source.ilike.*boncoin*)&order=date_lead.desc', h), // leads de nos annonces, tout l'historique : « À créer » s'en sert
+        _sbTout(SUPABASE_URL + '/rest/v1/contacts?select=reference_annonce,prix_annonce,date_lead,statut,source,lieu,typologie,vendeur,recu_par&or=(source.ilike.*loger*,source.ilike.*boncoin*)&order=date_lead.desc', h), // leads de nos annonces, tout l'historique : « À créer » s'en sert
         _sbTout(SUPABASE_URL + '/rest/v1/pige_programmes?select=ville,cp,lat,lng,prix_min,nb_libres,source', h),
         _sbTout(SUPABASE_URL + '/rest/v1/rpc/annonces_stock', h)
       ]);
@@ -17634,6 +17642,7 @@ function anOnglet(o) {
   document.querySelectorAll('#an-onglets button').forEach(b => b.classList.toggle('on', b.dataset.o === o));
   document.getElementById('an-vue-faire').style.display = o === 'faire' ? '' : 'none';
   document.getElementById('an-vue-annonces').style.display = o === 'annonces' ? '' : 'none';
+  document.getElementById('an-vue-vendeurs').style.display = o === 'vendeurs' ? '' : 'none';
   document.getElementById('an-vue-robot').style.display = o === 'robot' ? '' : 'none';
   document.getElementById('an-periode').style.display = o === 'robot' ? 'none' : ''; // la période ne concerne que les leads
   if (o === 'annonces' && _anLeads) _anRendre(); // la carte se dessine une fois visible
@@ -17762,6 +17771,64 @@ function _anTypoDe(t) {
   const m = s.match(/(\d+)\s*pi[eè]ce/i) || s.match(/\bT\s?(\d+)/i);
   return m ? 'T' + Math.min(5, Math.max(1, +m[1])) : null;
 }
+// Vue « Par vendeur » (demande d'Alex du 10/11/2026) : les leads de la période rangés selon la boîte
+// qui les a reçus (recu_par[0], celle du vendeur de l'annonce ; à défaut le vendeur de la fiche),
+// et pour chaque vendeur, ses annonces qui ont rapporté. Les annonces programme n'ont pas de
+// référence : elles sont regroupées par ville.
+let _anVendeurOuvert = '', _anVendeursListe = [];
+function anVendeurOuvrir(i) { const v = _anVendeursListe[i] || ''; _anVendeurOuvert = _anVendeurOuvert === v ? '' : v; _anRendre(); }
+function _anVendeurs(leads, nomVille) {
+  const box = document.getElementById('an-vendeurs');
+  if (!box) return;
+  const vend = {};
+  leads.forEach(l => {
+    const nom = (Array.isArray(l.recu_par) && l.recu_par[0] && l.recu_par[0].vendeur) || l.vendeur || 'Sans vendeur';
+    const v = vend[nom] || (vend[nom] = { nom, n: 0, suivis: 0, dernier: '', annonces: {}, villes: {} });
+    const d = String(l.date_lead || '').slice(0, 10), suivi = AN_QUALIFIES.includes(l.statut);
+    const vt = _anLeadVT(l), ville = vt ? nomVille(vt.kv) : '';
+    const ref = String(l.reference_annonce || '').trim();
+    const k = ref || 'Sans référence · ' + (ville || 'ville inconnue');
+    const a = v.annonces[k] || (v.annonces[k] = { ref: k, sansRef: !ref, n: 0, suivis: 0, dernier: '', ville, typo: vt && vt.typo !== 'NC' ? vt.typo : '' });
+    v.n++; a.n++;
+    if (suivi) { v.suivis++; a.suivis++; }
+    if (d > v.dernier) v.dernier = d;
+    if (d > a.dernier) a.dernier = d;
+    if (ville) v.villes[ville] = (v.villes[ville] || 0) + 1;
+  });
+  const liste = Object.values(vend).sort((a, b) => b.n - a.n);
+  if (!liste.length) { box.innerHTML = '<div class="empty"><p>Aucun lead sur la période</p></div>'; return; }
+  const jour = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—';
+  const silence = d => d ? Math.round((Date.now() - new Date(d + 'T12:00:00')) / 864e5) : null;
+  const pct = (a, b) => b ? Math.round(100 * a / b) + ' %' : '—';
+  const total = liste.reduce((s, v) => s + v.n, 0), totalSuivis = liste.reduce((s, v) => s + v.suivis, 0);
+  _anVendeursListe = liste.map(v => v.nom);
+  const lignes = liste.map((v, i) => {
+    const ann = Object.values(v.annonces).sort((a, b) => b.n - a.n || (b.dernier > a.dernier ? 1 : -1));
+    const nbRef = ann.filter(a => !a.sansRef).length;
+    const top = Object.entries(v.villes).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, n]) => k + ' ' + n).join(', ');
+    const sil = silence(v.dernier), ouvert = _anVendeurOuvert === v.nom;
+    let html = `<tr>
+      <td><b>${_vEsc(v.nom)}</b><button class="btn btn-ghost btn-sm an-vend-btn" onclick="anVendeurOuvrir(${i})">${ouvert ? 'Masquer' : 'Voir ses annonces'}</button></td>
+      <td><b>${v.n}</b><small>${Math.round(100 * v.n / total)} % du total</small></td>
+      <td>${v.suivis}<small>${pct(v.suivis, v.n)}</small></td>
+      <td class="an-vend-cache">${nbRef}${ann.length > nbRef ? `<small>+ programmes</small>` : ''}</td>
+      <td>${jour(v.dernier)}${sil != null && sil > AN_REGLES.silence ? `<small>rien depuis ${sil} j</small>` : ''}</td>
+      <td class="an-vend-cache">${_vEsc(top)}</td></tr>`;
+    if (ouvert) html += `<tr class="an-vend-detail"><td colspan="6"><table class="an-tab">
+      <tr><th>Annonce</th><th>Leads</th><th>Suivis</th><th>Dernier lead</th></tr>
+      ${ann.map(a => `<tr><td>${_vEsc(a.ref)}<small>${_vEsc([a.sansRef ? 'annonce programme' : a.ville, a.typo].filter(Boolean).join(' · '))}</small></td>
+        <td>${a.n}</td><td>${a.suivis}</td><td>${jour(a.dernier)}</td></tr>`).join('')}
+    </table></td></tr>`;
+    return html;
+  }).join('');
+  box.innerHTML = `<div class="an-vend-intro">Leads SeLoger et Leboncoin des ${_anPeriode} derniers jours, rangés selon le vendeur dont l'annonce a reçu le lead. « Suivis » : leads passés en Suivi, Sélections, Retour documentation, Finaliser la vente ou Vendu.</div>
+    <table class="an-tab an-vend">
+      <tr><th>Vendeur</th><th>Leads</th><th>Suivis</th><th class="an-vend-cache">Annonces</th><th>Dernier lead</th><th class="an-vend-cache">Villes principales</th></tr>
+      ${lignes}
+      <tr class="an-vend-total"><td><b>Ensemble</b></td><td><b>${total}</b></td><td>${totalSuivis}<small>${pct(totalSuivis, total)}</small></td><td class="an-vend-cache"></td><td></td><td class="an-vend-cache"></td></tr>
+    </table>`;
+}
+
 function _anLeadVT(l) {
   let kv = null, typo = _anTypoDe(l.typologie);
   const lieu = String(l.lieu || '').split(',')[0].trim();
@@ -17987,6 +18054,8 @@ async function _anRendre() {
   document.getElementById('an-nonlus-titre').textContent = `Leads non rangés (${nbNR})`;
   document.getElementById('an-nonlus').innerHTML = `<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Fiches dont ni le lieu ni l'intitulé de l'annonce ne donnent la ville : elles ne sont comptées nulle part.</div>` +
     il.map(i => `<div class="an-vd">${_vEsc(i.txt)} — ${i.n} lead${pl(i.n)}</div>`).join('');
+
+  _anVendeurs(leads, k => infoVille(k).nom);
 
   // Carte : de dessous en dessus, offre promoteurs, offre SeLoger, écart de prix, nos leads.
   // Dessinée seulement onglet « Carte » affiché : cachée, elle mesure 0 px et le cadrage part sur le monde entier.

@@ -11,18 +11,19 @@ SORTIE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ICI
 def j(n):
     return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
 
-def lead(lieu, typo, n, ref=None, prix=None, statut='Nouveau', source='SeLoger'):
-    return {'reference_annonce': ref, 'prix_annonce': prix, 'date_lead': j(n), 'statut': statut, 'source': source, 'lieu': lieu, 'typologie': typo}
+def lead(lieu, typo, n, ref=None, prix=None, statut='Nouveau', source='SeLoger', recu=None):
+    return {'reference_annonce': ref, 'prix_annonce': prix, 'date_lead': j(n), 'statut': statut, 'source': source, 'lieu': lieu, 'typologie': typo,
+            'vendeur': None, 'recu_par': [{'vendeur': recu, 'le': j(n)}] if recu else []}
 # Leads rangés par ville et typologie : premier lieu de la fiche (celui de l'annonce) et première typologie ;
 # à défaut l'intitulé. Les villes et typologies qui suivent sont les critères du client : jamais comptées.
 LEADS = [
-    *[lead('Clamart (92140)', 'Appartement 2 pièces, T2', i, 'Jules T2 - CLAMART - 45 M²', 237000, 'Suivi' if i % 3 == 0 else 'Sans réponse') for i in (1, 4, 9, 15, 30)],
+    *[lead('Clamart (92140)', 'Appartement 2 pièces, T2', i, 'Jules T2 - CLAMART - 45 M²', 237000, 'Suivi' if i % 3 == 0 else 'Sans réponse', recu='Jules') for i in (1, 4, 9, 15, 30)],
     lead('Clamart (92140), Meudon 92190', 'Appartement 2 pièces, T3, T4', 33, 'Anaïs', 237000, 'Perdu'),
     *[lead('Colombes (92700)', 'Appartement 2 pièces', i, 'Anaïs', 179000) for i in (2, 3, 10, 20)],
     lead('Colombes (92700)', 'Appartement 2 pièces', 6, None, 181000, source='Leboncoin'),
     lead('Clamart (92140)', 'Appartement 2 pièces', 2, None, 237000, source='Saisie manuelle'),
     lead('Paris 15ème (75015)', 'Appartement 3 pièces, T3', 5, 'Alex T3 - PARIS 15E - 75 M²', 837000, 'Sélections'),
-    lead(None, None, 25, 'Jules T2 - SAINT-DENIS PLEYEL - 45 M² - 177 000 €', 177000),
+    lead(None, None, 25, 'Jules T2 - SAINT-DENIS PLEYEL - 45 M² - 177 000 €', 177000, recu='Jules'),
     lead('Saint-Denis (93200)', 'Appartement 2 pièces', 6, 'Théo', 182000),
     lead('Massy (91300)', 'Appartement 4 pièces', 2, 'MTO - T4 - MASSY', 265000),
     lead('Vélizy-Villacoublay (78140)', 'Appartement 3 pièces', 8, 'MTO - VELIZY T3', 347000),
@@ -163,6 +164,17 @@ with sync_playwright() as p:
             page.evaluate("anVille(''); anTypo('T3')"); page.wait_for_timeout(300)
             cl = norm(page.text_content('#an-villes'))
             if 'Colombes' in cl or 'SeLoger 19 % moins cher' not in cl: erreurs.append('filtre typologie inopérant : ' + cl[:160])
+        # Vue « Par vendeur » : leads rangés selon la boîte qui les a reçus, annonces du vendeur dépliées
+        page.evaluate("anVille(''); anTypo(''); anOnglet('vendeurs')"); page.wait_for_timeout(400)
+        page.evaluate("anVendeurOuvrir(_anVendeursListe.indexOf('Jules'))"); page.wait_for_timeout(400)
+        vd = norm(page.text_content('#an-vendeurs'))
+        for attendu in ('Jules', 'Voir ses annonces', 'Masquer', 'Jules T2 - CLAMART - 45 M²', 'Clamart · T2', 'Sans vendeur', 'Ensemble'):
+            if attendu not in vd: erreurs.append(f'{nom} : vue par vendeur, « {attendu} » absent')
+        if not re.search(r'Jules\s*Masquer\s*6\s*30 % du total\s*3\s*50 %', vd): erreurs.append(f'{nom} : ligne de Jules ' + repr(vd[vd.find('Jules'):vd.find('Jules')+120]))
+        if not page.is_visible('#an-vendeurs') or page.is_visible('#an-faire'): erreurs.append(f'{nom} : onglet « Par vendeur » mal affiché')
+        large = page.evaluate('document.documentElement.scrollWidth')
+        if large > vp['width'] + 1: erreurs.append(f'{nom} : vue par vendeur plus large que l\'écran ({large} px)')
+        page.screenshot(path=str(SORTIE / f'annonces_{nom}_vendeurs.png'), full_page=False)
         page.close()
     nav.close()
 
