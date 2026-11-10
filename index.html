@@ -3746,6 +3746,10 @@ function fmtEur2(n) {
   const v = r2(n);
   return new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', minimumFractionDigits: Number.isInteger(v) ? 0 : 2, maximumFractionDigits: 2 }).format(v);
 }
+// Factures (promoteurs et commerciaux) : toujours deux chiffres après la virgule
+function fmtEurFac(n) {
+  return new Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(r2(n));
+}
 function initials(prenom, nom) {
   return ((prenom||'')[0]||'') + ((nom||'')[0]||'');
 }
@@ -20622,16 +20626,16 @@ function _facMajTotaux() {
   const ht = parseFloat((document.getElementById('fac-ht') || {}).value) || 0;
   const taux = parseFloat((document.getElementById('fac-tva-taux') || {}).value) || 0;
   const tva = r2(ht * taux / 100);
-  const mEl = document.getElementById('fac-tva-montant'); if (mEl) mEl.textContent = fmtEur2(tva);
-  const tEl = document.getElementById('fac-ttc'); if (tEl) tEl.textContent = fmtEur2(r2(ht + tva));
+  const mEl = document.getElementById('fac-tva-montant'); if (mEl) mEl.textContent = fmtEurFac(tva);
+  const tEl = document.getElementById('fac-ttc'); if (tEl) tEl.textContent = fmtEurFac(r2(ht + tva));
   const oBloc = document.getElementById('fac-otaree-bloc');
   if (oBloc) {
     const viaOtaree = (document.getElementById('fac-otaree') || {}).checked && ht > 0;
     oBloc.style.display = viaOtaree ? '' : 'none';
     if (viaOtaree) {
       const o = _facOtaree(ht, taux);
-      oBloc.innerHTML = '<div>Frais Otaree : ' + fmtEur2(o.fraisHt) + ' HT + ' + fmtEur2(o.fraisTva) + ' TVA = <strong>' + fmtEur2(o.fraisTtc) + ' TTC</strong></div>'
-        + '<div style="margin-top:4px">Montant reçu sur le compte : ' + fmtEur2(o.ttc) + ' − ' + fmtEur2(o.fraisTtc) + ' = <strong style="color:var(--accent)">' + fmtEur2(o.recu) + '</strong></div>';
+      oBloc.innerHTML = '<div>Frais Otaree : ' + fmtEurFac(o.fraisHt) + ' HT + ' + fmtEurFac(o.fraisTva) + ' TVA = <strong>' + fmtEurFac(o.fraisTtc) + ' TTC</strong></div>'
+        + '<div style="margin-top:4px">Montant reçu sur le compte : ' + fmtEurFac(o.ttc) + ' − ' + fmtEurFac(o.fraisTtc) + ' = <strong style="color:var(--accent)">' + fmtEurFac(o.recu) + '</strong></div>';
     }
   }
   const hint = document.getElementById('fac-base-hint');
@@ -20641,9 +20645,9 @@ function _facMajTotaux() {
     if (prix > 0 && tx > 0) {
       const base = r2(prix * tx / 100);
       const ecart = r2(base - ht);
-      hint.innerHTML = 'Base de calcul : ' + fmtEur(prix) + ' \u00d7 ' + _facPct(tx) + ' = <strong>' + fmtEur2(base) + ' HT</strong>'
+      hint.innerHTML = 'Base de calcul : ' + fmtEurFac(prix) + ' \u00d7 ' + _facPct(tx) + ' = <strong>' + fmtEurFac(base) + ' HT</strong>'
         + (Math.abs(ecart) >= 0.01
-            ? ' \u00b7 <span style="color:var(--warning)">montant factur\u00e9 saisi \u00e0 ' + fmtEur2(ht) + ' (\u00e9cart de ' + fmtEur2(ecart) + ')</span>'
+            ? ' \u00b7 <span style="color:var(--warning)">montant factur\u00e9 saisi \u00e0 ' + fmtEurFac(ht) + ' (\u00e9cart de ' + fmtEurFac(ecart) + ')</span>'
             : '');
     } else hint.innerHTML = '';
   }
@@ -20672,7 +20676,7 @@ function _remplirSelectVentes(selectedId) {
   const sel = document.getElementById('fac-vente'); if (!sel) return;
   const opts = ['<option value="">— Aucune (saisie libre) —</option>'];
   [...(data.ventes || [])].sort((a, b) => (b.date || '').localeCompare(a.date || '')).forEach(v => {
-    const lbl = (v.programme || '—') + (v.lot ? (' · lot ' + v.lot) : '') + ' · ' + (v.client || '—') + ' · ' + fmtEur(v.honoraires || 0);
+    const lbl = (v.programme || '—') + (v.lot ? (' · lot ' + v.lot) : '') + ' · ' + (v.client || '—') + ' · ' + fmtEurFac(v.honoraires || 0);
     opts.push('<option value="' + v.id + '"' + (v.id === selectedId ? ' selected' : '') + '>' + _esc(lbl) + '</option>');
   });
   sel.innerHTML = opts.join('');
@@ -20809,15 +20813,15 @@ function renderFactures() {
   const totEl = document.getElementById('factures-total');
   const list = [...st.emises].sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.numero || '').localeCompare(a.numero || ''));
   if (cnt) cnt.textContent = list.length + ' facture(s)';
-  if (totEl) totEl.textContent = fmtEur(list.reduce((s, r) => s + (Number(r.ttc) || 0), 0));
+  if (totEl) totEl.textContent = fmtEurFac(list.reduce((s, r) => s + (Number(r.ttc) || 0), 0));
   if (list.length === 0) { box.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">—</div><p>Aucune facture — cliquez « + Nouvelle facture »</p></div></td></tr>'; return; }
   box.innerHTML = list.map(r => '<tr>'
     + '<td style="font-family:var(--font-head);font-weight:700">' + _esc(r.numero) + '</td>'
     + '<td>' + (r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '—') + '</td>'
     + '<td>' + _esc((r.promoteur && r.promoteur.nom) || '—') + '</td>'
     + '<td style="color:var(--muted);font-size:12px">' + _esc(r.designation || '') + '</td>'
-    + '<td class="num">' + fmtEur(r.ht) + '</td>'
-    + '<td class="num" style="color:var(--accent);font-weight:700">' + fmtEur(r.ttc) + (r.otaree ? '<div style="font-size:11px;color:var(--muted);font-weight:400">Otaree : reçu ' + fmtEur(_facOtaree(r.ht, r.taux).recu) + '</div>' : '') + '</td>'
+    + '<td class="num">' + fmtEurFac(r.ht) + '</td>'
+    + '<td class="num" style="color:var(--accent);font-weight:700">' + fmtEurFac(r.ttc) + (r.otaree ? '<div style="font-size:11px;color:var(--muted);font-weight:400">Otaree : reçu ' + fmtEurFac(_facOtaree(r.ht, r.taux).recu) + '</div>' : '') + '</td>'
     + '<td><div style="display:flex;gap:5px;justify-content:flex-end">'
     + '<button class="btn btn-ghost btn-sm" onclick="regenFacturePDF(\'' + r.id + '\')" title="PDF"></button>'
     + '<button class="btn btn-ghost btn-sm" onclick="editFacture(\'' + r.id + '\')" title="Modifier">✎</button>'
@@ -20919,7 +20923,7 @@ function venteOffreHint() {
   const h = parseFloat(document.getElementById('v-honoraires').value) || 0;
   if (o <= 0) { el.textContent = ''; return; }
   const t = parseFloat(document.getElementById('v-taux').value) || 0;
-  el.textContent = 'Ce que GLR gagne : ' + fmtEur2(r2(h - o)) + ' HT' + (t ? ' · commission vendeur : ' + fmtEur2(venteCommissionForm()) : '');
+  el.textContent = 'Ce que GLR gagne : ' + fmtEurFac(r2(h - o)) + ' HT' + (t ? ' · commission vendeur : ' + fmtEurFac(venteCommissionForm()) : '');
 }
 function venteAvanceChange() {
   const on = document.getElementById('v-avance').checked;
@@ -20939,8 +20943,8 @@ function venteAvanceHint() {
   if (!document.getElementById('v-avance').checked) { h.textContent = ''; return; }
   const com = venteCommissionForm(), m = parseFloat(document.getElementById('v-avance-montant').value) || 0;
   if (!(com > 0)) { h.textContent = 'Renseigne les honoraires et le taux de commission pour voir le calcul.'; return; }
-  if (m <= 0 || m >= com - 0.004) h.textContent = 'Toute la commission (' + fmtEur2(com) + ') est avancée à la signature.';
-  else h.textContent = 'Avance de ' + fmtEur2(m) + ' (' + _pctTxt(m / com * 100) + ' %) à la signature — reste ' + fmtEur2(r2(com - m)) + ' facturé au paiement du promoteur.';
+  if (m <= 0 || m >= com - 0.004) h.textContent = 'Toute la commission (' + fmtEurFac(com) + ') est avancée à la signature.';
+  else h.textContent = 'Avance de ' + fmtEurFac(m) + ' (' + _pctTxt(m / com * 100) + ' %) à la signature — reste ' + fmtEurFac(r2(com - m)) + ' facturé au paiement du promoteur.';
 }
 // Prochaine facture à émettre pour une vente : { type: 'commission' | 'avance' | 'solde', ht }
 function facComProchaine(v) {
@@ -20969,6 +20973,19 @@ function facComGerant(vendeurId) {
   return !!(vd && vd.role === 'Associé gérant');
 }
 function facComEligible(v) { return !!facComProchaine(v); }
+// Paiement au choix du gérant (règle du 10/11/2026) : dès la signature chez le
+// notaire (ou vente payée), toute commission restante peut être facturée, au
+// montant choisi, même si le promoteur n'a pas encore payé.
+function facComReste(v) {
+  const com = _venteCommission(v);
+  return r2(com - facComActives(v.id).reduce((s, f) => s + (Number(f.ht) || 0), 0));
+}
+function facComPayable(v) {
+  if (!v || !v.vendeurId || facComGerant(v.vendeurId) || !(_venteCommission(v) > 0)) return false;
+  if (facComReste(v) <= 0.004) return false;
+  return v.statut === 'facture-payee' || (!!v.dateSignatureNotaire && v.dateSignatureNotaire <= _facAujourdhui());
+}
+function facComMontantDefaut(v) { const pr = facComProchaine(v); return pr ? pr.ht : facComReste(v); }
 function vdFactStatutChange(depuisStatut) {
   const st = document.getElementById('vd-fact-statut').value;
   if (depuisStatut) document.getElementById('vd-fact-tva').checked = (st === 'societe');
@@ -21003,7 +21020,7 @@ function facComCelluleVente(v) {
   let h = '';
   if (v.avanceAccordee) {
     const m = (Number(v.avanceMontant) > 0 && Number(v.avanceMontant) < com - 0.004) ? Number(v.avanceMontant) : com;
-    h += '<span style="' + sty + ';color:var(--muted)">Avance : ' + fmtEur2(m) + (com > 0 ? ' (' + _pctTxt(m / com * 100) + ' %)' : '') + (m < com - 0.004 ? ' · reste ' + fmtEur2(r2(com - m)) : '')
+    h += '<span style="' + sty + ';color:var(--muted)">Avance : ' + fmtEurFac(m) + (com > 0 ? ' (' + _pctTxt(m / com * 100) + ' %)' : '') + (m < com - 0.004 ? ' · reste ' + fmtEurFac(r2(com - m)) : '')
       + (v.statut !== 'facture-payee' && !v.dateSignatureNotaire ? ' · date de signature à saisir' : (v.statut !== 'facture-payee' && v.dateSignatureNotaire > _facAujourdhui() ? ' · signature le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR') : '')) + '</span>';
   }
   facComActives(v.id).forEach(f => {
@@ -21011,10 +21028,10 @@ function facComCelluleVente(v) {
   });
   const pr = facComProchaine(v);
   if (pr) h += '<button class="btn btn-ghost btn-sm" style="margin-top:5px;font-size:11px" onclick="facComEmettre(\'' + v.id + '\')">'
-    + (pr.type === 'avance' ? 'Facture d\'avance' : pr.type === 'solde' ? 'Facture de solde' : 'Facture de commission') + ' (' + fmtEur2(pr.ht) + ')</button>';
+    + (pr.type === 'avance' ? 'Facture d\'avance' : pr.type === 'solde' ? 'Facture de solde' : 'Facture de commission') + ' (' + fmtEurFac(pr.ht) + ')</button>';
   return h;
 }
-async function facComEmettre(venteId) {
+async function facComEmettre(venteId, montant) {
   const v = (data.ventes || []).find(x => x.id === venteId);
   const vd = v && (data.vendeurs || []).find(x => x.id === v.vendeurId);
   if (!v || !vd) { toast('Vente ou vendeur introuvable', 'var(--danger)'); return; }
@@ -21022,19 +21039,23 @@ async function facComEmettre(venteId) {
   if (!f.siren || !f.adresse || (f.statut === 'societe' && !f.raison) || (f.tva && !f.tvaNum)) {
     toast('⚠ Complète d\'abord la facturation de ' + vd.prenom + ' sur sa fiche vendeur (Modifier)', 'var(--warning)'); return;
   }
-  const pr = facComProchaine(v);
-  if (!pr) { toast('Aucune facture à émettre pour cette vente', 'var(--warning)'); return; }
+  if (!facComPayable(v)) { toast('Aucune facture à émettre pour cette vente', 'var(--warning)'); return; }
+  const reste = facComReste(v);
+  const ht = r2(montant != null ? montant : facComMontantDefaut(v));
+  if (!(ht > 0)) { toast('⚠ Saisis un montant', 'var(--warning)'); return; }
+  if (ht > reste + 0.004) { toast('⚠ Le reste à payer est de ' + fmtEurFac(reste) + ' HT', 'var(--warning)'); return; }
   const taux = f.tva ? 20 : 0;
-  const quoi = pr.type === 'avance' ? 'la facture d\'avance' : pr.type === 'solde' ? 'la facture de solde' : 'la facture de commission';
-  if (!confirm('Émettre ' + quoi + ' de ' + vd.prenom + ' ' + vd.nom + ' ?\n\n' + fmtEur2(pr.ht) + ' HT' + (taux ? ' + TVA 20 %' : ' (sans TVA)')
-      + (pr.type === 'avance' ? '\nAvance : versée à la signature chez le notaire.' : '') + '\n\nLe numéro est attribué maintenant et ne sera jamais réutilisé.')) return;
+  const quoi = ht < reste - 0.004 ? 'une facture d\'avance' : reste < _venteCommission(v) - 0.004 ? 'la facture de solde' : 'la facture de commission';
+  if (!confirm('Émettre ' + quoi + ' de ' + vd.prenom + ' ' + vd.nom + ' ?\n\n' + fmtEurFac(ht) + ' HT' + (taux ? ' + TVA 20 %' : ' (sans TVA)')
+      + (ht < reste - 0.004 ? '\nReste ensuite : ' + fmtEurFac(r2(reste - ht)) + ' HT.' : '')
+      + (v.statut !== 'facture-payee' ? '\nLe promoteur n\'a pas encore payé cette vente.' : '') + '\n\nLe numéro est attribué maintenant et ne sera jamais réutilisé.')) return;
   const emetteur = { prenom: vd.prenom, nom: vd.nom, statut: f.statut || 'ei', raison: f.raison || '', siren: f.siren, adresse: f.adresse, tva: !!f.tva, tvaNum: f.tvaNum || '' };
   const E = GLR_EMETTEUR;
   const payeur = { nom: E.nom, forme: E.forme, adresse: E.adresse, siren: E.siren, rcs: E.rcs, tva: E.tva };
   try {
-    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/facture_commerciale_emettre', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/facture_commerciale_emettre_libre', {
       method: 'POST', headers: venteHeaders(),
-      body: JSON.stringify({ p_vente: v.id, p_date: null, p_taux_tva: taux, p_emetteur: emetteur, p_payeur: payeur })
+      body: JSON.stringify({ p_vente: v.id, p_montant: ht, p_date: null, p_taux_tva: taux, p_emetteur: emetteur, p_payeur: payeur })
     });
     if (!res.ok) { let m = ''; try { m = (await res.json()).message || ''; } catch (_) {} toast('⚠ ' + (m || 'Facture non émise'), 'var(--danger)'); return; }
     const rec = await res.json();
@@ -21074,17 +21095,26 @@ function _facStatutBadge(f) {
 }
 function renderFacCom() {
   const box = document.getElementById('fac-panel-commerciaux'); if (!box) return;
-  const aEmettre = (data.ventes || []).filter(facComEligible).sort((a, b) => (a.dateSignatureNotaire || a.date || '').localeCompare(b.dateSignatureNotaire || b.date || ''));
+  const pretes = (data.ventes || []).filter(facComEligible);
+  const aEmettre = (data.ventes || []).filter(facComPayable).sort((a, b) => (facComEligible(b) - facComEligible(a)) || (a.dateSignatureNotaire || a.date || '').localeCompare(b.dateSignatureNotaire || b.date || ''));
   const tabBtn = document.getElementById('fac-tab-commerciaux');
-  if (tabBtn) tabBtn.textContent = 'Commerciaux' + (aEmettre.length ? ' (' + aEmettre.length + ' à émettre)' : '');
+  if (tabBtn) tabBtn.textContent = 'Commerciaux' + (pretes.length ? ' (' + pretes.length + ' à émettre)' : '');
   const nomV = id => { const vd = (data.vendeurs || []).find(x => x.id === id); return vd ? vd.prenom + ' ' + vd.nom : '—'; };
-  let h = '<div class="card" style="margin-bottom:14px"><div style="font-weight:700;margin-bottom:8px">À émettre (' + aEmettre.length + ')</div>';
-  if (!aEmettre.length) h += '<div style="color:var(--muted);font-size:13px">Aucune facture en attente. Une facture devient émissible quand la vente est payée, ou à la date de signature notaire si l\'avance est accordée.</div>';
-  else h += '<table><thead><tr><th>Commercial</th><th>Vente</th><th>Motif</th><th class="num">Montant HT</th><th></th></tr></thead><tbody>'
+  const motif = v => {
+    const pr = facComProchaine(v);
+    if (pr) return pr.type === 'avance' ? 'Avance — signature le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR') : pr.type === 'solde' ? 'Solde — vente payée' : 'Vente payée';
+    return '<span style="color:var(--warning)">Promoteur pas encore payé</span><br><span style="font-size:11px;color:var(--muted)">Signée le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR') + '</span>';
+  };
+  let h = '<div class="card" style="margin-bottom:14px;overflow-x:auto"><div style="font-weight:700;margin-bottom:4px">À émettre (' + aEmettre.length + ')</div>'
+    + '<div style="color:var(--muted);font-size:12px;margin-bottom:8px">Toute vente signée chez le notaire dont la commission n\'est pas entièrement payée. Choisis le montant : par défaut, le reste à payer.</div>';
+  if (!aEmettre.length) h += '<div style="color:var(--muted);font-size:13px">Aucune facture en attente.</div>';
+  else h += '<table><thead><tr><th>Commercial</th><th>Vente</th><th>Motif</th><th class="num">Commission HT</th><th class="num">Déjà facturé</th><th class="num">Montant HT</th><th></th></tr></thead><tbody>'
     + aEmettre.map(v => '<tr><td>' + _esc(nomV(v.vendeurId)) + '</td><td>' + _esc(v.programme || '—') + (v.lot ? ' · lot ' + _esc(v.lot) : '') + '<br><span style="font-size:11px;color:var(--muted)">' + _esc(v.client || '') + '</span></td>'
-      + '<td>' + (() => { const pr = facComProchaine(v); return pr.type === 'avance' ? 'Avance — signature le ' + new Date(v.dateSignatureNotaire).toLocaleDateString('fr-FR') : pr.type === 'solde' ? 'Solde — vente payée, avance déjà facturée' : 'Vente payée'; })() + '</td>'
-      + '<td class="num">' + fmtEur2(facComProchaine(v).ht) + '</td>'
-      + '<td><button class="btn btn-primary btn-sm" onclick="facComEmettre(\'' + v.id + '\')">Émettre la facture</button></td></tr>').join('') + '</tbody></table>';
+      + '<td>' + motif(v) + '</td>'
+      + '<td class="num">' + fmtEurFac(_venteCommission(v)) + '</td>'
+      + '<td class="num">' + fmtEurFac(r2(_venteCommission(v) - facComReste(v))) + '</td>'
+      + '<td class="num"><input type="number" step="0.01" min="0" max="' + facComReste(v) + '" id="fac-com-mt-' + v.id + '" value="' + facComMontantDefaut(v) + '" style="width:110px;text-align:right"></td>'
+      + '<td><button class="btn btn-primary btn-sm" onclick="facComEmettre(\'' + v.id + '\', parseFloat(document.getElementById(\'fac-com-mt-' + v.id + '\').value))">Émettre la facture</button></td></tr>').join('') + '</tbody></table>';
   h += '</div>';
   h += '<div class="card" style="overflow-x:auto"><div style="font-weight:700;margin-bottom:8px">Factures émises (' + _facCom.length + ')</div>';
   if (!_facCom.length) h += '<div style="color:var(--muted);font-size:13px">Aucune facture de commission pour l\'instant.</div>';
@@ -21092,7 +21122,7 @@ function renderFacCom() {
     + _facCom.map(f => '<tr' + (f.statut === 'annulee' ? ' style="opacity:.55"' : '') + '><td style="font-family:var(--font-head);font-weight:700">' + _esc(f.numero) + (_facTypeLib(f) ? '<br><span style="font-size:10.5px;color:var(--accent)">' + _facTypeLib(f) + '</span>' : '') + '</td>'
       + '<td>' + new Date(f.date_facture).toLocaleDateString('fr-FR') + '</td><td>' + _esc(nomV(f.vendeur_id)) + '</td>'
       + '<td style="font-size:12px">' + _esc((f.vente && f.vente.programme) || '—') + (f.vente && f.vente.lot ? ' · lot ' + _esc(f.vente.lot) : '') + '</td>'
-      + '<td class="num">' + fmtEur2(f.ht) + '</td><td class="num">' + fmtEur2(f.ttc) + '</td><td>' + _facStatutBadge(f) + '</td>'
+      + '<td class="num">' + fmtEurFac(f.ht) + '</td><td class="num">' + fmtEurFac(f.ttc) + '</td><td>' + _facStatutBadge(f) + '</td>'
       + '<td><div style="display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap"><button class="btn btn-ghost btn-sm" onclick="facComVoir(\'' + f.id + '\')">Voir la facture</button>'
       + (f.statut === 'emise' ? '<button class="btn btn-ghost btn-sm" onclick="facComStatut(\'' + f.id + '\',\'payee\')">Marquer payée</button><button class="btn btn-ghost btn-sm" onclick="facComStatut(\'' + f.id + '\',\'annulee\')">Annuler</button>' : '')
       + '</div></td></tr>').join('') + '</tbody></table>';
@@ -21109,7 +21139,7 @@ function renderEquipeFacCom(vendeurId) {
     + liste.map(f => '<tr><td style="font-family:var(--font-head);font-weight:700">' + _esc(f.numero) + (_facTypeLib(f) ? '<br><span style="font-size:10.5px;color:var(--accent)">' + _facTypeLib(f) + '</span>' : '') + '</td>'
       + '<td>' + new Date(f.date_facture).toLocaleDateString('fr-FR') + '</td>'
       + '<td style="font-size:12px">' + _esc((f.vente && f.vente.programme) || '—') + (f.vente && f.vente.lot ? ' · lot ' + _esc(f.vente.lot) : '') + '</td>'
-      + '<td class="num">' + fmtEur2(f.ht) + '</td><td class="num">' + fmtEur2(f.ttc) + '</td><td>' + _facStatutBadge(f) + '</td>'
+      + '<td class="num">' + fmtEurFac(f.ht) + '</td><td class="num">' + fmtEurFac(f.ttc) + '</td><td>' + _facStatutBadge(f) + '</td>'
       + '<td><button class="btn btn-ghost btn-sm" onclick="facComVoir(\'' + f.id + '\')">Voir la facture</button></td></tr>').join('')
     + '</tbody></table></div>';
 }
@@ -21127,7 +21157,8 @@ function _ouvrirFactureComPDF(f) {
   const totalCom = Number(V.commissionTotale) || 0;
   let recapCommission = '';
   if (f.type === 'avance' && totalCom && Number(f.ht) < totalCom - 0.004)
-    recapCommission = '<div class="sub">Avance de <b>' + String(Math.round(Number(f.ht) / totalCom * 10000) / 100).replace('.', ',') + ' %</b> sur une commission totale de <b>' + eur(totalCom) + ' HT</b> — le solde sera facturé au paiement de la vente.</div>';
+    recapCommission = '<div class="sub">Avance de <b>' + String(Math.round(Number(f.ht) / totalCom * 10000) / 100).replace('.', ',') + ' %</b> sur une commission totale de <b>' + eur(totalCom) + ' HT</b> — le solde sera facturé au paiement de la vente.'
+      + ((V.dejaFacture || []).length ? ' Déjà facturé : ' + (V.dejaFacture || []).map(x => 'facture ' + esc(x.numero) + ' (' + eur(x.ht) + ')').join(', ') + '.' : '') + '</div>';
   else if (f.type === 'solde' && totalCom)
     recapCommission = '<div class="sub">Commission totale : <b>' + eur(totalCom) + ' HT</b>. Déjà facturé : '
       + (V.dejaFacture || []).map(x => 'facture ' + esc(x.numero) + ' (' + eur(x.ht) + ')').join(', ') + '. <b>Solde : ' + eur(f.ht) + ' HT</b>.</div>';
