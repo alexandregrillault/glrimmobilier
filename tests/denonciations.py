@@ -11,7 +11,13 @@ INDEX = ICI.parent / 'index.html'
 SORTIE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ICI
 
 LEADS = [{'id': 'c1', 'nom': 'Client Test', 'prenom': '', 'statut': 'Suivi', 'vendeur': 'Louis', 'date_lead': '2026-11-09',
-          'lieu': 'Aubervilliers (93300)', 'appels': []}]
+          'lieu': 'Aubervilliers (93300)', 'appels': []},
+         {'id': 'c2', 'nom': 'Georges Test', 'prenom': 'Georges', 'nom_famille': 'Test', 'civilite': None, 'statut': 'Suivi',
+          'vendeur': 'Louis', 'date_lead': '2026-11-10', 'lieu': 'Colombes (92700)', 'appels': []}]
+# Civilité (décision d'Alex du 10/11/2026) : le robot a dénoncé Georges chez iSelection en « Mme »
+# (cas d'erreur simulé) ; le vendeur confirme « M. » → bandeau d'alerte, puis « C'est corrigé ».
+DENONC_C2 = [{'plateforme': 'iselection', 'compte': 'iselection', 'promoteur': 'ISELECTION', 'programme': 'Opus', 'ville': 'Colombes',
+              'statut': 'envoyee', 'fait_le': '2026-11-10T10:00:00+00:00', 'civilite': 'Mme'}]
 DENONC = [
     {'compte': 'care', 'promoteur': 'CARE PROMOTION', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'statut': 'envoyee', 'fait_le': '2026-11-09T15:14:00+00:00'},
     {'compte': 'care', 'promoteur': 'CARE PROMOTION', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'statut': 'echec', 'fait_le': '2026-11-09T14:14:00+00:00', 'detail': 'essai raté'},
@@ -30,12 +36,17 @@ with sync_playwright() as p:
     for nom, vp in (('bureau', {'width': 1400, 'height': 1000}), ('iphone', {'width': 390, 'height': 844})):
         page = nav.new_page(viewport=vp, timezone_id='Europe/Paris', locale='fr-FR')
         page.on('pageerror', lambda e: erreurs.append(f'{nom} : {e}'))
-        lus = []
+        lus, appels = [], []
         def repond(r):
             if 'supabase.co' not in r.request.url: return r.continue_()
             if '/rest/v1/denonciations' in r.request.url:
                 lus.append(r.request.url)
-                return r.fulfill(status=200, content_type='application/json', body=json.dumps(DENONC))
+                return r.fulfill(status=200, content_type='application/json', body=json.dumps(DENONC_C2 if 'eq.c2' in r.request.url else DENONC))
+            if '/rpc/civilite_du_prenom' in r.request.url:
+                return r.fulfill(status=200, content_type='application/json', body='"M."')
+            if '/rpc/denonciation_civilite_corrigee' in r.request.url or '/rest/v1/contacts' in r.request.url and r.request.method == 'PATCH':
+                appels.append((r.request.method, r.request.url, r.request.post_data))
+                return r.fulfill(status=200, content_type='application/json', body='1' if 'rpc' in r.request.url else '[]')
             r.fulfill(status=200, content_type='application/json', body='[]')
         page.route('**/*', repond)
         page.goto(INDEX.as_uri())
@@ -71,6 +82,22 @@ with sync_playwright() as p:
         # Tout dénoncé : message positif
         page.evaluate("bs => { _selCtx.libres = bs.slice(0, 1); selAjouterLibreRefresh(); }", BIENS)
         if 'Tous les programmes de cette sélection sont dénoncés' not in page.inner_text('#sel-denonc-resume'): erreurs.append(f'{nom} : message « tous dénoncés » absent')
+        page.evaluate("() => { const m = document.getElementById('eq-sel-modal'); if (m) m.remove(); }")
+
+        # 3. Civilité : déduite du prénom (à confirmer), confirmation, alerte si iSelection a reçu l'autre
+        page.evaluate("eqOuvrirFiche('c2')")
+        page.wait_for_function("(document.getElementById('eq-fiche-corps')||{innerText:''}).innerText.includes('à confirmer')", timeout=5000)
+        txt = page.inner_text('#eq-fiche-corps')
+        if 'Civilité à corriger' in txt: erreurs.append(f'{nom} : alerte avant toute confirmation')
+        page.click("#eq-fiche-corps button[onclick*=\"eqCiviliteSet('c2', 'Monsieur')\"]")
+        page.wait_for_function("(document.getElementById('eq-fiche-corps')||{innerText:''}).innerText.includes('Civilité à corriger')", timeout=5000)
+        if not any(m == 'PATCH' and 'Monsieur' in (d or '') for m, u, d in appels): erreurs.append(f'{nom} : civilité non enregistrée : {appels}')
+        if page.evaluate("_eqLeads.find(x => x.id === 'c2').civilite") != 'Monsieur': erreurs.append(f'{nom} : civilité pas à jour sur la fiche')
+        if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : fiche civilité déborde en largeur')
+        page.screenshot(path=str(SORTIE / f'denonciations_civilite_{nom}.png'))
+        page.click("button:has-text(\"C'est corrigé\")")
+        page.wait_for_timeout(500)
+        if not any('denonciation_civilite_corrigee' in u and 'c2' in (d or '') for m, u, d in appels): erreurs.append(f'{nom} : « C\'est corrigé » non envoyé')
         page.close()
     nav.close()
 
