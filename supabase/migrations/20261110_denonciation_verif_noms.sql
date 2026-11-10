@@ -64,7 +64,8 @@ revoke all on function public.robot_denonciation_nom_verif(text, bigint, text, t
 grant execute on function public.robot_denonciation_nom_verif(text, bigint, text, text, text) to anon, authenticated, service_role;
 
 -- Lancement chaque soir à 20 h 30, heure de Paris, après le dernier passage horaire (20 h).
--- « corriger » : faux tant qu'Alex n'a pas validé la correction sur un essai ; le robot relit seulement.
+-- « corriger » : activé le 10/11/2026 après le valide d'Alex sur l'essai (Morgane, Crenn & Odeau) ; le robot ne
+-- corrige que pour compléter un nom, un nom vraiment différent reste à vérifier à la main.
 create or replace function public.robot_lancer_verif_noms()
 returns text
 language plpgsql security definer set search_path = public as $$
@@ -86,7 +87,7 @@ begin
       'X-GitHub-Api-Version', '2022-11-28',
       'User-Agent', 'glr-robot-pige',
       'Content-Type', 'application/json'),
-    body := jsonb_build_object('ref', 'main', 'inputs', jsonb_build_object('noter', 'true', 'corriger', 'false')));
+    body := jsonb_build_object('ref', 'main', 'inputs', jsonb_build_object('noter', 'true', 'corriger', 'true')));
   return 'controle des noms lance';
 end
 $$;

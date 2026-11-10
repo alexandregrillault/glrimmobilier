@@ -10814,7 +10814,8 @@ function _denoncManqueTexte(manque) {
   const t = [];
   if (manque.includes('nom')) t.push('le prénom et le nom de famille (bouton « Modifier » à côté du nom)');
   if (manque.includes('civilite')) t.push('la civilité (M. ou Mme, à côté du téléphone)');
-  return t.join(' et ');
+  if (manque.includes('budget')) t.push('le budget du client (bouton « Modifier », Station 9 demande un revenu)');
+  return t.length > 1 ? t.slice(0, -1).join(', ') + ' et ' + t[t.length - 1] : t.join('');
 }
 function eqFicheDenoncManqueHtml(l) {
   denoncManqueCharger(l);

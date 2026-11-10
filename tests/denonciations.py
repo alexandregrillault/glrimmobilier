@@ -55,7 +55,7 @@ with sync_playwright() as p:
             if '/rpc/denonciation_manques' in r.request.url:
                 corps = r.request.post_data or ''
                 c3 = 'c3' in corps
-                rep = {'manque': ['nom', 'civilite'] if c3 else [], 'programmes': 3 if c3 else 0}
+                rep = {'manque': ['nom', 'civilite', 'budget'] if c3 else [], 'programmes': 3 if c3 else 0}
                 if 'c4' in corps:
                     valide = any(m == 'PATCH' and 'Lafagne' in (d or '') for m, u, d in appels)
                     rep = {'manque': [], 'programmes': 3, 'identite': {'prenom': 'Morgane', 'nom': 'Lafagne', 'source': 'fiche' if valide else 'email'}}
@@ -131,7 +131,7 @@ with sync_playwright() as p:
         page.evaluate("eqOuvrirFiche('c3')")
         page.wait_for_selector('#eq-denonc-manque', timeout=5000)
         txt = page.inner_text('#eq-denonc-manque')
-        for attendu in ('Dénonciations en attente (3 programmes)', 'nom de famille', 'civilité', "C'est fait"):
+        for attendu in ('Dénonciations en attente (3 programmes)', 'nom de famille', 'civilité', 'budget du client', "C'est fait"):
             if attendu not in txt: erreurs.append(f'{nom} : carré rouge sans « {attendu} » : {txt!r}')
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : carré rouge déborde en largeur')
         page.screenshot(path=str(SORTIE / f'denonciations_manque_{nom}.png'))
