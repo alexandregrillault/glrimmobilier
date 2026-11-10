@@ -19,6 +19,11 @@ LEADS = [{'id': 'c1', 'nom': 'Client Test', 'prenom': '', 'statut': 'Suivi', 've
 # Fiche incomplète (décision d'Alex du 10/11/2026) : Morgane n'a pas de nom de famille ni de civilité
 LEADS.append({'id': 'c3', 'nom': 'Morgane', 'prenom': 'Morgane', 'statut': 'Nouveau', 'vendeur': 'Louis',
               'date_lead': '2026-11-10', 'lieu': 'Ivry-sur-Seine (94200)', 'appels': []})
+# Nom tiré de l'e-mail : c4 à valider, c5 dénoncé sous un nom que la fiche contredit maintenant
+LEADS.append({'id': 'c4', 'nom': 'Morgane', 'prenom': 'Morgane', 'statut': 'Nouveau', 'vendeur': 'Louis', 'email': 'morgane.lafagne@exemple.fr',
+              'date_lead': '2026-11-10', 'lieu': 'Ivry-sur-Seine (94200)', 'appels': []})
+LEADS.append({'id': 'c5', 'nom': 'Morgane Lafargue', 'prenom': 'Morgane', 'nom_famille': 'Lafargue', 'statut': 'Suivi', 'vendeur': 'Louis',
+              'date_lead': '2026-11-10', 'lieu': 'Ivry-sur-Seine (94200)', 'appels': []})
 DENONC_C2 = [{'plateforme': 'iselection', 'compte': 'iselection', 'promoteur': 'ISELECTION', 'programme': 'Opus', 'ville': 'Colombes',
               'statut': 'envoyee', 'fait_le': '2026-11-10T10:00:00+00:00', 'civilite': 'Mme'}]
 DENONC = [
@@ -46,9 +51,16 @@ with sync_playwright() as p:
                 lus.append(r.request.url)
                 return r.fulfill(status=200, content_type='application/json', body=json.dumps(DENONC_C2 if 'eq.c2' in r.request.url else DENONC))
             if '/rpc/denonciation_manques' in r.request.url:
-                c3 = 'c3' in (r.request.post_data or '')
-                return r.fulfill(status=200, content_type='application/json',
-                                 body=json.dumps({'manque': ['nom', 'civilite'] if c3 else [], 'programmes': 3 if c3 else 0}))
+                corps = r.request.post_data or ''
+                c3 = 'c3' in corps
+                rep = {'manque': ['nom', 'civilite'] if c3 else [], 'programmes': 3 if c3 else 0}
+                if 'c4' in corps:
+                    valide = any(m == 'PATCH' and 'Lafagne' in (d or '') for m, u, d in appels)
+                    rep = {'manque': [], 'programmes': 3, 'identite': {'prenom': 'Morgane', 'nom': 'Lafagne', 'source': 'fiche' if valide else 'email'}}
+                if 'c5' in corps and not any('denonciation_nom_corrige' in u for m, u, d in appels):
+                    rep = {'manque': [], 'programmes': 3, 'identite': {'prenom': 'Morgane', 'nom': 'Lafargue', 'source': 'fiche'},
+                           'ecart_nom': {'nom': 'Morgane Lafagne', 'promoteurs': ['CARE PROMOTION', 'BOUYGUES']}}
+                return r.fulfill(status=200, content_type='application/json', body=json.dumps(rep))
             if '/rpc/denonciation_relancer' in r.request.url:
                 appels.append(('POST', r.request.url, r.request.post_data))
                 n = sum(1 for a in appels if 'denonciation_relancer' in a[1])
@@ -56,7 +68,7 @@ with sync_playwright() as p:
                                  body=json.dumps({'manque': ['civilite'] if n == 1 else [], 'programmes': 3, 'relance': n > 1}))
             if '/rpc/civilite_du_prenom' in r.request.url:
                 return r.fulfill(status=200, content_type='application/json', body='"M."')
-            if '/rpc/denonciation_civilite_corrigee' in r.request.url or '/rest/v1/contacts' in r.request.url and r.request.method == 'PATCH':
+            if '/rpc/denonciation_civilite_corrigee' in r.request.url or '/rpc/denonciation_nom_corrige' in r.request.url or '/rest/v1/contacts' in r.request.url and r.request.method == 'PATCH':
                 appels.append((r.request.method, r.request.url, r.request.post_data))
                 return r.fulfill(status=200, content_type='application/json', body='1' if 'rpc' in r.request.url else '[]')
             r.fulfill(status=200, content_type='application/json', body='[]')
@@ -127,6 +139,30 @@ with sync_playwright() as p:
         page.wait_for_timeout(400)
         if page.query_selector('#eq-denonc-manque'): erreurs.append(f'{nom} : carré rouge resté après la relance')
         if sum(1 for a in appels if 'denonciation_relancer' in a[1] and 'c3' in (a[2] or '')) != 2: erreurs.append(f'{nom} : relances : {appels}')
+        page.evaluate("eqFicheFermer()")
+
+        # 5. Nom tiré de l'e-mail : mis en avant, « C'est bon » l'écrit sur la fiche
+        page.evaluate("eqOuvrirFiche('c4')")
+        page.wait_for_selector('#eq-nom-retenu', timeout=5000)
+        txt = page.inner_text('#eq-nom-retenu')
+        for attendu in ('Morgane Lafagne', "e-mail", 'Prénom : Morgane', 'Nom : Lafagne', "C'est bon", 'Corriger'):
+            if attendu not in txt: erreurs.append(f'{nom} : encadré nom retenu sans « {attendu} » : {txt!r}')
+        if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : encadré nom déborde')
+        page.screenshot(path=str(SORTIE / f'denonciations_nom_email_{nom}.png'))
+        page.click("#eq-nom-retenu button:has-text(\"C'est bon\")")
+        page.wait_for_function("!document.getElementById('eq-nom-retenu')", timeout=5000)
+        if page.evaluate("_eqLeads.find(x => x.id === 'c4').nom_famille") != 'Lafagne': erreurs.append(f'{nom} : nom pas écrit sur la fiche')
+        if not any(m == 'PATCH' and 'nom_confirme' in (d or '') for m, u, d in appels): erreurs.append(f'{nom} : nom non confirmé')
+        page.evaluate("eqFicheFermer()")
+
+        # 6. Dénoncé sous un autre nom : bandeau rouge, « C'est corrigé »
+        page.evaluate("eqOuvrirFiche('c5')")
+        page.wait_for_selector('#eq-nom-ecart', timeout=5000)
+        txt = page.inner_text('#eq-nom-ecart')
+        for attendu in ('Dénoncé sous un autre nom', 'Morgane Lafagne', 'CARE PROMOTION, BOUYGUES'):
+            if attendu not in txt: erreurs.append(f'{nom} : bandeau écart sans « {attendu} » : {txt!r}')
+        page.click("#eq-nom-ecart button")
+        page.wait_for_function("!document.getElementById('eq-nom-ecart')", timeout=5000)
         page.close()
     nav.close()
 

@@ -10773,16 +10773,28 @@ function eqFicheCiviliteAlerteHtml(l) {
 // distincts, aucune dénonciation ne part ; sans civilité (ni confirmée, ni déduite), pas d'iSelection.
 // Carré rouge sur la fiche ; le vendeur complète puis clique « C'est fait », qui relance le robot
 // (RPC denonciation_manques / denonciation_relancer).
-const _denoncManque = {};           // contact_id → { manque: ['nom', 'civilite'], programmes: n }
-function denoncManqueCharger(id) {
-  if (!id || (id in _denoncManque)) return;
-  _denoncManque[id] = null;
+// Nom absent de la fiche (décision d'Alex du 10/11/2026) : la base le cherche dans l'e-mail
+// (« morgane.lafagne@… ») ; le robot dénonce sous ce nom, la fiche le met en avant pour que le
+// vendeur le valide (« C'est bon », qui l'écrit sur la fiche) ou le corrige.
+const _denoncManque = {};           // contact_id → { manque, programmes, identite, ecart_nom }
+const _denoncManqueSig = {};        // contact_id → nom/civilité lus : relu quand la fiche change
+function denoncManqueCharger(l, force) {
+  const id = l && l.id;
+  if (!id) return;
+  const sig = [l.prenom, l.nom_famille, l.nom, l.civilite, l.email].join('|');
+  if (!force && (id in _denoncManque) && _denoncManqueSig[id] === sig) return;
+  _denoncManqueSig[id] = sig;
+  if (!(id in _denoncManque)) _denoncManque[id] = null;
   fetch(SUPABASE_URL + '/rest/v1/rpc/denonciation_manques', {
     method: 'POST',
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_contact: id })
   }).then(r => r.ok ? r.json() : null)
-    .then(m => { _denoncManque[id] = m; if (m && (m.manque || []).length && _eqFicheId === id) _eqFicheRender(); })
+    .then(m => {
+      const avant = JSON.stringify(_denoncManque[id]);
+      _denoncManque[id] = m;
+      if (JSON.stringify(m) !== avant && _eqFicheId === id) _eqFicheRender();
+    })
     .catch(() => {});
 }
 function _denoncManqueTexte(manque) {
@@ -10792,9 +10804,58 @@ function _denoncManqueTexte(manque) {
   return t.join(' et ');
 }
 function eqFicheDenoncManqueHtml(l) {
-  denoncManqueCharger(l.id);
+  denoncManqueCharger(l);
   const m = _denoncManque[l.id];
-  if (!m || !(m.manque || []).length) return '';
+  if (!m) return '';
+  return eqFicheNomRetenuHtml(l, m) + eqFicheNomEcartHtml(l, m) + _eqFicheManqueCarre(l, m);
+}
+// Nom tiré de l'e-mail : mis en avant, à valider
+function eqFicheNomRetenuHtml(l, m) {
+  const i = m.identite;
+  if (!i || i.source !== 'email' || !m.programmes) return '';
+  const complet = (i.prenom || '') + ' ' + (i.nom || '');
+  return `<div id="eq-nom-retenu" style="margin:10px 0;background:#FFF6E5;border:1px solid #E8C88A;border-radius:11px;padding:11px 14px;font-size:12.5px;color:#6B4A12;display:flex;justify-content:space-between;align-items:center;gap:8px 14px;flex-wrap:wrap">
+    <span>Nom retenu pour les dénonciations : <strong style="font-size:14px">${_vEsc(i.prenom)} ${_vEsc(i.nom)}</strong><br><span style="font-size:11.5px">Trouvé dans l'e-mail du client (la fiche n'avait qu'un mot). Prénom : <strong>${_vEsc(i.prenom)}</strong> · Nom : <strong>${_vEsc(i.nom)}</strong>. Vérifie et valide.</span></span>
+    <span style="display:flex;gap:6px;flex-wrap:wrap">
+      <button onclick="eqNomRetenuValider('${l.id}')" style="border-radius:9px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff">C'est bon</button>
+      <button onclick="openEditContact('${l.id}')" style="border-radius:9px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #E8C88A;background:#fff;color:#6B4A12">Corriger</button>
+    </span>
+  </div>`;
+}
+// Dénoncé sous un nom tiré de l'e-mail, que la fiche contredit maintenant
+function eqFicheNomEcartHtml(l, m) {
+  const e = m.ecart_nom;
+  if (!e || !e.nom) return '';
+  const promos = (e.promoteurs || []).filter(Boolean).join(', ');
+  return `<div id="eq-nom-ecart" style="margin:10px 0;background:#FDECEA;border:1px solid #E5A29B;border-radius:11px;padding:11px 14px;font-size:12.5px;color:#7A1F17;display:flex;justify-content:space-between;align-items:center;gap:8px 14px;flex-wrap:wrap">
+    <span><strong>Dénoncé sous un autre nom.</strong> Le robot a dénoncé ce client sous « ${_vEsc(e.nom)} » (d'après son e-mail), alors que la fiche dit maintenant « ${_vEsc(nomComplet(l) || '')} ». Corrige le nom chez ${_vEsc(promos || 'les promoteurs')}, puis clique sur « C'est corrigé ».</span>
+    <button onclick="eqNomCorrige('${l.id}')" style="border-radius:9px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #E5A29B;background:#fff;color:#7A1F17">C'est corrigé</button>
+  </div>`;
+}
+async function eqNomRetenuValider(id) {
+  const l = _eqLeads.find(x => x.id === id);
+  const i = _denoncManque[id] && _denoncManque[id].identite;
+  if (!l || !i) return;
+  await _eqLeadPatch(id, { prenom: i.prenom, nom_famille: i.nom, nom: i.prenom + ' ' + i.nom, nom_confirme: true });
+  if (l.nom_famille === i.nom) { denoncManqueCharger(l, true); if (_eqFicheId === id) _eqFicheRender(); }
+}
+async function eqNomCorrige(id) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/denonciation_nom_corrige', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_contact: id })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const l = _eqLeads.find(x => x.id === id);
+    if (l) denoncManqueCharger(l, true);
+    toast('✓ Noté : nom corrigé chez les promoteurs', 'var(--success)');
+  } catch (e) {
+    toast('Impossible de noter la correction : ' + String(e.message || e).slice(0, 120), 'var(--danger)');
+  }
+}
+function _eqFicheManqueCarre(l, m) {
+  if (!(m.manque || []).length) return '';
   const n = m.programmes || 0;
   return `<div id="eq-denonc-manque" style="margin:10px 0;background:#FDECEA;border:1px solid #E5A29B;border-radius:11px;padding:11px 14px;font-size:12.5px;color:#7A1F17;display:flex;justify-content:space-between;align-items:center;gap:8px 14px;flex-wrap:wrap">
     <span><strong>Dénonciations en attente${n ? ' (' + n + ' programme' + (n > 1 ? 's' : '') + ')' : ''}.</strong> Il manque ${_vEsc(_denoncManqueTexte(m.manque))}. Complète la fiche, puis clique sur « C'est fait » pour lancer les dénonciations.</span>
