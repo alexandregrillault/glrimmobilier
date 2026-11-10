@@ -16,6 +16,9 @@ LEADS = [{'id': 'c1', 'nom': 'Client Test', 'prenom': '', 'statut': 'Suivi', 've
           'vendeur': 'Louis', 'date_lead': '2026-11-10', 'lieu': 'Colombes (92700)', 'appels': []}]
 # Civilité (décision d'Alex du 10/11/2026) : le robot a dénoncé Georges chez iSelection en « Mme »
 # (cas d'erreur simulé) ; le vendeur confirme « M. » → bandeau d'alerte, puis « C'est corrigé ».
+# Fiche incomplète (décision d'Alex du 10/11/2026) : Morgane n'a pas de nom de famille ni de civilité
+LEADS.append({'id': 'c3', 'nom': 'Morgane', 'prenom': 'Morgane', 'statut': 'Nouveau', 'vendeur': 'Louis',
+              'date_lead': '2026-11-10', 'lieu': 'Ivry-sur-Seine (94200)', 'appels': []})
 DENONC_C2 = [{'plateforme': 'iselection', 'compte': 'iselection', 'promoteur': 'ISELECTION', 'programme': 'Opus', 'ville': 'Colombes',
               'statut': 'envoyee', 'fait_le': '2026-11-10T10:00:00+00:00', 'civilite': 'Mme'}]
 DENONC = [
@@ -42,6 +45,15 @@ with sync_playwright() as p:
             if '/rest/v1/denonciations' in r.request.url:
                 lus.append(r.request.url)
                 return r.fulfill(status=200, content_type='application/json', body=json.dumps(DENONC_C2 if 'eq.c2' in r.request.url else DENONC))
+            if '/rpc/denonciation_manques' in r.request.url:
+                c3 = 'c3' in (r.request.post_data or '')
+                return r.fulfill(status=200, content_type='application/json',
+                                 body=json.dumps({'manque': ['nom', 'civilite'] if c3 else [], 'programmes': 3 if c3 else 0}))
+            if '/rpc/denonciation_relancer' in r.request.url:
+                appels.append(('POST', r.request.url, r.request.post_data))
+                n = sum(1 for a in appels if 'denonciation_relancer' in a[1])
+                return r.fulfill(status=200, content_type='application/json',
+                                 body=json.dumps({'manque': ['civilite'] if n == 1 else [], 'programmes': 3, 'relance': n > 1}))
             if '/rpc/civilite_du_prenom' in r.request.url:
                 return r.fulfill(status=200, content_type='application/json', body='"M."')
             if '/rpc/denonciation_civilite_corrigee' in r.request.url or '/rest/v1/contacts' in r.request.url and r.request.method == 'PATCH':
@@ -98,6 +110,23 @@ with sync_playwright() as p:
         page.click("button:has-text(\"C'est corrigé\")")
         page.wait_for_timeout(500)
         if not any('denonciation_civilite_corrigee' in u and 'c2' in (d or '') for m, u, d in appels): erreurs.append(f'{nom} : « C\'est corrigé » non envoyé')
+        page.evaluate("eqFicheFermer()")
+
+        # 4. Fiche incomplète : carré rouge, « C'est fait » refusé tant qu'il manque, puis relance
+        page.evaluate("eqOuvrirFiche('c3')")
+        page.wait_for_selector('#eq-denonc-manque', timeout=5000)
+        txt = page.inner_text('#eq-denonc-manque')
+        for attendu in ('Dénonciations en attente (3 programmes)', 'nom de famille', 'civilité', "C'est fait"):
+            if attendu not in txt: erreurs.append(f'{nom} : carré rouge sans « {attendu} » : {txt!r}')
+        if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : carré rouge déborde en largeur')
+        page.screenshot(path=str(SORTIE / f'denonciations_manque_{nom}.png'))
+        page.click("#eq-denonc-manque button")
+        page.wait_for_timeout(400)
+        if not page.query_selector('#eq-denonc-manque'): erreurs.append(f'{nom} : carré rouge retiré alors qu\'il manque encore la civilité')
+        page.click("#eq-denonc-manque button")
+        page.wait_for_timeout(400)
+        if page.query_selector('#eq-denonc-manque'): erreurs.append(f'{nom} : carré rouge resté après la relance')
+        if sum(1 for a in appels if 'denonciation_relancer' in a[1] and 'c3' in (a[2] or '')) != 2: erreurs.append(f'{nom} : relances : {appels}')
         page.close()
     nav.close()
 

@@ -9618,6 +9618,7 @@ function eqOuvrirFiche(id) {
   }
   _eqFicheId = id;
   delete _denonc[id];  // dénonciations relues à chaque ouverture de la fiche
+  delete _denoncManque[id];
   let panel = document.getElementById('eq-fiche-panel');
   if (!panel) {
     panel = document.createElement('div');
@@ -10334,6 +10335,7 @@ function _eqFicheRender() {
     ${eqTransfertBandeauFiche(l)}
     ${eqSuiviParBandeauFiche(l)}
     ${eqVeilleBandeauFiche(l)}
+    ${eqFicheDenoncManqueHtml(l)}
     ${eqFicheCiviliteAlerteHtml(l)}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 14px;font-size:13px">
 ${(() => {
@@ -10766,6 +10768,58 @@ function eqFicheCiviliteAlerteHtml(l) {
     <span><strong>Civilité à corriger chez iSelection.</strong> Le robot a dénoncé ce client en « ${_vEsc(e[0].civilite)} » d'après son prénom, alors qu'il est « ${_vEsc(CIV_COURTE[l.civilite])} ». Corrige-la dans iSelection (Mes clients), puis clique sur « C'est corrigé ».</span>
     <button onclick="eqCiviliteCorrigee('${l.id}')" style="border-radius:9px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #E5A29B;background:#fff;color:#7A1F17">C'est corrigé</button>
   </div>`;
+}
+// Fiche incomplète pour dénoncer (décision d'Alex du 10/11/2026) : sans prénom et nom de famille
+// distincts, aucune dénonciation ne part ; sans civilité (ni confirmée, ni déduite), pas d'iSelection.
+// Carré rouge sur la fiche ; le vendeur complète puis clique « C'est fait », qui relance le robot
+// (RPC denonciation_manques / denonciation_relancer).
+const _denoncManque = {};           // contact_id → { manque: ['nom', 'civilite'], programmes: n }
+function denoncManqueCharger(id) {
+  if (!id || (id in _denoncManque)) return;
+  _denoncManque[id] = null;
+  fetch(SUPABASE_URL + '/rest/v1/rpc/denonciation_manques', {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_contact: id })
+  }).then(r => r.ok ? r.json() : null)
+    .then(m => { _denoncManque[id] = m; if (m && (m.manque || []).length && _eqFicheId === id) _eqFicheRender(); })
+    .catch(() => {});
+}
+function _denoncManqueTexte(manque) {
+  const t = [];
+  if (manque.includes('nom')) t.push('le prénom et le nom de famille (bouton « Modifier » à côté du nom)');
+  if (manque.includes('civilite')) t.push('la civilité (M. ou Mme, à côté du téléphone)');
+  return t.join(' et ');
+}
+function eqFicheDenoncManqueHtml(l) {
+  denoncManqueCharger(l.id);
+  const m = _denoncManque[l.id];
+  if (!m || !(m.manque || []).length) return '';
+  const n = m.programmes || 0;
+  return `<div id="eq-denonc-manque" style="margin:10px 0;background:#FDECEA;border:1px solid #E5A29B;border-radius:11px;padding:11px 14px;font-size:12.5px;color:#7A1F17;display:flex;justify-content:space-between;align-items:center;gap:8px 14px;flex-wrap:wrap">
+    <span><strong>Dénonciations en attente${n ? ' (' + n + ' programme' + (n > 1 ? 's' : '') + ')' : ''}.</strong> Il manque ${_vEsc(_denoncManqueTexte(m.manque))}. Complète la fiche, puis clique sur « C'est fait » pour lancer les dénonciations.</span>
+    <button onclick="eqDenoncRelancer('${l.id}')" style="border-radius:9px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #E5A29B;background:#fff;color:#7A1F17">C'est fait</button>
+  </div>`;
+}
+async function eqDenoncRelancer(id) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/denonciation_relancer', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_contact: id })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const m = await r.json();
+    _denoncManque[id] = m;
+    if ((m.manque || []).length) {
+      toast('Il manque encore ' + _denoncManqueTexte(m.manque) + '.', 'var(--danger)');
+    } else {
+      toast('✓ Dénonciations relancées : le robot s\'en occupe dans les minutes qui viennent', 'var(--success)');
+    }
+    if (_eqFicheId === id) _eqFicheRender();
+  } catch (e) {
+    toast('Impossible de relancer les dénonciations : ' + String(e.message || e).slice(0, 120), 'var(--danger)');
+  }
 }
 async function eqCiviliteSet(id, val) {
   const l = _eqLeads.find(x => x.id === id);
