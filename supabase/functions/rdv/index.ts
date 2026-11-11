@@ -270,7 +270,7 @@ async function contactDuLien(lien: any) {
 // compétition ouverte ou client en veille → le rendez-vous vaut première action,
 // il est à lui ; client suivi → la demande est notée chez son vendeur, avec un
 // rappel du jour, et aucun créneau n'est pris sur le lien.
-async function ficheDuVisiteur(v: { nom: string; email: string; telephone: string; projet: string; vendeur: string }): Promise<{ id: string; suiviPar: string | null } | null> {
+async function ficheDuVisiteur(v: { nom: string; email: string; telephone: string; projet: string; vendeur: string }): Promise<{ id: string; suiviPar: string | null; creee?: boolean } | null> {
   const nowIso = new Date().toISOString();
   const today = nowIso.slice(0, 10);
   const tel = formatPhone(v.telephone);
@@ -366,7 +366,7 @@ async function ficheDuVisiteur(v: { nom: string; email: string; telephone: strin
   }).select('id').single();
 
   if (error || !cree) return null;
-  return { id: cree.id as string, suiviPar: null };
+  return { id: cree.id as string, suiviPar: null, creee: true };
 }
 
 // ---------------- Budget fait par le client (page budget/, 11/11/2026) ----------------
@@ -489,7 +489,10 @@ Deno.serve(async (req: Request) => {
       const perso = jeton();
       const { error: errLien } = await supabase.from('rdv_liens').insert({
         token: perso, contact_id: contactId, vendeur, origine: 'public_pris',
-        contexte: { projet, depuis: 'lien public de ' + vendeur, nom }
+        // fiche_creee : la fiche est née de ce lien (11/11/2026). Sinon le visiteur a été
+        // rattaché à une fiche existante par l'e-mail ou le téléphone tapés, sans preuve
+        // que ce soit lui : la page budget/ ne lui est alors ni proposée ni ouverte.
+        contexte: { projet, depuis: 'lien public de ' + vendeur, nom, fiche_creee: !!fiche.creee }
       });
       if (errLien) return json({ ok: false, error: 'lien_impossible' }, 500);
 
@@ -525,10 +528,12 @@ Deno.serve(async (req: Request) => {
 
       // Budget déjà sur la fiche (client connu) ? La page n'invite à le faire que sinon.
       let budgetFait = true;
-      try {
-        const { data: cs } = await supabase.from('contacts').select('simulations').eq('id', contactId).maybeSingle();
-        budgetFait = Array.isArray(cs && cs.simulations) && cs.simulations.length > 0;
-      } catch (_) { budgetFait = true; }
+      if (fiche.creee) {
+        try {
+          const { data: cs } = await supabase.from('contacts').select('simulations').eq('id', contactId).maybeSingle();
+          budgetFait = Array.isArray(cs && cs.simulations) && cs.simulations.length > 0;
+        } catch (_) { budgetFait = true; }
+      }
       return json({ ok: true, token: perso, creneau, budgetFait });
     }
 
@@ -541,6 +546,10 @@ Deno.serve(async (req: Request) => {
     // son propre budget de la page peut être remplacé (« Modifier mes réponses »).
     if (body.action === 'budget') {
       if (!lien.contact_id) return json({ ok: false, error: 'sans_contact' }, 400);
+      // Lien né du planning public sur une fiche qui existait déjà : rien ne prouve que
+      // c'est le client, on n'écrit rien sur sa fiche (même règle que le 03/11/2026).
+      const ctxB: any = (lien.contexte && typeof lien.contexte === 'object') ? lien.contexte : {};
+      if (lien.origine === 'public_pris' && !ctxB.fiche_creee) return json({ ok: false, error: 'deja_fait' }, 409);
       const { data: c } = await supabase.from('contacts').select('simulations, notes').eq('id', lien.contact_id).maybeSingle();
       const actuelles: any[] = Array.isArray(c && c.simulations) ? c.simulations : [];
       const remplace = actuelles.length > 0 && estBudgetPage(actuelles[0]) && actuelles.slice(1).every((x: any) => !x || estBudgetPage(x));
@@ -710,7 +719,8 @@ Deno.serve(async (req: Request) => {
     // Un budget existe-t-il déjà sur la fiche (client ou vendeur) ? La page de
     // rendez-vous ne propose la page budget/ que s'il n'y en a aucun (11/11/2026).
     let budgetFait = false;
-    if (lien.contact_id) {
+    if (depuisPublic && !ctx.fiche_creee) budgetFait = true;
+    else if (lien.contact_id) {
       try {
         const { data: cs } = await supabase.from('contacts').select('simulations').eq('id', lien.contact_id).maybeSingle();
         budgetFait = Array.isArray(cs && cs.simulations) && cs.simulations.length > 0;
