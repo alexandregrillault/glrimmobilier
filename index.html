@@ -2750,7 +2750,7 @@
   <div class="modal modal-wide">
     <div class="modal-title">Importer un relevé BNP</div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;color:var(--muted);line-height:1.6">
-      Dépose le relevé PDF du mois : il est lu <strong style="color:var(--text)">dans ton navigateur</strong>, rien n'est envoyé ailleurs. Les charges fixes, salaires, URSSAF, impôts et remboursements CCA se rangent automatiquement, les <strong style="color:var(--text)">dépenses carte</strong> arrivent dans l'onglet « À ranger » (défaut = carte du payeur). Vérifie l'aperçu, décoche ce que tu ne veux pas, puis enregistre.<br><strong style="color:var(--text)">L'import ne touche jamais au chiffre d'affaires ni aux commissions vendeurs</strong> : virements reçus et honoraires versés restent pilotés par le statut des ventes (« facture payée »).
+      Dépose le relevé PDF du mois : il est lu <strong style="color:var(--text)">dans ton navigateur</strong>, rien n'est envoyé ailleurs. Les charges fixes, salaires, URSSAF, impôts et remboursements CCA se rangent automatiquement, les <strong style="color:var(--text)">dépenses carte</strong> arrivent dans l'onglet « À ranger » (défaut = carte du payeur). Vérifie l'aperçu, décoche ce que tu ne veux pas, puis enregistre.<br>Salaires des associés : jusqu'à 2 000 € par associé et par mois dans la charge fixe « Salaires », le reste dans sa section. Une « facture prestation » payée à un commercial devient une commission : choisis le commercial dans l'aperçu.<br><strong style="color:var(--text)">L'import ne touche jamais au chiffre d'affaires</strong> : les virements reçus restent pilotés par le statut des ventes (« facture payée »).
     </div>
     <div class="form-grid">
       <div class="form-group full">
@@ -6054,8 +6054,6 @@ const BNP_REGLES_CHARGES = [
   { re: /URSSAF/i,                                cat:'urssaf',     ss:null,      lib:'URSSAF' },
   { re: /DGFIP|\bTVA\b/i,                         cat:'urssaf',     ss:null,      lib:'TVA (DGFIP)' },
   { re: /IMP[OÔ]TS? SOCIETE|\bIS\b/i,             cat:'urssaf',     ss:null,      lib:'Impôt société (IS)' },
-  { re: /SALAIRE.*(THEO|THÉO)/i,                  cat:'variable',   ss:'theo',    lib:'Salaire' },
-  { re: /SALAIRE.*ALEX/i,                         cat:'variable',   ss:'alex',    lib:'Salaire' },
   { re: /(REMBOURSEMENT|CCA|EMPRUNT).*ALEX/i,     cat:'variable',   ss:'alex',    lib:'Remboursement CCA' },
   { re: /(REMBOURSEMENT|CCA|EMPRUNT).*(THEO|THÉO)/i, cat:'variable',ss:'theo',    lib:'Remboursement CCA' },
   { re: /\bNDF\b|NOTE DE FRAIS/i,                 cat:'variable',   ss:'societe', lib:'Notes de frais' },
@@ -6070,10 +6068,52 @@ function carte4(section) {
   const m = /^CARTE (\S+)/.exec(section || ''); return m ? m[1].slice(-7, -3) : null;
 }
 
+// Salaires des associés (demande d'Alex du 11/11/2026) : un virement « SALAIRE »
+// va dans la charge fixe « Salaires » (cf-salaires) jusqu'à BNP_SALAIRE_PLAFOND
+// par associé et par mois ; le dépassement reste une ligne « Salaire » dans la
+// section de l'associé. Le montant du mois s'ajoute à ce qui a déjà été importé
+// pour ce mois (détail par associé gardé dans tranche.detail).
+const BNP_SALAIRE_PLAFOND = 2000;
+function bnpAssocie(txt) {
+  const t = /\b(THEO|THÉO|THEOPHILE|THÉOPHILE|ROUYER)\b/i.test(txt), a = /\bALEX/i.test(txt);
+  return t && !a ? 'theo' : a && !t ? 'alex' : null;
+}
+const _bnpSansAccent = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+// Commercial nommé dans le libellé (prénom seul, un seul candidat), sinon à choisir
+function bnpVendeurDevine(txt) {
+  const T = _bnpSansAccent(txt);
+  const c = (data.vendeurs || []).filter(v => v.prenom && new RegExp('\\b' + _bnpSansAccent(v.prenom) + '\\b').test(T));
+  return c.length === 1 ? c[0].id : '';
+}
+// Répartit chaque salaire gardé entre « Salaires » (partFixe) et sa section (partVar),
+// dans l'ordre des dates, en tenant compte de ce que le mois contient déjà.
+function bnpSalairesRepartir(lignes) {
+  const cf = (data.chargesFixes || []).find(x => x.id === 'cf-salaires');
+  const pris = {};
+  lignes.map((l, i) => ({ l, i })).filter(x => x.l.v.dest === 'salaire')
+    .sort((a, b) => a.l.op.date.localeCompare(b.l.op.date) || a.i - b.i)
+    .forEach(({ l }) => {
+      l.v.partFixe = l.v.partVar = null;
+      if (!l.garder || !l.v.associe) return;
+      const k = l.op.mois + '|' + l.v.associe;
+      if (!(k in pris)) {
+        const t = cf && (cf.tranches || []).find(x => x.mois === l.op.mois);
+        pris[k] = (t && t.detail && Number(t.detail[l.v.associe])) || 0;
+      }
+      const m = Math.round(Math.abs(l.op.montant) * 100) / 100;
+      const pf = Math.min(m, Math.max(0, BNP_SALAIRE_PLAFOND - pris[k]));
+      pris[k] += pf;
+      l.v.partFixe = Math.round(pf * 100) / 100;
+      l.v.partVar = Math.round((m - pf) * 100) / 100;
+    });
+}
+
 // Ce que le relevé ne doit JAMAIS toucher : le chiffre d'affaires et les
 // commissions vendeurs sont pilotés par le statut des ventes (« facture payée »),
 // pas par la banque. Les importer ici doublonnerait avec renderCommissionsVendeurs()
-// et avec le calcul de trésorerie.
+// et avec le calcul de trésorerie. Exception (demande d'Alex du 11/11/2026) : le
+// virement « FACTURE PRESTATION » payé à un commercial est enregistré en charge
+// « commission » (commercial choisi dans l'aperçu).
 function bnpVentiler(op) {
   if (op.sens === 'credit') {
     return { dest:'exclu', motif:'Recette — pilotée par le statut de la vente' };
@@ -6085,6 +6125,12 @@ function bnpVentiler(op) {
   if (f) {
     const cf = (data.chargesFixes || []).find(x => x.id === f.fixe);
     return { dest:'fixe', fixeId: f.fixe, libelle: cf ? cf.libelle : f.fixe };
+  }
+  if (op.type !== 'carte' && /\bSALAIRES?\b/i.test(txt)) {
+    return { dest:'salaire', associe: bnpAssocie(txt) };
+  }
+  if (op.type !== 'carte' && /FACTURE\s+PRESTATION/i.test(txt)) {
+    return { dest:'commission', vendeurId: bnpVendeurDevine(txt) };
   }
   if (op.type !== 'carte' && /COMMISSION|HONORAIRE/i.test(txt)) {
     return { dest:'exclu', motif:'Commission vendeur — pilotée par le statut « facture payée »' };
@@ -6151,6 +6197,14 @@ function setCartePorteur(n4, val) {
   IMPORT.lignes.forEach(l => { if (l.v.dest === 'aranger' && l.v.n4 === n4) l.v.carte = val; });
   renderImportApercu();
 }
+function setImportAssocie(i, val) {
+  IMPORT.lignes[i].v.associe = val || null;
+  renderImportApercu();
+}
+function setImportVendeur(i, val) {
+  IMPORT.lignes[i].v.vendeurId = val || '';
+  renderImportApercu();
+}
 function toggleImportLigne(i) {
   if (IMPORT.lignes[i].v.dest === 'exclu') return;
   IMPORT.lignes[i].garder = !IMPORT.lignes[i].garder;
@@ -6161,6 +6215,7 @@ function renderImportApercu() {
   const box = document.getElementById('import-apercu');
   const statut = document.getElementById('import-statut');
   const L = IMPORT.lignes;
+  bnpSalairesRepartir(L);
   const deb = L.filter(l => l.op.sens === 'debit').reduce((s,l) => s - l.op.montant, 0);
   const cre = L.filter(l => l.op.sens === 'credit').reduce((s,l) => s + l.op.montant, 0);
   const att = IMPORT.meta.totaux;
@@ -6194,20 +6249,55 @@ function renderImportApercu() {
 
   const groupes = [
     ['fixe',    'Charges fixes — tranche du mois mise à jour'],
+    ['salaire', 'Salaires — charge fixe « Salaires » jusqu’à ' + fmtEurC(BNP_SALAIRE_PLAFOND).replace(/,00/, '') + ' par associé et par mois, le reste dans sa section'],
+    ['commission', 'Commissions vendeurs (« Facture prestation »)'],
     ['charge',  'Charges enregistrées directement'],
     ['aranger', 'Dépenses carte → file « À ranger »'],
     ['exclu',   'Jamais importé — piloté par le statut des ventes'],
   ];
+  const _selStyle = 'background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:3px 6px;color:var(--text);font-size:12px;max-width:220px';
+  const _nomAss = a => a === 'alex' ? 'Alexandre' : a === 'theo' ? 'Théophile' : '';
   groupes.forEach(([dest, titre]) => {
     const items = L.map((l, i) => ({ l, i })).filter(x => x.l.v.dest === dest);
     if (!items.length) return;
+    // Mois dont « Salaires » a déjà un montant saisi à la main (sans détail par associé) :
+    // l'import s'y ajoute, on prévient.
+    let avert = '';
+    if (dest === 'salaire') {
+      const cf = (data.chargesFixes || []).find(x => x.id === 'cf-salaires');
+      const moisVus = [...new Set(items.filter(x => x.l.garder && x.l.v.partFixe).map(x => x.l.op.mois))];
+      moisVus.forEach(m => {
+        const t = cf && (cf.tranches || []).find(x => x.mois === m);
+        if (t && Number(t.montant) && !t.detail) {
+          avert += '<div class="imp-sal-avert" style="margin:6px 0;padding:7px 10px;border-radius:8px;background:rgba(245,166,35,.12);color:var(--text);font-size:12px">'
+            + 'Attention : « Salaires » de ' + m.split('-').reverse().join('/') + ' vaut déjà ' + fmtEurC(t.montant)
+            + ' (saisi à la main). L’import s’y ajoute.</div>';
+        }
+      });
+      if (!cf) avert += '<div class="imp-sal-avert" style="margin:6px 0;font-size:12px;color:var(--warning)">La charge fixe « Salaires » n’existe pas encore : elle sera créée.</div>';
+    }
     const tot = items.filter(x => x.l.garder).reduce((s, x) => s + Math.abs(x.l.op.montant), 0);
     html += '<div style="margin-top:16px;display:flex;justify-content:space-between;align-items:baseline">'
       + '<div style="font-size:12px;font-weight:700;color:var(--text)">' + titre + ' <span style="color:var(--muted);font-weight:400">(' + items.length + ')</span></div>'
       + (dest === 'exclu' ? '' : '<div style="font-family:var(--font-head);font-weight:700;color:var(--accent)">' + fmtEurC(tot) + '</div>')
-      + '</div><table style="width:100%;font-size:12.5px"><tbody>';
+      + '</div>' + avert + '<table style="width:100%;font-size:12.5px"><tbody>';
     items.forEach(({ l, i }) => {
-      const cible = l.v.dest === 'fixe' ? l.v.libelle
+      const cible = l.v.dest === 'salaire'
+        ? '<select class="imp-associe" onchange="setImportAssocie(' + i + ', this.value)" style="' + _selStyle + '">'
+            + '<option value="">Associé à choisir</option>'
+            + ['alex', 'theo'].map(a => '<option value="' + a + '"' + (l.v.associe === a ? ' selected' : '') + '>' + _nomAss(a) + '</option>').join('')
+            + '</select>'
+            + (l.garder && l.v.associe ? '<div class="imp-sal-part" style="font-size:11px;margin-top:2px">'
+                + (l.v.partFixe ? 'Salaires ' + fmtEurC(l.v.partFixe) : '')
+                + (l.v.partFixe && l.v.partVar ? ' + ' : '')
+                + (l.v.partVar ? _nomAss(l.v.associe) + ' — Salaire ' + fmtEurC(l.v.partVar) : '') + '</div>' : '')
+        : l.v.dest === 'commission'
+        ? '<select class="imp-vendeur" onchange="setImportVendeur(' + i + ', this.value)" style="' + _selStyle + '">'
+            + '<option value="">Commercial à choisir</option>'
+            + (data.vendeurs || []).map(v => '<option value="' + escHtml(v.id) + '"' + (l.v.vendeurId === v.id ? ' selected' : '') + '>'
+                + escHtml(((v.prenom || '') + ' ' + (v.nom || '')).trim()) + '</option>').join('')
+            + '</select>'
+        : l.v.dest === 'fixe' ? l.v.libelle
         : l.v.dest === 'charge' ? (l.v.sousSection ? l.v.sousSection + ' — ' : '') + l.v.libelle
         : l.v.dest === 'aranger' ? (l.v.carte === 'alex' ? 'Alexandre' : l.v.carte === 'theo' ? 'Théophile' : 'Société')
         : (l.doublon ? 'Déjà importé' : (l.v.motif || '—'));
@@ -6217,7 +6307,9 @@ function renderImportApercu() {
         + '<td style="padding:4px;color:var(--muted);white-space:nowrap">' + l.op.date.split('-').reverse().join('/') + '</td>'
         + '<td style="padding:4px">' + escHtml(l.op.tiers).slice(0, 60) + (l.v.incertain ? ' <span style="color:var(--warning);font-size:11px">à vérifier</span>' : '') + '</td>'
         + '<td style="padding:4px;text-align:right;white-space:nowrap;font-family:var(--font-head);font-weight:700">' + fmtEurC(l.op.montant) + '</td>'
-        + '<td style="padding:4px;color:var(--muted);white-space:nowrap">' + cible + '</td></tr>';
+        + (l.v.dest === 'salaire' || l.v.dest === 'commission'
+            ? '<td></td></tr><tr style="opacity:' + (l.garder ? 1 : .45) + '"><td></td><td colspan="4" style="padding:0 4px 8px;color:var(--muted)">' + cible + '</td></tr>'
+            : '<td style="padding:4px;color:var(--muted);white-space:nowrap">' + cible + '</td></tr>');
     });
     html += '</tbody></table>';
   });
@@ -6238,16 +6330,38 @@ function validerImportReleve() {
   if (!IMPORT) return;
   const gardees = IMPORT.lignes.filter(l => l.garder);
   if (!gardees.length) { toast('⚠ Rien à enregistrer', 'var(--warning)'); return; }
+  if (gardees.some(l => l.v.dest === 'salaire' && !l.v.associe)) { toast('⚠ Choisis l’associé de chaque salaire', 'var(--warning)'); return; }
+  if (gardees.some(l => l.v.dest === 'commission' && !l.v.vendeurId)) { toast('⚠ Choisis le commercial de chaque facture prestation', 'var(--warning)'); return; }
+  bnpSalairesRepartir(IMPORT.lignes);
   if (!data.aRanger) data.aRanger = [];
   if (!data.objectifs) data.objectifs = {};
   if (!data.objectifs.empreintesFixes) data.objectifs.empreintesFixes = [];
 
   let nFixe = 0, nCharge = 0, nRanger = 0;
-  const parFixe = {};
+  const parFixe = {}, parSalaire = {};
 
   gardees.forEach(({ op, v }) => {
     if (v.dest === 'exclu' || op.sens === 'credit') return; // ceinture et bretelles
-    if (v.dest === 'fixe') {
+    if (v.dest === 'salaire') {
+      if (v.partFixe) {
+        const s = parSalaire[op.mois] = parSalaire[op.mois] || { montant: 0, detail: {}, empreintes: [] };
+        s.montant += v.partFixe;
+        s.detail[v.associe] = (s.detail[v.associe] || 0) + v.partFixe;
+        s.empreintes.push(op.empreinte);
+      }
+      if (v.partVar) {
+        data.charges.push({ id: uid(), libelle: 'Salaire', categorie: 'variable',
+          sousSection: v.associe, mois: op.mois, montant: v.partVar,
+          recurrence: 'unique', taxe: null, empreinte: op.empreinte, source: 'releve-bnp' });
+        nCharge++;
+      }
+    } else if (v.dest === 'commission') {
+      const vd = (data.vendeurs || []).find(x => x.id === v.vendeurId);
+      data.charges.push({ id: uid(), libelle: 'Commission ' + (vd ? vd.prenom : v.vendeurId), categorie: 'commission',
+        sousSection: null, vendeurId: v.vendeurId, mois: op.mois, montant: Math.round(Math.abs(op.montant) * 100) / 100,
+        recurrence: 'unique', taxe: null, empreinte: op.empreinte, source: 'releve-bnp' });
+      nCharge++;
+    } else if (v.dest === 'fixe') {
       const k = v.fixeId + '|' + op.mois;
       parFixe[k] = parFixe[k] || { fixeId: v.fixeId, mois: op.mois, montant: 0, empreintes: [] };
       parFixe[k].montant += Math.abs(op.montant);
@@ -6272,6 +6386,27 @@ function validerImportReleve() {
     cf.tranches.sort((a, b) => a.mois.localeCompare(b.mois));
     if (!cf.dateDebut || t.mois < cf.dateDebut) cf.dateDebut = t.mois;
     t.empreintes.forEach(e => data.objectifs.empreintesFixes.push(e));
+    nFixe++;
+  });
+
+  // « Salaires » : on AJOUTE au mois (jamais de remplacement), détail par associé gardé
+  // pour le plafond des imports suivants.
+  Object.entries(parSalaire).forEach(([mois, s]) => {
+    if (!data.chargesFixes) data.chargesFixes = [];
+    let cf = data.chargesFixes.find(x => x.id === 'cf-salaires');
+    if (!cf) {
+      cf = { id: 'cf-salaires', libelle: 'Salaires', taxe: '', dateDebut: '', dateFin: null, tranches: [] };
+      data.chargesFixes.push(cf);
+    }
+    cf.tranches = cf.tranches || [];
+    let t = cf.tranches.find(x => x.mois === mois);
+    if (!t) { t = { mois, montant: 0 }; cf.tranches.push(t); }
+    t.montant = Math.round(((Number(t.montant) || 0) + s.montant) * 100) / 100;
+    t.detail = Object.assign({}, t.detail || {});
+    Object.entries(s.detail).forEach(([a, m]) => { t.detail[a] = Math.round(((Number(t.detail[a]) || 0) + m) * 100) / 100; });
+    cf.tranches.sort((a, b) => a.mois.localeCompare(b.mois));
+    if (!cf.dateDebut || mois < cf.dateDebut) cf.dateDebut = mois;
+    s.empreintes.forEach(e => data.objectifs.empreintesFixes.push(e));
     nFixe++;
   });
 
