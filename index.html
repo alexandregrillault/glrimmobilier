@@ -6095,13 +6095,17 @@ function bnpSalairesRepartir(lignes) {
     .forEach(({ l }) => {
       l.v.partFixe = l.v.partVar = null;
       if (!l.garder || !l.v.associe) return;
+      const m0 = Math.round(Math.abs(l.op.montant) * 100) / 100;
+      // Choix d'Alex sur la ligne (demande du 11/11/2026 : chaque salaire ressort,
+      // on propose, il tranche) : tout en fixe, tout en variable, ou la proposition.
+      if (l.v.choix === 'variable') { l.v.partFixe = 0; l.v.partVar = m0; return; }
       const k = l.op.mois + '|' + l.v.associe;
       if (!(k in pris)) {
         const t = cf && (cf.tranches || []).find(x => x.mois === l.op.mois);
         pris[k] = (t && t.detail && Number(t.detail[l.v.associe])) || 0;
       }
-      const m = Math.round(Math.abs(l.op.montant) * 100) / 100;
-      const pf = Math.min(m, Math.max(0, BNP_SALAIRE_PLAFOND - pris[k]));
+      const m = m0;
+      const pf = l.v.choix === 'fixe' ? m : Math.min(m, Math.max(0, BNP_SALAIRE_PLAFOND - pris[k]));
       pris[k] += pf;
       l.v.partFixe = Math.round(pf * 100) / 100;
       l.v.partVar = Math.round((m - pf) * 100) / 100;
@@ -6197,6 +6201,10 @@ function setCartePorteur(n4, val) {
   IMPORT.lignes.forEach(l => { if (l.v.dest === 'aranger' && l.v.n4 === n4) l.v.carte = val; });
   renderImportApercu();
 }
+function setImportSalaireChoix(i, val) {
+  IMPORT.lignes[i].v.choix = val || 'propose';
+  renderImportApercu();
+}
 function setImportAssocie(i, val) {
   IMPORT.lignes[i].v.associe = val || null;
   renderImportApercu();
@@ -6249,7 +6257,7 @@ function renderImportApercu() {
 
   const groupes = [
     ['fixe',    'Charges fixes — tranche du mois mise à jour'],
-    ['salaire', 'Salaires — charge fixe « Salaires » jusqu’à ' + fmtEurC(BNP_SALAIRE_PLAFOND).replace(/,00/, '') + ' par associé et par mois, le reste dans sa section'],
+    ['salaire', 'Salaires à vérifier — proposition : charge fixe « Salaires » jusqu’à ' + fmtEurC(BNP_SALAIRE_PLAFOND).replace(/,00/, '') + ' par associé et par mois (mois de la date du virement), le reste dans sa section'],
     ['commission', 'Commissions vendeurs (« Facture prestation »)'],
     ['charge',  'Charges enregistrées directement'],
     ['aranger', 'Dépenses carte → file « À ranger »'],
@@ -6286,6 +6294,10 @@ function renderImportApercu() {
         ? '<select class="imp-associe" onchange="setImportAssocie(' + i + ', this.value)" style="' + _selStyle + '">'
             + '<option value="">Associé à choisir</option>'
             + ['alex', 'theo'].map(a => '<option value="' + a + '"' + (l.v.associe === a ? ' selected' : '') + '>' + _nomAss(a) + '</option>').join('')
+            + '</select> '
+            + '<select class="imp-sal-choix" onchange="setImportSalaireChoix(' + i + ', this.value)" style="' + _selStyle + '">'
+            + [['propose', 'Proposition'], ['fixe', 'Tout en fixe'], ['variable', 'Tout dans sa section']]
+                .map(([c, t]) => '<option value="' + c + '"' + ((l.v.choix || 'propose') === c ? ' selected' : '') + '>' + t + '</option>').join('')
             + '</select>'
             + (l.garder && l.v.associe ? '<div class="imp-sal-part" style="font-size:11px;margin-top:2px">'
                 + (l.v.partFixe ? 'Salaires ' + fmtEurC(l.v.partFixe) : '')

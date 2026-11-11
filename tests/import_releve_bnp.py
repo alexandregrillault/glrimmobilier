@@ -1,6 +1,7 @@
 # Test de l'import du relevé BNP (demande d'Alex du 11/11/2026) :
-# - virement « SALAIRE » → charge fixe « Salaires » jusqu'à 2 000 € par associé et par mois,
+# - virement « SALAIRE » : proposition = charge fixe « Salaires » jusqu'à 2 000 € par associé et par mois,
 #   le dépassement en ligne « Salaire » dans la section de l'associé, montant du mois AJOUTÉ ;
+#   Alex peut choisir ligne par ligne « tout en fixe » ou « tout en variable » ;
 # - virement « FACTURE PRESTATION » → charge « commission », commercial choisi dans l'aperçu.
 # Bureau et iPhone. Lancer : ~/glr-pige-robot/.venv/bin/python tests/import_releve_bnp.py [dossier des captures]
 import pathlib, sys
@@ -74,10 +75,17 @@ with sync_playwright() as p:
         if page.evaluate("data.charges.length") != 0: erreurs.append(f'{nom} : enregistré malgré un commercial manquant')
         page.locator('select.imp-vendeur').nth(1).select_option('v-louis')
 
+        # Proposition par défaut, puis les choix d'Alex sur deux lignes
         parts = page.evaluate("() => IMPORT.lignes.map(l => [l.v.partFixe ?? null, l.v.partVar ?? null])")
-        if parts[0] != [500, 500]: erreurs.append(f'{nom} : salaire Alex novembre réparti {parts[0]} au lieu de 500 + 500')
+        if parts[0] != [500, 500]: erreurs.append(f'{nom} : proposition Alex novembre {parts[0]} au lieu de 500 + 500')
+        if parts[2] != [0, 800]: erreurs.append(f'{nom} : proposition complément Théo {parts[2]} au lieu de 0 + 800')
+        page.locator('select.imp-sal-choix').nth(0).select_option('variable')
+        page.locator('select.imp-sal-choix').nth(2).select_option('fixe')
+
+        parts = page.evaluate("() => IMPORT.lignes.map(l => [l.v.partFixe ?? null, l.v.partVar ?? null])")
+        if parts[0] != [0, 1000]: erreurs.append(f'{nom} : salaire Alex novembre (tout en variable) {parts[0]} au lieu de 0 + 1000')
         if parts[1] != [2000, 500]: erreurs.append(f'{nom} : salaire Théo réparti {parts[1]} au lieu de 2000 + 500')
-        if parts[2] != [0, 800]: erreurs.append(f'{nom} : complément Théo réparti {parts[2]} au lieu de 0 + 800')
+        if parts[2] != [800, 0]: erreurs.append(f'{nom} : complément Théo (tout en fixe) {parts[2]} au lieu de 800 + 0')
         if parts[5] != [2000, 0]: erreurs.append(f'{nom} : salaire Alex octobre réparti {parts[5]} au lieu de 2000 + 0')
 
         page.locator('#import-apercu').scroll_into_view_if_needed()
@@ -91,14 +99,13 @@ with sync_playwright() as p:
             ch: data.charges.map(c => [c.libelle, c.categorie, c.sousSection, c.mois, c.montant, c.vendeurId || null]),
             emp: (data.objectifs.empreintesFixes || []).length })""")
         tr = {t['mois']: t for t in r['tr']}
-        if tr['2026-11']['montant'] != 4000 or tr['2026-11'].get('detail') != {'alex': 2000, 'theo': 2000}:
-            erreurs.append(f'{nom} : Salaires novembre {tr["2026-11"]} au lieu de 4000 (alex 2000, theo 2000)')
+        if tr['2026-11']['montant'] != 4300 or tr['2026-11'].get('detail') != {'alex': 1500, 'theo': 2800}:
+            erreurs.append(f'{nom} : Salaires novembre {tr["2026-11"]} au lieu de 4300 (alex 1500, theo 2800)')
         if tr['2026-10']['montant'] != 6000 or tr['2026-10'].get('detail') != {'alex': 2000}:
             erreurs.append(f'{nom} : Salaires octobre {tr["2026-10"]} au lieu de 6000 ajoutés (alex 2000)')
         attendu_ch = sorted([
-            ['Salaire', 'variable', 'alex', '2026-11', 500, None],
+            ['Salaire', 'variable', 'alex', '2026-11', 1000, None],
             ['Salaire', 'variable', 'theo', '2026-11', 500, None],
-            ['Salaire', 'variable', 'theo', '2026-11', 800, None],
             ['Commission Anais', 'commission', None, '2026-11', 3000, 'v-anais'],
             ['Commission Louis', 'commission', None, '2026-11', 1200, 'v-louis'],
         ], key=str)
