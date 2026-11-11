@@ -158,6 +158,11 @@
   .simu-lot-montant { margin-left:auto; font-family:Georgia,serif; font-weight:700; color:var(--dark); }
   .simu-lot-eco { font-size:12px; color:var(--gold-fonce); font-weight:600; }
   .simu-lot-txt { color:var(--muted); }
+  .simu-lot-loyer { font-size:12.5px; color:var(--muted); border-top:1px solid #eee8db; padding-top:6px; margin-top:2px; }
+  .simu-lot-loyer b { color:var(--dark); }
+  .simu-lot-aides { list-style:none; margin:2px 0 0; padding:6px 0 0; border-top:1px solid #eee8db; display:flex; flex-direction:column; gap:3px; font-size:12.5px; color:var(--muted); }
+  .simu-lot-aides li { display:flex; flex-wrap:wrap; column-gap:10px; row-gap:1px; }
+  .simu-lot-aides li span:last-child { margin-left:auto; color:var(--dark); font-weight:600; }
 
   /* ---- Lots dans une carte ---- */
   .lots { padding:0 24px; }
@@ -851,6 +856,25 @@
     var h = "<div class='simu-lot'><div class='simu-lot-ligne'><span class='simu-lot-label'>Mensualité estimée</span><span class='simu-lot-montant'>" + new Intl.NumberFormat('fr-FR').format(Math.round(m)) + " €/mois</span></div>";
     var eco = Number(s.economie);
     if (isFinite(eco) && eco > 0) h += "<div class='simu-lot-eco'>Dont " + new Intl.NumberFormat('fr-FR').format(Math.round(eco)) + " €/mois gagnés grâce aux aides</div>";
+    // Écart avec le loyer actuel du locataire (11/11/2026, demande d'Alex)
+    var loyer = Number(sim.loyerActuel);
+    if (isFinite(loyer) && loyer > 0){
+      var nfl = { format: function(v){ return new Intl.NumberFormat('fr-FR').format(v).replace(/\u202f/g, "\u00a0"); } }, ec = Math.round(m - loyer);
+      h += "<div class='simu-lot-loyer'>Votre loyer actuel : " + nfl.format(Math.round(loyer)) + " €/mois, " +
+        (Math.abs(ec) < 20 ? "<b>soit à peu près la même somme</b>" : ec > 0 ? "<b>soit " + nfl.format(ec) + " €/mois de plus</b>" : "<b>soit " + nfl.format(-ec) + " €/mois de moins</b>") +
+        " pour devenir propriétaire</div>";
+    }
+    // Ce que chaque aide apporte sur ce lot, en euros (11/11/2026, demande d'Alex)
+    var LIB_AIDES = { tva:"TVA réduite à 5,5 %", ptz:"Prêt à taux zéro", pal:"Prêt Action Logement", ppl:"Prêt Paris Logement 0 %" };
+    var gs = Array.isArray(s.gains) ? s.gains.filter(function(g){ return g && LIB_AIDES[g.a] && isFinite(Number(g.v)) && Number(g.v) > 0; }) : [];
+    if (gs.length){
+      var nfa = { format: function(v){ return new Intl.NumberFormat('fr-FR').format(v).replace(/\u202f/g, "\u00a0"); } };
+      h += "<ul class='simu-lot-aides'>" + gs.map(function(g){
+        var lib = LIB_AIDES[g.a] + (g.a !== "tva" && isFinite(Number(g.montant)) && Number(g.montant) > 0 ? " de " + nfa.format(Math.round(Number(g.montant))) + " €" : "");
+        var val = g.a === "tva" ? nfa.format(Math.round(Number(g.v))) + " € de moins sur le prix" : nfa.format(Math.round(Number(g.v))) + " € d'intérêts en moins";
+        return "<li><span>" + esc(lib) + "</span><span>" + val + "</span></li>";
+      }).join("") + "</ul>";
+    }
     return h + "</div>";
   }
 

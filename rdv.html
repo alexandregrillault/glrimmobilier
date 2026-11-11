@@ -86,6 +86,13 @@
   .mention { font-size:12px; color:var(--muted); margin-top:10px; text-align:center; }
 
   .confirme { text-align:center; }
+  .budget-invite { text-align:left; border:1px solid var(--gold); background:#fffdf8; }
+  .budget-invite .budget-tag { display:inline-block; font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:var(--gold-fonce); margin-bottom:6px; }
+  .budget-invite h2 { font-size:19px; margin:0 0 6px; }
+  .budget-invite p { font-size:14.5px; margin:0; }
+  .budget-btn { display:block; text-align:center; margin-top:14px; background:var(--gold); color:#fff; text-decoration:none; font-weight:700; font-size:15px; border-radius:12px; padding:13px 16px; }
+  .budget-btn:hover { background:var(--gold-fonce); }
+  .budget-note { margin-top:8px; font-size:12.5px; color:var(--muted); text-align:center; }
   .confirme .quand { font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--gold-fonce); margin:10px 0 4px; }
   .confirme .etat { font-size:13px; color:var(--muted); }
   .coche { width:46px; height:46px; border-radius:50%; background:var(--gold); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 12px; }
@@ -378,6 +385,21 @@
     if (p && p !== _visioPhase) redessiner(donnees);
   }, 30000);
 
+  // Après la prise de rendez-vous seulement, et tant qu'aucun budget n'existe sur la
+  // fiche (fait par le client ou par le vendeur) : invitation à estimer son budget
+  // sur la page budget/ (décision d'Alex du 11/11/2026). Jamais avant le rendez-vous.
+  function htmlInviteBudget(d, qui){
+    if (d.budgetFait !== false || !token) return "";
+    if (!(etat.reserve && etat.debut && !etat.refuse)) return "";
+    return "<div class='bloc budget-invite'>"
+      + "<div class='budget-tag'>En attendant votre rendez-vous</div>"
+      + "<h2>Estimez votre budget en 2 minutes</h2>"
+      + "<p>7 questions simples, aucun document à fournir. " + qui + " aura votre estimation sous les yeux pour préparer votre échange.</p>"
+      + "<a class='budget-btn' href='https://www.glrimmobilier.com/budget/?t=" + encodeURIComponent(token) + "'>Estimer mon budget</a>"
+      + "<div class='budget-note'>Facultatif et sans engagement.</div>"
+      + "</div>";
+  }
+
   function htmlRdv(d){
     var qui = d.vendeur ? esc(d.vendeur) : "votre conseiller";
     if (estPublic) return htmlRdvPublic(d, qui);
@@ -394,7 +416,7 @@
       h += "<p style='margin-top:12px;font-size:14px'>" + (ok ? "À très vite avec " + qui + "." : qui + " vous confirme le rendez-vous très vite.") + "</p>";
       if (ok) h += htmlVisio(d, qui);
       else if (etat.mode === "visio") h += "<p class='sig'>Le lien de la visio apparaîtra ici une fois le rendez-vous confirmé.</p>";
-      return h + "</div>";
+      return h + "</div>" + htmlInviteBudget(d, qui);
     }
 
     // Le conseiller a proposé d'autres créneaux : le client tranche, c'est confirmé d'office
@@ -447,7 +469,8 @@
         + "<h2>Votre créneau est réservé</h2>"
         + "<div class='quand'>" + esc(fmtJourLong(etat.debut)) + " à " + esc(fmtHeure(etat.debut)) + "</div>"
         + "<div class='etat'>En attente de confirmation · " + esc(libelleRdv(etat)) + "</div>"
-        + "<p style='margin-top:12px;font-size:14px'>" + qui + " vous confirme le rendez-vous très vite, par mail.</p></div>";
+        + "<p style='margin-top:12px;font-size:14px'>" + qui + " vous confirme le rendez-vous très vite, par mail.</p></div>"
+        + htmlInviteBudget(d, qui);
     }
     if (etat.demande){
       return "<div class='bloc rdv confirme'><div class='coche'>✓</div>"
@@ -673,6 +696,8 @@
             FN = SUPA + "/functions/v1/rdv/" + encodeURIComponent(token);
             try { history.replaceState(null, "", location.pathname + "?t=" + encodeURIComponent(token)); } catch (e) {}
           }
+          // Budget déjà sur la fiche ? Le serveur le dit à la réservation (11/11/2026)
+          d.budgetFait = corps.budgetFait === false ? false : true;
           if (corps.creneau){
             etat = { demande:true, reserve:true, confirme:false, refuse:false, debut:corps.creneau.debut, fin:corps.creneau.fin, mode:corps.creneau.mode, format:formatChoisi };
           } else {

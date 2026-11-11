@@ -369,6 +369,34 @@ async function ficheDuVisiteur(v: { nom: string; email: string; telephone: strin
   return { id: cree.id as string, suiviPar: null };
 }
 
+// ---------------- Budget fait par le client (page budget/, 11/11/2026) ----------------
+// Proposé après la prise de rendez-vous, et seulement tant qu'aucun budget n'existe
+// sur la fiche (ni du client, ni du vendeur) : décision d'Alex du 11/11/2026.
+// Écrit dans contacts.simulations, au même format qu'une simulation du simulateur
+// (origine « client »), pour que le vendeur retrouve les réponses dans le
+// simulateur, les confirme et y ajoute les lots avant d'envoyer la sélection.
+const nombreOuNul = (v: unknown) => (v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v))) ? Math.round(Number(v)) : null;
+function objetBorne(x: any, max: number) {
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+  try { return JSON.stringify(x).length <= max ? x : null; } catch (_) { return null; }
+}
+function montageBudget(x: any) {
+  if (!x || typeof x !== 'object' || !Array.isArray(x.lignes)) return null;
+  const lignes = x.lignes.slice(0, 20).map((r: any) => ({
+    l: typeof r?.l === 'string' ? r.l.slice(0, 220) : '',
+    v: typeof r?.v === 'string' ? r.v.slice(0, 60) : '',
+    c: r?.c === 'sub' || r?.c === 'total' ? r.c : ''
+  })).filter((r: any) => r.l && r.v);
+  if (!lignes.length) return null;
+  return {
+    lignes,
+    note: typeof x.note === 'string' ? x.note.slice(0, 600) : '',
+    budgetAvec: nombreOuNul(x.budgetAvec),
+    budgetSans: nombreOuNul(x.budgetSans)
+  };
+}
+const estBudgetPage = (s: any) => !!(s && s.origine === 'client' && s.source === 'page_budget');
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   const url = new URL(req.url);
@@ -495,12 +523,58 @@ Deno.serve(async (req: Request) => {
         }
       }).eq('token', perso);
 
-      return json({ ok: true, token: perso, creneau });
+      // Budget déjà sur la fiche (client connu) ? La page n'invite à le faire que sinon.
+      let budgetFait = true;
+      try {
+        const { data: cs } = await supabase.from('contacts').select('simulations').eq('id', contactId).maybeSingle();
+        budgetFait = Array.isArray(cs && cs.simulations) && cs.simulations.length > 0;
+      } catch (_) { budgetFait = true; }
+      return json({ ok: true, token: perso, creneau, budgetFait });
     }
 
     if (estPublic) return json({ ok: false, error: 'presentation_requise' }, 400);
 
     const nomClient = (contact && (contact.nom || [contact.prenom, contact.nom_famille].filter(Boolean).join(' '))) || '';
+
+    // Le client a fait son budget sur la page budget/ : enregistré sur sa fiche.
+    // Refusé si un budget existe déjà (fait par le vendeur, ou plus ancien) ; seul
+    // son propre budget de la page peut être remplacé (« Modifier mes réponses »).
+    if (body.action === 'budget') {
+      if (!lien.contact_id) return json({ ok: false, error: 'sans_contact' }, 400);
+      const { data: c } = await supabase.from('contacts').select('simulations, notes').eq('id', lien.contact_id).maybeSingle();
+      const actuelles: any[] = Array.isArray(c && c.simulations) ? c.simulations : [];
+      const remplace = actuelles.length > 0 && estBudgetPage(actuelles[0]) && actuelles.slice(1).every((x: any) => !x || estBudgetPage(x));
+      if (actuelles.length && !remplace) return json({ ok: false, error: 'deja_fait' }, 409);
+      const p = (body.profil && typeof body.profil === 'object') ? body.profil : {};
+      const nouvelle = {
+        id: crypto.randomUUID(),
+        date: new Date().toISOString(),
+        origine: 'client',
+        source: 'page_budget',
+        profil: {
+          projet: typeof p.projet === 'string' ? p.projet.slice(0, 20) : '',
+          revenus: nombreOuNul(p.revenus),
+          apport: nombreOuNul(p.apport),
+          duree: nombreOuNul(p.duree)
+        },
+        budgetMax: nombreOuNul(body.budgetMax),
+        montage: montageBudget(body.montage),
+        loyerActuel: (() => { const n = nombreOuNul(body.loyerActuel); return n && n > 0 && n < 20000 ? n : null; })(),
+        etat: objetBorne(body.etat, 12000),
+        reponses: objetBorne(body.reponses, 4000),
+        lots: []
+      };
+      // Sans budget existant, ou en remplacement de son propre budget : il est seul sur la fiche
+      const maj: Record<string, unknown> = { simulations: [nouvelle] };
+      if (!remplace) {
+        const jour = new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+        const montant = nouvelle.budgetMax && nouvelle.budgetMax > 0 ? new Intl.NumberFormat('fr-FR').format(nouvelle.budgetMax).replace(/\s/g, ' ') + ' €' : 'pas de budget chiffrable';
+        const note = `[${jour}] A fait son budget en ligne : ${montant}. À confirmer avec le client avant la sélection.`;
+        maj.notes = (c && c.notes) ? c.notes + '\n' + note : note;
+      }
+      await supabase.from('contacts').update(maj).eq('id', lien.contact_id);
+      return json({ ok: true });
+    }
 
     // Réservation d'un créneau : atomique côté base (le premier arrivé l'emporte)
     if (body.action === 'reserver') {
@@ -633,6 +707,16 @@ Deno.serve(async (req: Request) => {
       ? (visioPropre(rdv.lieu) || await salleDuVendeur(vendeur))
       : '';
 
+    // Un budget existe-t-il déjà sur la fiche (client ou vendeur) ? La page de
+    // rendez-vous ne propose la page budget/ que s'il n'y en a aucun (11/11/2026).
+    let budgetFait = false;
+    if (lien.contact_id) {
+      try {
+        const { data: cs } = await supabase.from('contacts').select('simulations').eq('id', lien.contact_id).maybeSingle();
+        budgetFait = Array.isArray(cs && cs.simulations) && cs.simulations.length > 0;
+      } catch (_) { budgetFait = true; }
+    }
+
     return json({
       ok: true,
       expired: false,
@@ -642,6 +726,7 @@ Deno.serve(async (req: Request) => {
       bien,
       rdv,
       visio,
+      budgetFait,
       formats: FORMATS,
       creneaux: await creneauxDisponibles(vendeur),
       propositions: await creneauxProposes(token),

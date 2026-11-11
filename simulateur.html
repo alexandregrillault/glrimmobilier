@@ -158,7 +158,7 @@ summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--navy)}
       </div>
       <div class="f" id="fLoyer">
         <label>Loyer actuel</label>
-        <div class="unit"><input type="number" id="loyerActuel" value="1100" step="50"><span>€ / mois</span></div>
+        <div class="unit"><input type="number" id="loyerActuel" value="" placeholder="ex. 1 100" step="50"><span>€ / mois</span></div>
         <div class="help">Sert à comparer avec la future mensualité.</div>
       </div>
     </div>
@@ -1034,13 +1034,22 @@ async function enregistrerSimulation(){
       // mobiliser (Msans, calculée sur le prix plein) moins la mensualité réelle (M).
       // Montrée telle quelle au client sur sa feuille sélection (23/09/2026).
       const economie=Math.round(Math.max(0, m.Msans-m.M));
-      return { cle, titre:l.nom, prix:l.prix, mensualite:Math.round(m.M), economie, aides, eligible: m.M<=Mmax+0.5 };
+      // Ce que chaque aide apporte sur ce lot, en euros (11/11/2026, demande d'Alex) :
+      // TVA réduite = baisse du prix ; prêts aidés = intérêts évités sur toute la durée.
+      const gains=[];
+      if(m.tv.ok&&m.ecoTVA>0) gains.push({a:'tva', v:Math.round(m.ecoTVA)});
+      if(m.aPTZ.ok&&m.ptzM>0) gains.push({a:'ptz', montant:Math.round(m.ptzM), v:Math.round(interets(m.ptzM,m.taux,m.aPTZ.duree))});
+      if(m.aPAL.ok&&m.palM>0) gains.push({a:'pal', montant:Math.round(m.palM), v:Math.round(interets(m.palM,m.taux,m.aPAL.duree)-interets(m.palM,m.aPAL.taux,m.aPAL.duree))});
+      if(m.aPPL.ok&&m.pplM>0) gains.push({a:'ppl', montant:Math.round(m.pplM), v:Math.round(interets(m.pplM,m.taux,m.aPPL.duree))});
+      return { cle, titre:l.nom, prix:l.prix, mensualite:Math.round(m.M), economie, aides, gains:gains.filter(g=>g.v>0), eligible: m.M<=Mmax+0.5 };
     });
     const payload={ profil:{ projet:$('projet').value, revenus:Math.round(cl.revenus), apport:Math.round(cl.apport), duree:cl.duree }, lots, etat:etatFormulaire() };
     if(budgetMax!=null) payload.budgetMax=Math.round(budgetMax);
     // Tableau « Comment on y arrive » (lignes + note), montré tel quel sur la feuille sélection
     const montageBudget=montageBudgetActuel(); if(montageBudget) payload.montage=montageBudget;
     const objectif=objectifPourSauvegarde(); if(objectif) payload.objectif=objectif;
+    // Loyer actuel du locataire : la feuille sélection montre l'écart avec la mensualité de chaque lot (11/11/2026)
+    if((cl.logement==='loc'||cl.logement==='hlm') && cl.loyerActuel>0) payload.loyerActuel=Math.round(cl.loyerActuel);
 
     if(CTX_TOKEN){
       const r=await fetch(SB_URL+'/functions/v1/selection/'+encodeURIComponent(CTX_TOKEN), {

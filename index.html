@@ -9574,7 +9574,16 @@ function eqSimulationsHtml(l) {
     const couverts = new Set((Array.isArray(derniere.lots) ? derniere.lots : []).map(x => String((x && x.cle) || '').trim().toLowerCase()).filter(Boolean));
     manquants = biensActifs.filter(b => { const c = _selCleLot(b); return c && !couverts.has(c); }).length;
   }
-  const alerte = manquants
+  // Budget fait par le client sur la page budget/ (11/11/2026, décision d'Alex) : le
+  // vendeur le confirme dans le simulateur (réponses reprises) et y ajoute les lots
+  // avant d'envoyer la sélection ; la feuille montre toujours la dernière simulation.
+  const budgetClient = derniere && derniere.source === 'page_budget';
+  const alerte = budgetClient
+    ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 12px;border-top:1px solid var(--border);font-size:12px">
+        <span style="flex:1;min-width:160px;color:var(--warning)">Budget fait par le client le ${_vEsc(fmtD(derniere.date))}${Number(derniere.budgetMax) > 0 ? ' : <strong>' + _vEsc(eur(derniere.budgetMax)) + '</strong>' : ' : pas de budget chiffrable'}. À confirmer avec le client, lots compris, avant la sélection.</span>
+        <button onclick="simOuvrir('${l.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:6px 10px;color:var(--text);font-size:12px;cursor:pointer">Confirmer le budget</button>
+      </div>`
+    : manquants
     ? `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 12px;border-top:1px solid var(--border);font-size:12px">
         <span style="flex:1;min-width:160px;color:var(--warning)">${manquants} lot${manquants > 1 ? 's' : ''} de la sélection sans mensualité (ajouté${manquants > 1 ? 's' : ''} après la dernière simulation)</span>
         <button onclick="simOuvrir('${l.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:6px 10px;color:var(--text);font-size:12px;cursor:pointer">Mettre à jour la simulation</button>
