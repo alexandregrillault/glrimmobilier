@@ -845,6 +845,11 @@
         Rendez-vous
         <span id="nav-rdv-pastille" style="display:none;margin-left:auto;background:var(--danger);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
       </div>
+      <div class="nav-item" onclick="goTo(&#39;gerant-tickets&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg>
+        Tickets
+        <span id="nav-tickets-pastille" style="display:none;margin-left:auto;background:var(--danger);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
+      </div>
       <div class="nav-item" onclick="goTo(&#39;gerant-chiffres&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9M13 17V5M8 17v-3"></path></svg>
         Chiffres (€)
@@ -965,6 +970,11 @@
       <div class="nav-item" onclick="goTo(&#39;equipe-villes&#39;, this); renderEquipeVilles();">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-5.3-7-11a7 7 0 0 1 14 0c0 5.7-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
         Mes villes
+      </div>
+      <div class="nav-item" onclick="goTo(&#39;equipe-tickets&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg>
+        Mes tickets
+        <span id="nav-mestickets-pastille" style="display:none;margin-left:auto;background:var(--accent);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
       </div>
       <div class="nav-section">Outils</div>
       <div class="nav-item" onclick="goTo(&#39;promoteurs&#39;, this)">
@@ -2242,6 +2252,27 @@
 
 
     <!-- PAGE: MAILS AUTOMATIQUES — le guide des mails envoyés aux clients (fichier mails.html, à côté d'index.html) -->
+    <!-- PAGE: MES TICKETS (vendeur) — demande d'Alex du 11/11/2026 -->
+    <div class="page" id="page-equipe-tickets">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <div class="section-sub" style="max-width:620px">Un souci, une question, une demande ? Écris-le ou dicte-le : Alex et Théophile le reçoivent tout de suite, et leur réponse s'affiche ici.</div>
+        <button class="btn btn-primary" onclick="tkOuvrir()">Nouveau ticket</button>
+      </div>
+      <div id="tk-mes-liste"></div>
+    </div>
+
+    <!-- PAGE: TICKETS (gérants) -->
+    <div class="page" id="page-gerant-tickets">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <div class="section-sub" style="max-width:620px">Ce que les vendeurs vous remontent, le plus urgent en premier.</div>
+        <div style="display:flex;gap:6px" id="tk-filtres">
+          <button class="btn btn-sm btn-primary" data-f="ouverts" onclick="tkFiltre('ouverts')">À traiter</button>
+          <button class="btn btn-sm btn-secondary" data-f="regles" onclick="tkFiltre('regles')">Réglés</button>
+        </div>
+      </div>
+      <div id="tk-gerant-liste"></div>
+    </div>
+
     <div class="page" id="page-mails">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
         <div class="section-sub">Tout ce que le CRM envoie à nos clients par mail : quand, en quel nom, et à quoi ça ressemble. Mis à jour à chaque amélioration.</div>
@@ -2746,6 +2777,12 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-ticket">
+  <div class="modal">
+    <div class="modal-title">Nouveau ticket</div>
+    <div id="tk-form"></div>
+  </div>
+</div>
 <div class="modal-overlay" id="modal-import">
   <div class="modal modal-wide">
     <div class="modal-title">Importer un relevé BNP</div>
@@ -3419,6 +3456,7 @@ async function _startApp(){
   setInterval(function(){ _sbJetonFrais(600000); }, 10 * 60 * 1000);
   await _ficheDepuisLien();
   grDemarrer();
+  tkDemarrer();
 }
 
 async function handleLogin(){
@@ -3500,7 +3538,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
+const PAGES_GERANT = ['gerant-tickets', 'gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage', 'reporting'];
 
 function appliquerRole() {
@@ -3794,7 +3832,7 @@ const pages = {
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'veille': 'Réveil veille', 'pilotage': 'Pilotage commercial',
   'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'rapport-promoteurs': 'Rapport promoteurs', 'marche': 'Marché',
-  'gerant-annonces': 'Annonces', 'reporting': 'Reporting'
+  'gerant-annonces': 'Annonces', 'reporting': 'Reporting', 'gerant-tickets': 'Tickets', 'equipe-tickets': 'Mes tickets'
 };
 
 let currentSpace = 'gerant';
@@ -4844,6 +4882,8 @@ function goTo(id, el) {
   else if (id === 'pilotage') pilInit();
   else if (id === 'reporting') rpInit();
   else if (id === 'factures') { renderFactures(); renderFacCom(); }
+  else if (id === 'gerant-tickets') tkChargerGerant();
+  else if (id === 'equipe-tickets') tkChargerMes();
   else refresh();
 }
 
@@ -24636,6 +24676,361 @@ function grBasculeSansSuite() {
   const ouvert = l.style.display !== 'none';
   l.style.display = ouvert ? 'none' : 'block';
   if (f) f.textContent = ouvert ? '▸' : '▾';
+}
+
+// ============================================================
+//  TICKETS — demande d'Alex du 11/11/2026
+//  Un vendeur écrit ou dicte un ticket (« Mes tickets ») ; les gérants le
+//  reçoivent dans « Tickets » (pastille du menu), le prennent en charge et
+//  répondent ; la réponse revient au vendeur (pastille « Mes tickets »).
+//  Pour qu'un ticket se lise d'un coup d'œil : un type et une urgence choisis
+//  en un clic, le texte remis au propre (dictée comprise), un titre tiré de la
+//  première phrase, le client concerné, et d'où il a été envoyé — le vendeur
+//  voit l'aperçu exact avant d'envoyer. Table public.tickets
+//  (supabase/migrations/20261111_tickets.sql).
+// ============================================================
+const TK_TYPES = [
+  ['probleme', 'Problème dans le CRM', 'Quelque chose ne marche pas'],
+  ['question', 'Question', 'Tu as besoin d’une réponse'],
+  ['demande', 'Demande', 'Un lead, un document, un accès…'],
+  ['client', 'Un client', 'Un souci ou une info sur un client'],
+  ['autre', 'Autre', '']
+];
+const TK_URGENCES = [
+  ['normal', 'Pas pressé', 'var(--muted)'],
+  ['jour', 'Dans la journée', 'var(--warning)'],
+  ['bloquant', 'Bloquant', 'var(--danger)']
+];
+const TK_STATUTS = { nouveau: 'Nouveau', en_cours: 'Pris en charge', regle: 'Réglé' };
+let _tkForm = null, _tkRec = null, _tkMes = [], _tkTous = [], _tkFiltre = 'ouverts';
+
+const _tkEsc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const _tkLib = (liste, v) => (liste.find(x => x[0] === v) || [v, v])[1];
+function _tkHeaders(extra) {
+  return Object.assign({ 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' }, extra || {});
+}
+
+// Le texte remis au propre : mots de dictée, hésitations, espaces, majuscules, point final
+function tkNettoyer(t) {
+  let s = String(t || '').replace(/\r/g, '');
+  s = s.replace(/\s*\b(?:point d['’]interrogation)\b/gi, ' ?')
+       .replace(/\s*\b(?:point d['’]exclamation)\b/gi, ' !')
+       .replace(/\s*(?:retour à la ligne|à la ligne|nouvelle ligne)(?=[\s,.]|$)\s*/gi, '\n')
+       .replace(/\s*\bvirgule\b/gi, ',')
+       .replace(/(^|[\s,.;!?])(?:euh+|heu+|bah|ben)(?=[\s,.;!?]|$)/gi, '$1');
+  s = s.split('\n').map(l => l.replace(/[ \t]+/g, ' ').replace(/\s+([,.])/g, '$1').replace(/\s*([?!:;])/g, ' $1').replace(/,(?=\S)/g, ', ').replace(/^[\s,]+/, '').trim())
+       .filter((l, i, a) => l || (i > 0 && a[i - 1])).join('\n').trim();
+  // Majuscule en début de phrase
+  s = s.replace(/(^|[.!?]\s+|\n)([a-zàâçéèêëîïôûùüÿœ])/g, (m, a, b) => a + b.toUpperCase());
+  if (s && !/[.!?…:)]$/.test(s)) s += '.';
+  return s;
+}
+// Titre : la première phrase, coupée proprement à 90 caractères
+function tkTitre(texte) {
+  const s = String(texte || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  let t = (s.match(/^.+?[.!?](?=\s|$)/) || [s])[0].replace(/[.\s]+$/, '');
+  if (t.length > 90) t = t.slice(0, 90).replace(/\s+\S*$/, '') + '…';
+  return t;
+}
+function _tkAppareil() {
+  const u = navigator.userAgent || '';
+  return /iPhone|iPod/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'téléphone Android' : 'ordinateur';
+}
+function _tkPageActuelle() {
+  const p = document.querySelector('.page.active');
+  const id = p ? p.id.replace(/^page-/, '') : '';
+  return id === 'equipe-tickets' ? '' : (pages[id] || '');
+}
+function _tkQuand(d) {
+  const x = new Date(d); if (isNaN(x)) return '';
+  const j = x.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  return j.charAt(0).toUpperCase() + j.slice(1) + ' à ' + x.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', ' h ');
+}
+function _tkDepuis(d) {
+  const m = Math.round((Date.now() - new Date(d).getTime()) / 60000);
+  if (!(m >= 0)) return '';
+  if (m < 1) return 'à l’instant';
+  if (m < 60) return 'il y a ' + m + ' min';
+  const h = Math.round(m / 60);
+  if (h < 24) return 'il y a ' + h + ' h';
+  const j = Math.round(h / 24);
+  return 'il y a ' + j + ' jour' + (j > 1 ? 's' : '');
+}
+
+// ---- Carte d'un ticket (la même pour l'aperçu, le vendeur et les gérants) ----
+function tkCarte(t, mode) {
+  const urg = TK_URGENCES.find(x => x[0] === t.urgence) || TK_URGENCES[0];
+  const ctx = t.contexte || {};
+  const d = t.cree_le || new Date().toISOString();
+  const etat = t.statut === 'regle' ? 'Réglé' + (t.repondu_par ? ' par ' + t.repondu_par : '')
+    : t.statut === 'en_cours' ? 'Pris en charge' + (t.pris_par ? ' par ' + t.pris_par : '') : 'Nouveau';
+  const couleurEtat = t.statut === 'regle' ? 'var(--success)' : t.statut === 'en_cours' ? 'var(--accent2)' : 'var(--accent)';
+  const pastille = (txt, c, plein) => `<span style="display:inline-block;border:1px solid ${c};${plein ? 'background:' + c + ';color:#fff' : 'color:' + c};border-radius:20px;padding:2px 10px;font-size:11.5px;font-weight:700;white-space:nowrap">${_tkEsc(txt)}</span>`;
+  const infos = [];
+  if (t.contact_nom || t.contact_id) infos.push('<b>Client :</b> ' + _tkEsc(t.contact_nom || 'fiche liée') + (ctx.statut_client ? ' <span style="color:var(--muted)">(' + _tkEsc(ctx.statut_client) + ')</span>' : ''));
+  const env = [ctx.page ? 'depuis « ' + ctx.page + ' »' : '', ctx.appareil ? 'sur ' + ctx.appareil : '', t.saisie === 'vocal' ? 'dicté' : ''].filter(Boolean).join(', ');
+  if (env) infos.push('<b>Envoyé</b> ' + _tkEsc(env));
+  let actions = '';
+  if (mode === 'gerant') {
+    const btns = [];
+    if (t.contact_id) btns.push(`<button class="btn btn-sm btn-secondary" onclick="ouvrirFicheClient('${t.contact_id}')">Ouvrir la fiche</button>`);
+    if (t.statut === 'nouveau') btns.push(`<button class="btn btn-sm btn-secondary" onclick="tkPrendre('${t.id}')">Je m’en occupe</button>`);
+    if (t.statut !== 'regle') btns.push(`<button class="btn btn-sm btn-primary" onclick="tkRepondreOuvrir('${t.id}')">Répondre et régler</button>`);
+    actions = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${btns.join('')}</div>
+      <div id="tk-rep-${t.id}" style="display:none;margin-top:10px">
+        <textarea id="tk-rep-txt-${t.id}" rows="3" placeholder="Ta réponse à ${_tkEsc(t.auteur || 'ce vendeur')} (il la verra dans « Mes tickets »)" style="width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:var(--font-body);font-size:13.5px"></textarea>
+        <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">
+          <button class="btn btn-sm btn-ghost" onclick="document.getElementById('tk-rep-${t.id}').style.display='none'">Annuler</button>
+          <button class="btn btn-sm btn-primary" onclick="tkRepondre('${t.id}')">Envoyer et régler</button>
+        </div>
+      </div>`;
+  }
+  return `<div class="tk-carte" data-id="${_tkEsc(t.id || '')}" style="background:var(--surface);border:1px solid var(--border);border-left:4px solid ${urg[2]};border-radius:12px;padding:14px 16px;margin-bottom:12px">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      ${pastille(urg[1], urg[2], t.urgence === 'bloquant')}
+      ${pastille(_tkLib(TK_TYPES, t.type), 'var(--text)', false)}
+      ${mode === 'apercu' ? '' : pastille(etat, couleurEtat, false)}
+    </div>
+    <div class="tk-titre" style="font-family:var(--font-head);font-size:16px;font-weight:700;line-height:1.35">${_tkEsc(t.titre || 'Sans titre')}</div>
+    <div style="font-size:12px;color:var(--muted);margin:3px 0 10px">${_tkEsc(t.auteur || '')}${t.auteur ? ' · ' : ''}${_tkEsc(_tkQuand(d))}${mode === 'apercu' ? '' : ' · ' + _tkEsc(_tkDepuis(d))}</div>
+    <div class="tk-message" style="font-size:14px;line-height:1.55;white-space:pre-wrap;background:var(--surface2);border-radius:9px;padding:10px 12px">${_tkEsc(t.message || '')}</div>
+    ${infos.length ? `<div style="font-size:12.5px;margin-top:8px;display:flex;flex-direction:column;gap:2px">${infos.map(x => '<div>' + x + '</div>').join('')}</div>` : ''}
+    ${t.reponse ? `<div class="tk-reponse" style="margin-top:10px;border-left:3px solid var(--success);padding:6px 0 6px 12px">
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:2px">Réponse de ${_tkEsc(t.repondu_par || 'la direction')}${t.repondu_le ? ' · ' + _tkEsc(_tkQuand(t.repondu_le)) : ''}</div>
+        <div style="font-size:14px;white-space:pre-wrap">${_tkEsc(t.reponse)}</div></div>` : ''}
+    ${actions}
+  </div>`;
+}
+
+// ---- Saisie (vendeur) ------------------------------------------------------
+function tkOuvrir(contactId) {
+  const c = contactId ? (_eqLeads || []).find(l => l.id === contactId) : null;
+  _tkForm = { type: '', urgence: 'normal', message: '', saisie: 'ecrit', contact_id: c ? c.id : '', page: _tkPageActuelle() };
+  tkFormRender();
+  document.getElementById('modal-ticket').classList.add('open');
+  setTimeout(() => { const el = document.getElementById('tk-message'); if (el) el.focus(); }, 50);
+}
+function tkFermer() {
+  tkDicteeStop();
+  document.getElementById('modal-ticket').classList.remove('open');
+  _tkForm = null;
+}
+function _tkDicteePossible() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+function _tkClients() {
+  return (_eqLeads || []).filter(l => l && l.id).map(l => ({ id: l.id, nom: (nomComplet(l) || l.email || 'Sans nom').trim() }))
+    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+}
+function tkFormRender() {
+  const f = _tkForm; if (!f) return;
+  const box = document.getElementById('tk-form');
+  const choix = (liste, cle, cls) => liste.map(x => `<button type="button" class="${cls}" data-v="${x[0]}" onclick="tkChoisir('${cle}','${x[0]}')" style="text-align:left;border:1px solid ${f[cle] === x[0] ? 'var(--accent)' : 'var(--border)'};background:${f[cle] === x[0] ? 'rgba(200,169,110,.15)' : 'var(--surface2)'};border-radius:10px;padding:9px 11px;color:var(--text);cursor:pointer;font-family:var(--font-body)">
+      <div style="font-size:13px;font-weight:700">${_tkEsc(x[1])}</div>${x[2] && cls === 'tk-type' ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">${_tkEsc(x[2])}</div>` : ''}</button>`).join('');
+  const clients = _tkClients();
+  box.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">1. C’est à propos de quoi ?</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:14px">${choix(TK_TYPES, 'type', 'tk-type')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">2. Raconte (écris, ou appuie sur « Dicter » et parle)</div>
+    <textarea id="tk-message" rows="5" oninput="tkSaisie(this.value)" placeholder="Ex. : Je n’arrive pas à envoyer la sélection de Mme Martin, le bouton reste gris." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;color:var(--text);font-family:var(--font-body);font-size:15px;line-height:1.5">${_tkEsc(f.message)}</textarea>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 14px">
+      ${_tkDicteePossible() ? `<button type="button" id="tk-dicter" class="btn btn-sm ${_tkRec ? 'btn-primary' : 'btn-secondary'}" onclick="tkDicter()">${_tkRec ? 'Arrêter la dictée' : 'Dicter'}</button>` : ''}
+      <span id="tk-dictee-etat" style="font-size:12px;color:var(--muted)">${_tkRec ? 'Je t’écoute… parle normalement, tu pourras corriger le texte.' : (_tkDicteePossible() ? '' : 'Pour dicter : touche le micro de ton clavier.')}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px" class="tk-grille">
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">3. C’est urgent ?</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">${choix(TK_URGENCES, 'urgence', 'tk-urgence')}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">4. Un client concerné ? (facultatif)</div>
+        <select id="tk-client" onchange="tkChoisir('contact_id', this.value)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);font-size:14px">
+          <option value="">Aucun client en particulier</option>
+          ${clients.map(c => `<option value="${_tkEsc(c.id)}"${c.id === f.contact_id ? ' selected' : ''}>${_tkEsc(c.nom)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Ce que recevront Alex et Théophile</div>
+    <div id="tk-apercu"></div>
+    <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+      <button class="btn btn-ghost" onclick="tkFermer()">Annuler</button>
+      <button class="btn btn-primary" id="tk-envoyer" onclick="tkEnvoyer()">Envoyer le ticket</button>
+    </div>`;
+  tkApercu();
+}
+function _tkObjet() {
+  const f = _tkForm;
+  const msg = tkNettoyer(f.message);
+  const c = f.contact_id ? (_eqLeads || []).find(l => l.id === f.contact_id) : null;
+  return {
+    type: f.type || 'autre', urgence: f.urgence, titre: tkTitre(msg) || '…', message: msg || '…', saisie: f.saisie,
+    contact_id: c ? c.id : null, contact_nom: c ? (nomComplet(c) || c.email || '').trim().slice(0, 140) : null,
+    contexte: Object.assign({ appareil: _tkAppareil() }, f.page ? { page: f.page } : {}, c ? { statut_client: eqLeadStatut(c) } : {}),
+    auteur: (MON_ROLE && MON_ROLE.prenom) || ''
+  };
+}
+function tkApercu() {
+  const el = document.getElementById('tk-apercu');
+  if (el && _tkForm) el.innerHTML = tkCarte(_tkObjet(), 'apercu');
+}
+function tkSaisie(v) { if (_tkForm) { _tkForm.message = v; tkApercu(); } }
+function tkChoisir(cle, v) {
+  if (!_tkForm) return;
+  _tkForm.message = (document.getElementById('tk-message') || {}).value ?? _tkForm.message;
+  _tkForm[cle] = v;
+  tkFormRender();
+}
+
+// ---- Dictée (reconnaissance vocale du navigateur, en français) -------------
+// Rien n'est enregistré : seul le texte reconnu arrive dans la case, où le vendeur peut le corriger.
+function tkDicter() {
+  if (_tkRec) { tkDicteeStop(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR || !_tkForm) return;
+  const rec = new SR();
+  rec.lang = 'fr-FR'; rec.continuous = true; rec.interimResults = true;
+  const ta = () => document.getElementById('tk-message');
+  let base = (ta() && ta().value) ? ta().value.replace(/\s*$/, ' ') : '';
+  rec.onresult = (e) => {
+    let fin = '', provisoire = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) fin += r[0].transcript; else provisoire += r[0].transcript;
+    }
+    if (fin) base = (base + fin.trim() + ' ');
+    const el = ta();
+    if (el) el.value = base + provisoire;
+    _tkForm.message = base + provisoire;
+    _tkForm.saisie = 'vocal';
+    tkApercu();
+  };
+  rec.onerror = (e) => {
+    const etat = document.getElementById('tk-dictee-etat');
+    if (etat) etat.textContent = e.error === 'not-allowed' ? 'Micro refusé : autorise-le dans le navigateur, ou touche le micro de ton clavier.' : 'La dictée s’est arrêtée. Tu peux recommencer ou écrire.';
+  };
+  rec.onend = () => { if (_tkRec === rec) { _tkRec = null; if (_tkForm) { _tkForm.message = (ta() || {}).value || _tkForm.message; tkFormRender(); } } };
+  try { rec.start(); _tkRec = rec; } catch (e) { _tkRec = null; }
+  if (_tkForm) _tkForm.message = (ta() || {}).value || '';
+  tkFormRender();
+}
+function tkDicteeStop() {
+  const r = _tkRec; _tkRec = null;
+  if (r) { try { r.stop(); } catch (e) {} }
+  if (_tkForm) { const el = document.getElementById('tk-message'); if (el) _tkForm.message = el.value; tkFormRender(); }
+}
+
+async function tkEnvoyer() {
+  if (!_tkForm) return;
+  tkDicteeStop();
+  if (!_tkForm.type) { toast('⚠ Choisis de quoi il s’agit (étape 1)', 'var(--warning)'); return; }
+  const o = _tkObjet();
+  if (tkNettoyer(_tkForm.message).replace(/[.\s]/g, '').length < 5) { toast('⚠ Explique en quelques mots (étape 2)', 'var(--warning)'); return; }
+  delete o.auteur;
+  const b = document.getElementById('tk-envoyer'); if (b) { b.disabled = true; b.textContent = 'Envoi…'; }
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/tickets', { method: 'POST', headers: _tkHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify(o) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    tkFermer();
+    toast('✓ Ticket envoyé à Alex et Théophile');
+    if (document.getElementById('page-equipe-tickets').classList.contains('active')) tkChargerMes();
+  } catch (e) {
+    toast('⚠ Ticket non envoyé, réessaie', 'var(--danger)');
+    if (b) { b.disabled = false; b.textContent = 'Envoyer le ticket'; }
+  }
+}
+
+// ---- Mes tickets (vendeur) -------------------------------------------------
+async function tkChargerMes() {
+  const box = document.getElementById('tk-mes-liste'); if (!box) return;
+  const moi = (MON_ROLE && MON_ROLE.prenom) || '';
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/tickets?select=*&order=cree_le.desc&limit=100&auteur=eq.' + encodeURIComponent(moi), { cache: 'no-store', headers: _tkHeaders() });
+    _tkMes = r.ok ? await r.json() : [];
+  } catch (e) { _tkMes = []; }
+  box.innerHTML = _tkMes.length ? _tkMes.map(t => tkCarte(t, 'vendeur')).join('')
+    : '<div class="card" style="padding:22px;text-align:center;color:var(--muted)">Aucun ticket pour l’instant. Un souci ? « Nouveau ticket », en haut à droite.</div>';
+  // Réponses lues : la pastille s'éteint
+  const nonLues = _tkMes.filter(t => t.reponse && !t.reponse_vue_le);
+  await Promise.all(nonLues.map(t => fetch(SUPABASE_URL + '/rest/v1/rpc/ticket_reponse_vue', { method: 'POST', headers: _tkHeaders(), body: JSON.stringify({ p_id: t.id }) }).catch(() => {})));
+  nonLues.forEach(t => { t.reponse_vue_le = new Date().toISOString(); });
+  _tkMajPastilles();
+}
+
+// ---- Tickets (gérants) -----------------------------------------------------
+async function tkChargerGerant() {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/tickets?select=*&order=cree_le.desc&limit=300', { cache: 'no-store', headers: _tkHeaders() });
+    _tkTous = r.ok ? await r.json() : [];
+  } catch (e) { _tkTous = []; }
+  tkRenderGerant();
+  _tkMajPastilles();
+}
+function tkFiltre(f) { _tkFiltre = f; tkRenderGerant(); }
+function tkRenderGerant() {
+  const box = document.getElementById('tk-gerant-liste'); if (!box) return;
+  document.querySelectorAll('#tk-filtres button').forEach(b => { b.className = 'btn btn-sm ' + (b.dataset.f === _tkFiltre ? 'btn-primary' : 'btn-secondary'); });
+  const rangU = { bloquant: 0, jour: 1, normal: 2 }, rangS = { nouveau: 0, en_cours: 1 };
+  const liste = _tkFiltre === 'regles'
+    ? _tkTous.filter(t => t.statut === 'regle')
+    : _tkTous.filter(t => t.statut !== 'regle').sort((a, b) => (rangU[a.urgence] - rangU[b.urgence]) || (rangS[a.statut] - rangS[b.statut]) || (new Date(a.cree_le) - new Date(b.cree_le)));
+  box.innerHTML = liste.length ? liste.map(t => tkCarte(t, 'gerant')).join('')
+    : '<div class="card" style="padding:22px;text-align:center;color:var(--muted)">' + (_tkFiltre === 'regles' ? 'Aucun ticket réglé.' : 'Rien à traiter.') + '</div>';
+}
+async function _tkMaj(id, corps) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/tickets?id=eq.' + id, { method: 'PATCH', headers: _tkHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify(corps) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+async function tkPrendre(id) {
+  try { await _tkMaj(id, { statut: 'en_cours' }); toast('✓ Le vendeur voit que tu t’en occupes'); }
+  catch (e) { toast('⚠ Non enregistré', 'var(--danger)'); }
+  tkChargerGerant();
+}
+function tkRepondreOuvrir(id) {
+  const b = document.getElementById('tk-rep-' + id); if (!b) return;
+  b.style.display = 'block';
+  const t = document.getElementById('tk-rep-txt-' + id); if (t) t.focus();
+}
+async function tkRepondre(id) {
+  const t = document.getElementById('tk-rep-txt-' + id);
+  const txt = tkNettoyer(t ? t.value : '');
+  if (!txt) { toast('⚠ Écris ta réponse', 'var(--warning)'); return; }
+  try { await _tkMaj(id, { statut: 'regle', reponse: txt }); toast('✓ Réponse envoyée, ticket réglé'); }
+  catch (e) { toast('⚠ Réponse non envoyée', 'var(--danger)'); return; }
+  tkChargerGerant();
+}
+
+// ---- Pastilles du menu -----------------------------------------------------
+function _tkPastille(id, n, titre) {
+  const el = document.getElementById(id); if (!el) return;
+  el.style.display = n ? '' : 'none';
+  el.textContent = n || '';
+  el.title = titre || '';
+}
+function _tkMajPastilles() {
+  if (estGerant()) {
+    const nouveaux = _tkTous.filter(t => t.statut === 'nouveau');
+    _tkPastille('nav-tickets-pastille', nouveaux.length, nouveaux.length + ' ticket(s) à lire');
+    const el = document.getElementById('nav-tickets-pastille');
+    if (el) el.style.background = nouveaux.some(t => t.urgence === 'bloquant') ? 'var(--danger)' : 'var(--warning)';
+  }
+  const n = _tkMes.filter(t => t.reponse && !t.reponse_vue_le).length;
+  _tkPastille('nav-mestickets-pastille', n, n + ' réponse(s) à lire');
+}
+async function tkRafraichir() {
+  const moi = (MON_ROLE && MON_ROLE.prenom) || '';
+  try {
+    if (estGerant()) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/tickets?select=*&order=cree_le.desc&limit=300', { cache: 'no-store', headers: _tkHeaders() });
+      if (r.ok) { _tkTous = await r.json(); _tkMes = _tkTous.filter(t => t.auteur === moi); }
+    } else if (moi) {
+      const r = await fetch(SUPABASE_URL + '/rest/v1/tickets?select=*&order=cree_le.desc&limit=100&auteur=eq.' + encodeURIComponent(moi), { cache: 'no-store', headers: _tkHeaders() });
+      if (r.ok) _tkMes = await r.json();
+    }
+  } catch (e) { /* la pastille se remettra à jour au prochain passage */ }
+  _tkMajPastilles();
+}
+function tkDemarrer() {
+  tkRafraichir();
+  setInterval(tkRafraichir, 3 * 60 * 1000);
 }
 
 // ---- Ouvrir la fiche d'un client depuis l'espace gérant ---------------------
