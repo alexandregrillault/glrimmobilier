@@ -393,7 +393,7 @@ header>button,header h1,header .kpis{flex:0 0 auto}
   <div id="map"></div>
   <!-- Réglages d'affichage de la carte (12/11/2026, demande d'Alex) : fond « Communes » (aplats par département)
        ou « Plan » (rues, parcs, façon Otaree), lignes de transport actuelles et futures en option par-dessus. -->
-  <div id="mapOpts"><span class="seg" id="fondSeg"><button type="button" data-f="communes" title="Fond clair, communes colorées par département">Communes</button><button type="button" data-f="plan" title="Plan détaillé : rues, parcs, quartiers">Plan</button></span>
+  <div id="mapOpts"><span class="seg" id="fondSeg"><button type="button" data-f="plan" title="Plan détaillé : rues, parcs, quartiers">Plan</button><button type="button" data-f="communes" title="Fond clair, communes colorées par département">Communes</button></span>
     <label><input type="checkbox" id="tTransports"> Lignes de transport</label>
     <label title="Lignes en construction (pointillés), avec la date de mise en service prévue"><input type="checkbox" id="tFutur"> Futures lignes</label>
   </div>
@@ -773,10 +773,10 @@ document.getElementById('reset').onclick = () => { ttClear(false); Object.assign
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
 const map = L.map('map', { zoomControl: true, minZoom: 8, maxZoom: 19 }).fitBounds(IDF);
 // Deux fonds au choix (12/11/2026) : « communes » = fond clair + aplats par département (l'historique),
-// « plan » = plan détaillé (rues, parcs), sans aplats. Le choix est gardé sur l'appareil.
+// « plan » = plan détaillé (rues, parcs), sans aplats, affiché par défaut. Le choix est gardé sur l'appareil.
 const FONDS = { communes: ['light_nolabels', 'light_only_labels'], plan: ['rastertiles/voyager_nolabels', 'rastertiles/voyager_only_labels'] };
 const fondUrl = n => 'https://{s}.basemaps.cartocdn.com/' + n + '/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5';
-let fond = 'communes'; try { if (localStorage.getItem('carteFond') === 'plan') fond = 'plan'; } catch (e) {}
+let fond = 'plan'; try { if (localStorage.getItem('carteFond') === 'communes') fond = 'communes'; } catch (e) {}  // « Plan » par défaut (décision d'Alex du 12/11/2026)
 const fondBase = L.tileLayer(fondUrl(FONDS[fond][0]), { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
 const labelsPane = map.createPane('labels'); labelsPane.style.zIndex = 450; labelsPane.style.pointerEvents = 'none';
 const fondNoms = L.tileLayer(fondUrl(FONDS[fond][1]), { subdomains: 'abcd', maxZoom: 20, pane: 'labels' }).addTo(map);
