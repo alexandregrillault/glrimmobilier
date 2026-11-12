@@ -855,6 +855,11 @@
         Todo
         <span id="nav-todo-pastille" style="display:none;margin-left:auto;background:var(--accent);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
       </div>
+      <div class="nav-item" onclick="goTo(&#39;gerant-parrainage&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="13" rx="2"></rect><path d="M12 8v13M3 12h18M12 8c-1.5-3-5-3.5-5-1s3 1 5 1c2 0 5 1.5 5-1s-3.5-2-5 1"></path></svg>
+        Parrainage
+        <span id="nav-parr-pastille" style="display:none;margin-left:auto;background:var(--accent);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
+      </div>
       <div class="nav-item" onclick="goTo(&#39;gerant-chiffres&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9M13 17V5M8 17v-3"></path></svg>
         Chiffres (€)
@@ -2302,6 +2307,15 @@
       <div id="td-liste"></div>
     </div>
 
+    <!-- PAGE: PARRAINAGE (gérants) — décisions d'Alex du 12/11/2026 -->
+    <div class="page" id="page-gerant-parrainage">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <div class="section-sub" style="max-width:640px">1 000 € en carte cadeau pour le parrain, 500 € pour le filleul, quand le filleul a signé chez le notaire. Tout le monde peut parrainer, depuis la page du site ou depuis la fiche d'un client.</div>
+        <a href="https://www.glrimmobilier.com/parrainage/" target="_blank" rel="noopener" class="btn btn-secondary" style="font-size:12px;text-decoration:none">Voir la page du site</a>
+      </div>
+      <div id="parr-page"></div>
+    </div>
+
     <div class="page" id="page-mails">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
         <div class="section-sub">Tout ce que le CRM envoie à nos clients par mail : quand, en quel nom, et à quoi ça ressemble. Mis à jour à chaque amélioration.</div>
@@ -3487,6 +3501,7 @@ async function _startApp(){
   grDemarrer();
   tkDemarrer();
   tdDemarrer();
+  parrDemarrer();
 }
 
 async function handleLogin(){
@@ -3568,7 +3583,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-tickets', 'gerant-todo', 'gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
+const PAGES_GERANT = ['gerant-tickets', 'gerant-todo', 'gerant-parrainage', 'gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage', 'reporting'];
 
 function appliquerRole() {
@@ -3862,7 +3877,7 @@ const pages = {
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'veille': 'Réveil veille', 'pilotage': 'Pilotage commercial',
   'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'rapport-promoteurs': 'Rapport promoteurs', 'marche': 'Marché',
-  'gerant-annonces': 'Annonces', 'reporting': 'Reporting', 'gerant-tickets': 'Tickets', 'equipe-tickets': 'Mes tickets', 'gerant-todo': 'Todo'
+  'gerant-annonces': 'Annonces', 'reporting': 'Reporting', 'gerant-tickets': 'Tickets', 'equipe-tickets': 'Mes tickets', 'gerant-todo': 'Todo', 'gerant-parrainage': 'Parrainage'
 };
 
 let currentSpace = 'gerant';
@@ -4914,6 +4929,7 @@ function goTo(id, el) {
   else if (id === 'factures') { renderFactures(); renderFacCom(); }
   else if (id === 'gerant-tickets') tkChargerGerant();
   else if (id === 'gerant-todo') tdCharger();
+  else if (id === 'gerant-parrainage') parrCharger();
   else if (id === 'equipe-tickets') tkChargerMes();
   else refresh();
 }
@@ -8014,7 +8030,7 @@ async function renderEquipeLeads() {
     // même si la paternité n'est pas (encore) à lui.
     // …et une fiche où il garde un rappel conservé (activites, par = lui) arrive aussi.
     const filtreLeads = encodeURIComponent('(vendeur.eq."' + v.prenom + '",recu_par.cs.[{"vendeur":"' + v.prenom + '"}],activites.cs.[{"par":"' + v.prenom + '"}])');
-    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,civilite,mode_adresse,email,telephone,conjoint,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites,vente_lot,simulations&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
+    const res = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,nom_confirme,civilite,mode_adresse,email,telephone,conjoint,lieu,budget,typologie,intention,source,vendeur,statut,date_lead,recu_le,rappel_le,statut_maj,rappel_titre,rappel_heure,notes,qualif,reference_annonce,vendeur_depuis,derniere_action_le,paternite_jusqu_au,vendeur_historique,paternite_geree,recu_par,premiere_action_le,budget_min,budget_max,budget_approx,veille_depuis,veille_motif,veille_criteres,veille_ecartes,veille_reveils,veille_avert,activite_masquee_le,prix_annonce,appels,activites,vente_lot,simulations,parrain_id&or=' + filtreLeads + '&order=recu_le.desc.nullslast&limit=1000', {
       cache: 'no-store',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER }
     });
@@ -10715,6 +10731,8 @@ ${(() => {
     ${eqFicheSelectionsHtml(l)}
 
     ${eqFicheDenonciationsHtml(l)}
+
+    ${eqFicheParrainageHtml(l)}
 
     ${eqSimulationsHtml(l)}
 
@@ -25255,6 +25273,257 @@ async function tdRafraichir() {
 function tdDemarrer() {
   tdRafraichir();
   setInterval(tdRafraichir, 3 * 60 * 1000);
+}
+
+// ============================================================
+//  PARRAINAGE — décisions d'Alex du 12/11/2026 (parr*)
+//  Tout le monde peut parrainer (client ou non). Carte cadeau de 1 000 € au
+//  parrain et de 500 € au filleul, dues quand le filleul a signé chez le
+//  notaire (vente non supprimée : signature notaire passée, ou facturée / payée).
+//  Une récompense par filleul. Le filleul suit l'attribution habituelle.
+//  Fiche : bloc « Parrainage » (parrain du client, lien de parrainage du client).
+//  Espace Gérant → Parrainage : cartes à envoyer, filleuls, cartes envoyées.
+//  Tables parrains, parrainage_cartes, contacts.parrain_id, RPC parrainage_suivi()
+//  (supabase/migrations/20261112_parrainage.sql) ; page publique glr-site/parrainage/
+//  et edge function parrainage (supabase/functions/parrainage/).
+// ============================================================
+const PARR_MONTANTS = { parrain: 1000, filleul: 500 };
+const PARR_SITE = 'https://www.glrimmobilier.com/parrainage/';
+let _parrains = null, _parrChargeEnCours = false, _parrOuvert = {}, _parrSuivi = [], _parrCartes = [];
+const _parrEsc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+function _parrH(extra) { return Object.assign({ 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' }, extra || {}); }
+const _parrNom = (p) => p ? ((p.prenom || '') + (p.nom ? ' ' + p.nom : '')).trim() : '';
+const parrLien = (code) => PARR_SITE + '?p=' + code;
+const _parrJour = (d) => d ? new Date(d).toLocaleDateString('fr-FR') : '';
+const _parrEur = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €';
+
+function parrChargerListe(apres) {
+  if (_parrChargeEnCours) return;
+  _parrChargeEnCours = true;
+  fetch(SUPABASE_URL + '/rest/v1/parrains?select=id,code,prenom,nom,email,telephone,contact_id,origine,cree_le,cree_par&order=cree_le.desc&limit=5000', { cache: 'no-store', headers: _parrH() })
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => { _parrains = Array.isArray(rows) ? rows : []; if (apres) apres(); })
+    .catch(() => { _parrains = []; })
+    .finally(() => { _parrChargeEnCours = false; });
+}
+// Le parrain dont c'est la fiche (rattaché à la fiche, sinon même e-mail)
+function _parrDeLaFiche(l) {
+  if (!_parrains || !l) return null;
+  const em = String(l.email || '').trim().toLowerCase();
+  return _parrains.find(p => p.contact_id === l.id) || (em ? _parrains.find(p => (p.email || '') === em) : null) || null;
+}
+
+function eqFicheParrainageHtml(l) {
+  if (!_parrains) { parrChargerListe(() => { if (_eqFicheId === l.id) _eqFicheRender(); }); return ''; }
+  const parrain = l.parrain_id ? _parrains.find(p => p.id === l.parrain_id) : null;
+  const sien = _parrDeLaFiche(l);
+  const ligne = 'display:flex;justify-content:space-between;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:12.5px;padding:7px 0;border-top:1px solid var(--border)';
+  const champ = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 9px;font-size:13px;color:var(--text);min-width:0';
+  let haut;
+  if (_parrOuvert[l.id]) {
+    const options = _parrains.filter(p => p.contact_id !== l.id)
+      .slice().sort((a, b) => _parrNom(a).localeCompare(_parrNom(b), 'fr'))
+      .map(p => `<option value="${p.id}"${p.id === l.parrain_id ? ' selected' : ''}>${_parrEsc(_parrNom(p))}${p.telephone ? ' · ' + _parrEsc(p.telephone) : ''}${p.email ? ' · ' + _parrEsc(p.email) : ''}</option>`).join('');
+    haut = `<div style="${ligne};display:block">
+      <div style="font-weight:600;margin-bottom:6px">Qui a recommandé ce client ?</div>
+      <select id="parr-choix-${l.id}" style="${champ};width:100%;margin-bottom:8px"><option value="">Un nouveau parrain (à saisir ci-dessous)</option>${options}</select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <input id="parr-prenom-${l.id}" placeholder="Prénom" maxlength="60" style="${champ}">
+        <input id="parr-nom-${l.id}" placeholder="Nom" maxlength="80" style="${champ}">
+        <input id="parr-tel-${l.id}" placeholder="Téléphone" maxlength="40" inputmode="tel" style="${champ}">
+        <input id="parr-email-${l.id}" placeholder="E-mail" maxlength="160" inputmode="email" style="${champ}">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-sm btn-primary" onclick="parrEnregistrer('${l.id}')">Enregistrer</button>
+        <button class="btn btn-sm btn-secondary" onclick="parrFermer('${l.id}')">Annuler</button>
+      </div>
+    </div>`;
+  } else if (parrain) {
+    haut = `<div style="${ligne}">
+      <span>Recommandé par <strong>${_parrEsc(_parrNom(parrain))}</strong>${parrain.telephone ? ' <span style="color:var(--muted)">· ' + _parrEsc(parrain.telephone) + '</span>' : ''}${parrain.email ? ' <span style="color:var(--muted)">· ' + _parrEsc(parrain.email) + '</span>' : ''}<br><span style="font-size:11.5px;color:var(--muted)">S'il signe chez le notaire : ${_parrEur(PARR_MONTANTS.parrain)} en carte cadeau pour le parrain, ${_parrEur(PARR_MONTANTS.filleul)} pour le client.</span></span>
+      <span style="display:flex;gap:6px"><button class="btn btn-sm btn-secondary" onclick="parrOuvrir('${l.id}')">Modifier</button><button class="btn btn-sm btn-secondary" onclick="parrRetirer('${l.id}')">Retirer</button></span>
+    </div>`;
+  } else {
+    haut = `<div style="${ligne}">
+      <span style="color:var(--muted)">Aucun parrain. Le client vient de la part de quelqu'un ?</span>
+      <button class="btn btn-sm btn-secondary" onclick="parrOuvrir('${l.id}')">Ajouter un parrain</button>
+    </div>`;
+  }
+  const bas = sien
+    ? `<div style="${ligne}">
+        <span>Son lien de parrainage : <a href="${parrLien(sien.code)}" target="_blank" rel="noopener">${_parrEsc(parrLien(sien.code).replace('https://', ''))}</a></span>
+        <button class="btn btn-sm btn-secondary" onclick="parrCopier('${sien.code}')">Copier le lien</button>
+      </div>`
+    : `<div style="${ligne}">
+        <span style="color:var(--muted)">Ce client peut parrainer ses proches : 1 000 € pour lui, 500 € pour eux.</span>
+        <button class="btn btn-sm btn-secondary" onclick="parrCreerLien('${l.id}')">Créer son lien de parrainage</button>
+      </div>`;
+  return `<div style="margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px">
+    <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Parrainage</div>
+    ${haut}${bas}
+  </div>`;
+}
+function parrOuvrir(id) { _parrOuvert[id] = true; _eqFicheRender(); }
+function parrFermer(id) { delete _parrOuvert[id]; _eqFicheRender(); }
+async function _parrCreer(corps) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/parrains', { method: 'POST', headers: _parrH({ 'Prefer': 'return=representation' }), body: JSON.stringify(Object.assign({ origine: 'crm' }, corps)) });
+  if (!r.ok) {
+    const t = await r.text().catch(() => '');
+    throw new Error(/parrains_email_uidx|duplicate/i.test(t) ? 'Un parrain existe déjà avec cet e-mail : choisissez-le dans la liste.' : 'HTTP ' + r.status);
+  }
+  const p = (await r.json())[0];
+  if (_parrains) _parrains.unshift(p);
+  return p;
+}
+async function parrEnregistrer(id) {
+  const val = (k) => { const e = document.getElementById('parr-' + k + '-' + id); return e ? e.value.trim() : ''; };
+  let parrainId = val('choix');
+  try {
+    if (!parrainId) {
+      const prenom = val('prenom'), nom = val('nom'), telephone = val('tel'), email = val('email').toLowerCase();
+      if (!prenom) { toast('Indiquez au moins le prénom du parrain, ou choisissez-le dans la liste', 'var(--danger)'); return; }
+      if (!telephone && !email) { toast('Indiquez le téléphone ou l\'e-mail du parrain : il faudra lui envoyer sa carte cadeau', 'var(--danger)'); return; }
+      const p = await _parrCreer({ prenom, nom: nom || null, telephone: telephone || null, email: email || null });
+      parrainId = p.id;
+    }
+  } catch (e) { toast('⚠ ' + (e.message || 'Parrain non enregistré'), 'var(--danger)'); return; }
+  delete _parrOuvert[id];
+  await _eqLeadPatch(id, { parrain_id: parrainId });
+}
+async function parrRetirer(id) {
+  if (!confirm('Retirer le parrain de ce client ? Il ne touchera pas de carte cadeau pour cette vente.')) return;
+  await _eqLeadPatch(id, { parrain_id: null });
+}
+async function parrCreerLien(id) {
+  const l = (_eqLeads || []).find(x => x.id === id); if (!l) return;
+  const prenom = (l.prenom || String(l.nom || '').split(' ')[0] || '').trim();
+  if (!prenom) { toast('Complétez d\'abord le prénom du client', 'var(--danger)'); return; }
+  try {
+    const p = await _parrCreer({ prenom, nom: l.nom_famille || null, telephone: l.telephone || null, email: (l.email || '').trim().toLowerCase() || null, contact_id: l.id });
+    _eqFicheRender();
+    parrCopier(p.code);
+  } catch (e) { toast('⚠ ' + (e.message || 'Lien non créé'), 'var(--danger)'); }
+}
+function parrCopier(code) {
+  const lien = parrLien(code);
+  const ok = () => toast('✓ Lien copié : ' + lien.replace('https://', ''), 'var(--success)');
+  if (navigator.clipboard) navigator.clipboard.writeText(lien).then(ok, () => prompt('Lien de parrainage à copier :', lien));
+  else prompt('Lien de parrainage à copier :', lien);
+}
+
+// ---- Espace Gérant → Parrainage ----------------------------------------------
+function _parrAEnvoyer() {
+  const liste = [];
+  _parrSuivi.filter(x => x.signe).forEach(x => {
+    if (!x.carte_parrain_le) liste.push({ x, qui: 'parrain' });
+    if (!x.carte_filleul_le) liste.push({ x, qui: 'filleul' });
+  });
+  return liste;
+}
+function _parrMajPastille() {
+  const el = document.getElementById('nav-parr-pastille'); if (!el) return;
+  const n = _parrAEnvoyer().length;
+  el.style.display = n ? '' : 'none'; el.textContent = n || ''; el.title = n + ' carte(s) cadeau à envoyer';
+}
+async function _parrLireSuivi() {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/parrainage_suivi', { method: 'POST', cache: 'no-store', headers: _parrH(), body: '{}' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function parrCharger() {
+  const zone = document.getElementById('parr-page');
+  if (zone && !_parrSuivi.length) zone.innerHTML = '<div class="section-sub">Chargement…</div>';
+  try {
+    const [suivi, cartes, parrains] = await Promise.all([
+      _parrLireSuivi(),
+      fetch(SUPABASE_URL + '/rest/v1/parrainage_cartes?select=*&order=envoyee_le.desc&limit=1000', { cache: 'no-store', headers: _parrH() }).then(r => r.ok ? r.json() : []),
+      fetch(SUPABASE_URL + '/rest/v1/parrains?select=id,code,prenom,nom,email,telephone,contact_id,origine,cree_le,cree_par&order=cree_le.desc&limit=5000', { cache: 'no-store', headers: _parrH() }).then(r => r.ok ? r.json() : [])
+    ]);
+    _parrSuivi = Array.isArray(suivi) ? suivi : [];
+    _parrCartes = Array.isArray(cartes) ? cartes : [];
+    _parrains = Array.isArray(parrains) ? parrains : [];
+  } catch (e) {
+    if (zone) zone.innerHTML = '<div class="section-sub" style="color:var(--danger)">Impossible de lire le parrainage. Réessayez dans un instant.</div>';
+    return;
+  }
+  parrRender();
+}
+function parrRender() {
+  _parrMajPastille();
+  const zone = document.getElementById('parr-page'); if (!zone) return;
+  const aEnvoyer = _parrAEnvoyer();
+  const enCours = _parrSuivi.filter(x => !x.signe);
+  const nbParrains = (_parrains || []).length;
+  const totalDu = aEnvoyer.reduce((s, a) => s + PARR_MONTANTS[a.qui], 0);
+  const kpi = (label, val, sub, coul) => `<div class="kpi" style="border-top:2px solid ${coul}"><div class="kpi-label">${label}</div><div class="kpi-value" style="font-size:24px">${val}</div><div class="kpi-sub">${sub}</div></div>`;
+  const ficheLien = (id, nom) => `<a href="#" onclick="ouvrirFicheClient('${id}');return false" style="color:var(--text);font-weight:600">${_parrEsc(nom || 'Client')}</a>`;
+  const carte = 'background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px 14px;margin-bottom:8px';
+  const titre = (t, sous) => `<h3 style="font-size:15px;margin:22px 0 4px">${t}</h3>${sous ? `<div class="section-sub" style="margin-bottom:10px">${sous}</div>` : ''}`;
+
+  const blocEnvoyer = aEnvoyer.length ? aEnvoyer.map(({ x, qui }) => {
+    const pourParrain = qui === 'parrain';
+    const coord = pourParrain ? [x.parrain_telephone, x.parrain_email].filter(Boolean).map(_parrEsc).join(' · ') : '';
+    return `<div style="${carte};display:flex;justify-content:space-between;align-items:center;gap:8px 14px;flex-wrap:wrap">
+      <div style="font-size:13px;line-height:1.5">
+        <strong style="color:var(--accent)">${_parrEur(PARR_MONTANTS[qui])}</strong> en carte cadeau pour
+        ${pourParrain ? `<strong>${_parrEsc(x.parrain_nom)}</strong>, parrain de ${ficheLien(x.filleul_id, x.filleul_nom)}` : `${ficheLien(x.filleul_id, x.filleul_nom)}, filleul de ${_parrEsc(x.parrain_nom)}`}
+        <br><span style="color:var(--muted);font-size:12px">${_parrEsc([x.vente_programme, x.vente_lot ? 'lot ' + x.vente_lot : ''].filter(Boolean).join(' · '))} · signé chez le notaire le ${_parrJour(x.signe_le)}${coord ? ' · ' + coord : ''}</span>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="parrCarteEnvoyee('${x.filleul_id}','${qui}','${x.parrain_id}')">Carte envoyée</button>
+    </div>`;
+  }).join('') : `<div class="section-sub" style="${carte}">Aucune carte à envoyer pour le moment.</div>`;
+
+  const blocEnCours = enCours.length ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <thead><tr style="text-align:left;color:var(--muted)"><th style="padding:6px 8px">Filleul</th><th style="padding:6px 8px">Parrain</th><th style="padding:6px 8px">Statut</th><th style="padding:6px 8px">Vendeur</th><th style="padding:6px 8px">Reçu le</th></tr></thead>
+      <tbody>${enCours.map(x => `<tr style="border-top:1px solid var(--border)"><td style="padding:7px 8px">${ficheLien(x.filleul_id, x.filleul_nom)}</td><td style="padding:7px 8px">${_parrEsc(x.parrain_nom)}</td><td style="padding:7px 8px">${_parrEsc(x.filleul_statut || '')}</td><td style="padding:7px 8px">${_parrEsc(x.filleul_vendeur || '—')}</td><td style="padding:7px 8px;white-space:nowrap">${_parrJour(x.filleul_recu_le)}</td></tr>`).join('')}</tbody>
+    </table></div>` : `<div class="section-sub" style="${carte}">Aucun filleul pour l'instant.</div>`;
+
+  const nomFilleul = (id) => { const x = _parrSuivi.find(s => s.filleul_id === id); return x ? x.filleul_nom : 'filleul'; };
+  const nomParrain = (id) => { const p = (_parrains || []).find(p => p.id === id); return p ? _parrNom(p) : 'parrain'; };
+  const blocEnvoyees = _parrCartes.length ? _parrCartes.map(c => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;padding:7px 0;border-top:1px solid var(--border)">
+      <span>${_parrJour(c.envoyee_le)} · <strong>${_parrEur(c.montant)}</strong> à ${_parrEsc(c.beneficiaire === 'parrain' ? nomParrain(c.parrain_id) + ' (parrain de ' + nomFilleul(c.filleul_id) + ')' : nomFilleul(c.filleul_id) + ' (filleul)')}${c.envoyee_par ? ' <span style="color:var(--muted)">· noté par ' + _parrEsc(c.envoyee_par) + '</span>' : ''}</span>
+      <button class="btn btn-sm btn-secondary" onclick="parrCarteAnnuler('${c.id}')">Annuler</button>
+    </div>`).join('') : '<div class="section-sub">Aucune carte envoyée pour l\'instant.</div>';
+
+  zone.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:6px">
+      ${kpi('Cartes à envoyer', aEnvoyer.length, totalDu ? _parrEur(totalDu) + ' au total' : 'rien en attente', 'var(--accent)')}
+      ${kpi('Filleuls', _parrSuivi.length, enCours.length + ' en cours', 'var(--accent2)')}
+      ${kpi('Ventes signées', _parrSuivi.filter(x => x.signe).length, 'filleuls passés chez le notaire', 'var(--success)')}
+      ${kpi('Parrains', nbParrains, 'inscrits sur le site ou dans le CRM', 'var(--border)')}
+    </div>
+    ${titre('Cartes cadeaux à envoyer', 'Quand la carte est partie, cliquez sur « Carte envoyée ».')}
+    ${blocEnvoyer}
+    ${titre('Filleuls en cours', 'Pas encore signés chez le notaire.')}
+    ${blocEnCours}
+    ${titre('Cartes envoyées')}
+    <div style="${carte}">${blocEnvoyees}</div>`;
+}
+async function parrCarteEnvoyee(filleulId, qui, parrainId) {
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/parrainage_cartes', { method: 'POST', headers: _parrH(),
+      body: JSON.stringify({ filleul_id: filleulId, beneficiaire: qui, parrain_id: parrainId || null, montant: PARR_MONTANTS[qui] }) });
+    if (!r.ok && r.status !== 409) throw new Error('HTTP ' + r.status);
+    toast('✓ Carte notée comme envoyée', 'var(--success)');
+  } catch (e) { toast('⚠ Non enregistré', 'var(--danger)'); return; }
+  parrCharger();
+}
+async function parrCarteAnnuler(id) {
+  if (!confirm('Remettre cette carte dans « à envoyer » ?')) return;
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/parrainage_cartes?id=eq.' + id, { method: 'DELETE', headers: _parrH() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (e) { toast('⚠ Non enregistré', 'var(--danger)'); return; }
+  parrCharger();
+}
+async function parrRafraichir() {
+  if (typeof estGerant === 'function' && !estGerant()) return;
+  try { _parrSuivi = await _parrLireSuivi(); } catch (e) { return; }
+  _parrMajPastille();
+}
+function parrDemarrer() {
+  parrRafraichir();
+  setInterval(parrRafraichir, 10 * 60 * 1000);
 }
 
 function tkDemarrer() {
