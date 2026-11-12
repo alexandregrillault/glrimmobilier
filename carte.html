@@ -271,7 +271,9 @@ table.lots td.r{text-align:right}
 .docsbox .dl{display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap}
 .docsbox .dl b{min-width:100px;color:var(--muted);font-weight:600}
 .docsbox .dl a{color:var(--teal)}
-.pige{font-size:11px;color:var(--muted);white-space:nowrap}
+.pige{font-size:11px;color:var(--muted);white-space:nowrap;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+#search{min-width:150px}
+header>button,header h1,header .kpis{flex:0 0 auto}
 .crit-body .row.tri>*{flex:1}
 @media (max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:56px 1fr}aside{display:none}header .kpis{display:none}#panel{width:auto;left:10px;min-width:0}}
 </style>
@@ -685,7 +687,7 @@ FLAGS.forEach(([k, t, g]) => { const fFl = document.getElementById('fFlags' + g)
   if (k === 'ext') { const i = document.createElement('input'); i.type = 'number'; i.id = 'fExtMin'; i.min = '0'; i.step = '1'; i.placeholder = 'm² min'; i.title = 'Surface extérieure minimale (balcon, terrasse, jardin — m²)'; i.autocomplete = 'off'; i.hidden = true; i.style.cssText = 'width:72px;flex:0 0 auto;padding:2px 6px;font-size:11px'; i.oninput = () => { F.extMin = i.value ? String(Math.max(0, +i.value)) : ''; apply(); }; fFl.appendChild(i); } });
 // Le champ « m² min » n'a de sens que si « Extérieur » est coché : caché sinon, et le seuil s'efface
 function renderExtMin() { const i = document.getElementById('fExtMin'); if (!i) return; const on = F.flags.has('ext'); i.hidden = !on; if (!on && F.extMin) { F.extMin = ''; i.value = ''; } }
-document.getElementById('pige').textContent = META.pige_date ? 'pigé le ' + new Date(META.pige_date).toLocaleDateString('fr-FR') + (META.prev_date ? ' · ' + META.nouveaux_programmes + ' nouveaux programmes, ' + META.nouveaux_lots + ' nouveaux lots, ' + META.baisses + ' baisses depuis le ' + new Date(META.prev_date).toLocaleDateString('fr-FR') : '') : '';
+document.getElementById('pige').title = document.getElementById('pige').textContent = META.pige_date ? 'pigé le ' + new Date(META.pige_date).toLocaleDateString('fr-FR') + (META.prev_date ? ' · ' + META.nouveaux_programmes + ' nouveaux programmes, ' + META.nouveaux_lots + ' nouveaux lots, ' + META.baisses + ' baisses depuis le ' + new Date(META.prev_date).toLocaleDateString('fr-FR') : '') : '';
 const curY = new Date().getFullYear();
 const years = [...new Set(P.map(p => p.livraison_key && Math.floor(p.livraison_key)).filter(y => y && y >= curY && y <= curY + 6))].sort();
 const fLY = document.getElementById('fLivY'), fLS = document.getElementById('fLivS');

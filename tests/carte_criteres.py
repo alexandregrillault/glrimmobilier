@@ -24,7 +24,7 @@ def prog(i, nom, ville, cp, lat, lng):
             'lat': lat, 'lng': lng, 'nb_lots': 2, 'nb_dispo': 2, 'nb_libres': 2, 'prix_min': 300000, 'prix_max': 500000, 'livraison_key': 2028.4, 'commission_pct': 5}
 def lot(i, pid, typo, prix, st='libre'):
     return {'id': f't:l{i}', 'programme_id': f't:{pid}', 'n': 'A' + str(i), 'type': 'Appartement', 'typo': typo, 'pieces': int(typo[1]), 'surf': 60, 'prix': prix, 'st': st}
-DATA = {'meta': {'pige_date': '2026-11-12'}, 'genere': '2026-11-12',
+DATA = {'meta': {'pige_date': '2026-11-12', 'prev_date': '2026-11-09', 'nouveaux_programmes': 0, 'nouveaux_lots': 55, 'baisses': 175}, 'genere': '2026-11-12',
         'programmes': [prog(1, 'Les Quais', 'Boulogne-Billancourt', '92100', 48.835, 2.24), prog(2, 'Belvédère', 'Meudon', '92190', 48.81, 2.24), prog(3, 'Atelier', 'Paris', '75018', 48.89, 2.34)],
         'lots': [lot(1, 1, 'T2', 300000), lot(2, 1, 'T3', 450000), lot(3, 2, 'T3', 400000), lot(4, 3, 'T4', 500000, 'option')]}
 
@@ -42,7 +42,7 @@ def site(route):
 
 with sync_playwright() as pw:
     nav = pw.chromium.launch()
-    for nom, vp in (('bureau', {'width': 1400, 'height': 900}), ('iphone', {'width': 390, 'height': 844})):
+    for nom, vp in (('bureau', {'width': 1280, 'height': 800}), ('iphone', {'width': 390, 'height': 844})):
         ctx = nav.new_context(viewport=vp)
         ctx.route('**/glr.test/**', site)
         ctx.route('**/hydqfbxdtpmbuooexekp.supabase.co/**', base)
@@ -59,6 +59,8 @@ with sync_playwright() as pw:
         compteur = lambda: re.sub(r'\s+', ' ', page.inner_text('#critCount'))
 
         ko(not cache(), 'la fenêtre des critères est ouverte au chargement')
+        # l'en-tête ne doit pas déborder de l'écran (constaté le 12/11/2026 : le nouveau bouton poussait la page de côté)
+        if nom == 'bureau': ko(js('document.documentElement.scrollWidth > innerWidth'), 'la page déborde en largeur')
         ko(js("!!document.querySelector('aside select#fPromo, aside #fTypo')"), 'des filtres sont restés dans la colonne')
         ko(js("document.getElementById('active').hidden") is not True, 'pastilles affichées sans critère')
 
