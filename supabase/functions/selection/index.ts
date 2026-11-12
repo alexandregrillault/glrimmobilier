@@ -547,9 +547,12 @@ async function extraireInterne(lotId: string) {
   const plan = String((docsLot && docsLot.plan_url) || dLot.plan || '');
   // plusieurs vues du même lot (30/09/2026, ex. duplex remonté depuis la carte) :
   // plan_urls si déjà rempli, sinon la seule URL disponible.
+  // Sinon, les plans de la pige quand l'extranet en donne plusieurs (12/11/2026 : duplex Catella,
+  // « 601 haut » + « 601 bas », dont un seul arrivait jusqu'ici).
+  const plansPige: string[] = Array.isArray(dLot.plans) ? dLot.plans.filter((u: any) => typeof u === 'string' && u) : [];
   const plans: string[] = (docsLot && Array.isArray(docsLot.plan_urls) && docsLot.plan_urls.length)
     ? docsLot.plan_urls
-    : (plan ? [plan] : []);
+    : (plansPige.length > 1 ? plansPige : (plan ? [plan] : []));
   const masse = String((docsProg && docsProg.plan_masse_url) || '');
   const plaquette = String((docsProg && docsProg.plaquette_url) || dProg.plaquette || '');
   // Documents remis au client sur la feuille sélection (un bouton par document)
