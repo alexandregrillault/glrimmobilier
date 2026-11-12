@@ -60,10 +60,9 @@ header h1 small{font-weight:400;color:var(--muted);font-size:12px;margin-left:8p
 .kpis{display:flex;gap:14px;margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
 .kpis b{color:var(--navy);font-size:14px}
 aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
-.filters{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:6px}
-.filters select,.filters input{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;max-width:100%}
-.filters .row{display:flex;gap:6px;width:100%}
-.filters .row>*{flex:1;min-width:0}
+.crit-body select,.crit-body input{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;background:#fff;max-width:100%}
+.crit-body .row{display:flex;gap:6px;width:100%}
+.crit-body .row>*{flex:1;min-width:0}
 .chips{display:flex;flex-wrap:wrap;gap:4px;width:100%}
 .chip{border:1px solid var(--line);border-radius:14px;padding:3px 9px;font-size:11px;cursor:pointer;background:#fff;user-select:none}
 .chip.on{background:var(--teal);color:#fff;border-color:var(--teal)}
@@ -87,15 +86,42 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .tools label{display:flex;align-items:center;gap:4px;cursor:pointer}
 .tools a{color:var(--teal);cursor:pointer;text-decoration:none}
 #active[hidden]{display:none}
-#active{padding:6px 12px;border-bottom:1px solid var(--line);display:flex;gap:4px;align-items:center;flex-wrap:wrap;background:#f9fafb}
+#active{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:4px;align-items:center;flex-wrap:wrap;background:#f9fafb}
 #active .ac{display:inline-flex;align-items:center;gap:5px;border:1px solid #0f7c8c;color:#0f7c8c;background:#fff;border-radius:14px;padding:2px 7px 2px 9px;font-size:11px;font-weight:600}
 #active .ac i{font-style:normal;cursor:pointer;color:#9ca3af;font-weight:700}#active .ac i:hover{color:#dc2626}
 #active .edit{font-size:11px;color:var(--teal);cursor:pointer;margin-left:8px;font-weight:600}
 #active .all{font-size:11px;color:var(--muted);cursor:pointer;margin-left:auto}
-.fbar{padding:6px 12px;border-bottom:1px solid var(--line);background:#fff;display:flex}
-.fbar button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--navy)}
-.fbar button:hover{background:#f4f4f4}
-.filters.collapsed{display:none}
+/* Écran de critères (12/11/2026, demande d'Alex, sur le modèle d'Otaree) : les filtres ne sont plus
+   empilés dans la colonne, ils s'ouvrent dans une fenêtre rangée par thèmes, avec le compteur en direct. */
+#critBtn,#critGo{border:1px solid var(--teal);background:var(--teal);color:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
+#critBtn:hover,#critGo:hover{background:#0c6976}
+#crit{position:fixed;inset:0;z-index:5000;background:rgba(20,33,61,.35);display:flex;align-items:flex-start;justify-content:center;padding:28px 16px}
+#crit[hidden]{display:none}
+.crit-card{background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:100%;max-width:1060px;max-height:calc(100vh - 56px);display:flex;flex-direction:column;overflow:hidden}
+.crit-head{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line)}
+.crit-head b{font-size:16px;color:var(--navy)}
+#critClose{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;font-size:12.5px;cursor:pointer;color:var(--navy);font-family:inherit}
+#critClose:hover{background:#f4f4f4}
+.crit-body{display:grid;grid-template-columns:330px 1fr;gap:20px;padding:18px 20px;overflow:auto;flex:1;min-height:0;align-items:start}
+.crit-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.cs{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cs h3{margin:0 0 2px;font-size:14px;color:var(--navy)}
+.cs-ou{background:#f9fafb;border:1px solid var(--line);border-radius:12px;padding:14px}
+.crit-col .cs{padding-bottom:14px;border-bottom:1px dashed var(--line)}
+.crit-col .cs:last-child{border-bottom:0;padding-bottom:0}
+.crit-body .fl{font-size:11px;color:var(--muted);margin-top:2px}
+.crit-body select,.crit-body input[type=number],.crit-body input:not([type]){padding:7px 9px;font-size:13px}
+.crit-body .dd button{padding:7px 22px 7px 9px;font-size:13px}
+.crit-body .chip{padding:5px 11px;font-size:12px}
+.crit-body .chk{display:inline-flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap}
+.crit-body .typorow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.crit-body .typorow .chips{width:auto}
+.crit-foot{display:flex;align-items:center;gap:16px;padding:12px 20px;border-top:1px solid var(--line);background:#f9fafb}
+#critCount{font-size:13px;color:var(--muted)}
+#critCount b{font-size:18px;color:var(--navy)}
+#reset{margin-left:auto;color:var(--teal);cursor:pointer;font-size:13px}
+#listTools{padding:8px 12px;border-bottom:1px solid var(--line)}
+@media (max-width:900px){#crit{padding:0}.crit-card{max-height:100vh;height:100%;border-radius:0}.crit-body{grid-template-columns:1fr}}
 .chip .cnt{opacity:.6;font-weight:400;margin-left:3px;font-size:10px}
 .conc{margin:8px 12px;border:1px solid #fdba74;background:#fff7ed;border-radius:8px;padding:8px 10px;font-size:12px;color:#7c2d12}
 .conc b{display:block;margin-bottom:4px}.conc .o{display:inline-block;margin:2px 4px 2px 0;border:1px solid #fb923c;background:#fff;border-radius:14px;padding:2px 9px;cursor:pointer;color:#9a3412}
@@ -246,7 +272,7 @@ table.lots td.r{text-align:right}
 .docsbox .dl b{min-width:100px;color:var(--muted);font-weight:600}
 .docsbox .dl a{color:var(--teal)}
 .pige{font-size:11px;color:var(--muted);white-space:nowrap}
-.filters .row.tri>*{flex:1}
+.crit-body .row.tri>*{flex:1}
 @media (max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:56px 1fr}aside{display:none}header .kpis{display:none}#panel{width:auto;left:10px;min-width:0}}
 </style>
 </head>
@@ -255,44 +281,30 @@ table.lots td.r{text-align:right}
 <header>
   <h1>Programmes pigés<small>Île-de-France</small></h1><span class="pige" id="pige"></span>
   <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
-  <button id="sideBtn" title="Afficher / masquer les critères">◧ Critères</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
+  <button id="critBtn" title="Ouvrir les critères de recherche">Critères de recherche</button><button id="sideBtn" title="Afficher ou masquer la liste à gauche de la carte">Masquer la liste</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
 </header>
 <div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="crit" id="clientCritInfo" hidden>· filtré selon ses critères : <b id="clientCritResume"></b><button id="clientCritOff" title="Retirer ce filtre et revenir à toute l'Île-de-France">Retirer le filtre</button></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><span class="crit" id="clientTrajetChoix" hidden>· Afficher sur la feuille le trajet jusqu'à <b id="clientTrajetChoixAdr"></b> ?<button data-modes="transit">En transports</button><button data-modes="car">En voiture</button><button data-modes="transit,car">Les deux</button><button data-modes="">Non, les lignes à proximité</button></span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
-<aside>
-  <div class="fbar"><button type="button" id="filtToggle">▾ Filtres</button></div>
-  <div class="filters">
-    <div class="row">
-      <select id="fPromo"><option value="">Tous les promoteurs</option></select>
+<!-- Écran de critères (12/11/2026) : mêmes champs et mêmes identifiants qu'avant, rangés par thèmes. -->
+<div id="crit" hidden>
+ <div class="crit-card" role="dialog" aria-label="Critères de recherche">
+  <div class="crit-head"><b>Critères de recherche</b><button type="button" id="critClose">Fermer</button></div>
+  <div class="crit-body">
+    <section class="cs cs-ou">
+      <h3>Où</h3>
       <!-- Département : un seul filtre, la liste à cases (« + départements ») juste
            en dessous. L'ancienne liste déroulante mono-département faisait doublon
            (retirée le 24/09/2026 à la demande d'Alex) ; l'élément reste, masqué,
            parce que la navigation par département sur la carte (zoom, fil d'Ariane,
            bouton retour) s'appuie encore sur sa valeur. -->
       <select id="fDept" hidden><option value="">Tous les départements</option></select>
-    </div>
-    <div class="row">
+      <span class="fl">Départements et villes</span>
+      <div class="row">
       <div class="dd" id="fDeptsDD"><button type="button" id="fDeptsBtn">+ départements</button><div class="dd-pop" id="fDeptsPop" hidden></div></div>
       <div class="dd" id="fVillesDD"><button type="button" id="fVillesBtn">+ villes</button><div class="dd-pop" id="fVillesPop" hidden><input id="fVillesSearch" placeholder="Rechercher une ville…" autocomplete="off"></div></div>
-    </div>
-    <div class="row">
-      <select id="fSource"><option value="">Toutes les sources</option></select>
-      <select id="fCom"><option value="">Commission min</option></select>
-    </div>
-    <div class="chips" id="fTypo"></div>
-    <div class="row tri">
-      <input type="number" id="fBudget" placeholder="Budget max (k€)" min="0" step="1" list="fBudgetList" autocomplete="off"><datalist id="fBudgetList"><option value="150"><option value="200"><option value="250"><option value="300"><option value="350"><option value="400"><option value="500"><option value="600"><option value="800"><option value="1000"></datalist>
-      <select id="fPm2"><option value="">€/m² max</option></select>
-      <select id="fRenta"><option value="">Renta min</option></select>
-    </div>
-    <div class="row">
-      <select id="fGare"><option value="">Distance gare</option></select>
-      <select id="fEtage" title="Étage du lot (RDC = rez-de-chaussée, RDJ = rez-de-jardin)"><option value="">Étage</option></select>
-      <input type="number" id="fEtageMin" min="1" max="60" step="1" placeholder="n°" title="Étage minimum (1 = à partir du 1er, pas de RDC)" inputmode="numeric" hidden style="flex:0 0 58px;text-align:right">
-    </div>
-    <div class="row">
-      <div class="dd" id="fFiscDD"><button type="button" id="fFiscBtn">Fiscalité</button><div class="dd-pop" id="fFiscPop" hidden></div></div>
-    </div>
-    <div class="tt-box" id="ttBox">
+      </div>
+      <span class="fl">Distance à une gare</span>
+      <div class="row"><select id="fGare"><option value="">Distance gare</option></select></div>
+      <div class="tt-box" id="ttBox">
       <span class="t">Temps de trajet depuis une adresse (lieu de travail, école, famille…)</span>
       <div id="ttSugg"><input id="ttAddr" placeholder="Adresse de départ…" autocomplete="off"><div id="ttList" hidden></div></div>
       <div class="rowi">
@@ -302,16 +314,52 @@ table.lots td.r{text-align:right}
       </div>
       <span class="msg" id="ttMsg"></span>
     </div>
-    <div class="livrow"><span class="lbl">Livraison</span><div class="chips" id="fLivM"><span class="chip on" data-m="max" title="Livré au plus tard cette année-là">au plus tard</span><span class="chip" data-m="eq" title="Livré exactement cette année-là">cette année</span></div><div class="chips" id="fLivY"></div><div class="chips" id="fLivS" hidden></div></div>
-    <div class="chips" id="fFlags"></div>
-    <div class="livrow"><span class="lbl">Statut</span><div class="chips" id="fStChips" title="Cumulables : coche les statuts à afficher (aucun coché = tous)"><span class="chip on" data-v="libre">Libres</span><span class="chip" data-v="option">Optionnés</span><span class="chip" data-v="reserve,bloque">Réservés</span><span class="chip" data-v="vendu">Vendus</span></div></div>
-    <div class="tools">
-      <select id="fSort" title="Ordre de la liste" style="padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:11px;background:#fff"><option value="ville">Par ville</option><option value="prix">Prix croissant</option><option value="pm2">€/m² croissant</option><option value="liv">Livraison la plus proche</option><option value="tt">Temps de trajet</option><option value="new">Nouveautés d’abord</option></select>
-      <label><input type="checkbox" id="fMaison"> Maisons</label>
-      <label><input type="checkbox" id="tTransports"> Transports</label>
-      <label title="Lignes en construction (pointillés), avec la date de mise en service prévue"><input type="checkbox" id="tFutur"> Futures lignes</label>
-      <a id="reset">Réinitialiser</a><a id="csv" title="Exporter les lots correspondant aux filtres">Export CSV</a>
+    </section>
+    <div class="crit-col">
+      <section class="cs">
+        <h3>Budget</h3>
+        <div class="row tri">
+      <input type="number" id="fBudget" placeholder="Budget max (k€)" min="0" step="1" list="fBudgetList" autocomplete="off"><datalist id="fBudgetList"><option value="150"><option value="200"><option value="250"><option value="300"><option value="350"><option value="400"><option value="500"><option value="600"><option value="800"><option value="1000"></datalist>
+      <select id="fPm2"><option value="">€/m² max</option></select>
+      <select id="fRenta"><option value="">Renta min</option></select>
+        </div>
+        <div class="row"><div class="dd" id="fFiscDD"><button type="button" id="fFiscBtn">Fiscalité</button><div class="dd-pop" id="fFiscPop" hidden></div></div></div>
+      </section>
+      <section class="cs">
+        <h3>Le logement</h3>
+        <div class="typorow"><div class="chips" id="fTypo"></div><label class="chk"><input type="checkbox" id="fMaison"> Maisons seulement</label></div>
+        <div class="row">
+      <select id="fEtage" title="Étage du lot (RDC = rez-de-chaussée, RDJ = rez-de-jardin)"><option value="">Étage</option></select>
+      <input type="number" id="fEtageMin" min="1" max="60" step="1" placeholder="n°" title="Étage minimum (1 = à partir du 1er, pas de RDC)" inputmode="numeric" hidden style="flex:0 0 58px;text-align:right">
+        </div>
+        <div class="chips" id="fFlagsLot"></div>
+        <div class="livrow"><span class="lbl">Statut</span><div class="chips" id="fStChips" title="Cumulables : coche les statuts à afficher (aucun coché = tous)"><span class="chip on" data-v="libre">Libres</span><span class="chip" data-v="option">Optionnés</span><span class="chip" data-v="reserve,bloque">Réservés</span><span class="chip" data-v="vendu">Vendus</span></div></div>
+      </section>
+      <section class="cs">
+        <h3>Livraison</h3>
+        <div class="livrow"><div class="chips" id="fLivM"><span class="chip on" data-m="max" title="Livré au plus tard cette année-là">au plus tard</span><span class="chip" data-m="eq" title="Livré exactement cette année-là">cette année</span></div><div class="chips" id="fLivY"></div><div class="chips" id="fLivS" hidden></div></div>
+        <div class="chips" id="fFlagsLiv"></div>
+      </section>
+      <section class="cs">
+        <h3>Pour nous</h3>
+        <div class="row"><select id="fPromo"><option value="">Tous les promoteurs</option></select></div>
+        <div class="row">
+      <select id="fSource"><option value="">Toutes les sources</option></select>
+      <select id="fCom"><option value="">Commission min</option></select>
+        </div>
+        <div class="chips" id="fFlagsNous"></div>
+      </section>
     </div>
+  </div>
+  <div class="crit-foot"><span id="critCount"></span><a id="reset">Réinitialiser les critères</a><button type="button" id="critGo">Afficher les résultats</button></div>
+ </div>
+</div>
+<aside>
+  <div class="tools" id="listTools">
+    <select id="fSort" title="Ordre de la liste" style="padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:11px;background:#fff"><option value="ville">Par ville</option><option value="prix">Prix croissant</option><option value="pm2">€/m² croissant</option><option value="liv">Livraison la plus proche</option><option value="tt">Temps de trajet</option><option value="new">Nouveautés d’abord</option></select>
+    <label><input type="checkbox" id="tTransports"> Transports</label>
+    <label title="Lignes en construction (pointillés), avec la date de mise en service prévue"><input type="checkbox" id="tFutur"> Futures lignes</label>
+    <a id="csv" title="Exporter les lots correspondant aux filtres">Export CSV</a>
   </div>
   <div id="active" hidden></div>
   <div id="tabs"><span class="on" data-t="p">Programmes</span><span data-t="l">Lots <small id="tabLN"></small></span></div>
@@ -415,10 +463,16 @@ const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLow
 
 // ---------- filtres ----------
 const F = { promo: '', dept: '', typos: new Set(), extMin: '', etage: '', etageMin: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre', 'option']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
-// ---------- repli manuel du volet des filtres (gagner de la place pour la liste) ----------
-let filtersCollapsed = false;
-function setFiltersCollapsed(on) { filtersCollapsed = on; document.querySelector('.filters').classList.toggle('collapsed', on); }
-document.getElementById('filtToggle').onclick = () => { setFiltersCollapsed(!filtersCollapsed); renderActive(); };
+// ---------- écran de critères (12/11/2026) : s'ouvre par « Critères de recherche », se ferme par
+// « Afficher les résultats », « Fermer », Échap ou un clic à côté. Les résultats se mettent à jour
+// derrière à chaque critère ; le compteur du bas dit combien il en reste.
+const critEl = document.getElementById('crit');
+function critOuvrir(on) { critEl.hidden = !on; if (!on) setTimeout(() => map.invalidateSize(), 60); }
+document.getElementById('critBtn').onclick = () => critOuvrir(true);
+document.getElementById('critClose').onclick = document.getElementById('critGo').onclick = () => critOuvrir(false);
+critEl.addEventListener('mousedown', e => { if (e.target === critEl) critOuvrir(false); });
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && !critEl.hidden) { e.stopPropagation(); critOuvrir(false); } }, true);
+const flagChips = () => [...critEl.querySelectorAll('.chip[data-f]')];
 // ---------- repli manuel de la légende de la carte ----------
 document.getElementById('legendToggle').onclick = () => {
   const on = !document.getElementById('legendBox').classList.contains('collapsed');
@@ -512,6 +566,7 @@ function apply() {
   document.getElementById('kd').textContent = nd.toLocaleString('fr-FR');
   document.getElementById('kpr').textContent = new Set(VIS.filter(p => !p.nomandat).map(p => p.promoteur)).size;
   renderList(); renderMap(); renderCrumbs(); renderBack(); renderLotsView(); renderCartBtn(); renderActive();
+  { const nlv = visibleLots().length; document.getElementById('critCount').innerHTML = '<b>' + nlv.toLocaleString('fr-FR') + '</b> lot' + (nlv > 1 ? 's' : '') + ' · <b>' + VIS.length.toLocaleString('fr-FR') + '</b> programme' + (VIS.length > 1 ? 's' : ''); }
   clearTimeout(apply._t); apply._t = setTimeout(renderCounts, 30);
 }
 // ---------- compteurs "avec les autres critères" ----------
@@ -523,7 +578,7 @@ function renderCounts() {
   selCount('fPromo', 'promo'); selCount('fDept', 'dept'); selCount('fSource', 'source'); selCount('fCom', 'com'); selCount('fPm2', 'pm2'); selCount('fRenta', 'renta'); selCount('fGare', 'gare'); selCount('fEtage', 'etage');
   const chipCount = (c, n) => { let s = c.querySelector('.cnt'); if (!s) { s = document.createElement('span'); s.className = 'cnt'; c.appendChild(s); } s.textContent = n.toLocaleString('fr-FR'); c.classList.toggle('dim', n === 0 && !c.classList.contains('on')); };
   [...fT.children].forEach(c => { const t = c.firstChild.textContent; chipCount(c, F.typos.has(t) ? VIS.length : countWith({ typos: setOn(F.typos, t, true) })); });
-  [...fFl.querySelectorAll('.chip')].forEach(c => { const k = c.dataset.f; chipCount(c, F.flags.has(k) ? VIS.length : countWith({ flags: setOn(F.flags, k, true) })); });
+  flagChips().forEach(c => { const k = c.dataset.f; chipCount(c, F.flags.has(k) ? VIS.length : countWith({ flags: setOn(F.flags, k, true) })); });
   [...fLY.children].forEach(c => { const y = +c.dataset.y; chipCount(c, +F.liv === y ? VIS.length : countWith({ liv: y, livS: 2 })); });
   fPop.querySelectorAll('label:not(.all)').forEach(l => { const f = l.querySelector('input').value; l.querySelector('.cnt').textContent = F.fisc.has(f) ? VIS.length : countWith({ fisc: setOn(F.fisc, f, true) }); });
   [...document.getElementById('fStChips').children].forEach(c => { const vals = c.dataset.v.split(','); const on = vals.every(x => F.st.has(x)); chipCount(c, on ? VIS.length : countWith({ st: new Set([...F.st, ...vals]) })); });
@@ -548,7 +603,7 @@ function activeList() {
   F.fisc.forEach(f => add(f, () => { F.fisc.delete(f); fPop.querySelectorAll('input').forEach(i => { if (i.value === f) i.checked = false; }); fiscLabel(); }));
   if (F.tt) add((F.tt.mode === 'car' ? '🚗' : '🚇') + ' ≤ ' + F.tt.max + ' min de ' + F.tt.label.split(',')[0], () => ttClear(false));
   if (F.liv) add('Livraison ' + (F.livM === 'eq' ? 'en ' : 'au plus tard ') + F.liv + (F.livS === 1 ? ' (S1)' : ''), () => { F.liv = ''; F.livS = 2; renderLiv(); });
-  F.flags.forEach(k => add((FLAGS.find(x => x[0] === k) || [k, k])[1], () => { F.flags.delete(k); [...fFl.children].forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); renderExtMin(); }));
+  F.flags.forEach(k => add((FLAGS.find(x => x[0] === k) || [k, k])[1], () => { F.flags.delete(k); flagChips().forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); renderExtMin(); }));
   if (F.flags.has('ext') && F.extMin) add('Extérieur ≥ ' + String(F.extMin).replace('.', ',') + ' m²', () => { F.extMin = ''; const i = document.getElementById('fExtMin'); if (i) i.value = ''; });
   if (F.maison) add('Maisons', () => { F.maison = false; document.getElementById('fMaison').checked = false; });
   if (!(F.st.size === 2 && F.st.has('libre') && F.st.has('option'))) add(F.st.size ? stLabel(F.st) : 'Tous les statuts', () => { setSt('libre,option'); });
@@ -556,12 +611,12 @@ function activeList() {
 }
 function renderActive() {
   const el = document.getElementById('active'), a = activeList();
-  document.getElementById('filtToggle').textContent = (filtersCollapsed ? '▸' : '▾') + ' Filtres' + (a.length ? ' (' + a.length + ')' : '');
-  el.hidden = !a.length || !filtersCollapsed;
-  if (!a.length || !filtersCollapsed) return;
+  document.getElementById('critBtn').textContent = 'Critères de recherche' + (a.length ? ' (' + a.length + ')' : '');
+  el.hidden = !a.length;
+  if (!a.length) return;
   el.innerHTML = a.map((x, i) => '<span class="ac">' + esc(x.label) + '<i data-i="' + i + '" title="Retirer ce critère">✕</i></span>').join('') + '<span class="edit">Modifier</span><span class="all">Tout effacer</span>';
   el.querySelectorAll('i').forEach(i => i.onclick = () => { a[+i.dataset.i].off(); apply(); });
-  el.querySelector('.edit').onclick = () => { setFiltersCollapsed(false); renderActive(); };
+  el.querySelector('.edit').onclick = () => critOuvrir(true);
   el.querySelector('.all').onclick = () => document.getElementById('reset').click();
 }
 // ---------- concession assistée ----------
@@ -590,7 +645,7 @@ function concessions() {
   if (F.source) push('Toutes les sources', { source: '' }, () => { F.source = ''; document.getElementById('fSource').value = ''; });
   if (F.com) push('Sans minimum de commission', { com: '' }, () => { F.com = ''; document.getElementById('fCom').value = ''; });
   if (F.fisc.size) push('Sans critère de fiscalité', { fisc: new Set() }, () => { F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); });
-  F.flags.forEach(k => push('Sans « ' + (FLAGS.find(x => x[0] === k) || [k, k])[1] + ' »', { flags: setOn(F.flags, k, false) }, () => { F.flags.delete(k); [...fFl.children].forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); renderExtMin(); }));
+  F.flags.forEach(k => push('Sans « ' + (FLAGS.find(x => x[0] === k) || [k, k])[1] + ' »', { flags: setOn(F.flags, k, false) }, () => { F.flags.delete(k); flagChips().forEach(c => { if (c.dataset.f === k) c.classList.remove('on'); }); renderExtMin(); }));
   if (F.maison) push('Appartements aussi', { maison: false }, () => { F.maison = false; document.getElementById('fMaison').checked = false; });
   if (F.tt) { const nx = Math.min(180, F.tt.max + 15); if (nx > F.tt.max) out.push({ label: 'Trajet ≤ ' + nx + ' min au lieu de ' + F.tt.max, n: null, go: () => { document.getElementById('ttMax').value = nx; ttRun(); } }); }
   return out.sort((a, b) => (b.n == null ? -1 : b.n) - (a.n == null ? -1 : a.n)).slice(0, 8);
@@ -625,9 +680,8 @@ sel('fEtage', [['rdc', 'RDC ou RDJ'], ['rdj', 'Rez-de-jardin seulement'], ['top'
 function renderEtageMin() { const i = document.getElementById('fEtageMin'); if (!i) return; const on = F.etage === 'min'; i.hidden = !on; if (!on) { if (F.etageMin || i.value) { F.etageMin = ''; i.value = ''; } } else { if (!i.value) i.value = F.etageMin || '1'; F.etageMin = i.value; } }
 document.getElementById('fEtageMin').oninput = () => { const i = document.getElementById('fEtageMin'); F.etageMin = i.value ? String(Math.min(60, Math.max(1, Math.round(+i.value)))) : ''; apply(); };
 sel('fGare', [[300, '≤ 300 m d’une gare'], [500, '≤ 500 m (6 min à pied)'], [800, '≤ 800 m (10 min à pied)'], [1200, '≤ 1,2 km (15 min à pied)'], [2000, '≤ 2 km']]);
-const FLAGS = [['ext', 'Extérieur'], ['pk', 'Parking'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)')], ['pick', 'Picking à demander'], ['nomandat', 'Sans mandat'], ['nopick', 'Mandat + stock seulement'], ['livre', 'Déjà livré'], ['nonact', 'Pas encore actable']];
-const fFl = document.getElementById('fFlags');
-FLAGS.forEach(([k, t]) => { const c = document.createElement('span'); c.className = 'chip'; c.dataset.f = k; c.textContent = t; c.onclick = () => { F.flags.has(k) ? F.flags.delete(k) : F.flags.add(k); c.classList.toggle('on'); renderExtMin(); apply(); }; fFl.appendChild(c);
+const FLAGS = [['ext', 'Extérieur', 'Lot'], ['pk', 'Parking', 'Lot'], ['new', 'Nouveautés' + (META.prev_date ? '' : ' (1re pige)'), 'Lot'], ['pick', 'Picking à demander', 'Nous'], ['nomandat', 'Sans mandat', 'Nous'], ['nopick', 'Mandat + stock seulement', 'Nous'], ['livre', 'Déjà livré', 'Liv'], ['nonact', 'Pas encore actable', 'Liv']];
+FLAGS.forEach(([k, t, g]) => { const fFl = document.getElementById('fFlags' + g); const c = document.createElement('span'); c.className = 'chip'; c.dataset.f = k; c.textContent = t; c.onclick = () => { F.flags.has(k) ? F.flags.delete(k) : F.flags.add(k); c.classList.toggle('on'); renderExtMin(); apply(); }; fFl.appendChild(c);
   if (k === 'ext') { const i = document.createElement('input'); i.type = 'number'; i.id = 'fExtMin'; i.min = '0'; i.step = '1'; i.placeholder = 'm² min'; i.title = 'Surface extérieure minimale (balcon, terrasse, jardin — m²)'; i.autocomplete = 'off'; i.hidden = true; i.style.cssText = 'width:72px;flex:0 0 auto;padding:2px 6px;font-size:11px'; i.oninput = () => { F.extMin = i.value ? String(Math.max(0, +i.value)) : ''; apply(); }; fFl.appendChild(i); } });
 // Le champ « m² min » n'a de sens que si « Extérieur » est coché : caché sinon, et le seuil s'efface
 function renderExtMin() { const i = document.getElementById('fExtMin'); if (!i) return; const on = F.flags.has('ext'); i.hidden = !on; if (!on && F.extMin) { F.extMin = ''; i.value = ''; } }
@@ -662,7 +716,7 @@ document.getElementById('fBudget').oninput = e => { const v = e.target.value; F.
 [...document.getElementById('fLivM').children].forEach(c => c.onclick = () => { F.livM = c.dataset.m; [...c.parentElement.children].forEach(x => x.classList.toggle('on', x === c)); apply(); });
 document.getElementById('fSort').onchange = e => { F.sort = e.target.value; renderList(); };
 document.getElementById('fMaison').onchange = e => { F.maison = e.target.checked; apply(); };
-document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', etage: '', etageMin: '' }); renderEtageMin(); setSt('libre,option'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); [...fFl.querySelectorAll('.chip')].forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
+document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', etage: '', etageMin: '' }); renderEtageMin(); setSt('libre,option'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); flagChips().forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
 
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
@@ -823,7 +877,7 @@ function hoverPin(id, on) {
 
 // ---------- critères masquables ----------
 const sideBtn = document.getElementById('sideBtn');
-function setSide(on) { document.getElementById('app').classList.toggle('nof', !on); sideBtn.classList.toggle('on', !on); sideBtn.textContent = on ? '◧ Critères' : '◨ Critères'; try { localStorage.setItem('sideOff', on ? '' : '1') } catch (e) {} setTimeout(() => map.invalidateSize(), 60); }
+function setSide(on) { document.getElementById('app').classList.toggle('nof', !on); sideBtn.classList.toggle('on', !on); sideBtn.textContent = on ? 'Masquer la liste' : 'Afficher la liste'; try { localStorage.setItem('sideOff', on ? '' : '1') } catch (e) {} setTimeout(() => map.invalidateSize(), 60); }
 sideBtn.onclick = () => setSide(document.getElementById('app').classList.contains('nof'));
 try { if (localStorage.getItem('sideOff')) setSide(false) } catch (e) {}
 

@@ -1,0 +1,107 @@
+# Test de l'écran de critères de la carte (12/11/2026, demande d'Alex, sur le modèle d'Otaree) :
+# les filtres s'ouvrent dans une fenêtre rangée par thèmes (« Critères de recherche »), le compteur
+# « lots · programmes » bouge à chaque critère, « Afficher les résultats » referme, et les critères
+# actifs restent en pastilles au-dessus de la liste (croix pour en retirer un, « Modifier », « Tout effacer »).
+# Bureau et iPhone.
+# Lancer : ~/glr-pige-robot/.venv/bin/python tests/carte_criteres.py [dossier des captures]
+import json, pathlib, re, subprocess, sys, tempfile
+from playwright.sync_api import sync_playwright
+
+ICI = pathlib.Path(__file__).resolve().parent
+CARTE = ICI.parent / 'carte.html'
+SORTIE = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ICI
+html = CARTE.read_text(encoding='utf-8')
+
+erreurs = []
+with tempfile.TemporaryDirectory() as d:
+    for i, b in enumerate(re.findall(r'<script(?![^>]*src)[^>]*>(.*?)</script>', html, re.S)):
+        p = pathlib.Path(d) / f'b{i}.js'; p.write_text(b, encoding='utf-8')
+        r = subprocess.run(['node', '--check', str(p)], capture_output=True, text=True)
+        if r.returncode: erreurs.append(f'syntaxe bloc {i} : {r.stderr[:200]}')
+
+def prog(i, nom, ville, cp, lat, lng):
+    return {'id': f't:{i}', 'nom': nom, 'promoteur': 'Promoteur ' + str(i), 'extranet': 'Test', 'ville': ville, 'cp': cp, 'dept': cp[:2],
+            'lat': lat, 'lng': lng, 'nb_lots': 2, 'nb_dispo': 2, 'nb_libres': 2, 'prix_min': 300000, 'prix_max': 500000, 'livraison_key': 2028.4, 'commission_pct': 5}
+def lot(i, pid, typo, prix, st='libre'):
+    return {'id': f't:l{i}', 'programme_id': f't:{pid}', 'n': 'A' + str(i), 'type': 'Appartement', 'typo': typo, 'pieces': int(typo[1]), 'surf': 60, 'prix': prix, 'st': st}
+DATA = {'meta': {'pige_date': '2026-11-12'}, 'genere': '2026-11-12',
+        'programmes': [prog(1, 'Les Quais', 'Boulogne-Billancourt', '92100', 48.835, 2.24), prog(2, 'Belvédère', 'Meudon', '92190', 48.81, 2.24), prog(3, 'Atelier', 'Paris', '75018', 48.89, 2.34)],
+        'lots': [lot(1, 1, 'T2', 300000), lot(2, 1, 'T3', 450000), lot(3, 2, 'T3', 400000), lot(4, 3, 'T4', 500000, 'option')]}
+
+def base(route):
+    nom = route.request.url.rsplit('/', 1)[-1].split('?')[0]
+    if '/rpc/' in route.request.url:
+        return route.fulfill(status=200, body=json.dumps('v1' if nom == 'pige_carte_version' else DATA), content_type='application/json')
+    route.fulfill(status=200, body='[]', content_type='application/json')
+
+def site(route):
+    chemin = route.request.url.split('glr.test/', 1)[1].split('?')[0]
+    f = ICI.parent / chemin
+    if f.exists(): route.fulfill(status=200, body=f.read_bytes(), content_type='text/html' if chemin.endswith('.html') else 'application/json')
+    else: route.fulfill(status=404, body='')
+
+with sync_playwright() as pw:
+    nav = pw.chromium.launch()
+    for nom, vp in (('bureau', {'width': 1400, 'height': 900}), ('iphone', {'width': 390, 'height': 844})):
+        ctx = nav.new_context(viewport=vp)
+        ctx.route('**/glr.test/**', site)
+        ctx.route('**/hydqfbxdtpmbuooexekp.supabase.co/**', base)
+        page = ctx.new_page()
+        page.on('pageerror', lambda e: erreurs.append(f'{nom} : {e}'))
+        page.add_init_script("localStorage.setItem('glr_session', JSON.stringify({access_token: 'jeton-test'}))")
+        page.goto('http://glr.test/carte.html?embed=1')
+        page.wait_for_function("!document.getElementById('chargement')", timeout=20000)
+        page.wait_for_timeout(400)
+        def ko(cond, msg):
+            if cond: erreurs.append(f'{nom} : {msg}')
+        js = page.evaluate
+        cache = lambda: js("document.getElementById('crit').hidden")
+        compteur = lambda: re.sub(r'\s+', ' ', page.inner_text('#critCount'))
+
+        ko(not cache(), 'la fenêtre des critères est ouverte au chargement')
+        ko(js("!!document.querySelector('aside select#fPromo, aside #fTypo')"), 'des filtres sont restés dans la colonne')
+        ko(js("document.getElementById('active').hidden") is not True, 'pastilles affichées sans critère')
+
+        js("document.getElementById('critBtn').click()")
+        page.wait_for_timeout(200)
+        ko(cache(), 'la fenêtre ne s’ouvre pas')
+        titres = page.eval_on_selector_all('#crit h3', 'els => els.map(e => e.textContent)')
+        ko(titres != ['Où', 'Budget', 'Le logement', 'Livraison', 'Pour nous'], f'thèmes {titres}')
+        ko(js("document.querySelectorAll('#crit .chip[data-f]').length") != 8, 'pastilles Extérieur / Parking… incomplètes')
+        ko(compteur() != '4 lots · 3 programmes', f'compteur de départ {compteur()!r}')
+        page.screenshot(path=str(SORTIE / f'carte_criteres_{nom}.png'))
+
+        # un critère : le compteur bouge tout de suite
+        js("[...document.querySelectorAll('#fTypo .chip')].find(c => c.firstChild.textContent === 'T3').click()")
+        page.wait_for_timeout(200)
+        ko(compteur() != '2 lots · 2 programmes', f'compteur après T3 {compteur()!r}')
+        page.fill('#fBudget', '420'); page.wait_for_timeout(200)
+        ko(compteur() != '1 lot · 1 programme', f'compteur après budget {compteur()!r}')
+        js("document.getElementById('critGo').click()")
+        page.wait_for_timeout(200)
+        ko(not cache(), '« Afficher les résultats » ne referme pas')
+        ko(page.inner_text('#critBtn') != 'Critères de recherche (2)', f'bouton {page.inner_text("#critBtn")!r}')
+        pastilles = page.eval_on_selector_all('#active .ac', 'els => els.map(e => e.firstChild.textContent)')
+        ko(pastilles != ['T3', '≤ 420 k€'], f'pastilles {pastilles}')
+        page.screenshot(path=str(SORTIE / f'carte_criteres_pastilles_{nom}.png'))
+
+        # la croix retire un critère sans rouvrir la fenêtre
+        js("document.querySelector('#active .ac i').click()"); page.wait_for_timeout(200)
+        pastilles = page.eval_on_selector_all('#active .ac', 'els => els.map(e => e.firstChild.textContent)')
+        ko(pastilles != ['≤ 420 k€'], f'après la croix {pastilles}')
+        ko(js("document.querySelector('#fTypo .chip.on')") is not None, 'T3 encore coché dans la fenêtre')
+
+        # « Modifier » rouvre, Échap referme, « Tout effacer » remet à zéro
+        js("document.querySelector('#active .edit').click()"); page.wait_for_timeout(150)
+        ko(cache(), '« Modifier » ne rouvre pas la fenêtre')
+        page.keyboard.press('Escape'); page.wait_for_timeout(150)
+        ko(not cache(), 'Échap ne referme pas')
+        js("document.querySelector('#active .all').click()"); page.wait_for_timeout(300)
+        ko(js("document.getElementById('active').hidden") is not True, 'pastilles encore là après « Tout effacer »')
+        ko(compteur() != '4 lots · 3 programmes', f'compteur après remise à zéro {compteur()!r}')
+        ko(page.inner_text('#critBtn') != 'Critères de recherche', 'bouton pas remis à zéro')
+        ctx.close()
+    nav.close()
+
+print('\n'.join(erreurs) if erreurs else 'Tout est bon.')
+sys.exit(1 if erreurs else 0)
