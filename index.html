@@ -850,6 +850,11 @@
         Tickets
         <span id="nav-tickets-pastille" style="display:none;margin-left:auto;background:var(--danger);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
       </div>
+      <div class="nav-item" onclick="goTo(&#39;gerant-todo&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M7 10l2 2 4-4M7 16h10"></path></svg>
+        Todo
+        <span id="nav-todo-pastille" style="display:none;margin-left:auto;background:var(--accent);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
+      </div>
       <div class="nav-item" onclick="goTo(&#39;gerant-chiffres&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"></path><path d="M18 17V9M13 17V5M8 17v-3"></path></svg>
         Chiffres (€)
@@ -2273,6 +2278,30 @@
       <div id="tk-gerant-liste"></div>
     </div>
 
+    <!-- PAGE: TODO (gérants) — demande d'Alex du 12/11/2026 -->
+    <div class="page" id="page-gerant-todo">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <div class="section-sub" style="max-width:620px">Ce qu'il reste à faire. Coche une étape quand c'est fait : elle quitte la liste et part dans l'historique.</div>
+        <div style="display:flex;gap:6px" id="td-filtres">
+          <button class="btn btn-sm btn-primary" data-f="afaire" onclick="tdFiltre('afaire')">À faire</button>
+          <button class="btn btn-sm btn-secondary" data-f="histo" onclick="tdFiltre('histo')">Historique</button>
+        </div>
+      </div>
+      <div class="card" id="td-ajout" style="padding:14px 16px;margin-bottom:16px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <label style="flex:1 1 220px;font-size:12px;color:var(--muted)">Sujet
+            <input id="td-sujet" list="td-sujets" placeholder="Ex. Dénonciation" maxlength="140" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:14px;color:var(--text)">
+          </label>
+          <datalist id="td-sujets"></datalist>
+          <label style="flex:2 1 280px;font-size:12px;color:var(--muted)">Étape
+            <input id="td-etape" placeholder="Ce qu'il faut faire" maxlength="500" onkeydown="if(event.key==='Enter')tdAjouter()" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:14px;color:var(--text)">
+          </label>
+          <button class="btn btn-primary" onclick="tdAjouter()">Ajouter</button>
+        </div>
+      </div>
+      <div id="td-liste"></div>
+    </div>
+
     <div class="page" id="page-mails">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
         <div class="section-sub">Tout ce que le CRM envoie à nos clients par mail : quand, en quel nom, et à quoi ça ressemble. Mis à jour à chaque amélioration.</div>
@@ -3457,6 +3486,7 @@ async function _startApp(){
   await _ficheDepuisLien();
   grDemarrer();
   tkDemarrer();
+  tdDemarrer();
 }
 
 async function handleLogin(){
@@ -3538,7 +3568,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-tickets', 'gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
+const PAGES_GERANT = ['gerant-tickets', 'gerant-todo', 'gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage', 'reporting'];
 
 function appliquerRole() {
@@ -3832,7 +3862,7 @@ const pages = {
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'veille': 'Réveil veille', 'pilotage': 'Pilotage commercial',
   'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'rapport-promoteurs': 'Rapport promoteurs', 'marche': 'Marché',
-  'gerant-annonces': 'Annonces', 'reporting': 'Reporting', 'gerant-tickets': 'Tickets', 'equipe-tickets': 'Mes tickets'
+  'gerant-annonces': 'Annonces', 'reporting': 'Reporting', 'gerant-tickets': 'Tickets', 'equipe-tickets': 'Mes tickets', 'gerant-todo': 'Todo'
 };
 
 let currentSpace = 'gerant';
@@ -4883,6 +4913,7 @@ function goTo(id, el) {
   else if (id === 'reporting') rpInit();
   else if (id === 'factures') { renderFactures(); renderFacCom(); }
   else if (id === 'gerant-tickets') tkChargerGerant();
+  else if (id === 'gerant-todo') tdCharger();
   else if (id === 'equipe-tickets') tkChargerMes();
   else refresh();
 }
@@ -25028,6 +25059,132 @@ async function tkRafraichir() {
   } catch (e) { /* la pastille se remettra à jour au prochain passage */ }
   _tkMajPastilles();
 }
+// ============================================================
+//  TODO DES GÉRANTS — demande d'Alex du 12/11/2026 (td*)
+//  Une ligne = une étape d'un sujet. Cocher une étape la retire de la
+//  liste ; elle reste dans l'historique (qui, quand), d'où on peut la
+//  remettre à faire. Claude y ajoute aussi des étapes (« rajoute dans la
+//  todo »), notées « Claude ». Table public.gerant_todo, gérants seulement
+//  (supabase/migrations/20261112_gerant_todo.sql).
+// ============================================================
+let _tdTout = [], _tdFiltre = 'afaire';
+const _tdEsc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const _TD_MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+function _tdJour(d) { const x = new Date(d); return x.getDate() + ' ' + _TD_MOIS[x.getMonth()]; }
+function _tdHeure(d) { const x = new Date(d); return x.getHours() + 'h' + String(x.getMinutes()).padStart(2, '0'); }
+function _tdCleJour(d) { const x = new Date(d); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+function _tdHeaders(extra) {
+  return Object.assign({ 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' }, extra || {});
+}
+async function _tdLire() {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/gerant_todo?select=*&order=cree_le.asc,ordre.asc&limit=1000', { cache: 'no-store', headers: _tdHeaders() });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+async function tdCharger() {
+  try { _tdTout = await _tdLire(); } catch (e) { _tdTout = []; }
+  tdRender();
+}
+function tdFiltre(f) { _tdFiltre = f; tdRender(); }
+function _tdMajPastille() {
+  const el = document.getElementById('nav-todo-pastille'); if (!el) return;
+  const n = _tdTout.filter(t => !t.fait_le).length;
+  el.style.display = n ? '' : 'none'; el.textContent = n || ''; el.title = n + ' étape(s) à faire';
+}
+function tdRender() {
+  _tdMajPastille();
+  document.querySelectorAll('#td-filtres button').forEach(b => { b.className = 'btn btn-sm ' + (b.dataset.f === _tdFiltre ? 'btn-primary' : 'btn-secondary'); });
+  const ajout = document.getElementById('td-ajout'); if (ajout) ajout.style.display = _tdFiltre === 'histo' ? 'none' : '';
+  const box = document.getElementById('td-liste'); if (!box) return;
+  const ouverts = _tdTout.filter(t => !t.fait_le);
+  const dl = document.getElementById('td-sujets');
+  if (dl) dl.innerHTML = [...new Set(ouverts.map(t => t.sujet))].map(s => '<option value="' + _tdEsc(s) + '">').join('');
+  if (_tdFiltre === 'histo') { box.innerHTML = _tdHistoHtml(); return; }
+  if (!ouverts.length) { box.innerHTML = '<div class="card" style="padding:22px;text-align:center;color:var(--muted)">Rien à faire. Bravo.</div>'; return; }
+  // Un bloc par sujet, le plus ancien d'abord
+  const sujets = new Map();
+  ouverts.forEach(t => { if (!sujets.has(t.sujet)) sujets.set(t.sujet, []); sujets.get(t.sujet).push(t); });
+  box.innerHTML = [...sujets.entries()].map(([sujet, etapes]) => {
+    const depuis = etapes.reduce((m, t) => t.cree_le < m ? t.cree_le : m, etapes[0].cree_le);
+    const faites = _tdTout.filter(t => t.sujet === sujet && t.fait_le).length;
+    return `<div class="td-sujet" style="background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">
+        <div style="font-family:var(--font-head);font-size:16px;font-weight:700;line-height:1.35">${_tdEsc(sujet)}</div>
+        <div style="font-size:12px;color:var(--muted);white-space:nowrap">depuis le ${_tdJour(depuis)} · ${etapes.length} à faire${faites ? ', ' + faites + ' faite' + (faites > 1 ? 's' : '') : ''}</div>
+      </div>
+      <div style="margin-top:8px">${etapes.map(t => `
+        <label class="td-etape" style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--border);cursor:pointer">
+          <input type="checkbox" onchange="tdCocher('${t.id}', this)" style="width:20px;height:20px;flex:0 0 auto;margin:1px 0 0;accent-color:var(--success);cursor:pointer">
+          <span style="flex:1;min-width:0;font-size:14px;line-height:1.45;overflow-wrap:anywhere">${_tdEsc(t.etape)}${t.cree_par ? ` <span style="font-size:11.5px;color:var(--muted)">· ${_tdEsc(t.cree_par)}</span>` : ''}</span>
+        </label>`).join('')}
+      </div>
+      <button class="btn btn-sm btn-ghost" style="margin-top:6px" onclick="tdAjouterA(this.dataset.s)" data-s="${_tdEsc(sujet)}">Ajouter une étape</button>
+    </div>`;
+  }).join('');
+}
+function _tdHistoHtml() {
+  const faits = _tdTout.filter(t => t.fait_le).sort((a, b) => (b.fait_le > a.fait_le ? 1 : -1));
+  if (!faits.length) return '<div class="card" style="padding:22px;text-align:center;color:var(--muted)">Rien de coché pour l’instant.</div>';
+  const jours = new Map();
+  faits.forEach(t => { const k = _tdCleJour(t.fait_le); if (!jours.has(k)) jours.set(k, []); jours.get(k).push(t); });
+  return [...jours.values()].map(l => `<div class="card" style="padding:12px 16px;margin-bottom:12px">
+      <div style="font-family:var(--font-head);font-weight:700;margin-bottom:4px">${_tdJour(l[0].fait_le)}</div>
+      ${l.map(t => `<div class="td-fait" style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:7px 0;border-top:1px solid var(--border)">
+        <div style="min-width:0;font-size:13.5px;line-height:1.45;overflow-wrap:anywhere"><span style="color:var(--success);font-weight:800">✓</span> <b>${_tdEsc(t.sujet)}</b> — ${_tdEsc(t.etape)}
+          <div style="font-size:11.5px;color:var(--muted)">${t.fait_par ? 'par ' + _tdEsc(t.fait_par) + ' ' : ''}à ${_tdHeure(t.fait_le)}</div></div>
+        <button class="btn btn-sm btn-secondary" style="flex:0 0 auto" onclick="tdRemettre('${t.id}')">Remettre</button>
+      </div>`).join('')}
+    </div>`).join('');
+}
+async function _tdMaj(id, corps) {
+  const r = await fetch(SUPABASE_URL + '/rest/v1/gerant_todo?id=eq.' + id, { method: 'PATCH', headers: _tdHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify(corps) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+}
+async function tdCocher(id, box) {
+  const ligne = box && box.closest('.td-etape');
+  if (ligne) { ligne.style.transition = 'opacity .35s'; ligne.style.opacity = '0.35'; }
+  try { await _tdMaj(id, { fait_le: new Date().toISOString() }); toast('✓ Fait, rangé dans l’historique'); }
+  catch (e) { toast('⚠ Non enregistré', 'var(--danger)'); if (box) box.checked = false; if (ligne) ligne.style.opacity = ''; return; }
+  setTimeout(tdCharger, 300);
+}
+async function tdRemettre(id) {
+  try { await _tdMaj(id, { fait_le: null }); toast('✓ Remis à faire'); }
+  catch (e) { toast('⚠ Non enregistré', 'var(--danger)'); return; }
+  tdCharger();
+}
+function tdAjouterA(sujet) {
+  const s = document.getElementById('td-sujet'), e = document.getElementById('td-etape');
+  if (s) s.value = sujet || '';
+  if (e) { e.focus(); e.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+async function tdAjouter() {
+  const s = document.getElementById('td-sujet'), e = document.getElementById('td-etape');
+  const sujet = (s ? s.value : '').replace(/\s+/g, ' ').trim();
+  const etape = (e ? e.value : '').replace(/\s+/g, ' ').trim();
+  if (!etape) { toast('⚠ Écris l’étape', 'var(--warning)'); if (e) e.focus(); return; }
+  const sujetFinal = sujet || etape.slice(0, 140);
+  const ordre = 1 + _tdTout.filter(t => t.sujet === sujetFinal).reduce((m, t) => Math.max(m, t.ordre || 0), 0);
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/gerant_todo', { method: 'POST', headers: _tdHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ sujet: sujetFinal, etape, ordre }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (err) { toast('⚠ Non ajouté', 'var(--danger)'); return; }
+  if (e) e.value = '';
+  toast('✓ Ajouté à la todo');
+  tdCharger();
+}
+async function tdRafraichir() {
+  if (typeof estGerant === 'function' && !estGerant()) return;
+  try { _tdTout = await _tdLire(); } catch (e) { return; }
+  const page = document.getElementById('page-gerant-todo');
+  // Ne pas redessiner sous les doigts de quelqu'un qui tape
+  const tape = document.activeElement && ['td-sujet', 'td-etape'].includes(document.activeElement.id);
+  if (page && page.classList.contains('active') && !tape) tdRender(); else _tdMajPastille();
+}
+function tdDemarrer() {
+  tdRafraichir();
+  setInterval(tdRafraichir, 3 * 60 * 1000);
+}
+
 function tkDemarrer() {
   tkRafraichir();
   setInterval(tkRafraichir, 3 * 60 * 1000);
