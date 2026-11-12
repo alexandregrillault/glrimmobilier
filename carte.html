@@ -138,6 +138,11 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .lieu .r{display:flex;align-items:center;gap:8px;margin-top:5px;font-size:11.5px;color:var(--muted)}
 .crit-body .lieu .r input{flex:1;min-width:0;padding:0;border:0;accent-color:var(--teal)}
 .lieu .r span{flex:0 0 118px;text-align:right}
+#mapOpts{position:absolute;z-index:900;top:10px;right:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 70px);background:#fff;border-radius:8px;padding:6px 10px;font-size:12px;color:var(--txt);box-shadow:0 2px 8px rgba(0,0,0,.18)}
+#mapOpts label{display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:#fff;padding:4px 11px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--navy)}
+.seg button.on{background:var(--teal);color:#fff;font-weight:600}
 #listTools{padding:8px 12px;border-bottom:1px solid var(--line)}
 @media (max-width:900px){#crit{padding:0}.crit-card{max-height:100vh;height:100%;border-radius:0}.crit-body{grid-template-columns:1fr}}
 .chip .cnt{opacity:.6;font-weight:400;margin-left:3px;font-size:10px}
@@ -375,8 +380,6 @@ header>button,header h1,header .kpis{flex:0 0 auto}
 <aside>
   <div class="tools" id="listTools">
     <select id="fSort" title="Ordre de la liste" style="padding:3px 6px;border:1px solid var(--line);border-radius:6px;font-size:11px;background:#fff"><option value="ville">Par ville</option><option value="prix">Prix croissant</option><option value="pm2">€/m² croissant</option><option value="liv">Livraison la plus proche</option><option value="tt">Temps de trajet</option><option value="new">Nouveautés d’abord</option></select>
-    <label><input type="checkbox" id="tTransports"> Transports</label>
-    <label title="Lignes en construction (pointillés), avec la date de mise en service prévue"><input type="checkbox" id="tFutur"> Futures lignes</label>
     <a id="csv" title="Exporter les lots correspondant aux filtres">Export CSV</a>
   </div>
   <div id="active" hidden></div>
@@ -388,6 +391,12 @@ header>button,header h1,header .kpis{flex:0 0 auto}
 </aside>
 <div id="mapwrap">
   <div id="map"></div>
+  <!-- Réglages d'affichage de la carte (12/11/2026, demande d'Alex) : fond « Communes » (aplats par département)
+       ou « Plan » (rues, parcs, façon Otaree), lignes de transport actuelles et futures en option par-dessus. -->
+  <div id="mapOpts"><span class="seg" id="fondSeg"><button type="button" data-f="communes" title="Fond clair, communes colorées par département">Communes</button><button type="button" data-f="plan" title="Plan détaillé : rues, parcs, quartiers">Plan</button></span>
+    <label><input type="checkbox" id="tTransports"> Lignes de transport</label>
+    <label title="Lignes en construction (pointillés), avec la date de mise en service prévue"><input type="checkbox" id="tFutur"> Futures lignes</label>
+  </div>
   <button id="back" hidden>↩ Retour</button>
   <div id="panel"><div id="panelGrip" title="Glisser pour élargir ou réduire la fenêtre"></div><div class="hd"><button class="mx" title="Agrandir / réduire">⛶</button><button class="x" title="Fermer">✕</button><h2></h2><div class="sub"></div></div><div class="bd"></div></div>
   <div id="cart"><div class="hd"><h2>Ma sélection</h2><button class="x" title="Fermer">✕</button></div><div class="bd"></div><div class="ft"><button class="btn" id="cartCsv">Exporter en CSV</button><button class="btn o" id="cartCopy">Copier le tableau</button><button class="btn" id="cartZip" title="Fiches PDF par lot + tableau + liens vers les plans">Dossier commercial (ZIP)</button><a id="cartClear">Vider</a></div></div>
@@ -763,14 +772,26 @@ document.getElementById('reset').onclick = () => { ttClear(false); Object.assign
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];
 const map = L.map('map', { zoomControl: true, minZoom: 8, maxZoom: 19 }).fitBounds(IDF);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5', { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
+// Deux fonds au choix (12/11/2026) : « communes » = fond clair + aplats par département (l'historique),
+// « plan » = plan détaillé (rues, parcs), sans aplats. Le choix est gardé sur l'appareil.
+const FONDS = { communes: ['light_nolabels', 'light_only_labels'], plan: ['rastertiles/voyager_nolabels', 'rastertiles/voyager_only_labels'] };
+const fondUrl = n => 'https://{s}.basemaps.cartocdn.com/' + n + '/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5';
+let fond = 'communes'; try { if (localStorage.getItem('carteFond') === 'plan') fond = 'plan'; } catch (e) {}
+const fondBase = L.tileLayer(fondUrl(FONDS[fond][0]), { attribution: '© OpenStreetMap, © CARTO', subdomains: 'abcd', maxZoom: 20 }).addTo(map);
 const labelsPane = map.createPane('labels'); labelsPane.style.zIndex = 450; labelsPane.style.pointerEvents = 'none';
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png?key=cb1_3s9l_1_f6e0eaa79d9477f1729177a5', { subdomains: 'abcd', maxZoom: 20, pane: 'labels' }).addTo(map);
+const fondNoms = L.tileLayer(fondUrl(FONDS[fond][1]), { subdomains: 'abcd', maxZoom: 20, pane: 'labels' }).addTo(map);
+function setFond(f) {
+  fond = f; fondBase.setUrl(fondUrl(FONDS[f][0])); fondNoms.setUrl(fondUrl(FONDS[f][1]));
+  if (communesLayer) communesLayer.setStyle(commStyle);
+  document.querySelectorAll('#fondSeg button').forEach(b => b.classList.toggle('on', b.dataset.f === f));
+  try { localStorage.setItem('carteFond', f); } catch (e) {}
+}
+document.querySelectorAll('#fondSeg button').forEach(b => { b.classList.toggle('on', b.dataset.f === fond); b.onclick = () => setFond(b.dataset.f); });
 // --- communes (contours) : aplats pastel par département, style carte administrative ---
 const villesAvecProg = new Set(P.map(p => p.ville));
 const DCOL = { '75': '#e8c9c2', '77': '#f2cdb3', '78': '#c7d3a8', '91': '#f3d98f', '92': '#d9c3cf', '93': '#d2dea5', '94': '#f1e6a6', '95': '#ecdc9c' };
 let communesLayer = null, deptLayer = null;
-const commStyle = f => { const z = map.getZoom(); return { color: '#ffffff', weight: z >= 13 ? 1.6 : (z >= 11 ? 1.1 : 0.6), opacity: .95, fillColor: DCOL[f.properties.d] || '#ddd', fillOpacity: z >= 14 ? .18 : (z >= 12 ? .32 : .6) }; };
+const commStyle = f => { const z = map.getZoom(); if (fond === 'plan') return { color: '#14213d', weight: z >= 12 ? 1 : .5, opacity: .28, fillColor: DCOL[f.properties.d] || '#ddd', fillOpacity: 0 }; return { color: '#ffffff', weight: z >= 13 ? 1.6 : (z >= 11 ? 1.1 : 0.6), opacity: .95, fillColor: DCOL[f.properties.d] || '#ddd', fillOpacity: z >= 14 ? .18 : (z >= 12 ? .32 : .6) }; };
 if (GEO.contours) {
   const communesPane = map.createPane('communes'); communesPane.style.zIndex = 300;
   communesLayer = L.geoJSON(GEO.contours, { style: commStyle, pane: 'communes', interactive: true,

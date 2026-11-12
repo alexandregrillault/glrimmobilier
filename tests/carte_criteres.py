@@ -104,6 +104,17 @@ with sync_playwright() as pw:
         ko(compteur() != '4 lots · 3 programmes', f'compteur après remise à zéro {compteur()!r}')
         ko(page.inner_text('#critBtn') != 'Critères de recherche', 'bouton pas remis à zéro')
 
+        # --- fond de carte : « Communes » par défaut, « Plan » au choix, gardé sur l'appareil ; lignes en option sur la carte ---
+        tuile = lambda: js("document.querySelector('.leaflet-tile-pane img').src")
+        ko('light_nolabels' not in tuile(), f'fond de départ {tuile()}')
+        ko(js("!!document.querySelector('aside #tTransports')") or not js("!!document.querySelector('#mapOpts #tTransports') && !!document.querySelector('#mapOpts #tFutur')"), 'cases des lignes pas sur la carte')
+        js("document.querySelector('#fondSeg button[data-f=plan]').click()"); page.wait_for_timeout(700)
+        ko('voyager' not in tuile(), f'fond après « Plan » {tuile()}')
+        ko(js("localStorage.getItem('carteFond')") != 'plan', 'choix du fond non gardé')
+        page.screenshot(path=str(SORTIE / f'carte_fond_plan_{nom}.png'))
+        js("document.querySelector('#fondSeg button[data-f=communes]').click()"); page.wait_for_timeout(300)
+        ko('light_nolabels' not in tuile(), 'retour au fond « Communes »')
+
         # --- lieux : un seul champ, plusieurs villes et départements, rayon autour d'une ville ---
         js("document.getElementById('critBtn').click()"); page.wait_for_timeout(150)
         ko(js("!!document.getElementById('fVillesBtn') || !!document.getElementById('fDeptsBtn')"), 'anciens menus villes / départements encore là')
