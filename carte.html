@@ -321,6 +321,31 @@ table.lots td.r{text-align:right}
 header>button,header h1{flex:0 0 auto}
 .crit-body .row.tri>*{flex:1}
 @media (max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:56px 1fr}aside{display:none}header .kpis{display:none}#panel{width:auto;left:10px;min-width:0}}
+/* iPhone (12/11/2026, dernier chantier de l'ergonomie façon Otaree) : en-tête sur deux lignes (recherche + sélection, puis
+   critères + les trois vues), carte seule en vue « Carte », fiche programme et sélection en plein écran. */
+#mapOpts>*{flex:0 0 auto}
+@media (max-width:700px){
+#app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}
+#app.client-mode{grid-template-rows:auto auto minmax(0,1fr)}
+#app.plein,#app.plein.nof,#app.plein.lots{grid-template-columns:minmax(0,1fr)}
+header,#clientBar,#mapwrap{grid-column:1}
+header{flex-wrap:wrap;gap:8px;padding:8px 10px}
+header h1,header .pige{display:none}
+#search{order:1;flex:1 1 calc(100% - 130px);min-width:0;max-width:none}
+#search input{font-size:16px}  /* en dessous de 16 px, l'iPhone zoome tout seul quand on touche le champ */
+#cartBtn{order:2;padding:9px 10px}
+#critBtn{order:3;padding:9px 12px}
+#critBtn .lg{display:none}
+#vueSeg{order:4;flex:1 1 calc(100% - 150px);display:flex;min-width:0}
+#vueSeg button{flex:1 1 auto;padding:9px 4px;white-space:nowrap}
+#clientBar{flex-wrap:wrap;padding:6px 10px;gap:4px 8px}
+#mapOpts{left:10px;right:10px;max-width:none;justify-content:flex-start;gap:6px 14px;padding:7px 10px}
+#sideBtn,.leaflet-control-zoom{display:none}
+#panel,#cart{top:0;left:0;right:0;bottom:0;width:auto!important;min-width:0;max-width:none;border-radius:0}
+#panelGrip,#panel .mx{display:none}
+.legend{max-width:calc(100% - 20px);bottom:40px}  /* au-dessus de la mention des sources, qui passe sur deux lignes */
+.crit-body input,.crit-body select{font-size:16px}
+}
 </style>
 </head>
 <body>
@@ -328,7 +353,7 @@ header>button,header h1{flex:0 0 auto}
 <header>
   <h1>Programmes pigés<small>Île-de-France</small></h1><span class="pige" id="pige"></span>
   <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
-  <button id="critBtn" title="Ouvrir les critères de recherche">Critères de recherche</button><span class="seg" id="vueSeg" title="Trois vues des mêmes résultats"><button type="button" data-v="lots">Lots <small id="vueNL"></small></button><button type="button" data-v="programmes">Programmes <small id="vueNP"></small></button><button type="button" data-v="carte" class="on">Carte</button></span><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
+  <button id="critBtn" title="Ouvrir les critères de recherche">Critères<span class="lg"> de recherche</span></button><span class="seg" id="vueSeg" title="Trois vues des mêmes résultats"><button type="button" data-v="lots">Lots <small id="vueNL"></small></button><button type="button" data-v="programmes">Programmes <small id="vueNP"></small></button><button type="button" data-v="carte" class="on">Carte</button></span><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
 </header>
 <div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="crit" id="clientCritInfo" hidden>· filtré selon ses critères : <b id="clientCritResume"></b><button id="clientCritOff" title="Retirer ce filtre et revenir à toute l'Île-de-France">Retirer le filtre</button></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><span class="crit" id="clientTrajetChoix" hidden>· Afficher sur la feuille le trajet jusqu'à <b id="clientTrajetChoixAdr"></b> ?<button data-modes="transit">En transports</button><button data-modes="car">En voiture</button><button data-modes="transit,car">Les deux</button><button data-modes="">Non, les lignes à proximité</button></span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
 <!-- Écran de critères (12/11/2026) : mêmes champs et mêmes identifiants qu'avant, rangés par thèmes. -->
@@ -532,6 +557,8 @@ document.getElementById('legendToggle').onclick = () => {
   document.getElementById('legendBox').classList.toggle('collapsed', on);
   document.getElementById('legendToggle').textContent = on ? '▸' : '▾';
 };
+// iPhone : la légende démarre repliée, elle couvrirait la moitié de la carte
+if (matchMedia('(max-width:700px)').matches) document.getElementById('legendToggle').onclick();
 const NOWK = (() => { const d = new Date(); return d.getFullYear() + (Math.floor(d.getMonth() / 3) + 1) / 10; })();  // clé "année + trimestre/10" du trimestre en cours
 const TODAY = new Date().toISOString().slice(0, 10);
 const isLivre = p => p.livre === true || (p.livraison_key && p.livraison_key < NOWK);
@@ -696,7 +723,7 @@ function activeList() {
 }
 function renderActive() {
   const el = document.getElementById('active'), a = activeList();
-  document.getElementById('critBtn').textContent = 'Critères de recherche' + (a.length ? ' (' + a.length + ')' : '');
+  document.getElementById('critBtn').innerHTML = 'Critères<span class="lg"> de recherche</span>' + (a.length ? ' (' + a.length + ')' : '');
   el.hidden = !a.length;
   if (!a.length) return;
   el.innerHTML = a.map((x, i) => '<span class="ac">' + esc(x.label) + '<i data-i="' + i + '" title="Retirer ce critère">✕</i></span>').join('') + '<span class="edit">Modifier</span><span class="all">Tout effacer</span>';

@@ -66,7 +66,16 @@ with sync_playwright() as pw:
 
         ko(not cache(), 'la fenêtre des critères est ouverte au chargement')
         # l'en-tête ne doit pas déborder de l'écran (constaté le 12/11/2026 : le nouveau bouton poussait la page de côté)
-        if nom == 'bureau': ko(js('document.documentElement.scrollWidth > innerWidth'), 'la page déborde en largeur')
+        ko(js('document.documentElement.scrollWidth > innerWidth'), 'la page déborde en largeur')
+        if nom == 'iphone':
+            # iPhone (12/11/2026) : tous les boutons de l'en-tête tiennent dans l'écran, sur deux lignes
+            hors = js("['q','cartBtn','critBtn','vueSeg'].filter(i => { const r = document.getElementById(i).getBoundingClientRect(); return r.width < 40 || r.left < 0 || r.right > innerWidth + 1; })")
+            ko(hors, f'en-tête : hors écran {hors}')
+            ko(js("[...document.querySelectorAll('#vueSeg button')].some(b => b.scrollWidth > b.clientWidth + 1)"), 'boutons de vue coupés')
+            ko(not js("document.getElementById('legendBox').classList.contains('collapsed')"), 'légende pas repliée')
+            ko(js("document.getElementById('vueSeg').getBoundingClientRect().top < document.getElementById('q').getBoundingClientRect().bottom"), 'en-tête pas sur deux lignes')
+            ko(js("(() => { const s = document.getElementById('vueSeg').getBoundingClientRect(), b = [...document.querySelectorAll('#vueSeg button')].pop().getBoundingClientRect(); return b.right > s.right + 1; })()"), 'bouton Carte coupé')
+            page.screenshot(path=str(SORTIE / 'carte_iphone_accueil.png'))
         ko(js("!!document.querySelector('aside select#fPromo, aside #fTypo')"), 'des filtres sont restés dans la colonne')
         ko(js("document.getElementById('active').hidden") is not True, 'pastilles affichées sans critère')
 
@@ -88,7 +97,7 @@ with sync_playwright() as pw:
         js("document.getElementById('critGo').click()")
         page.wait_for_timeout(200)
         ko(not cache(), '« Afficher les résultats » ne referme pas')
-        ko(page.inner_text('#critBtn') != 'Critères de recherche (2)', f'bouton {page.inner_text("#critBtn")!r}')
+        ko(page.text_content('#critBtn') != 'Critères de recherche (2)', f'bouton {page.text_content("#critBtn")!r}')
         pastilles = page.eval_on_selector_all('#active .ac', 'els => els.map(e => e.firstChild.textContent)')
         ko(pastilles != ['T3', '≤ 420 k€'], f'pastilles {pastilles}')
         page.screenshot(path=str(SORTIE / f'carte_criteres_pastilles_{nom}.png'))
@@ -107,7 +116,7 @@ with sync_playwright() as pw:
         js("document.querySelector('#active .all').click()"); page.wait_for_timeout(300)
         ko(js("document.getElementById('active').hidden") is not True, 'pastilles encore là après « Tout effacer »')
         ko(compteur() != '4 lots · 3 programmes', f'compteur après remise à zéro {compteur()!r}')
-        ko(page.inner_text('#critBtn') != 'Critères de recherche', 'bouton pas remis à zéro')
+        ko(page.text_content('#critBtn') != 'Critères de recherche', 'bouton pas remis à zéro')
 
         # --- fond de carte : « Plan » par défaut (décision d'Alex du 12/11/2026), « Communes » au choix, gardé sur l'appareil ; lignes en option sur la carte ---
         # « Plan » = carte vectorielle aux couleurs d'Otaree (canvas MapLibre) ; sans WebGL, plan en images (Voyager)
@@ -176,7 +185,7 @@ with sync_playwright() as pw:
         js("document.querySelector('#vueSeg button[data-v=carte]').click()"); page.wait_for_timeout(400)
         e = etat(); ko(e['plein'] or not e['carte'] or (nom == 'bureau' and not 250 < e['colonne'] < 500), f'vue Carte {e}')
         ko(not js("!!document.querySelector('#mapOpts #sideBtn')"), '« Masquer la liste » pas sur la carte')
-        if nom == 'bureau': ko(js('document.documentElement.scrollWidth > innerWidth'), 'la page déborde en largeur avec les trois vues')
+        ko(js('document.documentElement.scrollWidth > innerWidth'), 'la page déborde en largeur avec les trois vues')
 
         # --- fourchettes : budget « de… à… » et surface « de… à… » ---
         js("document.getElementById('critBtn').click()"); page.wait_for_timeout(150)
