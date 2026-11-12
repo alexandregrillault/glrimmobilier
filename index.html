@@ -5088,6 +5088,9 @@ function saveVente() {
 // Charge type / libelle helpers
 const LIBELLES_FIXE = ['Efficimo','Seloger','Allianz','Assurance','Neptisia','BNP','SFR','Bureaux','IONOS','Autre'];
 const LIBELLES_VARIABLE = ['Salaire','Remboursement CCA','Apport CCA','Dépense perso','Autre'];
+// Sous Théophile et Alexandre, trois rubriques seulement (demande d'Alex du 12/11/2026) ;
+// le salaire fixe (2 000 € par mois) est dans la charge fixe « Salaires ».
+const LIBELLES_ASSOCIE = ['Salaire','Remboursement CCA','Dépenses carte'];
 const LIBELLES_URSSAF = ['URSSAF','TVA (DGFIP)','Impôt société (IS)','Cotisations sociales','Autre'];
 let currentChargeType = 'fixe';
 
@@ -5113,7 +5116,9 @@ function setChargeType(type) {
   document.getElementById('c-categorie').value = type;
   // Update libelle options
   const sel = document.getElementById('c-libelle-select');
-  const libelles = type==='fixe' ? LIBELLES_FIXE : type==='variable' ? LIBELLES_VARIABLE : LIBELLES_URSSAF;
+  const libelles = type==='fixe' ? LIBELLES_FIXE
+    : type==='variable' ? (currentVariableSousSection === 'societe' ? LIBELLES_VARIABLE : LIBELLES_ASSOCIE)
+    : LIBELLES_URSSAF;
   sel.innerHTML = libelles.map(l => `<option value="${l}">${l}</option>`).join('');
   onLibelleChange();
 }
@@ -5938,7 +5943,9 @@ function assignARanger(id, dest) {
   const it = data.aRanger[idx];
   data.charges.push({
     id: uid(),
-    libelle: it.marchand || 'Dépense carte',
+    // Pour Théophile et Alexandre : rubrique « Dépenses carte », le commerçant reste en détail (12/11/2026)
+    libelle: (dest === 'alex' || dest === 'theo') ? 'Dépenses carte' : (it.marchand || 'Dépense carte'),
+    marchand: it.marchand || null,
     categorie: 'variable',
     sousSection: DEST_SOUS[dest] || 'societe',
     mois: (it.date || '').slice(0,7),
@@ -6508,14 +6515,15 @@ function openEditCharge(id) {
   const c = data.charges.find(x => x.id === id);
   if (!c) return;
   editingChargeId = id;
-  setChargeType(c.categorie || 'fixe');
   currentVariableSousSection = c.sousSection || 'theo';
+  setChargeType(c.categorie || 'fixe');
 
   const sel = document.getElementById('c-libelle-select');
   // Try to find the label in the select, else set to Autre
   const opt = [...sel.options].find(o => o.value === c.libelle);
   if (opt) { sel.value = c.libelle; }
-  else { sel.value = 'Autre'; document.getElementById('c-libelle').value = c.libelle; }
+  else if ([...sel.options].some(o => o.value === 'Autre')) { sel.value = 'Autre'; document.getElementById('c-libelle').value = c.libelle; }
+  else { sel.value = 'Dépenses carte'; }
   onLibelleChange();
 
   document.getElementById('c-mois').value = c.mois || '';
@@ -6549,7 +6557,7 @@ function cvDetailRow(c, grpId) {
   return `<tr class="cv-detail" data-grp="${grpId}" style="display:none">
     <td colspan="4" style="padding:0">
       <div class="cv-drow">
-        <span class="cv-dmonth">${c.mois||'—'}${recBadge}${taxeBadge}</span>
+        <span class="cv-dmonth">${c.mois||'—'}${c.marchand && c.marchand !== c.libelle ? ' · ' + escHtml(c.marchand) : ''}${recBadge}${taxeBadge}</span>
         <span class="cv-dright">
           <span class="cv-damt">${fmtEur(c.montant)}</span>
           <button class="btn btn-ghost btn-sm" onclick="openEditCharge('${c.id}')" title="Modifier">✎</button>
