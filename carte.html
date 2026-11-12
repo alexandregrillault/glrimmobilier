@@ -147,6 +147,8 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
 .seg button{border:0;background:#fff;padding:4px 11px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--navy)}
 .seg button.on{background:var(--teal);color:#fff;font-weight:600}
+.crit-body .row.fourch{align-items:center;max-width:340px}
+.crit-body .row.fourch>span{flex:0 0 auto;font-size:12px;color:var(--muted)}
 #listTools{padding:8px 12px;border-bottom:1px solid var(--line)}
 @media (max-width:900px){#crit{padding:0}.crit-card{max-height:100vh;height:100%;border-radius:0}.crit-body{grid-template-columns:1fr}}
 .chip .cnt{opacity:.6;font-weight:400;margin-left:3px;font-size:10px}
@@ -345,8 +347,9 @@ header>button,header h1,header .kpis{flex:0 0 auto}
     <div class="crit-col">
       <section class="cs">
         <h3>Budget</h3>
-        <div class="row tri">
-      <input type="number" id="fBudget" placeholder="Budget max (k€)" min="0" step="1" list="fBudgetList" autocomplete="off"><datalist id="fBudgetList"><option value="150"><option value="200"><option value="250"><option value="300"><option value="350"><option value="400"><option value="500"><option value="600"><option value="800"><option value="1000"></datalist>
+        <span class="fl">Budget, en milliers d'euros</span>
+        <div class="row fourch"><input type="number" id="fBudgetMin" placeholder="de" min="0" step="1" list="fBudgetList" autocomplete="off"><span>à</span><input type="number" id="fBudget" placeholder="à" min="0" step="1" list="fBudgetList" autocomplete="off"><datalist id="fBudgetList"><option value="150"><option value="200"><option value="250"><option value="300"><option value="350"><option value="400"><option value="500"><option value="600"><option value="800"><option value="1000"></datalist><span>k€</span></div>
+        <div class="row">
       <select id="fPm2"><option value="">€/m² max</option></select>
       <select id="fRenta"><option value="">Renta min</option></select>
         </div>
@@ -355,6 +358,8 @@ header>button,header h1,header .kpis{flex:0 0 auto}
       <section class="cs">
         <h3>Le logement</h3>
         <div class="typorow"><div class="chips" id="fTypo"></div><label class="chk"><input type="checkbox" id="fMaison"> Maisons seulement</label></div>
+        <span class="fl">Surface du logement</span>
+        <div class="row fourch"><input type="number" id="fSurfMin" placeholder="de" min="0" step="1" autocomplete="off" inputmode="numeric"><span>à</span><input type="number" id="fSurfMax" placeholder="à" min="0" step="1" autocomplete="off" inputmode="numeric"><span>m²</span></div>
         <div class="row">
       <select id="fEtage" title="Étage du lot (RDC = rez-de-chaussée, RDJ = rez-de-jardin)"><option value="">Étage</option></select>
       <input type="number" id="fEtageMin" min="1" max="60" step="1" placeholder="n°" title="Étage minimum (1 = à partir du 1er, pas de RDC)" inputmode="numeric" hidden style="flex:0 0 58px;text-align:right">
@@ -493,7 +498,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---------- filtres ----------
-const F = { promo: '', dept: '', typos: new Set(), extMin: '', etage: '', etageMin: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre', 'option']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set(), rayons: {} };
+const F = { promo: '', dept: '', typos: new Set(), extMin: '', etage: '', etageMin: '', budget: '', budgetMin: '', surfMin: '', surfMax: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre', 'option']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set(), rayons: {} };
 const RAYON_MAX = 10;  // km autour d'une ville, au plus
 // ---------- écran de critères (12/11/2026) : s'ouvre par « Critères de recherche », se ferme par
 // « Afficher les résultats », « Fermer », Échap ou un clic à côté. Les résultats se mettent à jour
@@ -556,7 +561,10 @@ function lotOK(l) {
   if (F.maison && l.type !== 'Maison') return false;
   if (!F.maison && l.type !== 'Appartement' && l.type !== 'Maison') return false;
   if (F.typos.size && !F.typos.has(l.typo)) return false;
-  if (F.budget && !(p20e(l) && p20e(l) <= +F.budget) && !(l.prix55 && l.prix55 <= +F.budget)) return false;
+  // Fourchette de budget (12/11/2026) : le lot passe si l'un de ses prix (TVA 20 % ou 5,5 %) est entre le minimum et le maximum
+  if (F.budget || F.budgetMin) { const dans = v => v && (!F.budget || v <= +F.budget) && (!F.budgetMin || v >= +F.budgetMin); if (!dans(p20e(l)) && !dans(l.prix55)) return false; }
+  if (F.surfMin && !(l.surf >= +F.surfMin)) return false;
+  if (F.surfMax && !(l.surf && l.surf <= +F.surfMax)) return false;
   if (F.pm2 && (!l.prix_m2 || l.prix_m2 > +F.pm2)) return false;
   if (F.etage && !etageOK(l)) return false;
   if (F.renta && (!l.renta || l.renta < +F.renta)) return false;
@@ -612,8 +620,8 @@ function progOK(p) {
   if (F.flags.has('pick') && !(p.picking && !p.nomandat)) return false;
   if (F.flags.has('nomandat') && !p.nomandat) return false;
   if (F.flags.has('nopick') && p.picking) return false;
-  if (p.picking) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.etage || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
-  if (!p.logs.length) return !(F.typos.size || F.budget || F.maison || F.pm2 || F.renta || F.extMin || F.etage || ['ext', 'pk', 'new'].some(f => F.flags.has(f)));
+  if (p.picking) return !(F.typos.size || F.budget || F.budgetMin || F.surfMin || F.surfMax || F.maison || F.pm2 || F.renta || F.extMin || F.etage || F.flags.has('ext') || F.flags.has('pk') || F.flags.has('new'));
+  if (!p.logs.length) return !(F.typos.size || F.budget || F.budgetMin || F.surfMin || F.surfMax || F.maison || F.pm2 || F.renta || F.extMin || F.etage || ['ext', 'pk', 'new'].some(f => F.flags.has(f)));
   return p.logs.some(lotOK);
 }
 let VIS = [];
@@ -655,7 +663,8 @@ function activeList() {
   if (F.source) add('Source : ' + F.source, () => { F.source = ''; document.getElementById('fSource').value = ''; });
   if (F.com) add('Commission ≥ ' + F.com + ' %', () => { F.com = ''; document.getElementById('fCom').value = ''; });
   F.typos.forEach(t => add(t, () => { F.typos.delete(t); [...fT.children].forEach(c => { if (c.firstChild.textContent === t) c.classList.remove('on'); }); }));
-  if (F.budget) add('≤ ' + fmtk(+F.budget), () => { F.budget = ''; document.getElementById('fBudget').value = ''; });
+  if (F.budget || F.budgetMin) add(F.budget && F.budgetMin ? 'de ' + Math.round(F.budgetMin / 1000) + ' à ' + fmtk(+F.budget) : (F.budget ? '≤ ' + fmtk(+F.budget) : '≥ ' + fmtk(+F.budgetMin)), () => { F.budget = ''; F.budgetMin = ''; document.getElementById('fBudget').value = ''; document.getElementById('fBudgetMin').value = ''; });
+  if (F.surfMin || F.surfMax) add(F.surfMin && F.surfMax ? 'de ' + F.surfMin + ' à ' + F.surfMax + ' m²' : (F.surfMax ? '≤ ' + F.surfMax + ' m²' : '≥ ' + F.surfMin + ' m²'), () => { F.surfMin = ''; F.surfMax = ''; document.getElementById('fSurfMin').value = ''; document.getElementById('fSurfMax').value = ''; });
   if (F.pm2) add('≤ ' + (+F.pm2).toLocaleString('fr-FR') + ' €/m²', () => { F.pm2 = ''; document.getElementById('fPm2').value = ''; });
   if (F.renta) add('Renta ≥ ' + String(F.renta).replace('.', ',') + ' %', () => { F.renta = ''; document.getElementById('fRenta').value = ''; });
   if (F.etage) { const o = [...document.getElementById('fEtage').options].find(x => x.value === F.etage); const n = +F.etageMin || 1; add(F.etage === 'min' ? ('À partir du ' + n + (n === 1 ? 'er' : 'e') + ' étage') : (o ? o.textContent.replace(/\s*\(\d[\d\s]*\)$/, '') : 'Étage'), () => { F.etage = ''; F.etageMin = ''; document.getElementById('fEtage').value = ''; renderEtageMin(); }); }
@@ -691,6 +700,9 @@ function concessions() {
   if (F.pm2) { const v = Math.round(+F.pm2 * 1.1 / 100) * 100; push('€/m² +10 % (≤ ' + v.toLocaleString('fr-FR') + ')', { pm2: v }, () => { F.pm2 = String(v); const s = document.getElementById('fPm2'); if (![...s.options].some(o => +o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = '≤ ' + v.toLocaleString('fr-FR') + ' €/m²'; s.appendChild(o); } s.value = v; }); }
   if (F.renta) { const v = +F.renta - 0.5; push('Renta ≥ ' + String(v).replace('.', ',') + ' %', { renta: v }, () => { F.renta = String(v); document.getElementById('fRenta').value = v; }); }
   if (F.budget) push('Sans limite de budget', { budget: '' }, () => { F.budget = ''; document.getElementById('fBudget').value = ''; });
+  if (F.budgetMin) push('Sans budget minimum', { budgetMin: '' }, () => { F.budgetMin = ''; document.getElementById('fBudgetMin').value = ''; });
+  if (F.surfMin) { const v = Math.max(0, Math.round(+F.surfMin * 0.9)); push('Surface dès ' + v + ' m²', { surfMin: String(v) }, () => { F.surfMin = String(v); document.getElementById('fSurfMin').value = v; }); }
+  if (F.surfMin || F.surfMax) push('Sans critère de surface', { surfMin: '', surfMax: '' }, () => { F.surfMin = ''; F.surfMax = ''; document.getElementById('fSurfMin').value = ''; document.getElementById('fSurfMax').value = ''; });
   if (F.typos.size) push('Toutes les typologies', { typos: new Set() }, () => { F.typos.clear(); [...fT.children].forEach(c => c.classList.remove('on')); });
   if (F.liv) push('Sans critère de livraison', { liv: '' }, () => { F.liv = ''; F.livS = 2; renderLiv(); });
   if (F.pm2) push('Sans limite de €/m²', { pm2: '' }, () => { F.pm2 = ''; document.getElementById('fPm2').value = ''; });
@@ -767,11 +779,14 @@ const fT = document.getElementById('fTypo');
 TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = t; c.onclick = () => { F.typos.has(t) ? F.typos.delete(t) : F.typos.add(t); c.classList.toggle('on'); apply(); }; fT.appendChild(c); });
 ['fPromo','fDept','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fEtage') { renderEtageMin(); if (F.etage === 'min') { const i = document.getElementById('fEtageMin'); i.focus(); i.select(); } } if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
 document.getElementById('fBudget').oninput = e => { const v = e.target.value; F.budget = v ? String(Math.round(+v * 1000)) : ''; apply(); };
+document.getElementById('fBudgetMin').oninput = e => { const v = e.target.value; F.budgetMin = v ? String(Math.round(+v * 1000)) : ''; apply(); };
+document.getElementById('fSurfMin').oninput = e => { F.surfMin = e.target.value ? String(Math.max(0, +e.target.value)) : ''; apply(); };
+document.getElementById('fSurfMax').oninput = e => { F.surfMax = e.target.value ? String(Math.max(0, +e.target.value)) : ''; apply(); };
 [...document.getElementById('fStChips').children].forEach(c => c.onclick = () => { toggleSt(c.dataset.v); apply(); });
 [...document.getElementById('fLivM').children].forEach(c => c.onclick = () => { F.livM = c.dataset.m; [...c.parentElement.children].forEach(x => x.classList.toggle('on', x === c)); apply(); });
 document.getElementById('fSort').onchange = e => { F.sort = e.target.value; renderList(); };
 document.getElementById('fMaison').onchange = e => { F.maison = e.target.checked; apply(); };
-document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', etage: '', etageMin: '' }); renderEtageMin(); setSt('libre,option'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); flagChips().forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
+document.getElementById('reset').onclick = () => { ttClear(false); Object.assign(F, { promo: '', dept: '', budget: '', budgetMin: '', surfMin: '', surfMax: '', liv: '', livS: 2, maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', etage: '', etageMin: '' }); renderEtageMin(); setSt('libre,option'); F.livM = 'max'; [...document.getElementById('fLivM').children].forEach(x => x.classList.toggle('on', x.dataset.m === 'max')); F.typos.clear(); F.flags.clear(); flagChips().forEach(c => c.classList.remove('on')); F.extMin = ''; renderExtMin(); F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); renderLiv(); ['fPromo','fDept','fBudget','fBudgetMin','fSurfMin','fSurfMax','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).value = ''); document.getElementById('fMaison').checked = false; [...fT.children].forEach(c => c.classList.remove('on')); F.mDepts.clear(); renderDeptsMulti(); F.mVilles.clear(); renderVillesMulti(); const cci = document.getElementById('clientCritInfo'); if (cci) cci.hidden = true; map.fitBounds(IDF); apply(); };
 
 // ---------- carte ----------
 const IDF = [[48.12, 1.45], [49.24, 3.56]];

@@ -3,6 +3,7 @@
 # « lots · programmes » bouge à chaque critère, « Afficher les résultats » referme, et les critères
 # actifs restent en pastilles au-dessus de la liste (croix pour en retirer un, « Modifier », « Tout effacer »).
 # Lieux (même jour) : un seul champ pour les villes et les départements, plusieurs possibles, rayon en km autour d'une ville.
+# Fourchettes de budget et de surface, temps de trajet, critères préremplis depuis une fiche client.
 # Bureau et iPhone.
 # Lancer : ~/glr-pige-robot/.venv/bin/python tests/carte_criteres.py [dossier des captures]
 import json, pathlib, re, subprocess, sys, tempfile
@@ -24,7 +25,7 @@ def prog(i, nom, ville, cp, lat, lng):
     return {'id': f't:{i}', 'nom': nom, 'promoteur': 'Promoteur ' + str(i), 'extranet': 'Test', 'ville': ville, 'cp': cp, 'dept': cp[:2],
             'lat': lat, 'lng': lng, 'nb_lots': 2, 'nb_dispo': 2, 'nb_libres': 2, 'prix_min': 300000, 'prix_max': 500000, 'livraison_key': 2028.4, 'commission_pct': 5}
 def lot(i, pid, typo, prix, st='libre'):
-    return {'id': f't:l{i}', 'programme_id': f't:{pid}', 'n': 'A' + str(i), 'type': 'Appartement', 'typo': typo, 'pieces': int(typo[1]), 'surf': 60, 'prix': prix, 'st': st}
+    return {'id': f't:l{i}', 'programme_id': f't:{pid}', 'n': 'A' + str(i), 'type': 'Appartement', 'typo': typo, 'pieces': int(typo[1]), 'surf': {'T2': 42, 'T3': 63, 'T4': 85}[typo], 'prix': prix, 'st': st}
 DATA = {'meta': {'pige_date': '2026-11-12', 'prev_date': '2026-11-09', 'nouveaux_programmes': 0, 'nouveaux_lots': 55, 'baisses': 175}, 'genere': '2026-11-12',
         'programmes': [prog(1, 'Les Quais', 'Boulogne-Billancourt', '92100', 48.835, 2.24), prog(2, 'Belvédère', 'Meudon', '92190', 48.81, 2.24), prog(3, 'Atelier', 'Paris', '75018', 48.89, 2.34)],
         'lots': [lot(1, 1, 'T2', 300000), lot(2, 1, 'T3', 450000), lot(3, 2, 'T3', 400000), lot(4, 3, 'T4', 500000, 'option')]}
@@ -47,6 +48,9 @@ with sync_playwright() as pw:
         ctx = nav.new_context(viewport=vp)
         ctx.route('**/glr.test/**', site)
         ctx.route('**/hydqfbxdtpmbuooexekp.supabase.co/**', base)
+        # temps de trajet : adresse et durées simulées (10, 20, 30 minutes… dans l'ordre demandé)
+        ctx.route('**/api-adresse.data.gouv.fr/**', lambda r: r.fulfill(status=200, content_type='application/json', body=json.dumps({'features': [{'geometry': {'coordinates': [2.3, 48.86]}, 'properties': {'label': '1 rue de Test 75001 Paris'}}]})))
+        ctx.route('**/table/v1/**', lambda r: r.fulfill(status=200, content_type='application/json', body=json.dumps({'code': 'Ok', 'durations': [[0] + [600 * (k + 1) for k in range(r.request.url.split('/driving/')[1].split('?')[0].count(';'))]]})))
         page = ctx.new_page()
         page.on('pageerror', lambda e: erreurs.append(f'{nom} : {e}'))
         page.add_init_script("localStorage.setItem('glr_session', JSON.stringify({access_token: 'jeton-test'}))")
@@ -151,6 +155,50 @@ with sync_playwright() as pw:
         ko(pastilles != ['Hauts-de-Seine (92)', 'Paris'], f'pastilles des lieux {pastilles}')
         js("document.querySelector('#active .all').click()"); page.wait_for_timeout(200)
         ko(js("document.querySelectorAll('#lieuList .lieu').length") != 0, 'lieux encore là après « Tout effacer »')
+
+        # --- fourchettes : budget « de… à… » et surface « de… à… » ---
+        js("document.getElementById('critBtn').click()"); page.wait_for_timeout(150)
+        page.fill('#fBudgetMin', '350'); page.fill('#fBudget', '460'); page.wait_for_timeout(250)
+        ko(compteur() != '2 lots · 2 programmes', f'budget de 350 à 460 {compteur()!r}')
+        page.fill('#fSurfMin', '50'); page.fill('#fSurfMax', '70'); page.wait_for_timeout(250)
+        ko(compteur() != '2 lots · 2 programmes', f'surface de 50 à 70 {compteur()!r}')
+        page.fill('#fSurfMin', '80'); page.fill('#fSurfMax', ''); page.wait_for_timeout(250)
+        ko(compteur() != '0 lot · 0 programme', f'surface dès 80 avec ce budget {compteur()!r}')
+        page.fill('#fBudgetMin', ''); page.fill('#fBudget', ''); page.wait_for_timeout(250)
+        ko(compteur() != '1 lot · 1 programme', f'surface dès 80 {compteur()!r}')
+        page.fill('#fBudgetMin', '350'); page.fill('#fSurfMin', '50'); page.fill('#fSurfMax', '70'); page.fill('#fBudget', '460'); page.wait_for_timeout(250)
+        page.screenshot(path=str(SORTIE / f'carte_criteres_fourchettes_{nom}.png'))
+        js("document.getElementById('critGo').click()"); page.wait_for_timeout(150)
+        pastilles = page.eval_on_selector_all('#active .ac', 'els => els.map(e => e.firstChild.textContent)')
+        ko(pastilles != ['de 350 à 460 k€', 'de 50 à 70 m²'], f'pastilles des fourchettes {pastilles}')
+        js("document.querySelector('#active .all').click()"); page.wait_for_timeout(200)
+        ko(js("['fBudgetMin','fBudget','fSurfMin','fSurfMax'].some(i => document.getElementById(i).value)"), 'fourchettes pas vidées par « Tout effacer »')
+
+        # --- temps de trajet : toujours là, dans le bloc « Où » ---
+        js("document.getElementById('critBtn').click()"); page.wait_for_timeout(150)
+        ko(not js("!!document.querySelector('#crit .cs-ou #ttAddr') && !!document.querySelector('#crit .cs-ou #ttMode option[value=transit]')"), 'temps de trajet absent du bloc « Où »')
+        page.fill('#ttAddr', '1 rue de Test Paris'); page.fill('#ttMax', '15')
+        js("document.getElementById('ttGo').click()"); page.wait_for_timeout(1200)
+        ko(compteur().split(' · ')[1] != '1 programme', f'trajet de 15 minutes au plus {compteur()!r}')
+        js("document.getElementById('critGo').click()"); page.wait_for_timeout(150)
+        pastilles = page.eval_on_selector_all('#active .ac', 'els => els.map(e => e.firstChild.textContent)')
+        ko(len(pastilles) != 1 or '≤ 15 min' not in pastilles[0], f'pastille du trajet {pastilles}')
+        js("document.querySelector('#active .all').click()"); page.wait_for_timeout(200)
+        ctx.close()
+
+        # --- ouverture depuis la fiche d'un client : ses critères arrivent préremplis ---
+        ctx = nav.new_context(viewport=vp)
+        ctx.route('**/glr.test/**', site); ctx.route('**/hydqfbxdtpmbuooexekp.supabase.co/**', base)
+        page = ctx.new_page(); page.on('pageerror', lambda e: erreurs.append(f'{nom} (client) : {e}'))
+        page.add_init_script("localStorage.setItem('glr_session', JSON.stringify({access_token: 'jeton-test'}))")
+        from urllib.parse import quote
+        page.goto('http://glr.test/carte.html?embed=1&criteres=' + quote(json.dumps({'villes': ['Boulogne Billancourt (92100)'], 'typologies': ['T3'], 'budget_max': 440000})))
+        page.wait_for_function("!document.getElementById('chargement')", timeout=20000); page.wait_for_timeout(700)
+        js = page.evaluate
+        pastilles = page.eval_on_selector_all('#active .ac', 'els => els.map(e => e.firstChild.textContent)')
+        ko('Boulogne-Billancourt' not in pastilles or 'T3' not in pastilles or not any(p.startswith('≤') for p in pastilles), f'critères du client {pastilles}')
+        ko(page.eval_on_selector_all('#lieuList .lieu b', 'els => els.map(e => e.textContent)') != ['Boulogne-Billancourt'], 'ville du client absente du bloc « Où »')
+        ko(js("document.getElementById('fBudget').value") == '', 'budget du client non prérempli')
         ctx.close()
     nav.close()
 
