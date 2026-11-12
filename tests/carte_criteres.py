@@ -2,6 +2,7 @@
 # les filtres s'ouvrent dans une fenêtre rangée par thèmes (« Critères de recherche »), le compteur
 # « lots · programmes » bouge à chaque critère, « Afficher les résultats » referme, et les critères
 # actifs restent en pastilles au-dessus de la liste (croix pour en retirer un, « Modifier », « Tout effacer »).
+# Lieux (même jour) : un seul champ pour les villes et les départements, plusieurs possibles, rayon en km autour d'une ville.
 # Bureau et iPhone.
 # Lancer : ~/glr-pige-robot/.venv/bin/python tests/carte_criteres.py [dossier des captures]
 import json, pathlib, re, subprocess, sys, tempfile
@@ -102,6 +103,37 @@ with sync_playwright() as pw:
         ko(js("document.getElementById('active').hidden") is not True, 'pastilles encore là après « Tout effacer »')
         ko(compteur() != '4 lots · 3 programmes', f'compteur après remise à zéro {compteur()!r}')
         ko(page.inner_text('#critBtn') != 'Critères de recherche', 'bouton pas remis à zéro')
+
+        # --- lieux : un seul champ, plusieurs villes et départements, rayon autour d'une ville ---
+        js("document.getElementById('critBtn').click()"); page.wait_for_timeout(150)
+        ko(js("!!document.getElementById('fVillesBtn') || !!document.getElementById('fDeptsBtn')"), 'anciens menus villes / départements encore là')
+        page.fill('#lieuQ', 'boul'); page.wait_for_timeout(150)
+        prop = page.eval_on_selector_all('#lieuSugg a', 'els => els.map(e => e.innerText.replace(/\\s+/g, " "))')
+        ko(not prop or not prop[0].startswith('Boulogne-Billancourt'), f'propositions pour « boul » {prop}')
+        page.keyboard.press('Enter'); page.wait_for_timeout(200)
+        ko(compteur() != '2 lots · 1 programme', f'Boulogne seule {compteur()!r}')
+        # le rayon : Meudon est à environ 3 km du centre de Boulogne
+        js("(() => { const c = document.querySelector('#lieuList .lieu[data-t=ville] input[type=range]'); c.value = 2; c.dispatchEvent(new Event('input')); })()"); page.wait_for_timeout(200)
+        ko(compteur() != '2 lots · 1 programme', f'Boulogne + 2 km {compteur()!r}')
+        js("(() => { const c = document.querySelector('#lieuList .lieu[data-t=ville] input[type=range]'); c.value = 5; c.dispatchEvent(new Event('input')); })()"); page.wait_for_timeout(200)
+        ko(compteur() != '3 lots · 2 programmes', f'Boulogne + 5 km {compteur()!r}')
+        ko(page.inner_text('#lieuList .lieu .r span') != 'et 5 km autour', 'libellé du rayon')
+        # une deuxième ville, puis un département : l'un ou l'autre
+        page.fill('#lieuQ', 'paris'); page.wait_for_timeout(150); page.keyboard.press('Enter'); page.wait_for_timeout(200)
+        ko(compteur() != '4 lots · 3 programmes', f'Boulogne + 5 km et Paris {compteur()!r}')
+        js("document.querySelectorAll('#lieuList .lieu[data-t=ville]')[0].querySelector('button').click()"); page.wait_for_timeout(200)
+        ko(compteur() != '1 lot · 1 programme', f'Paris seule {compteur()!r}')
+        page.fill('#lieuQ', '92'); page.wait_for_timeout(150)
+        prop = page.eval_on_selector_all('#lieuSugg a', 'els => els.map(e => e.innerText.replace(/\\s+/g, " "))')
+        ko(not prop or 'Hauts-de-Seine (92)' not in prop[0], f'propositions pour « 92 » {prop}')
+        page.keyboard.press('Enter'); page.wait_for_timeout(200)
+        ko(compteur() != '4 lots · 3 programmes', f'Paris ou Hauts-de-Seine {compteur()!r}')
+        page.screenshot(path=str(SORTIE / f'carte_criteres_lieux_{nom}.png'))
+        js("document.getElementById('critGo').click()"); page.wait_for_timeout(150)
+        pastilles = page.eval_on_selector_all('#active .ac', 'els => els.map(e => e.firstChild.textContent)')
+        ko(pastilles != ['Hauts-de-Seine (92)', 'Paris'], f'pastilles des lieux {pastilles}')
+        js("document.querySelector('#active .all').click()"); page.wait_for_timeout(200)
+        ko(js("document.querySelectorAll('#lieuList .lieu').length") != 0, 'lieux encore là après « Tout effacer »')
         ctx.close()
     nav.close()
 

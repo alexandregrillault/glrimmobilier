@@ -26,7 +26,6 @@ html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Seg
 #clientBar .crit button{background:#fff;border:1px solid #B0894C;color:#1E3A32;border-radius:5px;padding:2px 9px;font-size:11.5px;cursor:pointer;font-weight:600}
 #clientBar .crit button:hover{background:#f3ece0}
 #clientBar .crit[hidden]{display:none}
-#fVillesPop #fVillesSearch{width:100%;box-sizing:border-box;padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:12px;margin-bottom:6px}
 /* poignée de redimensionnement du volet des critères (bord droit) */
 aside{position:relative}
 #sideGrip{position:absolute;top:0;bottom:0;right:0;width:7px;cursor:col-resize;z-index:30}
@@ -120,6 +119,25 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 #critCount{font-size:13px;color:var(--muted)}
 #critCount b{font-size:18px;color:var(--navy)}
 #reset{margin-left:auto;color:var(--teal);cursor:pointer;font-size:13px}
+/* Lieux (12/11/2026) : un seul champ pour les villes et les départements, une pastille par lieu, un rayon par ville */
+#lieuBox{position:relative}
+#lieuQ{width:100%}
+#lieuSugg{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:1200;max-height:260px;overflow:auto}
+#lieuSugg[hidden]{display:none}
+#lieuSugg a{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;font-size:12.5px;cursor:pointer}
+#lieuSugg a:hover,#lieuSugg a.sel{background:#eef7f8}
+#lieuSugg a.vide{color:var(--muted);cursor:default;background:none}
+#lieuSugg a span{color:var(--muted);font-size:11px;white-space:nowrap}
+#lieuList{display:flex;flex-direction:column;gap:6px}
+#lieuList:empty{display:none}
+.lieu{border:1px solid var(--teal);border-radius:10px;background:#fff;padding:7px 10px}
+.lieu .h{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.lieu .h b{font-size:13px;color:var(--navy)}
+.lieu .h button{border:0;background:none;color:var(--muted);font-size:11.5px;cursor:pointer;padding:0;font-family:inherit}
+.lieu .h button:hover{color:var(--bad)}
+.lieu .r{display:flex;align-items:center;gap:8px;margin-top:5px;font-size:11.5px;color:var(--muted)}
+.crit-body .lieu .r input{flex:1;min-width:0;padding:0;border:0;accent-color:var(--teal)}
+.lieu .r span{flex:0 0 118px;text-align:right}
 #listTools{padding:8px 12px;border-bottom:1px solid var(--line)}
 @media (max-width:900px){#crit{padding:0}.crit-card{max-height:100vh;height:100%;border-radius:0}.crit-body{grid-template-columns:1fr}}
 .chip .cnt{opacity:.6;font-weight:400;margin-left:3px;font-size:10px}
@@ -299,11 +317,9 @@ header>button,header h1,header .kpis{flex:0 0 auto}
            parce que la navigation par département sur la carte (zoom, fil d'Ariane,
            bouton retour) s'appuie encore sur sa valeur. -->
       <select id="fDept" hidden><option value="">Tous les départements</option></select>
-      <span class="fl">Départements et villes</span>
-      <div class="row">
-      <div class="dd" id="fDeptsDD"><button type="button" id="fDeptsBtn">+ départements</button><div class="dd-pop" id="fDeptsPop" hidden></div></div>
-      <div class="dd" id="fVillesDD"><button type="button" id="fVillesBtn">+ villes</button><div class="dd-pop" id="fVillesPop" hidden><input id="fVillesSearch" placeholder="Rechercher une ville…" autocomplete="off"></div></div>
-      </div>
+      <span class="fl">Villes et départements (plusieurs possibles)</span>
+      <div id="lieuBox"><input id="lieuQ" placeholder="Ajouter une ville ou un département…" autocomplete="off"><div id="lieuSugg" hidden></div></div>
+      <div id="lieuList"></div>
       <span class="fl">Distance à une gare</span>
       <div class="row"><select id="fGare"><option value="">Distance gare</option></select></div>
       <div class="tt-box" id="ttBox">
@@ -464,7 +480,8 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---------- filtres ----------
-const F = { promo: '', dept: '', typos: new Set(), extMin: '', etage: '', etageMin: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre', 'option']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set() };
+const F = { promo: '', dept: '', typos: new Set(), extMin: '', etage: '', etageMin: '', budget: '', liv: '', livS: 2, livM: 'max', fisc: new Set(), st: new Set(['libre', 'option']), maison: false, ville: '', source: '', com: '', pm2: '', renta: '', gare: '', flags: new Set(), tt: null, sort: 'ville', mDepts: new Set(), mVilles: new Set(), rayons: {} };
+const RAYON_MAX = 10;  // km autour d'une ville, au plus
 // ---------- écran de critères (12/11/2026) : s'ouvre par « Critères de recherche », se ferme par
 // « Afficher les résultats », « Fermer », Échap ou un clic à côté. Les résultats se mettent à jour
 // derrière à chaque critère ; le compteur du bas dit combien il en reste.
@@ -473,7 +490,7 @@ function critOuvrir(on) { critEl.hidden = !on; if (!on) setTimeout(() => map.inv
 document.getElementById('critBtn').onclick = () => critOuvrir(true);
 document.getElementById('critClose').onclick = document.getElementById('critGo').onclick = () => critOuvrir(false);
 critEl.addEventListener('mousedown', e => { if (e.target === critEl) critOuvrir(false); });
-window.addEventListener('keydown', e => { if (e.key === 'Escape' && !critEl.hidden) { e.stopPropagation(); critOuvrir(false); } }, true);
+window.addEventListener('keydown', e => { if (e.key !== 'Escape' || critEl.hidden) return; e.stopPropagation(); const ls = document.getElementById('lieuSugg'); if (!ls.hidden) ls.hidden = true; else critOuvrir(false); }, true);
 const flagChips = () => [...critEl.querySelectorAll('.chip[data-f]')];
 // ---------- repli manuel de la légende de la carte ----------
 document.getElementById('legendToggle').onclick = () => {
@@ -536,12 +553,40 @@ function lotOK(l) {
   if (F.flags.has('new') && !(l.nouveau || l.prix_prev)) return false;
   return true;
 }
+// Lieux choisis (12/11/2026) : un programme est retenu s'il est dans l'un des départements choisis,
+// dans l'une des villes choisies, ou à moins de N km du centre d'une ville qui a un rayon (F.rayons).
+// Avant, départements et villes se cumulaient (il fallait les deux) ; avec un seul champ, c'est l'un ou l'autre.
+const _centres = new Map();
+function villeCentre(v) {
+  if (_centres.has(v)) return _centres.get(v);
+  let c = null;
+  const f = GEO.contours && GEO.contours.features.find(x => x.properties.n === v);
+  if (f) {
+    const g = f.geometry, ring = g.type === 'Polygon' ? g.coordinates[0] : g.coordinates.reduce((a, b) => (b[0].length > a.length ? b[0] : a), []);
+    if (ring.length) { const xs = ring.map(q => q[0]), ys = ring.map(q => q[1]); c = [(Math.min(...ys) + Math.max(...ys)) / 2, (Math.min(...xs) + Math.max(...xs)) / 2]; }
+  }
+  if (!c) { const ps = P.filter(p => p.ville === v && p.lat); if (ps.length) c = [ps.reduce((a, p) => a + p.lat, 0) / ps.length, ps.reduce((a, p) => a + p.lng, 0) / ps.length]; }
+  _centres.set(v, c); return c;
+}
+function lieuOK(p) {
+  if (!F.mDepts.size && !F.mVilles.size) return true;
+  if (F.mDepts.has(p.dept) || F.mVilles.has(p.ville)) return true;
+  if (!p.lat) return false;
+  for (const v of F.mVilles) { const r = F.rayons[v]; if (!r) continue; const c = villeCentre(v); if (c && dist(c[0], c[1], p.lat, p.lng) <= r * 1000) return true; }
+  return false;
+}
+// cercles des rayons sur la carte
+let lieuCercles = null;
+function drawLieux() {
+  if (!lieuCercles) lieuCercles = L.layerGroup().addTo(map);
+  lieuCercles.clearLayers();
+  F.mVilles.forEach(v => { const r = F.rayons[v], c = r && villeCentre(v); if (c) L.circle(c, { radius: r * 1000, color: '#0f7c8c', weight: 1.5, dashArray: '6 5', fillColor: '#0f7c8c', fillOpacity: .05, interactive: false }).addTo(lieuCercles); });
+}
 function progOK(p) {
   if (F.promo && p.promoteur !== F.promo) return false;
   if (F.dept && p.dept !== F.dept) return false;
   if (F.ville && p.ville !== F.ville) return false;
-  if (F.mDepts.size && !F.mDepts.has(p.dept)) return false;
-  if (F.mVilles.size && !F.mVilles.has(p.ville)) return false;
+  if (!lieuOK(p)) return false;
   if (!livOK(p)) return false;
   if (F.flags.has('livre') && !isLivre(p)) return false;
   if (F.flags.has('nonact') && !nonActable(p)) return false;
@@ -567,7 +612,7 @@ function apply() {
   document.getElementById('kl').textContent = nl.toLocaleString('fr-FR');
   document.getElementById('kd').textContent = nd.toLocaleString('fr-FR');
   document.getElementById('kpr').textContent = new Set(VIS.filter(p => !p.nomandat).map(p => p.promoteur)).size;
-  renderList(); renderMap(); renderCrumbs(); renderBack(); renderLotsView(); renderCartBtn(); renderActive();
+  renderList(); renderMap(); renderCrumbs(); renderBack(); renderLotsView(); renderCartBtn(); renderActive(); drawLieux();
   { const nlv = visibleLots().length; document.getElementById('critCount').innerHTML = '<b>' + nlv.toLocaleString('fr-FR') + '</b> lot' + (nlv > 1 ? 's' : '') + ' · <b>' + VIS.length.toLocaleString('fr-FR') + '</b> programme' + (VIS.length > 1 ? 's' : ''); }
   clearTimeout(apply._t); apply._t = setTimeout(renderCounts, 30);
 }
@@ -593,7 +638,7 @@ function activeList() {
   if (F.dept) add(DEPTS[F.dept] + ' (' + F.dept + ')', () => { F.dept = ''; document.getElementById('fDept').value = ''; map.fitBounds(IDF); });
   if (F.ville) add(F.ville, () => { F.ville = ''; });
   F.mDepts.forEach(d => add(DEPTS[d] + ' (' + d + ')', () => { F.mDepts.delete(d); renderDeptsMulti(); }));
-  F.mVilles.forEach(v => add(v, () => { F.mVilles.delete(v); renderVillesMulti(); }));
+  F.mVilles.forEach(v => add(v + (F.rayons[v] ? ' + ' + F.rayons[v] + ' km' : ''), () => { F.mVilles.delete(v); renderVillesMulti(); }));
   if (F.source) add('Source : ' + F.source, () => { F.source = ''; document.getElementById('fSource').value = ''; });
   if (F.com) add('Commission ≥ ' + F.com + ' %', () => { F.com = ''; document.getElementById('fCom').value = ''; });
   F.typos.forEach(t => add(t, () => { F.typos.delete(t); [...fT.children].forEach(c => { if (c.firstChild.textContent === t) c.classList.remove('on'); }); }));
@@ -641,8 +686,9 @@ function concessions() {
   if (F.etage) push('Sans critère d\'étage', { etage: '' }, () => { F.etage = ''; F.etageMin = ''; document.getElementById('fEtage').value = ''; renderEtageMin(); });
   if (F.dept) push('Tous les départements', { dept: '' }, () => { F.dept = ''; document.getElementById('fDept').value = ''; map.fitBounds(IDF); });
   if (F.ville) push('Toute l’Île-de-France (pas seulement ' + F.ville + ')', { ville: '' }, () => { F.ville = ''; });
-  if (F.mDepts.size) push('Sans le filtre multi-départements', { mDepts: new Set() }, () => { F.mDepts.clear(); renderDeptsMulti(); });
-  if (F.mVilles.size) push('Sans le filtre multi-villes', { mVilles: new Set() }, () => { F.mVilles.clear(); renderVillesMulti(); });
+  if (F.mDepts.size) push('Sans les départements choisis', { mDepts: new Set() }, () => { F.mDepts.clear(); renderDeptsMulti(); });
+  if (F.mVilles.size) { const rz = {}; let plus = false; F.mVilles.forEach(v => { rz[v] = Math.min(RAYON_MAX, (F.rayons[v] || 0) + 2); if (rz[v] > (F.rayons[v] || 0)) plus = true; }); if (plus) push('2 km de plus autour des villes', { rayons: rz }, () => { F.rayons = rz; renderLieux(); }); }
+  if (F.mVilles.size) push('Sans les villes choisies', { mVilles: new Set() }, () => { F.mVilles.clear(); renderVillesMulti(); });
   if (F.promo) push('Tous les promoteurs', { promo: '' }, () => { F.promo = ''; document.getElementById('fPromo').value = ''; });
   if (F.source) push('Toutes les sources', { source: '' }, () => { F.source = ''; document.getElementById('fSource').value = ''; });
   if (F.com) push('Sans minimum de commission', { com: '' }, () => { F.com = ''; document.getElementById('fCom').value = ''; });
@@ -701,15 +747,9 @@ fiscs.forEach(f => { const l = document.createElement('label'); const c = docume
 const fAll = document.createElement('label'); fAll.className = 'all'; fAll.textContent = 'Tout décocher'; fAll.onclick = () => { F.fisc.clear(); fPop.querySelectorAll('input').forEach(i => i.checked = false); fiscLabel(); apply(); }; fPop.appendChild(fAll);
 fBtn.onclick = e => { e.stopPropagation(); fPop.hidden = !fPop.hidden; };
 fPop.onclick = e => e.stopPropagation();
-// ---- multi-sélection départements ----
-const fDeptsPop = document.getElementById('fDeptsPop'), fDeptsBtn = document.getElementById('fDeptsBtn');
-function deptsLabel() { const n = F.mDepts.size; fDeptsBtn.textContent = n ? (n === 1 ? DEPTS[[...F.mDepts][0]] : n + ' départements') : '+ départements'; fDeptsBtn.classList.toggle('on', n > 0); }
-function renderDeptsMulti() { fDeptsPop.querySelectorAll('input').forEach(i => i.checked = F.mDepts.has(i.value)); deptsLabel(); }
-Object.keys(DEPTS).forEach(d => { const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = d; c.onchange = () => { c.checked ? F.mDepts.add(d) : F.mDepts.delete(d); deptsLabel(); apply(); }; l.appendChild(c); l.appendChild(document.createTextNode(d + ' — ' + DEPTS[d])); fDeptsPop.appendChild(l); });
-const fDeptsAll = document.createElement('label'); fDeptsAll.className = 'all'; fDeptsAll.textContent = 'Tout décocher'; fDeptsAll.onclick = () => { F.mDepts.clear(); renderDeptsMulti(); apply(); }; fDeptsPop.appendChild(fDeptsAll);
-fDeptsBtn.onclick = e => { e.stopPropagation(); fDeptsPop.hidden = !fDeptsPop.hidden; };
-fDeptsPop.onclick = e => e.stopPropagation();
-document.addEventListener('click', () => { fPop.hidden = true; fDeptsPop.hidden = true; fVillesPop.hidden = true; });
+// départements et villes : voir « lieux » plus bas (un seul champ depuis le 12/11/2026)
+function renderDeptsMulti() { renderLieux(); }
+document.addEventListener('click', () => { fPop.hidden = true; });
 const fT = document.getElementById('fTypo');
 TYPOS.forEach(t => { const c = document.createElement('span'); c.className = 'chip'; c.textContent = t; c.onclick = () => { F.typos.has(t) ? F.typos.delete(t) : F.typos.add(t); c.classList.toggle('on'); apply(); }; fT.appendChild(c); });
 ['fPromo','fDept','fSource','fCom','fPm2','fRenta','fGare','fEtage'].forEach(id => document.getElementById(id).onchange = e => { F[id.slice(1).toLowerCase()] = e.target.value; if (id === 'fEtage') { renderEtageMin(); if (F.etage === 'min') { const i = document.getElementById('fEtageMin'); i.focus(); i.select(); } } if (id === 'fDept') { F.ville = ''; if (e.target.value) zoomDept(e.target.value); else map.fitBounds(IDF); } apply(); });
@@ -1453,35 +1493,50 @@ const nv = s => norm(s).replace(/[-'’]/g, ' ').replace(/\bst\b/g, 'saint').rep
 const villes = [...new Set(P.map(p => p.ville).filter(Boolean))].map(v => ({ t: 'ville', v, n: P.filter(p => p.ville === v).length, cp: P.find(p => p.ville === v).cp }));
 // toutes les communes IDF (même sans programme) : zoom sur le contour
 const communesAll = GEO.contours ? GEO.contours.features.filter(f => !villes.some(v => v.v === f.properties.n)).map(f => ({ v: f.properties.n, d: f.properties.d, f })) : [];
-// liste complète pour le sélecteur « + villes » : toutes les communes IDF, avec ou sans programme actuellement
+// liste complète pour le champ des lieux : toutes les communes IDF, avec ou sans programme (utile avec un rayon)
 const villesToutes = [...villes, ...communesAll.map(c => ({ v: c.v }))];
-// ---- multi-sélection villes ----
-const fVillesPop = document.getElementById('fVillesPop'), fVillesBtn = document.getElementById('fVillesBtn'), fVillesSearch = document.getElementById('fVillesSearch');
-function villesLabel() { const n = F.mVilles.size; fVillesBtn.textContent = n ? (n === 1 ? [...F.mVilles][0] : n + ' villes') : '+ villes'; fVillesBtn.classList.toggle('on', n > 0); }
-const fVillesAll = document.createElement('label'); fVillesAll.className = 'all'; fVillesAll.textContent = 'Tout décocher'; fVillesAll.onclick = () => { F.mVilles.clear(); renderVillesMulti(); apply(); };
-function renderVillesList(filtre) {
-  [...fVillesPop.querySelectorAll('label:not(.all)')].forEach(l => l.remove());
-  const sv = nv(filtre || '');
-  // Villes cochées d'abord (demande d'Alex, 02/10/2026 : depuis une fiche client, les villes
-  // préremplies sont en tête pour être décochées sans les chercher), puis l'ordre alphabétique.
-  // La liste est redessinée à chaque coche : une ville décochée reprend aussitôt sa place.
-  const liste = villesToutes.filter(v => !sv || nv(v.v).includes(sv))
-    .sort((a, b) => ((F.mVilles.has(a.v) ? 0 : 1) - (F.mVilles.has(b.v) ? 0 : 1)) || a.v.localeCompare(b.v, 'fr')).slice(0, 200);
-  const nbSel = liste.filter(v => F.mVilles.has(v.v)).length;
-  liste.forEach((v, i) => {
-    const l = document.createElement('label'); const c = document.createElement('input'); c.type = 'checkbox'; c.value = v.v; c.checked = F.mVilles.has(v.v);
-    if (c.checked) { l.className = 'sel' + (i === nbSel - 1 && nbSel < liste.length ? ' sel-fin' : ''); }
-    c.onchange = () => { c.checked ? F.mVilles.add(v.v) : F.mVilles.delete(v.v); renderVillesMulti(); apply(); };
-    l.appendChild(c); l.appendChild(document.createTextNode(v.v));
-    fVillesPop.appendChild(l);
+// ---- lieux (12/11/2026, demande d'Alex, sur le modèle d'Otaree) : un seul champ où l'on tape une ville,
+// un code postal ou un département ; chaque choix devient une pastille (plusieurs possibles), et chaque
+// ville a un curseur « N km autour ». Villes déjà choisies (fiche client) affichées d'office.
+const lieuQ = document.getElementById('lieuQ'), lieuSugg = document.getElementById('lieuSugg'), lieuList = document.getElementById('lieuList');
+const rayonTxt = r => r ? 'et ' + r + ' km autour' : 'la ville seulement';
+function lieuAjouter(t, v) { if (t === 'dept') F.mDepts.add(v); else F.mVilles.add(v); lieuQ.value = ''; lieuSugg.hidden = true; renderLieux(); apply(); }
+function lieuRetirer(t, v) { if (t === 'dept') F.mDepts.delete(v); else F.mVilles.delete(v); renderLieux(); apply(); }
+function renderLieux() {
+  Object.keys(F.rayons).forEach(v => { if (!F.mVilles.has(v)) delete F.rayons[v]; });
+  lieuList.innerHTML = [...F.mDepts].map(d => '<div class="lieu" data-t="dept" data-v="' + esc(d) + '"><div class="h"><b>' + esc(DEPTS[d] || d) + ' (' + esc(d) + ')</b><button type="button">Retirer</button></div></div>').join('')
+    + [...F.mVilles].map(v => '<div class="lieu" data-t="ville" data-v="' + esc(v) + '"><div class="h"><b>' + esc(v) + '</b><button type="button">Retirer</button></div>'
+      + (villeCentre(v) ? '<div class="r"><input type="range" min="0" max="' + RAYON_MAX + '" step="1" value="' + (F.rayons[v] || 0) + '" title="Élargir autour de la ville, en kilomètres depuis son centre"><span>' + rayonTxt(F.rayons[v]) + '</span></div>' : '') + '</div>').join('');
+  lieuList.querySelectorAll('.lieu').forEach(el => {
+    const t = el.dataset.t, v = el.dataset.v;
+    el.querySelector('button').onclick = () => lieuRetirer(t, v);
+    const c = el.querySelector('input');
+    if (c) c.oninput = () => { const r = +c.value; if (r) F.rayons[v] = r; else delete F.rayons[v]; el.querySelector('.r span').textContent = rayonTxt(r); apply(); };
   });
-  fVillesPop.appendChild(fVillesAll);
 }
-function renderVillesMulti() { renderVillesList(fVillesSearch.value); villesLabel(); }
-renderVillesList('');
-fVillesBtn.onclick = e => { e.stopPropagation(); fVillesPop.hidden = !fVillesPop.hidden; if (!fVillesPop.hidden) fVillesSearch.focus(); };
-fVillesPop.onclick = e => e.stopPropagation();
-fVillesSearch.oninput = () => renderVillesList(fVillesSearch.value);
+function renderVillesMulti() { renderLieux(); }
+let lieuIdx = -1, lieuOpts = [];
+function lieuChercher() {
+  const s = nv(lieuQ.value.trim()); lieuIdx = -1; lieuOpts = [];
+  if (!s) { lieuSugg.hidden = true; return; }
+  const lDepts = []; Object.keys(DEPTS).filter(d => !F.mDepts.has(d) && (d.startsWith(s) || nv(DEPTS[d]).includes(s))).forEach(d => lDepts.push({ t: 'dept', v: d, h: '<b>' + esc(DEPTS[d]) + ' (' + d + ')</b><span>département</span>' }));
+  villesToutes.filter(v => !F.mVilles.has(v.v) && (nv(v.v).includes(s) || String(v.cp || '').startsWith(s)))
+    .sort((a, b) => ((nv(a.v).startsWith(s) ? 0 : 1) - (nv(b.v).startsWith(s) ? 0 : 1)) || ((b.n || 0) - (a.n || 0)) || a.v.localeCompare(b.v, 'fr')).slice(0, 12)
+    .forEach(v => lieuOpts.push({ t: 'ville', v: v.v, h: '<b>' + esc(v.v) + '</b><span>' + (v.n ? v.n + ' programme' + (v.n > 1 ? 's' : '') : 'aucun programme') + '</span>' }));
+  // un numéro tapé (« 92 ») : le département d'abord ; un nom (« paris », « val ») : les villes d'abord
+  lieuOpts = /^\d/.test(s) ? [...lDepts, ...lieuOpts] : [...lieuOpts, ...lDepts];
+  lieuSugg.innerHTML = lieuOpts.length ? lieuOpts.map((o, i) => '<a data-i="' + i + '">' + o.h + '</a>').join('') : '<a class="vide">Aucune ville ni département à ce nom</a>';
+  lieuSugg.hidden = false;
+  lieuSugg.querySelectorAll('a[data-i]').forEach(a => a.onmousedown = e => { e.preventDefault(); const o = lieuOpts[+a.dataset.i]; lieuAjouter(o.t, o.v); });
+}
+lieuQ.oninput = lieuChercher; lieuQ.onfocus = lieuChercher;
+lieuQ.onblur = () => setTimeout(() => { lieuSugg.hidden = true; }, 150);
+lieuQ.onkeydown = e => {
+  if (lieuSugg.hidden || !lieuOpts.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); lieuIdx = Math.max(0, Math.min(lieuOpts.length - 1, lieuIdx + (e.key === 'ArrowDown' ? 1 : -1))); lieuSugg.querySelectorAll('a[data-i]').forEach((a, i) => a.classList.toggle('sel', i === lieuIdx)); }
+  else if (e.key === 'Enter') { e.preventDefault(); const o = lieuOpts[Math.max(0, lieuIdx)]; lieuAjouter(o.t, o.v); }
+};
+renderLieux();
 let sugIdx = -1;
 q.oninput = () => {
   const s = norm(q.value.trim()); sugIdx = -1;
