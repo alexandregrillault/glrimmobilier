@@ -105,15 +105,21 @@ with sync_playwright() as pw:
         ko(page.inner_text('#critBtn') != 'Critères de recherche', 'bouton pas remis à zéro')
 
         # --- fond de carte : « Plan » par défaut (décision d'Alex du 12/11/2026), « Communes » au choix, gardé sur l'appareil ; lignes en option sur la carte ---
-        tuile = lambda: js("document.querySelector('.leaflet-tile-pane img').src")
-        ko('voyager' not in tuile(), f'fond de départ {tuile()}')
+        # « Plan » = carte vectorielle aux couleurs d'Otaree (canvas MapLibre) ; sans WebGL, plan en images (Voyager)
+        fondVu = lambda: js("(() => { const c = document.querySelector('.leaflet-tile-pane canvas.maplibregl-canvas'); const i = document.querySelector('.leaflet-tile-pane img'); return c ? 'plan-vectoriel' : (i ? i.src : 'rien'); })()")
+        page.wait_for_timeout(1500)
+        ko(fondVu() != 'plan-vectoriel' and 'voyager' not in fondVu(), f'fond de départ {fondVu()}')
+        ko(js("localStorage.getItem('carteFond')") is not None, 'le fond par défaut ne doit pas être noté comme un choix')
         ko(js("!!document.querySelector('aside #tTransports')") or not js("!!document.querySelector('#mapOpts #tTransports') && !!document.querySelector('#mapOpts #tFutur')"), 'cases des lignes pas sur la carte')
-        js("document.querySelector('#fondSeg button[data-f=communes]').click()"); page.wait_for_timeout(700)
-        ko('light_nolabels' not in tuile(), f'fond après « Communes » {tuile()}')
-        ko(js("localStorage.getItem('carteFond')") != 'communes', 'choix du fond non gardé')
-        js("document.querySelector('#fondSeg button[data-f=plan]').click()"); page.wait_for_timeout(700)
-        ko('voyager' not in tuile(), 'retour au fond « Plan »')
+        # en « Plan », aucun contour de commune ni de département
+        traits = js("[...document.querySelectorAll('.leaflet-communes-pane path, .leaflet-depts-pane path')].filter(p => +(p.getAttribute('stroke-opacity') || 1) > 0 && p.getAttribute('stroke') !== 'none').length")
+        ko(traits != 0, f'{traits} contours encore tracés en « Plan »')
         page.screenshot(path=str(SORTIE / f'carte_fond_plan_{nom}.png'))
+        js("document.querySelector('#fondSeg button[data-f=communes]').click()"); page.wait_for_timeout(900)
+        ko('light_nolabels' not in fondVu(), f'fond après « Communes » {fondVu()}')
+        ko(js("localStorage.getItem('carteFond')") != 'communes', 'choix du fond non gardé')
+        js("document.querySelector('#fondSeg button[data-f=plan]').click()"); page.wait_for_timeout(900)
+        ko(fondVu() != 'plan-vectoriel' and 'voyager' not in fondVu(), f'retour au fond « Plan » : {fondVu()}')
 
         # --- lieux : un seul champ, plusieurs villes et départements, rayon autour d'une ville ---
         js("document.getElementById('critBtn').click()"); page.wait_for_timeout(150)
