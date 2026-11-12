@@ -7241,6 +7241,7 @@ async function _eqSelBulk(corpsFn, verbe){
   const leads = [..._eqSelected].map(id => (_eqLeads || []).find(l => l.id === id)).filter(Boolean);
   if (!leads.length) return;
   let rates = 0;
+  _eqBulkEnCours = true;
   for (const l of leads){
     const corps = corpsFn(l);
     if (!corps) continue;
@@ -7255,13 +7256,14 @@ async function _eqSelBulk(corpsFn, verbe){
       if (typeof _toucheAuRappel === 'function' && _toucheAuRappel(corps)) await eqCreneauRappelSync(l);
     } catch(e){ rates++; }
   }
+  _eqBulkEnCours = false;
   const faits = leads.length - rates;
   if (faits && typeof toast === 'function') toast('✓ ' + faits + ' client' + (faits > 1 ? 's ' : ' ') + verbe, 'var(--success)');
   if (rates && typeof toast === 'function') toast('⚠ ' + rates + ' client' + (rates > 1 ? 's n\'ont' : ' n\'a') + ' pas pu être mis à jour', 'var(--danger)');
   if (!rates) _eqSelected.clear();
   renderEquipeLeadsTable();
   if (typeof renderEqNotifs === 'function') renderEqNotifs();
-  if (typeof eqMajVue === 'function') eqMajVue(true);
+  if (typeof eqMajVue === 'function') await eqMajVue(true);
 }
 
 function eqSelStatut(sel){
@@ -7295,7 +7297,11 @@ function eqSelRappel(){
 }
 
 // Réattribution de la paternité — gérants uniquement (Alex et Théophile)
-function eqSelVendeur(sel){
+// Corrigée le 12/11/2026 (« parfois ils ne partent pas tous ») : les fiches cochées
+// sont relues en base (même celles sorties de la liste affichée), chaque transfert
+// est vérifié dans la réponse de la base, et le bilan distingue transférés, déjà
+// chez ce vendeur et échecs (qui restent cochés). La liste est toujours rechargée.
+async function eqSelVendeur(sel){
   const choix = sel && sel.value;
   if (sel) sel.value = '';
   if (!choix || !_eqSelected.size) return;
@@ -7304,20 +7310,71 @@ function eqSelVendeur(sel){
     return;
   }
   const nouveau = choix === '__aucun' ? null : choix;
-  const n = _eqSelected.size;
+  const ids = [..._eqSelected];
+  const n = ids.length;
   if (!confirm('Transférer ' + n + ' client' + (n > 1 ? 's' : '') + (nouveau ? ' à ' + nouveau : ' vers « aucun vendeur »') + ' ?\n\nLa paternité change et le transfert est tracé dans l\'historique de chaque fiche.')) return;
-  const nowIso = new Date().toISOString();
-  _eqSelBulk((l) => {
-    const ancien = l.vendeur || null;
-    if (ancien === nouveau) return null;
-    const corps = { vendeur: nouveau, vendeur_depuis: nouveau ? nowIso : null };
-    if (ancien){
-      const hist = Array.isArray(l.vendeur_historique) ? l.vendeur_historique.slice() : [];
-      hist.push({ vendeur: ancien, du: l.vendeur_depuis || null, au: nowIso, motif: 'réattribution groupée' });
-      corps.vendeur_historique = hist;
+  const h = { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' };
+  const nomDe = (id, f) => { const l = f || (_eqLeads || []).find(x => x.id === id); return (l && (nomComplet(l) || l.email)) || 'client'; };
+  _eqBulkEnCours = true;
+  const bilan = { faits: [], deja: [], echecs: [] };
+  const fiches = {};
+  try {
+    // 1. L'état réel des fiches cochées, par paquets
+    for (let k = 0; k < ids.length; k += 50) {
+      const lot = ids.slice(k, k + 50);
+      try {
+        const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?select=id,nom,prenom,nom_famille,email,vendeur,vendeur_depuis,vendeur_historique&id=in.(' + lot.join(',') + ')', { cache: 'no-store', headers: h });
+        if (r.ok) (await r.json()).forEach(f => { fiches[f.id] = f; });
+      } catch (e) { /* les fiches non relues finissent en échec, et restent cochées */ }
     }
-    return corps;
-  }, nouveau ? 'transférés à ' + nouveau : 'remis en libre');
+    // 2. Un transfert à la fois, vérifié dans la réponse de la base
+    const nowIso = new Date().toISOString();
+    for (const id of ids) {
+      const f = fiches[id];
+      if (!f) { bilan.echecs.push(id); continue; }
+      const ancien = f.vendeur || null;
+      if (ancien === nouveau) {
+        bilan.deja.push(id);
+        const l = (_eqLeads || []).find(x => x.id === id);
+        if (l) { l.vendeur = f.vendeur; l.vendeur_depuis = f.vendeur_depuis; }   // la liste affichée était en retard
+        continue;
+      }
+      const corps = { vendeur: nouveau, vendeur_depuis: nouveau ? nowIso : null };
+      if (ancien) {
+        const hist = Array.isArray(f.vendeur_historique) ? f.vendeur_historique.slice() : [];
+        hist.push({ vendeur: ancien, du: f.vendeur_depuis || null, au: nowIso, motif: 'réattribution groupée' });
+        corps.vendeur_historique = hist;
+      }
+      try {
+        const r = await fetch(SUPABASE_URL + '/rest/v1/contacts?id=eq.' + id + '&select=id,vendeur', {
+          method: 'PATCH', headers: Object.assign({ 'Prefer': 'return=representation' }, h), body: JSON.stringify(corps)
+        });
+        const rows = r.ok ? await r.json() : [];
+        if (!rows.length || (rows[0].vendeur || null) !== nouveau) throw new Error('non transféré');
+        bilan.faits.push(id);
+        const l = (_eqLeads || []).find(x => x.id === id);
+        if (l) Object.assign(l, corps);
+      } catch (e) { bilan.echecs.push(id); }
+    }
+  } finally { _eqBulkEnCours = false; }
+
+  // 3. Seuls les échecs restent cochés, pour pouvoir réessayer
+  _eqSelected.clear();
+  bilan.echecs.forEach(id => _eqSelected.add(id));
+  const qui = nouveau ? nouveau : 'aucun vendeur';
+  const lignes = [];
+  if (bilan.faits.length) lignes.push(bilan.faits.length + ' transféré' + (bilan.faits.length > 1 ? 's' : '') + ' à ' + qui);
+  if (bilan.deja.length) lignes.push(bilan.deja.length + ' déjà chez ' + qui);
+  if (bilan.echecs.length) {
+    alert((lignes.length ? lignes.join(' · ') + '\n\n' : '') + bilan.echecs.length + ' client' + (bilan.echecs.length > 1 ? 's n\'ont' : ' n\'a') + ' pas pu être transféré' + (bilan.echecs.length > 1 ? 's' : '') + ' :\n'
+      + bilan.echecs.map(id => '• ' + nomDe(id, fiches[id])).join('\n') + '\n\n' + (bilan.echecs.length > 1 ? 'Ils restent cochés' : 'Il reste coché') + ' : réessaie dans un instant.');
+  } else if (typeof toast === 'function') {
+    toast('✓ ' + lignes.join(' · '), 'var(--success)');
+  }
+  renderEquipeLeadsTable();
+  if (typeof renderEqNotifs === 'function') renderEqNotifs();
+  if (typeof eqMajVue === 'function') await eqMajVue(true);
+  return bilan;
 }
 
 // Export CSV : les leads cochés, sinon la liste affichée (recherche + filtre en cours)
@@ -7880,9 +7937,15 @@ function _eqLeadFlags(l) {
 // ============================================================
 let _majEnCours = false;
 let _majDerniere = 0;
+let _majRelancer = false;    // rechargement forcé demandé pendant qu'un autre tournait
+let _eqBulkEnCours = false;  // action groupée en cours : pas de rafraîchissement de fond
 
 async function eqMajVue(force){
-  if (_majEnCours) return;
+  // Un rechargement forcé (après une action) arrivé pendant un rafraîchissement
+  // de fond n'est plus perdu : il repart dès que l'autre est fini (12/11/2026 —
+  // les clients réattribués restaient affichés).
+  if (_majEnCours) { if (force) _majRelancer = true; return; }
+  if (!force && _eqBulkEnCours) return;
   // Un écran ouvert par-dessus (fiche, sélection, créneaux…) ne doit pas être
   // balayé par un rafraîchissement de fond. Après une action, on passe outre.
   if (!force && document.querySelector('#eq-fiche-panel, #eq-sel-modal, #eq-cren-modal, #eq-modele-modal, #eq-prop-modal, #eq-rappel-picker, #eq-act-suppr')) return;
@@ -7909,6 +7972,7 @@ async function eqMajVue(force){
     _majDerniere = Date.now();
   } catch(e){ /* un rafraîchissement raté ne doit jamais bloquer l'écran */ }
   _majEnCours = false;
+  if (_majRelancer) { _majRelancer = false; await eqMajVue(true); }
 }
 
 // Retour sur l'onglet ou sur la fenêtre : on resynchronise
