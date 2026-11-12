@@ -58,3 +58,8 @@ revoke all on function public.robot_plans_copies(text, text[]) from public;
 revoke all on function public.robot_plan_copie_corriger(text, text, text, text, text) from public;
 grant execute on function public.robot_plans_copies(text, text[]) to anon, authenticated, service_role;
 grant execute on function public.robot_plan_copie_corriger(text, text, text, text, text) to anon, authenticated, service_role;
+
+-- Même jour, accord d'Alex (« retire-le », Studéa lot 208 : un procès-verbal d'AG rangé comme plan) :
+-- p_apres null = retirer la copie d'un document qui n'est pas un plan ; l'ancien lien reste au journal.
+alter table public.documents_lot_corrections alter column apres drop not null;
+-- (robot_plan_copie_corriger inchangée dans sa forme : un p_apres null met plan_url à null.)
