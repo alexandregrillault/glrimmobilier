@@ -149,6 +149,22 @@ aside{background:#fff;border-right:1px solid var(--line);display:flex;flex-direc
 .seg button.on{background:var(--teal);color:#fff;font-weight:600}
 .crit-body .row.fourch{align-items:center;max-width:340px}
 .crit-body .row.fourch>span{flex:0 0 auto;font-size:12px;color:var(--muted)}
+/* Trois vues plein écran (12/11/2026, demande d'Alex, modèle Otaree) : « Lots » et « Programmes » prennent toute
+   la largeur (la carte est masquée, la fiche du programme s'ouvre par-dessus) ; « Carte » = carte + liste à gauche. */
+#vueSeg{flex:0 0 auto}
+#vueSeg button{padding:7px 12px;font-size:12.5px}
+#vueSeg small{opacity:.75;font-weight:400}
+header .kpis{flex:0 1 auto;min-width:0;overflow:hidden;flex-wrap:wrap;max-height:22px;align-items:center}  /* faute de place, un chiffre entier disparaît plutôt que d'être coupé */
+#app #tabs{display:none}
+#app.plein,#app.plein.nof,#app.plein.lots{grid-template-columns:1fr 0}
+#app.plein aside,#app.plein.nof aside{display:flex;grid-column:1;grid-row:2;border-right:0}
+#app.plein #mapwrap{grid-column:1;grid-row:2;pointer-events:none;z-index:5}
+#app.plein.client-mode aside,#app.plein.client-mode #mapwrap{grid-row:3}
+#app.plein #map{visibility:hidden}  /* masquée mais toujours à sa taille : la carte ne doit pas se retrouver à 0 pixel */
+#app.plein #back,#app.plein #mapOpts,#app.plein .legend,#app.plein #sideGrip{display:none}
+#app.plein #panel,#app.plein #cart{pointer-events:auto}
+#app.plein #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));align-content:start;padding:0 8px}
+#app.plein #list .grp,#app.plein #list .conc,#app.plein #list .empty{grid-column:1/-1}
 #listTools{padding:8px 12px;border-bottom:1px solid var(--line)}
 @media (max-width:900px){#crit{padding:0}.crit-card{max-height:100vh;height:100%;border-radius:0}.crit-body{grid-template-columns:1fr}}
 .chip .cnt{opacity:.6;font-weight:400;margin-left:3px;font-size:10px}
@@ -302,7 +318,7 @@ table.lots td.r{text-align:right}
 .docsbox .dl a{color:var(--teal)}
 .pige{font-size:11px;color:var(--muted);white-space:nowrap;flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 #search{min-width:150px}
-header>button,header h1,header .kpis{flex:0 0 auto}
+header>button,header h1{flex:0 0 auto}
 .crit-body .row.tri>*{flex:1}
 @media (max-width:900px){#app{grid-template-columns:1fr;grid-template-rows:56px 1fr}aside{display:none}header .kpis{display:none}#panel{width:auto;left:10px;min-width:0}}
 </style>
@@ -312,7 +328,7 @@ header>button,header h1,header .kpis{flex:0 0 auto}
 <header>
   <h1>Programmes pigés<small>Île-de-France</small></h1><span class="pige" id="pige"></span>
   <div id="search"><input id="q" placeholder="Programme, ville, code postal, promoteur…" autocomplete="off"><div id="sugg"></div></div>
-  <button id="critBtn" title="Ouvrir les critères de recherche">Critères de recherche</button><button id="sideBtn" title="Afficher ou masquer la liste à gauche de la carte">Masquer la liste</button><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
+  <button id="critBtn" title="Ouvrir les critères de recherche">Critères de recherche</button><span class="seg" id="vueSeg" title="Trois vues des mêmes résultats"><button type="button" data-v="lots">Lots <small id="vueNL"></small></button><button type="button" data-v="programmes">Programmes <small id="vueNP"></small></button><button type="button" data-v="carte" class="on">Carte</button></span><button id="cartBtn" title="Lots mis de côté">Sélection <b id="cartN">0</b></button><div class="kpis"><span><b id="kp">0</b> programmes<small id="knm" style="color:#b91c1c"></small></span><span><b id="kl">0</b> logements</span><span><b id="kd">0</b> disponibles</span><span><b id="kpr">0</b> promoteurs</span></div>
 </header>
 <div id="clientBar"><span>Sélection pour <b id="clientBarNom"></b></span><span class="crit" id="clientCritInfo" hidden>· filtré selon ses critères : <b id="clientCritResume"></b><button id="clientCritOff" title="Retirer ce filtre et revenir à toute l'Île-de-France">Retirer le filtre</button></span><span class="m" id="clientBarMsg">coche des lots dans la carte, puis valide</span><span class="crit" id="clientTrajetChoix" hidden>· Afficher sur la feuille le trajet jusqu'à <b id="clientTrajetChoixAdr"></b> ?<button data-modes="transit">En transports</button><button data-modes="car">En voiture</button><button data-modes="transit,car">Les deux</button><button data-modes="">Non, les lignes à proximité</button></span><button class="valider" id="clientBarValider" disabled><span id="clientBarValiderLabel">Valider la sélection</span> <span id="clientBarValiderN"></span></button></div>
 <!-- Écran de critères (12/11/2026) : mêmes champs et mêmes identifiants qu'avant, rangés par thèmes. -->
@@ -402,7 +418,7 @@ header>button,header h1,header .kpis{flex:0 0 auto}
   <div id="map"></div>
   <!-- Réglages d'affichage de la carte (12/11/2026, demande d'Alex) : fond « Communes » (aplats par département)
        ou « Plan » (rues, parcs, façon Otaree), lignes de transport actuelles et futures en option par-dessus. -->
-  <div id="mapOpts"><span class="seg" id="fondSeg"><button type="button" data-f="plan" title="Plan détaillé : rues, parcs, quartiers">Plan</button><button type="button" data-f="communes" title="Fond clair, communes colorées par département">Communes</button></span>
+  <div id="mapOpts"><button id="sideBtn" title="Afficher ou masquer la liste à gauche de la carte">Masquer la liste</button><span class="seg" id="fondSeg"><button type="button" data-f="plan" title="Plan détaillé : rues, parcs, quartiers">Plan</button><button type="button" data-f="communes" title="Fond clair, communes colorées par département">Communes</button></span>
     <label><input type="checkbox" id="tTransports"> Lignes de transport</label>
     <label title="Lignes en construction (pointillés), avec la date de mise en service prévue"><input type="checkbox" id="tFutur"> Futures lignes</label>
   </div>
@@ -634,7 +650,7 @@ function apply() {
   document.getElementById('kd').textContent = nd.toLocaleString('fr-FR');
   document.getElementById('kpr').textContent = new Set(VIS.filter(p => !p.nomandat).map(p => p.promoteur)).size;
   renderList(); renderMap(); renderCrumbs(); renderBack(); renderLotsView(); renderCartBtn(); renderActive(); drawLieux();
-  { const nlv = visibleLots().length; document.getElementById('critCount').innerHTML = '<b>' + nlv.toLocaleString('fr-FR') + '</b> lot' + (nlv > 1 ? 's' : '') + ' · <b>' + VIS.length.toLocaleString('fr-FR') + '</b> programme' + (VIS.length > 1 ? 's' : ''); }
+  { const nlv = visibleLots().length; document.getElementById('vueNL').textContent = '(' + nlv.toLocaleString('fr-FR') + ')'; document.getElementById('vueNP').textContent = '(' + VIS.length.toLocaleString('fr-FR') + ')'; document.getElementById('critCount').innerHTML = '<b>' + nlv.toLocaleString('fr-FR') + '</b> lot' + (nlv > 1 ? 's' : '') + ' · <b>' + VIS.length.toLocaleString('fr-FR') + '</b> programme' + (VIS.length > 1 ? 's' : ''); }
   clearTimeout(apply._t); apply._t = setTimeout(renderCounts, 30);
 }
 // ---------- compteurs "avec les autres critères" ----------
@@ -1221,7 +1237,8 @@ function renderList() {
   const el = document.getElementById('list');
   let items = VIS;
   const z = map.getZoom();
-  if (z >= 12 && !F.ville) { const b = map.getBounds(); const inb = items.filter(p => p.lat && b.contains([p.lat, p.lng])); if (inb.length) items = inb; }
+  // en vue « Carte », la liste suit ce qu'on voit sur la carte ; en vue « Programmes » plein écran, elle montre tout
+  if (!document.getElementById('app').classList.contains('plein') && z >= 12 && !F.ville) { const b = map.getBounds(); const inb = items.filter(p => p.lat && b.contains([p.lat, p.lng])); if (inb.length) items = inb; }
   if (!items.length) { el.innerHTML = '<div class="empty">Aucun programme ne correspond aux filtres.</div>' + concHtml(); bindConc(el); return; }
   const pmin = p => { const ls = p.logs.filter(lotOK).map(l => p20e(l) != null ? p20e(l) : l.prix55).filter(Boolean); return ls.length ? Math.min(...ls) : Infinity; };
   const SORTS = { prix: (a, b) => pmin(a) - pmin(b), pm2: (a, b) => (a.prix_m2_moy || Infinity) - (b.prix_m2_moy || Infinity), liv: (a, b) => (a.livraison_key || 9999) - (b.livraison_key || 9999), tt: (a, b) => ((F.tt && F.tt.times[a.id]) ?? 1e9) - ((F.tt && F.tt.times[b.id]) ?? 1e9), new: (a, b) => ((b.nouveau ? 2 : 0) + (b.nb_nouveaux_lots ? 1 : 0) + (b.nb_baisses ? 1 : 0)) - ((a.nouveau ? 2 : 0) + (a.nb_nouveaux_lots ? 1 : 0) + (a.nb_baisses ? 1 : 0)) };
@@ -1887,6 +1904,15 @@ function carteAppliquerCriteres() {
 // ---------- vue « Lots » (tableau global des lots filtrés) ----------
 let VIEW = 'p', lvK = 'prix_m2', lvD = 1, lvMax = 300;
 document.querySelectorAll('#tabs span').forEach(t => t.onclick = () => { VIEW = t.dataset.t; document.querySelectorAll('#tabs span').forEach(x => x.classList.toggle('on', x === t)); document.getElementById('list').style.display = VIEW === 'p' ? '' : 'none'; document.getElementById('crumbs').style.display = VIEW === 'p' ? '' : 'none'; document.getElementById('lotsview').style.display = VIEW === 'l' ? 'block' : 'none'; document.getElementById('app').classList.toggle('lots', VIEW === 'l'); setTimeout(() => map.invalidateSize(), 50); renderLotsView(); });
+// ---------- trois vues : Lots, Programmes, Carte ----------
+function setVue(v) {
+  const app = document.getElementById('app');
+  app.classList.toggle('plein', v !== 'carte');
+  document.querySelector('#tabs span[data-t="' + (v === 'lots' ? 'l' : 'p') + '"]').click();
+  document.querySelectorAll('#vueSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  renderList(); setTimeout(() => map.invalidateSize(), 80);
+}
+document.querySelectorAll('#vueSeg button').forEach(b => { b.onclick = () => setVue(b.dataset.v); });
 function visibleLots() { const out = []; VIS.forEach(p => p.logs.forEach(l => { if (lotOK(l)) out.push({ l, p }); })); return out; }
 function renderLotsView() {
   const all = visibleLots(); document.getElementById('tabLN').textContent = '(' + all.length.toLocaleString('fr-FR') + ')';

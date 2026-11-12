@@ -4,6 +4,7 @@
 # actifs restent en pastilles au-dessus de la liste (croix pour en retirer un, « Modifier », « Tout effacer »).
 # Lieux (même jour) : un seul champ pour les villes et les départements, plusieurs possibles, rayon en km autour d'une ville.
 # Fourchettes de budget et de surface, temps de trajet, critères préremplis depuis une fiche client.
+# Trois vues : Lots et Programmes en plein écran, Carte avec la liste.
 # Bureau et iPhone.
 # Lancer : ~/glr-pige-robot/.venv/bin/python tests/carte_criteres.py [dossier des captures]
 import json, pathlib, re, subprocess, sys, tempfile
@@ -155,6 +156,27 @@ with sync_playwright() as pw:
         ko(pastilles != ['Hauts-de-Seine (92)', 'Paris'], f'pastilles des lieux {pastilles}')
         js("document.querySelector('#active .all').click()"); page.wait_for_timeout(200)
         ko(js("document.querySelectorAll('#lieuList .lieu').length") != 0, 'lieux encore là après « Tout effacer »')
+
+        # --- trois vues : Lots et Programmes en plein écran, Carte avec la liste à gauche ---
+        large = js('innerWidth')
+        etat = lambda: js("(() => { const r = e => { const b = document.querySelector(e).getBoundingClientRect(); return Math.round(b.width); }; return { plein: document.getElementById('app').classList.contains('plein'), actif: document.querySelector('#vueSeg button.on').dataset.v, carte: getComputedStyle(document.getElementById('map')).visibility !== 'hidden', liste: getComputedStyle(document.getElementById('list')).display, lots: getComputedStyle(document.getElementById('lotsview')).display, colonne: r('aside') }; })()")
+        ko(page.inner_text('#vueSeg').replace('\n', ' ').split() != ['Lots', '(4)', 'Programmes', '(3)', 'Carte'], f'boutons des vues {page.inner_text("#vueSeg")!r}')
+        js("document.querySelector('#vueSeg button[data-v=lots]').click()"); page.wait_for_timeout(300)
+        e = etat(); ko(not e['plein'] or e['carte'] or e['lots'] == 'none' or e['colonne'] < large - 2 or e['actif'] != 'lots', f'vue Lots {e}')
+        ko(js("document.querySelectorAll('#lotsview tbody tr').length") != 4, 'vue Lots : 4 lignes attendues')
+        page.screenshot(path=str(SORTIE / f'carte_vue_lots_{nom}.png'))
+        js("document.querySelector('#vueSeg button[data-v=programmes]').click()"); page.wait_for_timeout(300)
+        e = etat(); ko(not e['plein'] or e['carte'] or e['liste'] != 'grid' or e['colonne'] < large - 2, f'vue Programmes {e}')
+        ko(js("document.querySelectorAll('#list .it').length") != 3, 'vue Programmes : 3 programmes attendus')
+        page.screenshot(path=str(SORTIE / f'carte_vue_programmes_{nom}.png'))
+        # la fiche d'un programme s'ouvre par-dessus, même sans la carte
+        js("document.querySelector('#list .it').click()"); page.wait_for_timeout(500)
+        ko(not js("(() => { const p = document.getElementById('panel'), b = p.getBoundingClientRect(); return getComputedStyle(p).display !== 'none' && b.width > 200 && document.elementFromPoint(b.left + b.width / 2, b.top + 30) && p.contains(document.elementFromPoint(b.left + b.width / 2, b.top + 30)); })()"), 'fiche du programme pas ouverte en vue Programmes')
+        js("document.querySelector('#panel .x').click()"); page.wait_for_timeout(200)
+        js("document.querySelector('#vueSeg button[data-v=carte]').click()"); page.wait_for_timeout(400)
+        e = etat(); ko(e['plein'] or not e['carte'] or (nom == 'bureau' and not 250 < e['colonne'] < 500), f'vue Carte {e}')
+        ko(not js("!!document.querySelector('#mapOpts #sideBtn')"), '« Masquer la liste » pas sur la carte')
+        if nom == 'bureau': ko(js('document.documentElement.scrollWidth > innerWidth'), 'la page déborde en largeur avec les trois vues')
 
         # --- fourchettes : budget « de… à… » et surface « de… à… » ---
         js("document.getElementById('critBtn').click()"); page.wait_for_timeout(150)
