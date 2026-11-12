@@ -550,9 +550,12 @@ async function extraireInterne(lotId: string) {
   // Sinon, les plans de la pige quand l'extranet en donne plusieurs (12/11/2026 : duplex Catella,
   // « 601 haut » + « 601 bas », dont un seul arrivait jusqu'ici).
   const plansPige: string[] = Array.isArray(dLot.plans) ? dLot.plans.filter((u: any) => typeof u === 'string' && u) : [];
-  const plans: string[] = (docsLot && Array.isArray(docsLot.plan_urls) && docsLot.plan_urls.length)
-    ? docsLot.plan_urls
-    : (plansPige.length > 1 ? plansPige : (plan ? [plan] : []));
+  // La copie gardée chez nous ne passe avant la pige que si elle a au moins autant de niveaux (12/11/2026 :
+  // ODEA B01, copie à un plan qui masquait les 3 niveaux).
+  const plansDocs: string[] = (docsLot && Array.isArray(docsLot.plan_urls)) ? docsLot.plan_urls : [];
+  const plans: string[] = (plansPige.length > 1 && plansPige.length > plansDocs.length)
+    ? plansPige
+    : (plansDocs.length ? plansDocs : (plan ? [plan] : []));
   const masse = String((docsProg && docsProg.plan_masse_url) || '');
   const plaquette = String((docsProg && docsProg.plaquette_url) || dProg.plaquette || '');
   // Documents remis au client sur la feuille sélection (un bouton par document)
@@ -908,7 +911,7 @@ function completerDocsCarte(b: any, docs: { progs: Map<string, any>; lots: Map<s
   if (dp && dp.plan_masse_url) b.masse = String(dp.plan_masse_url);
   if (dp && dp.plaquette_url) b.plaquette = String(dp.plaquette_url);
   if (dl && dl.plan_url && !b.plan) b.plan = String(dl.plan_url);
-  if (dl && Array.isArray(dl.plan_urls) && dl.plan_urls.length) b.plans = dl.plan_urls;
+  if (dl && Array.isArray(dl.plan_urls) && dl.plan_urls.length && dl.plan_urls.length >= (Array.isArray(b.plans) ? b.plans.length : 0)) b.plans = dl.plan_urls;
   else if (b.plan && (!Array.isArray(b.plans) || !b.plans.length)) b.plans = [b.plan];
   const liste: { nom: string; url: string }[] = [];
   const vuesPlan: string[] = Array.isArray(b.plans) && b.plans.length ? b.plans : (b.plan ? [String(b.plan)] : []);
