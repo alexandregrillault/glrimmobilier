@@ -341,6 +341,21 @@ header h1,header .pige{display:none}
 #clientBar{flex-wrap:wrap;padding:6px 10px;gap:4px 8px}
 #mapOpts{left:10px;right:10px;max-width:none;justify-content:flex-start;gap:6px 14px;padding:7px 10px}
 #sideBtn,.leaflet-control-zoom{display:none}
+.lsort{display:flex;align-items:center;gap:8px;padding:8px 10px;font-size:13px;color:var(--muted);border-bottom:1px solid var(--line);background:#f9fafb;position:sticky;top:0;z-index:2}
+.lsort select{flex:1;min-width:0;font-size:16px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.lsort button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:8px 10px;font-size:13px;color:var(--navy);white-space:nowrap;font-family:inherit}
+.lc{display:flex;align-items:stretch;border-bottom:1px solid #eceef1;background:#fff}
+.lc.sel{background:#e6f4f6;box-shadow:inset 3px 0 0 var(--teal)}
+.lc .lck{flex:0 0 46px;display:flex;align-items:center;justify-content:center}
+.lc .lck input{width:20px;height:20px}
+.lc .lcb{flex:1;min-width:0;padding:10px 12px 10px 0;cursor:pointer;font-size:13px;line-height:1.45}
+.lc .lc1{color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lc .lc2{color:var(--txt)}
+.lc .lc3{font-size:15px;font-weight:700;color:var(--navy);margin-top:2px}
+.lc .lc3 .p55{font-size:12.5px;font-weight:600;color:#166534;margin-left:6px}
+.lc .lc3 .pm2{font-size:12.5px;font-weight:400;color:var(--muted);margin-left:6px;white-space:nowrap}
+.lc .lc4{font-size:12px;color:var(--muted)}
+.lc .lpl a{margin-left:6px;display:inline-block;padding:2px 0}
 #panel,#cart{top:0;left:0;right:0;bottom:0;width:auto!important;min-width:0;max-width:none;border-radius:0}
 #panelGrip,#panel .mx{display:none}
 .legend{max-width:calc(100% - 20px);bottom:40px}  /* au-dessus de la mention des sources, qui passe sur deux lignes */
@@ -1948,6 +1963,32 @@ function renderLotsView() {
   const key = { ville: x => x.p.ville, prog: x => x.p.nom, n: x => x.l.n, typo: x => x.l.typo, surf: x => x.l.surf, ext: x => (extSurf(x.l) || null), etage: x => x.l.etage, prix: x => p20e(x.l), prix55: x => x.l.prix55, prix_m2: x => x.l.prix_m2, renta: x => x.l.renta, com: x => x.p.commission_pct, liv: x => x.p.livraison_key, gare: x => x.p.gare_dist };
   const g = key[lvK] || key.prix_m2;
   all.sort((a, b) => { const x = g(a), y = g(b); if (x == null) return 1; if (y == null) return -1; return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { numeric: true })) * lvD; });
+  // iPhone (13/11/2026, choix d'Alex) : une carte par lot à la place du tableau, qui obligeait à glisser de côté pour voir le prix
+  if (matchMedia('(max-width:700px)').matches) {
+    const tris = [['prix_m2', 'Prix au m²'], ['prix', 'Prix'], ['surf', 'Surface'], ['ville', 'Ville'], ['liv', 'Livraison'], ['gare', 'Distance à la gare']];
+    let c = '<div class="lsort">Trier par <select id="lvTri">' + tris.map(([k, t]) => '<option value="' + k + '"' + ((key[lvK] ? lvK : 'prix_m2') === k ? ' selected' : '') + '>' + t + '</option>').join('') + '</select><button type="button" id="lvSens">' + (lvD > 0 ? 'Ordre croissant' : 'Ordre décroissant') + '</button></div>';
+    all.slice(0, lvMax).forEach(({ l, p }) => {
+      const ext = extSurf(l) ? String(Math.round(extSurf(l) * 10) / 10).replace('.', ',') + ' m² ext.' : (l.ext ? 'extérieur' : '');
+      const l2 = [esc(l.typo || ''), l.surf ? l.surf + ' m²' : '', l.etage == null ? '' : (l.etage === 0 ? 'RDC' : 'étage ' + l.etage), ext].filter(Boolean).join(' · ');
+      const l4 = [p.livraison ? 'Livraison ' + esc(p.livraison) : '', p.gare_dist ? 'gare à ' + (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') : '', l.renta ? 'renta ' + l.renta + ' %' : '', p.commission_pct ? 'com. ' + String(p.commission_pct).replace('.', ',') + ' %' : ''].filter(Boolean).join(' · ');
+      c += '<div class="lc' + (CART.has(l.id) ? ' sel' : '') + '" data-p="' + esc(p.id) + '" data-l="' + esc(l.id) + '"><label class="lck"><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></label><div class="lcb">'
+        + '<div class="lc1"><b>' + esc(p.ville) + '</b> · ' + esc(p.nom) + '</div>'
+        + '<div class="lc2">Lot ' + esc(l.n) + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + (l2 ? ' · ' + l2 : '') + '</div>'
+        + '<div class="lc3">' + html20(l, true) + (l.prix_prev ? ' <span class="tag dn">↓</span>' : '') + (l.prix55 ? ' <span class="p55">' + fmtk(l.prix55) + ' en 5,5 %</span>' : '') + (l.prix_m2 ? ' <span class="pm2">' + l.prix_m2.toLocaleString('fr-FR') + ' €/m²</span>' : '') + '</div>'
+        + (l4 || planLot(p, l) ? '<div class="lc4">' + l4 + (planLot(p, l) ? ' <span class="lpl">' + liensPlans(p, l, 'Plan') + '</span>' : '') + '</div>' : '')
+        + '</div></div>';
+    });
+    c += all.length ? '' : '<div class="empty">Aucun lot ne correspond à ces critères.</div>';
+    c += all.length > lvMax ? '<div class="more" id="lvMore">Afficher ' + Math.min(300, all.length - lvMax) + ' lots de plus (' + all.length + ' au total)</div>' : '';
+    el.innerHTML = c;
+    document.getElementById('lvTri').onchange = e => { lvK = e.target.value; renderLotsView(); };
+    document.getElementById('lvSens').onclick = () => { lvD = -lvD; renderLotsView(); };
+    el.querySelectorAll('a.plan-a').forEach(a => a.onclick = e => { e.preventDefault(); e.stopPropagation(); apercuDoc(a.getAttribute('href'), 'Plan — lot ' + a.dataset.n + ' · ' + a.dataset.prog); });
+    el.querySelectorAll('.lc .lcb').forEach(d => d.onclick = () => { const lc = d.parentElement; select(PI[lc.dataset.p], true); const lid = lc.dataset.l; setTimeout(() => { const row = [...panel.querySelectorAll('input.ck')].find(x => x.dataset.l === lid); if (row) { row.closest('tr').style.background = '#fef3c7'; row.closest('tr').scrollIntoView({ block: 'center' }); } }, 50); });
+    el.querySelectorAll('input.ck').forEach(x => x.onchange = () => { toggleCart(x.dataset.l, x.checked); x.closest('.lc').classList.toggle('sel', x.checked); });
+    const mm = document.getElementById('lvMore'); if (mm) mm.onclick = () => { lvMax += 300; renderLotsView(); };
+    return;
+  }
   const cols = [['ville', 'Ville'], ['prog', 'Programme'], ['n', 'Lot'], ['typo', 'Typo'], ['surf', 'm²'], ['ext', 'Ext. m²'], ['etage', 'Ét.'], ['prix', 'Prix 20 %'], ['prix55', '5,5 %'], ['prix_m2', '€/m²'], ['renta', 'Renta'], ['com', 'Com.'], ['liv', 'Livr.'], ['gare', 'Gare'], ['plan', 'Plan']];
   let h = '<table><thead><tr><th></th>' + cols.map(([k, t]) => (k === 'plan' ? '<th>' + t + '</th>' : '<th data-k="' + k + '">' + t + (lvK === k ? (lvD > 0 ? ' ▲' : ' ▼') : '') + '</th>')).join('') + '</tr></thead><tbody>';
   all.slice(0, lvMax).forEach(({ l, p }) => { h += '<tr' + (CART.has(l.id) ? ' class="sel"' : '') + ' data-p="' + esc(p.id) + '" data-l="' + esc(l.id) + '"><td><input type="checkbox" class="ck" data-l="' + esc(l.id) + '"' + (CART.has(l.id) ? ' checked' : '') + '></td><td>' + esc(p.ville) + '</td><td title="' + esc(p.promoteur) + '">' + esc(p.nom).slice(0, 22) + '</td><td>' + esc(l.n) + (l.top ? ' <span class="tag" title="dernier étage">DE</span>' : '') + (l.nouveau ? ' <span class="tag nw">new</span>' : '') + carteBadgeMatch(carteMatchLot(l, p)) + '</td><td>' + esc(l.typo || '') + '</td><td class="r">' + (l.surf || '') + '</td><td class="r" title="' + esc(l.annexes || '') + '">' + (extSurf(l) ? String(Math.round(extSurf(l) * 10) / 10).replace('.', ',') : (l.ext ? '✓' : '')) + '</td><td>' + (l.etage == null ? '' : (l.etage === 0 ? 'RDC' : l.etage)) + '</td><td class="r">' + html20(l, true) + (l.prix_prev ? ' <span class="tag dn">↓</span>' : '') + '</td><td class="r" style="color:#166534">' + (l.prix55 ? fmtk(l.prix55) : '') + '</td><td class="r">' + (l.prix_m2 ? l.prix_m2.toLocaleString('fr-FR') : '') + '</td><td class="r">' + (l.renta ? l.renta + ' %' : '') + '</td><td class="r">' + (p.commission_pct ? String(p.commission_pct).replace('.', ',') + ' %' : '') + '</td><td>' + esc(p.livraison || '') + '</td><td class="r">' + (p.gare_dist ? (p.gare_dist < 1000 ? p.gare_dist + ' m' : (p.gare_dist / 1000).toFixed(1) + ' km') : '') + '</td><td>' + (planLot(p, l) ? liensPlans(p, l, 'Plan') : '') + '</td></tr>'; });
