@@ -317,6 +317,61 @@ async function extraireOtaree(lien: string) {
   } catch (_) {
     return { ok: false, error: 'Otaree injoignable' };
   }
+  const tous: any[] = Array.isArray(p.presentationFiles) ? p.presentationFiles : [];
+  const fiches = tous.filter((f) => f && f.type === 'property');
+  if (fiches.length <= 1) return await extraireOtareeLot(lien, m[1], p, 'otaree:' + m[1], null);
+
+  // ===== Un lien, plusieurs lots du même programme (16/11/2026, demande d'Alex) =====
+  // Le vendeur peut mettre plusieurs lots dans une même présentation Otaree :
+  // « Fiche lot - C103 », « Plan - C103 », « Fiche lot - D003 », « Plan - D003 »…
+  // Avant, seule la première fiche était lue et tous les plans finissaient sur
+  // ce premier lot (pris pour les niveaux d'un duplex). Chaque fiche devient
+  // maintenant un lot à part, avec ses propres plans ; la plaquette, le plan de
+  // masse et les photos restent communs à tous. Réponse : le premier lot à la
+  // racine (compatibilité) et la liste complète dans « lots ».
+  const numDe = (f: any) => {
+    const mm = String((f && f.name) || '').match(/fiche\s*(?:du\s*)?lot\s*(?:n\s*°?\s*)?[-–:]?\s*(.+)$/i);
+    return mm ? mm[1].trim() : '';
+  };
+  const echap = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nomMin = (f: any) => String((f && f.name) || '').toLowerCase();
+  const estPlan = (f: any) => f && f.type === 'file' && nomMin(f).includes('plan') && !nomMin(f).includes('masse');
+  const blocs = fiches.map((f) => ({ fiche: f, num: numDe(f), propres: [] as any[] }));
+  const communs: any[] = [];
+  let courant = -1;
+  for (const f of tous) {
+    if (f && f.type === 'property') { courant = fiches.indexOf(f); continue; }
+    const nom = String((f && f.name) || '');
+    // Rattaché au lot dont le numéro figure dans son nom (« Plan - C103 »)…
+    const k = blocs.findIndex((b) => b.num && new RegExp('(^|[^a-z0-9])' + echap(b.num) + '([^a-z0-9]|$)', 'i').test(nom));
+    if (k >= 0) blocs[k].propres.push(f);
+    // … sinon un plan sans numéro suit la fiche de son lot
+    else if (estPlan(f) && courant >= 0) blocs[courant].propres.push(f);
+    else communs.push(f);
+  }
+  const prog = p.program || {};
+  const nomProgramme = String(prog.displayedName || prog.name || String(p.name || '').replace(/\s*[-–]\s*lot\b.*$/i, '') || 'Programme').trim();
+  const lots: any[] = [];
+  let images: string[] | null = null;   // photos du programme : analysées une seule fois
+  for (const b of blocs) {
+    const garder = new Set([...communs, b.fiche, ...b.propres]);
+    const sous = { ...p, name: nomProgramme + ' - Lot ' + (b.num || (lots.length + 1)), presentationFiles: tous.filter((f) => garder.has(f)) };
+    const cle = 'otaree:' + m[1] + ':' + String((b.fiche.data && b.fiche.data.propertyId) || b.num || lots.length);
+    // Chaque lot garde un lien distinct (même présentation, repère du lot après #)
+    // pour que le dashboard ne les confonde pas ; Otaree ignore ce repère.
+    const lienLot = lien.split('#')[0] + '#lot-' + encodeURIComponent(b.num || String(lots.length + 1));
+    const r: any = await extraireOtareeLot(lienLot, m[1], sous, cle, images);
+    if (r && r.ok) { lots.push(r); if (images === null) images = Array.isArray(r.images) ? r.images : []; }
+  }
+  if (!lots.length) return { ok: false, error: 'Aucun lot lisible dans cette présentation' };
+  return { ...lots[0], lots };
+}
+
+// Un lot d'une présentation Otaree (p peut être une présentation réduite à ce
+// lot, voir extraireOtaree). imagesConnues : photos déjà analysées pour un
+// autre lot de la même présentation.
+async function extraireOtareeLot(lien: string, idPresentation: string, p: any, clefLotDefaut: string, imagesConnues: string[] | null) {
+  const m = [lien, idPresentation];
   const files: any[] = Array.isArray(p.presentationFiles) ? p.presentationFiles : [];
   const imgUrl = (f: any) => (f && f.file && f.file.urls) ? (f.file.urls.presentation || f.file.urls.large || f.file.urls.medium || '') : '';
   const urlAnalyse = (f: any) => (f && f.file && f.file.urls) ? (f.file.urls.medium || f.file.urls.large || f.file.urls.presentation || '') : '';
@@ -364,8 +419,8 @@ async function extraireOtaree(lien: string) {
   // Analyse : on ne retient que les pages majoritairement visuelles (belle photo du programme).
   // Les pages à fond uni — blanches ou colorées (pages de titre) — sont écartées.
   // Si aucune ne passe, image reste vide → la page client affiche le logo GLR.
-  const images: string[] = [];
-  for (const f of candidates) {
+  const images: string[] = imagesConnues ? imagesConnues.slice() : [];
+  for (const f of (imagesConnues ? [] : candidates)) {
     if (images.length >= 3) break;
     const ratio = await ratioFondUni(urlAnalyse(f));
     if (ratio < 0.55) images.push(imgUrl(f));
@@ -401,7 +456,7 @@ async function extraireOtaree(lien: string) {
     clefProgramme = (promoteurSlug || 'otaree-sans-promoteur') + ':' + programmeSlug + '-' + villeSlug;
   }
   // Même logique pour le lot lui-même (numéro extrait de p.name, « Lot n°A-101 »).
-  let clefLot = 'otaree:' + m[1];
+  let clefLot = clefLotDefaut;
   if (idProgrammeCarte) {
     const mLot = String(p.name || '').match(/lot\s*n?°?\s*([a-z0-9-]+)/i);
     if (mLot) {

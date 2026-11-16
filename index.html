@@ -15315,7 +15315,7 @@ async function selExtraireLiens() {
   if (!liens.length) { if (typeof toast === 'function') toast('⚠ Colle au moins un lien Otaree', 'var(--warning)'); return; }
   const btn = document.getElementById('sel-otaree-btn');
   btn.disabled = true; btn.textContent = 'Analyse en cours…';
-  let ok = 0;
+  let ok = 0, nbLots = 0;
   for (const lien of liens) {
     try {
       const res = await fetch(SUPABASE_URL + '/functions/v1/selection', {
@@ -15324,7 +15324,12 @@ async function selExtraireLiens() {
       });
       const d = await res.json();
       if (d.ok) {
-        _selCtx.libres.push(_selLotDepuisExtraction(d, lien));
+        // Un lien Otaree peut contenir plusieurs lots du même programme (16/11/2026,
+        // demande d'Alex) : la fonction les rend tous dans « lots », chacun avec ses
+        // plans et un lien qui lui est propre (repère #lot-… après le lien).
+        const lots = Array.isArray(d.lots) && d.lots.length ? d.lots : [d];
+        lots.forEach(x => _selCtx.libres.push(_selLotDepuisExtraction(x, x.lien || lien)));
+        nbLots += lots.length;
         ok++;
       }
     } catch(e) { /* lien suivant */ }
@@ -15336,7 +15341,7 @@ async function selExtraireLiens() {
   btn.disabled = false; btn.textContent = 'Analyser les liens';
   if (ok) ta.value = '';
   selAjouterLibreRefresh();
-  if (typeof toast === 'function') toast(ok === liens.length ? '✓ ' + ok + ' lot(s) ajouté(s) — prix, surface, étage et annexes récupérés' : '⚠ ' + ok + '/' + liens.length + ' lot(s) reconnus', ok === liens.length ? 'var(--success)' : 'var(--warning)');
+  if (typeof toast === 'function') toast(ok === liens.length ? '✓ ' + nbLots + ' lot(s) ajouté(s) — prix, surface, étage et annexes récupérés' : '⚠ ' + ok + '/' + liens.length + ' lien(s) reconnus, ' + nbLots + ' lot(s) ajouté(s)', ok === liens.length ? 'var(--success)' : 'var(--warning)');
 }
 
 // Nom lisible d'un document, sans l'extension ni les tirets de nommage
