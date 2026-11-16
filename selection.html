@@ -179,12 +179,19 @@
   .plan-btn:hover { background:var(--gold-fonce); }
   .chev { flex:none; transition:transform .2s ease; }
 
-  .avis-mini { display:flex; gap:6px; flex-wrap:wrap; align-items:center; flex:none; }
-  .avis-ico { width:32px; height:32px; border-radius:50%; border:1px solid var(--bordure); background:#fff; display:flex; align-items:center; justify-content:center; flex:none; font-size:14px; cursor:pointer; font-family:inherit; transition:all .15s; }
+  /* Avis en toutes lettres (demande d'Alex du 16/11/2026 : les petits signes ✓ ~ ✕ ne parlaient pas assez) */
+  .avis-mini { display:flex; gap:8px; flex-wrap:wrap; align-items:stretch; flex:1 1 100%; }
+  .avis-ico { flex:1 1 0; min-width:96px; min-height:42px; border-radius:12px; border:1.5px solid var(--bordure); background:#fff; color:var(--encre); display:flex; align-items:center; justify-content:center; gap:6px; padding:8px 10px; font-size:13.5px; font-weight:700; line-height:1.2; text-align:center; cursor:pointer; font-family:inherit; transition:all .15s; }
+  .avis-ico .avis-sym { font-size:15px; line-height:1; }
   .avis-ico:hover { border-color:var(--gold); }
   .avis-ico.selected { background:var(--gold); border-color:var(--gold); color:#fff; }
-  .avis-ico[data-avis="a_discuter"].selected { background:var(--dark); border-color:var(--dark); }
+  .avis-ico[data-avis="a_discuter"].selected { background:var(--vert); border-color:var(--vert); }
   .avis-ico[data-avis="pas_pour_moi"].selected { background:#8a8f99; border-color:#8a8f99; }
+  .avis-mini .avis-save { flex:1 1 100%; height:40px; border-radius:12px; font-size:13px; }
+  @media (max-width:480px){
+    .avis-mini { gap:6px; }
+    .avis-ico { flex-direction:column; gap:3px; min-width:0; padding:8px 4px; font-size:12.5px; white-space:nowrap; letter-spacing:-.1px; }
+  }
   .avis-save { background:var(--vert); color:#fff; border:none; border-radius:14px; padding:0 13px; font-size:11.5px; font-weight:700; font-family:inherit; cursor:pointer; flex:none; height:32px; }
   .avis-save:hover { background:#152a24; }
   .avis-save:disabled { opacity:.65; cursor:default; }
@@ -1139,12 +1146,12 @@
     };
   }
 
-  // ---------- Avis (icônes + bouton Enregistrer, choix d'Alex du 29/09/2026) ----------
+  // ---------- Avis (boutons en toutes lettres + Enregistrer : choix d'Alex du 29/09/2026, texte remis le 16/11/2026) ----------
   function htmlAvisMini(i){
     var a = etatAvis[String(i)] || {};
     var choix = a.choix || "";
     function ic(c, sym, titre){
-      return "<button type='button' class='avis-ico" + (choix === c ? " selected" : "") + "' data-avis='" + c + "' title='" + esc(titre) + "'>" + sym + "</button>";
+      return "<button type='button' class='avis-ico" + (choix === c ? " selected" : "") + "' data-avis='" + c + "'><span class='avis-sym' aria-hidden='true'>" + sym + "</span>" + esc(titre) + "</button>";
     }
     var h = "<div class='avis-mini' data-i='" + i + "'>";
     h += ic("interesse", "✓", "Ça m'intéresse");
