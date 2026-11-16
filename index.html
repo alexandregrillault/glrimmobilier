@@ -855,6 +855,11 @@
         Todo
         <span id="nav-todo-pastille" style="display:none;margin-left:auto;background:var(--accent);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
       </div>
+      <div class="nav-item" onclick="goTo(&#39;gerant-hebdo&#39;, this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 9h18M8 2v4M16 2v4M7 13h2M11 13h2M15 13h2M7 17h2M11 17h2"></path></svg>
+        Tâches hebdomadaires
+        <span id="nav-hebdo-pastille" style="display:none;margin-left:auto;background:var(--accent);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:800;line-height:1.7"></span>
+      </div>
       <div class="nav-item" onclick="goTo(&#39;gerant-parrainage&#39;, this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="13" rx="2"></rect><path d="M12 8v13M3 12h18M12 8c-1.5-3-5-3.5-5-1s3 1 5 1c2 0 5 1.5 5-1s-3.5-2-5 1"></path></svg>
         Parrainage
@@ -2307,6 +2312,50 @@
       <div id="td-liste"></div>
     </div>
 
+    <!-- PAGE: TÂCHES HEBDOMADAIRES (gérants) — demande d'Alex du 16/11/2026 -->
+    <div class="page" id="page-gerant-hebdo">
+      <style>
+        .hb-jours{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;align-items:start}
+        .hb-jour{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:7px;min-width:0}
+        .hb-jour.hb-auj{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+        .hb-it{display:flex;gap:9px;align-items:flex-start;padding:7px 9px;border-radius:8px;font-size:13px;line-height:1.4;min-width:0}
+        .hb-it .hb-h{font-variant-numeric:tabular-nums;font-weight:600;font-size:12px;color:var(--muted);min-width:42px;padding-top:1px}
+        .hb-it .hb-q{flex:1;min-width:0;overflow-wrap:break-word}
+        .hb-it .hb-h:empty{display:none}
+        .hb-it small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+        .hb-robot{background:color-mix(in srgb,var(--muted) 10%,transparent)}
+        .hb-rappel{background:color-mix(in srgb,var(--warning) 13%,transparent)}
+        .hb-toi{border:1.5px solid var(--accent);cursor:pointer}
+        .hb-toi.hb-fait{opacity:.5}.hb-toi.hb-fait b{text-decoration:line-through}
+        .hb-pt{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+        .hb-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+      </style>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <div>
+          <div id="hb-semaine" style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)"></div>
+          <div class="section-sub" style="max-width:640px;margin-top:4px">Ce qui revient chaque semaine. Les cases encadrées sont à faire toi-même : coche quand c'est fait (elles repartent à zéro chaque lundi). Le reste tourne seul ou te prévient. Heures de Paris.</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:6px"><span class="hb-pt" style="border:1.5px solid var(--accent)"></span>À faire &nbsp; <span class="hb-pt" style="background:color-mix(in srgb,var(--warning) 35%,transparent)"></span>Rappel &nbsp; <span class="hb-pt" style="background:color-mix(in srgb,var(--muted) 30%,transparent)"></span>Robot</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+          <div style="display:flex;gap:6px" id="hb-filtres">
+            <button class="btn btn-sm btn-primary" data-f="tout" onclick="hbFiltre('tout')">Tout</button>
+            <button class="btn btn-sm btn-secondary" data-f="toi" onclick="hbFiltre('toi')">À faire seulement</button>
+          </div>
+          <div id="hb-compteur" style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums"></div>
+        </div>
+      </div>
+      <div class="hb-jours" id="hb-jours"></div>
+      <div class="card" style="padding:14px 16px;margin-top:18px">
+        <div style="font-family:var(--font-head);font-weight:700;font-size:15px">Tous les jours, en fond</div>
+        <div style="font-size:12.5px;color:var(--muted);margin:2px 0 10px">Ces robots tournent sans toi. Le seul geste : allumer le Mac le matin.</div>
+        <div class="hb-grille" id="hb-fond"></div>
+      </div>
+      <div class="card" style="padding:14px 16px;margin-top:14px">
+        <div style="font-family:var(--font-head);font-weight:700;font-size:15px;margin-bottom:10px">Chaque mois <span id="hb-mois-nom" style="font-weight:500;color:var(--muted);font-size:13px"></span></div>
+        <div class="hb-grille" id="hb-mois"></div>
+      </div>
+    </div>
+
     <!-- PAGE: PARRAINAGE (gérants) — décisions d'Alex du 12/11/2026 -->
     <div class="page" id="page-gerant-parrainage">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
@@ -3501,6 +3550,7 @@ async function _startApp(){
   grDemarrer();
   tkDemarrer();
   tdDemarrer();
+  hbDemarrer();
   parrDemarrer();
 }
 
@@ -3583,7 +3633,7 @@ async function chargerMonRole() {
 }
 
 // Pages réservées aux gérants
-const PAGES_GERANT = ['gerant-tickets', 'gerant-todo', 'gerant-parrainage', 'gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
+const PAGES_GERANT = ['gerant-tickets', 'gerant-todo', 'gerant-hebdo', 'gerant-parrainage', 'gerant-chiffres', 'gerant-kpi', 'gerant-villes', 'gerant-annonces', 'treso-prev', 'rapport-marche', 'rapport-promoteurs',
                       'ventes', 'charges', 'vendeurs', 'gerant-documents', 'factures', 'journal', 'pilotage', 'reporting'];
 
 function appliquerRole() {
@@ -3877,7 +3927,7 @@ const pages = {
   'gerant-rdv': 'Rendez-vous', 'gerant-chiffres': 'Chiffres (€)', 'gerant-kpi': 'Performance', 'gerant-villes': 'Villes & leads', 'gerant-documents': 'Documents', 'contacts': 'Contacts & Campagnes', 'programmes': 'Programmes', 'factures': 'Factures',
   'equipe-villes': 'Mes villes', 'equipe-planning': 'Mon planning', 'pool': 'Pool de leads', 'promoteurs': 'Contacts promoteurs', 'journal': 'Journal des modifications', 'veille': 'Réveil veille', 'pilotage': 'Pilotage commercial',
   'mails': 'Mails automatiques', 'carte': 'Carte des programmes', 'simulateur': 'Simuler un financement', 'rapport-marche': 'Rapport marché', 'rapport-promoteurs': 'Rapport promoteurs', 'marche': 'Marché',
-  'gerant-annonces': 'Annonces', 'reporting': 'Reporting', 'gerant-tickets': 'Tickets', 'equipe-tickets': 'Mes tickets', 'gerant-todo': 'Todo', 'gerant-parrainage': 'Parrainage'
+  'gerant-annonces': 'Annonces', 'reporting': 'Reporting', 'gerant-tickets': 'Tickets', 'equipe-tickets': 'Mes tickets', 'gerant-todo': 'Todo', 'gerant-hebdo': 'Tâches hebdomadaires', 'gerant-parrainage': 'Parrainage'
 };
 
 let currentSpace = 'gerant';
@@ -4929,6 +4979,7 @@ function goTo(id, el) {
   else if (id === 'factures') { renderFactures(); renderFacCom(); }
   else if (id === 'gerant-tickets') tkChargerGerant();
   else if (id === 'gerant-todo') tdCharger();
+  else if (id === 'gerant-hebdo') hbCharger();
   else if (id === 'gerant-parrainage') parrCharger();
   else if (id === 'equipe-tickets') tkChargerMes();
   else refresh();
@@ -25278,6 +25329,147 @@ async function tdRafraichir() {
 function tdDemarrer() {
   tdRafraichir();
   setInterval(tdRafraichir, 3 * 60 * 1000);
+}
+
+// ============================================================
+//  TÂCHES HEBDOMADAIRES — demande d'Alex du 16/11/2026 (hb*)
+//  Tout ce qui revient chaque semaine : robots (tournent seuls), rappels
+//  de Claude, et tâches à faire soi-même (à cocher). La liste est écrite
+//  ici (HB_JOURS, HB_FOND, HB_MOIS) ; la table public.gerant_hebdo ne garde
+//  que les cases cochées, par semaine (le lundi) ou par mois (le 1er),
+//  pour qu'elles soient les mêmes sur le Mac et l'iPhone
+//  (supabase/migrations/20261116_gerant_hebdo.sql). Une tâche qui change
+//  = modifier la liste ci-dessous (et la clé `id` si la tâche est nouvelle).
+//  Type : 'toi' = à faire (case), 'rappel' = Claude prévient, 'robot' = seul.
+// ============================================================
+const HB_PIGE = (j) => [
+  { t: 'robot', h: '6:00', q: 'Pige du Mac : LNC, Marignan, MyDBI', s: 'Mac éteint ? Elle se rattrape quand tu l’allumes.' },
+  { t: 'robot', h: '6:17', q: 'Robot de pige (Immo-Lead et plateformes)', s: 'Lancé par la base, sur GitHub.' },
+  { t: 'rappel', h: '9:30', q: 'Rappel : c’est jour de pige' },
+  { id: j + '-pige', t: 'toi', h: '9:30', q: 'Pige : écrire « pige » à Claude', s: 'Reconnexions Chrome (Nexity, MyDBI, Green City, Catella), SeLoger Neuf, puis relecture.' },
+  { id: j + '-publie', t: 'toi', q: 'Relire le rapport puis dire « publie »', s: 'Baisses et hausses de prix, sources en chute, ventes en bloc, lots redécoupés.' }
+];
+const HB_SELOGER = (j, n) => ({ id: j + '-seloger', t: 'toi', q: 'Robot SeLoger : ' + n + ' annonces', s: 'Un seul passage, dans ton Chrome.' });
+const HB_JOURS = [
+  { nom: 'Lundi', theme: 'Pige · vidéo 1', it: [...HB_PIGE('lun'),
+    { id: 'lun-video', t: 'toi', q: 'Vidéo 1' },
+    { id: 'lun-lecture-seloger', t: 'toi', q: 'Lecture SeLoger de la semaine (à confirmer)', s: 'Leads reçus, rang de nos annonces.' },
+    HB_SELOGER('lun', 35)] },
+  { nom: 'Mardi', theme: '', it: [HB_SELOGER('mar', 25)] },
+  { nom: 'Mercredi', theme: 'Pige · vidéo 2', it: [...HB_PIGE('mer'),
+    { id: 'mer-video', t: 'toi', q: 'Vidéo 2' },
+    HB_SELOGER('mer', 20)] },
+  { nom: 'Jeudi', theme: '', it: [HB_SELOGER('jeu', 15)] },
+  { nom: 'Vendredi', theme: 'Pige · vidéo 3 · bilan', it: [...HB_PIGE('ven'),
+    { id: 'ven-video', t: 'toi', q: 'Vidéo 3' },
+    { id: 'ven-prix', t: 'toi', q: 'Prix de nos annonces (à confirmer)', s: 'À partir des baisses et hausses de la semaine.' },
+    HB_SELOGER('ven', 40),
+    { id: 'ven-bilan', t: 'toi', q: 'Bilan de semaine : la Todo', s: 'Espace Gérant → Todo : cocher, repousser.' }] },
+  { nom: 'Samedi', theme: '', it: [HB_SELOGER('sam', 40)] },
+  { nom: 'Dimanche', theme: '', it: [HB_SELOGER('dim', 35)] }
+];
+const HB_FOND = [
+  { t: 'robot', h: '5:47', q: 'Chiffres de la pige recalculés' },
+  { t: 'robot', h: '8:00', q: 'Suivi des dénonciations', s: 'Robot GitHub lancé par la base.' },
+  { t: 'robot', h: '8–20 h', q: 'Dénonciation des nouveaux leads', s: 'Toutes les heures, sur tous les programmes de leurs villes.' },
+  { t: 'robot', h: '8:25–20:25', q: 'Dénonciations Nexity, Catella, Green City', s: 'Sur le Mac, toutes les heures : Mac allumé.' },
+  { t: 'robot', h: '20:30', q: 'Vérification des noms dénoncés', s: 'Lecture seule.' },
+  { t: 'robot', h: 'continu', q: 'Robot Instagram Quoi de neuf', s: 'Les leads partent chez Théophile.' },
+  { t: 'robot', h: '5 min', q: 'Carte des programmes mise à jour' }
+];
+const HB_MOIS = [
+  { id: 'm-releve-seloger', t: 'toi', h: '1ʳᵉ sem.', q: 'Relevé SeLoger complet', s: 'Toutes les villes avec stock (≈ 274), ≈ 2 h 30, devant le Chrome.' },
+  { id: 'm-bilans', t: 'toi', h: '1ʳᵉ sem.', q: 'Bilans individuels des commerciaux', s: 'Mois écoulé ; suivi mesuré sans les statuts.' },
+  { t: 'robot', h: 'continu', q: 'Rapport mensuel de la pige', s: 'Mis à jour à chaque publication.' }
+];
+let _hbCoches = {}, _hbFiltre = 'tout';
+const _hbEsc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const _hbIso = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+function _hbLundi() { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; }
+function _hbPremier() { const x = new Date(); return new Date(x.getFullYear(), x.getMonth(), 1); }
+const _hbCle = (it) => (it.id.startsWith('m-') ? _hbIso(_hbPremier()) : _hbIso(_hbLundi())) + '|' + it.id;
+function _hbHeure(h) { return h ? h.replace(/:/g, ' h ').replace(/ h 00/g, ' h') : ''; }
+function _hbHeaders(extra) {
+  return Object.assign({ 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER, 'Content-Type': 'application/json' }, extra || {});
+}
+async function _hbLire() {
+  const sem = _hbIso(_hbLundi()), mois = _hbIso(_hbPremier());
+  const r = await fetch(SUPABASE_URL + '/rest/v1/gerant_hebdo?select=*&semaine=in.(' + sem + ',' + mois + ')', { cache: 'no-store', headers: _hbHeaders() });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const m = {};
+  (await r.json()).forEach(l => { if (l.fait) m[l.semaine + '|' + l.cle] = l; });
+  return m;
+}
+async function hbCharger() {
+  try { _hbCoches = await _hbLire(); } catch (e) { /* on garde l'état connu */ }
+  hbRender();
+}
+function hbFiltre(f) { _hbFiltre = f; hbRender(); }
+function _hbAuj() { return (new Date().getDay() + 6) % 7; }
+function _hbMajPastille() {
+  const el = document.getElementById('nav-hebdo-pastille'); if (!el) return;
+  const n = HB_JOURS[_hbAuj()].it.filter(it => it.t === 'toi' && !_hbCoches[_hbCle(it)]).length;
+  el.style.display = n ? '' : 'none'; el.textContent = n || ''; el.title = n + ' tâche(s) à faire aujourd’hui';
+}
+function _hbItemHtml(it) {
+  const fait = it.id && _hbCoches[_hbCle(it)];
+  const qui = fait && fait.maj_par ? ' <span style="font-size:11.5px;color:var(--muted)">· ' + _hbEsc(fait.maj_par) + '</span>' : '';
+  const corps = `<span class="hb-h">${_hbEsc(_hbHeure(it.h))}</span><span class="hb-q"><b>${_hbEsc(it.q)}</b>${qui}${it.s ? '<small>' + _hbEsc(it.s) + '</small>' : ''}</span>`;
+  if (it.t !== 'toi') return `<div class="hb-it hb-${it.t}"${_hbFiltre === 'toi' ? ' style="display:none"' : ''}>${corps}</div>`;
+  return `<label class="hb-it hb-toi${fait ? ' hb-fait' : ''}"><input type="checkbox" ${fait ? 'checked' : ''} onchange="hbCocher('${it.id}', this)" style="width:18px;height:18px;flex:0 0 auto;margin:1px 0 0;accent-color:var(--success);cursor:pointer">${corps}</label>`;
+}
+function _hbRang(it) { const n = parseInt(it.h, 10); return isNaN(n) ? 1 : (n < 12 ? 0 : 2); }
+function hbRender() {
+  _hbMajPastille();
+  document.querySelectorAll('#hb-filtres button').forEach(b => { b.className = 'btn btn-sm ' + (b.dataset.f === _hbFiltre ? 'btn-primary' : 'btn-secondary'); });
+  const box = document.getElementById('hb-jours'); if (!box) return;
+  const L = _hbLundi(), auj = _hbAuj();
+  const D = new Date(L); D.setDate(L.getDate() + 6);
+  const fmt = (d) => d.getDate() + ' ' + _TD_MOIS[d.getMonth()];
+  document.getElementById('hb-semaine').textContent = 'Semaine du ' + fmt(L) + ' au ' + fmt(D);
+  const mn = document.getElementById('hb-mois-nom'); if (mn) mn.textContent = '· ' + _TD_MOIS[new Date().getMonth()];
+  box.innerHTML = HB_JOURS.map((j, i) => {
+    const d = new Date(L); d.setDate(L.getDate() + i);
+    // matin à l'heure, puis tâches sans heure dans l'ordre écrit, puis soirée
+    const its = j.it.map((it, k) => [it, k]).sort((a, b) => (_hbRang(a[0]) - _hbRang(b[0])) || (_hbRang(a[0]) === 0 ? parseFloat(a[0].h.replace(':', '.')) - parseFloat(b[0].h.replace(':', '.')) : a[1] - b[1])).map(x => x[0]);
+    return `<div class="hb-jour${i === auj ? ' hb-auj' : ''}" id="hb-jour-${i}">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+        <div style="font-family:var(--font-head);font-weight:700;font-size:15px">${j.nom} ${d.getDate()}</div>
+        ${i === auj ? '<span style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--accent);color:#fff;padding:2px 7px;border-radius:5px">Aujourd’hui</span>' : ''}
+      </div>
+      ${j.theme ? '<div style="font-size:12px;color:var(--accent);font-weight:600">' + _hbEsc(j.theme) + '</div>' : ''}
+      ${its.map(_hbItemHtml).join('')}
+    </div>`;
+  }).join('');
+  document.getElementById('hb-fond').innerHTML = HB_FOND.map(_hbItemHtml).join('');
+  document.getElementById('hb-mois').innerHTML = HB_MOIS.map(_hbItemHtml).join('');
+  const toutes = HB_JOURS.flatMap(j => j.it).filter(it => it.t === 'toi');
+  const faites = toutes.filter(it => _hbCoches[_hbCle(it)]).length;
+  document.getElementById('hb-compteur').textContent = faites + ' sur ' + toutes.length + ' tâches cochées cette semaine';
+}
+async function hbCocher(id, box) {
+  const it = [...HB_JOURS.flatMap(j => j.it), ...HB_MOIS].find(x => x.id === id); if (!it) return;
+  const cle = _hbCle(it), [semaine] = cle.split('|'), fait = !!(box && box.checked);
+  try {
+    const r = await fetch(SUPABASE_URL + '/rest/v1/gerant_hebdo?on_conflict=semaine,cle', {
+      method: 'POST', headers: _hbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=representation' }),
+      body: JSON.stringify({ semaine, cle: id, fait })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const [ligne] = await r.json();
+    if (fait) _hbCoches[cle] = ligne || { fait: true }; else delete _hbCoches[cle];
+  } catch (e) { toast('⚠ Non enregistré', 'var(--danger)'); if (box) box.checked = !fait; return; }
+  hbRender();
+}
+async function hbRafraichir() {
+  if (typeof estGerant === 'function' && !estGerant()) return;
+  try { _hbCoches = await _hbLire(); } catch (e) { return; }
+  const page = document.getElementById('page-gerant-hebdo');
+  if (page && page.classList.contains('active')) hbRender(); else _hbMajPastille();
+}
+function hbDemarrer() {
+  hbRafraichir();
+  setInterval(hbRafraichir, 3 * 60 * 1000);
 }
 
 // ============================================================
