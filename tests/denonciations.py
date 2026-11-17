@@ -24,14 +24,43 @@ LEADS.append({'id': 'c4', 'nom': 'Morgane', 'prenom': 'Morgane', 'statut': 'Nouv
               'date_lead': '2026-11-10', 'lieu': 'Ivry-sur-Seine (94200)', 'appels': []})
 LEADS.append({'id': 'c5', 'nom': 'Morgane Lafargue', 'prenom': 'Morgane', 'nom_famille': 'Lafargue', 'statut': 'Suivi', 'vendeur': 'Louis',
               'date_lead': '2026-11-10', 'lieu': 'Ivry-sur-Seine (94200)', 'appels': []})
+# Les 4 états (demande d'Alex du 17/11/2026), affichés à côté des programmes des sélections envoyées
+LEADS.append({'id': 'c6', 'nom': 'Paul Quatre', 'prenom': 'Paul', 'nom_famille': 'Quatre', 'civilite': 'Monsieur', 'statut': 'Sélections',
+              'vendeur': 'Louis', 'date_lead': '2026-11-12', 'lieu': 'Clamart (92140)', 'appels': []})
+DENONC_C6 = [
+    {'compte': 'mydbi', 'promoteur': 'DEMATHIEU BARD', 'programme': 'Les Terrasses Mansart', 'ville': 'Clamart', 'statut': 'envoyee',
+     'fait_le': '2026-11-12T17:30:00+00:00', 'preuve_niveau': 'liste', 'portee': 'programme', 'paternite_fin': '2099-12-12',
+     'detail': 'Envoyé et retrouvé dans la liste de la plateforme'},
+    {'compte': 'catella', 'promoteur': 'CATELLA', 'programme': 'Le Square', 'ville': 'Clamart', 'statut': 'envoyee',
+     'fait_le': '2026-11-13T09:00:00+00:00', 'preuve_niveau': 'message', 'portee': 'programme', 'detail': 'Catella : Votre dénonciation a été envoyée.'},
+    {'compte': 'accueil', 'promoteur': 'Accueil immobilier', 'programme': 'Villa Flora', 'ville': 'Clamart', 'statut': 'deja_connu',
+     'fait_le': '2026-11-13T09:10:00+00:00', 'portee': 'programme', 'detail': 'déjà utilisé'},
+    {'compte': 'nexity', 'promoteur': 'NEXITY', 'programme': 'Coeur Clamart', 'ville': 'Clamart', 'statut': 'envoyee',
+     'fait_le': '2026-11-13T10:00:00+00:00', 'preuve_niveau': 'message', 'portee': 'client', 'detail': 'Nexity : prospect créé'},
+    {'compte': 'cogedim', 'promoteur': 'COGEDIM', 'programme': 'Panorama', 'ville': 'Clamart', 'statut': 'envoyee',
+     'fait_le': '2026-09-01T10:00:00+00:00', 'preuve_niveau': 'liste', 'portee': 'client', 'paternite_fin': '2026-10-01'},
+    {'compte': 'bouygues', 'promoteur': 'BOUYGUES', 'programme': 'Retrospective', 'ville': 'Clamart', 'statut': 'echec',
+     'fait_le': '2026-11-13T11:00:00+00:00', 'portee': 'programme', 'detail': 'programme « Retrospective » absent des suggestions Bouygues'},
+    {'compte': 'bouygues', 'promoteur': 'BOUYGUES', 'programme': 'Retrospective', 'ville': 'Clamart', 'statut': 'echec',
+     'fait_le': '2026-11-13T12:00:00+00:00', 'portee': 'programme', 'detail': 'programme « Retrospective » absent des suggestions Bouygues'},
+]
+SEL_C6 = [{'contact_id': 'c6', 'token': 'tokc6', 'created_at': '2026-11-14T10:00:00+00:00', 'opened_at': None, 'avis': {}, 'biens': [
+    {'titre': 'Les Terrasses Mansart — lot 12', 'programme': 'Les Terrasses Mansart', 'ville': 'Clamart', 'promoteur': 'Demathieu Bard Immobilier'},
+    {'titre': 'Le Square — lot 3', 'programme': 'Le Square', 'ville': 'Clamart', 'promoteur': 'Catella'},
+    {'titre': 'Villa Flora — lot 1', 'programme': 'Villa Flora', 'ville': 'Clamart', 'promoteur': 'Accueil Immobilier'},
+    {'titre': 'Les Hauts de Clamart — lot 8', 'programme': 'Les Hauts de Clamart', 'ville': 'Clamart', 'promoteur': 'Nexity'},
+    {'titre': 'Jardin Secret — lot 2', 'programme': 'Jardin Secret', 'ville': 'Clamart', 'promoteur': 'Vinci Immobilier'},
+    {'titre': 'Panorama — lot 4', 'programme': 'Panorama', 'ville': 'Clamart', 'promoteur': 'Cogedim'},
+    {'titre': 'Retrospective — lot 5', 'programme': 'Retrospective', 'ville': 'Clamart', 'promoteur': 'Bouygues Immobilier'},
+]}]
 DENONC_C2 = [{'plateforme': 'iselection', 'compte': 'iselection', 'promoteur': 'ISELECTION', 'programme': 'Opus', 'ville': 'Colombes',
               'statut': 'envoyee', 'fait_le': '2026-11-10T10:00:00+00:00', 'civilite': 'Mme'}]
 DENONC = [
-    {'compte': 'care', 'promoteur': 'CARE PROMOTION', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'statut': 'envoyee', 'fait_le': '2026-11-09T15:14:00+00:00',
+    {'compte': 'care', 'promoteur': 'CARE PROMOTION', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'statut': 'envoyee', 'fait_le': '2026-11-09T15:14:00+00:00', 'preuve_niveau': 'liste', 'portee': 'programme',
      'nom_promoteur': 'Client Test', 'nom_verif': 'ok', 'nom_verifie_le': '2026-11-10T19:30:00+00:00'},
     {'compte': 'care', 'promoteur': 'CARE PROMOTION', 'programme': 'Stand Up', 'ville': 'Aubervilliers', 'statut': 'echec', 'fait_le': '2026-11-09T14:14:00+00:00', 'detail': 'essai raté'},
     {'compte': 'wemo', 'promoteur': 'wemo', 'programme': 'Icone', 'ville': 'Aubervilliers', 'statut': 'deja_connu', 'fait_le': '2026-11-09T15:20:00+00:00', 'detail': 'Refus du promoteur'},
-    {'compte': 'logih', 'promoteur': 'LOGI H', 'programme': "Le Jardin d'Hélène", 'ville': 'Aubervilliers', 'statut': 'acceptee', 'fait_le': '2026-11-09T15:30:00+00:00',
+    {'compte': 'logih', 'promoteur': 'LOGI H', 'programme': "Le Jardin d'Hélène", 'ville': 'Aubervilliers', 'statut': 'acceptee', 'fait_le': '2026-11-09T15:30:00+00:00', 'preuve_niveau': 'liste',
      'nom_promoteur': 'CLIENT', 'nom_verif': 'different', 'nom_verifie_le': '2026-11-10T19:30:00+00:00'},
 ]
 BIENS = [
@@ -51,7 +80,7 @@ with sync_playwright() as p:
             if 'supabase.co' not in r.request.url: return r.continue_()
             if '/rest/v1/denonciations' in r.request.url:
                 lus.append(r.request.url)
-                return r.fulfill(status=200, content_type='application/json', body=json.dumps(DENONC_C2 if 'eq.c2' in r.request.url else DENONC))
+                return r.fulfill(status=200, content_type='application/json', body=json.dumps(DENONC_C2 if 'eq.c2' in r.request.url else DENONC_C6 if 'eq.c6' in r.request.url else DENONC))
             if '/rpc/denonciation_manques' in r.request.url:
                 corps = r.request.post_data or ''
                 c3 = 'c3' in corps
@@ -82,10 +111,10 @@ with sync_playwright() as p:
         page.evaluate("eqOuvrirFiche('c1')")
         page.wait_for_function("document.getElementById('eq-fiche-corps') && document.getElementById('eq-fiche-corps').innerText.includes('DÉNONCIATIONS') || (document.getElementById('eq-fiche-corps')||{innerText:''}).innerText.toLowerCase().includes('dénonciations')", timeout=5000)
         txt = page.inner_text('#eq-fiche-corps')
-        for attendu in ('Stand Up', 'Dénoncé le 09/11', 'Déjà connu du promoteur', 'pris en charge', '2 dénoncés · 1 déjà connu',
+        for attendu in ('Stand Up', 'Dénoncé le 09/11', 'Déjà connu du promoteur', 'pris en charge', '2 vérifiés · 1 déjà connu ou refusé',
                         'Au nom de « Client Test », vérifié chez le promoteur le 10/11', 'Chez le promoteur : « CLIENT »'):
             if attendu not in txt: erreurs.append(f'{nom} : fiche sans « {attendu} »')
-        if 'Pas encore dénoncé' in txt: erreurs.append(f'{nom} : l\'échec de Stand Up l\'emporte sur l\'envoi')
+        if 'À dénoncer à la main' in txt or 'réessaie' in txt: erreurs.append(f'{nom} : l\'échec de Stand Up l\'emporte sur l\'envoi')
         if not lus or 'statut=neq.essai' not in lus[0] or 'contact_id=eq.c1' not in lus[0]: erreurs.append(f'{nom} : lecture du registre : {lus[:1]}')
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : fiche déborde en largeur')
         page.screenshot(path=str(SORTIE / f'denonciations_fiche_{nom}.png'), full_page=True)
@@ -97,10 +126,10 @@ with sync_playwright() as p:
         page.evaluate("bs => { _selCtx.libres = bs; selAjouterLibreRefresh(); }", BIENS)
         page.wait_for_function("document.getElementById('sel-libres').innerText.includes('Dénoncé le')", timeout=5000)
         lots = page.inner_text('#sel-libres')
-        for attendu in ('Dénoncé le 09/11', 'Déjà connu du promoteur', 'Pas encore dénoncé'):
+        for attendu in ('Dénoncé le 09/11', 'Déjà connu du promoteur', 'À dénoncer à la main'):
             if attendu not in lots: erreurs.append(f'{nom} : lots sans « {attendu} »')
         resume = page.inner_text('#sel-denonc-resume')
-        if 'Programme pas encore dénoncé : Passage Des Arts' not in resume: erreurs.append(f'{nom} : résumé manquants : {resume!r}')
+        if 'À dénoncer à la main : Passage Des Arts' not in resume: erreurs.append(f'{nom} : résumé manquants : {resume!r}')
         if 'Déjà connu du promoteur, commission non garantie : Icone' not in resume: erreurs.append(f'{nom} : résumé déjà connu : {resume!r}')
         if 'envoi reste possible' not in resume: erreurs.append(f'{nom} : le résumé ne dit pas que l\'envoi reste possible')
         if page.is_disabled('#sel-btn-valider'): erreurs.append(f'{nom} : bouton d\'envoi bloqué')
@@ -166,6 +195,26 @@ with sync_playwright() as p:
             if attendu not in txt: erreurs.append(f'{nom} : bandeau écart sans « {attendu} » : {txt!r}')
         page.click("#eq-nom-ecart button")
         page.wait_for_function("!document.getElementById('eq-nom-ecart')", timeout=5000)
+
+        # 7. Les 4 états à côté des programmes des sélections envoyées
+        page.evaluate("ss => { _eqSelectionsAll = ss; }", SEL_C6)
+        page.evaluate("eqOuvrirFiche('c6')")
+        page.wait_for_function("(document.getElementById('eq-fiche-corps')||{innerText:''}).innerText.includes('à vérifier')", timeout=5000)
+        txt = page.inner_text('#eq-fiche-corps')
+        sel = txt[txt.lower().index('sélections envoyées'):] if 'sélections envoyées' in txt.lower() else ''
+        for attendu in ('Dénoncé le 12/11 · jusqu\'au 12/12', 'Envoyé le 13/11 · à vérifier', 'Déjà connu du promoteur',
+                        'À dénoncer à la main', 'Paternité finie le 01/10 · à redénoncer'):
+            if attendu not in sel: erreurs.append(f'{nom} : sélections envoyées sans « {attendu} »')
+        etats = page.evaluate("""() => { const r = {}; ['Les Terrasses Mansart','Le Square','Villa Flora','Les Hauts de Clamart','Jardin Secret','Panorama','Retrospective'].forEach(p => {
+            const b = { programme: p, promoteur: (_eqSelectionsAll[0].biens.find(x => x.programme === p) || {}).promoteur };
+            r[p] = denoncEtat(denoncPour('c6', p, b.promoteur))[3]; }); return r; }""")
+        voulu = {'Les Terrasses Mansart': 'vert', 'Le Square': 'bleu', 'Villa Flora': 'rouge', 'Les Hauts de Clamart': 'bleu',
+                 'Jardin Secret': 'orange', 'Panorama': 'orange', 'Retrospective': 'orange'}
+        if etats != voulu: erreurs.append(f'{nom} : états {etats}')
+        if 'pas dans la liste de dénonciation du promoteur' not in txt: erreurs.append(f'{nom} : raison de l\'échec Bouygues absente')
+        if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : fiche 4 états déborde en largeur')
+        page.evaluate("() => { const t = [...document.querySelectorAll('#eq-fiche-corps div')].find(d => /^Sélections envoyées/i.test(d.innerText)); if (t) t.scrollIntoView(); }")
+        page.screenshot(path=str(SORTIE / f'denonciations_quatre_etats_{nom}.png'), full_page=True)
         page.close()
     nav.close()
 

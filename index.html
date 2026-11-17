@@ -11142,7 +11142,7 @@ const _denoncEnCours = {};
 function denoncCharger(contactId, apres) {
   if (!contactId || _denoncEnCours[contactId]) return;
   _denoncEnCours[contactId] = true;
-  fetch(SUPABASE_URL + '/rest/v1/denonciations?select=plateforme,compte,promoteur,programme,ville,statut,fait_le,suivi_le,detail,civilite,nom_utilise,nom_promoteur,nom_verif,nom_verifie_le&statut=neq.essai&contact_id=eq.' + encodeURIComponent(contactId) + '&order=fait_le.desc&limit=200',
+  fetch(SUPABASE_URL + '/rest/v1/denonciations?select=plateforme,compte,promoteur,programme,ville,statut,fait_le,suivi_le,detail,civilite,nom_utilise,nom_promoteur,nom_verif,nom_verifie_le,preuve_niveau,portee,paternite_fin&statut=neq.essai&contact_id=eq.' + encodeURIComponent(contactId) + '&order=fait_le.desc&limit=200',
     { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SB_BEARER } })
     .then(r => r.ok ? r.json() : [])
     .then(rows => { _denonc[contactId] = Array.isArray(rows) ? rows : []; if (apres) apres(); })
@@ -11154,28 +11154,80 @@ function _denoncNorm(t) {
   return _pnorm(t).replace(/[’`]/g, "'").replace(/\s*\(\d{2,5}\)\s*$/, '').replace(/[^a-z0-9']+/g, ' ').trim();
 }
 const DENONC_RANG = { acceptee: 6, envoyee: 5, deja_connu: 4, refusee: 4, a_faire_main: 3, echec: 1 };
-// Par programme, la dénonciation qui compte quand il y a eu plusieurs tentatives
+// Par programme, la dénonciation qui compte quand il y a eu plusieurs tentatives (et le nombre d'échecs)
 function denoncParProgramme(contactId) {
   const m = {};
   (_denonc[contactId] || []).forEach(d => {
     const k = _denoncNorm(d.programme);
-    if (k && (!m[k] || (DENONC_RANG[d.statut] || 0) > (DENONC_RANG[m[k].statut] || 0))) m[k] = d;
+    if (!k) return;
+    const prev = m[k];
+    const echecs = (prev ? prev._echecs : 0) + (d.statut === 'echec' ? 1 : 0);
+    if (!prev || (DENONC_RANG[d.statut] || 0) > (DENONC_RANG[prev.statut] || 0)) m[k] = Object.assign({}, d);
+    m[k]._echecs = echecs;
   });
   return m;
 }
-function denoncEtat(d) {   // [libellé, couleur]
-  if (!d || d.statut === 'echec') return ['Pas encore dénoncé', 'var(--warning)'];
-  const j = d.fait_le ? new Date(d.fait_le).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
-  if (d.statut === 'acceptee') return ['Dénoncé le ' + j + ', pris en charge', 'var(--success)'];
-  if (d.statut === 'envoyee') return ['Dénoncé le ' + j, 'var(--success)'];
-  if (d.statut === 'deja_connu' || d.statut === 'refusee') return ['Déjà connu du promoteur', 'var(--danger)'];
-  if (d.statut === 'a_faire_main') return ['À dénoncer à la main', 'var(--warning)'];
-  return ['Pas encore dénoncé', 'var(--warning)'];
+// Promoteur comparable (« PICHET Sotck RP », « Infineo Groupe (Prim'Arte) », « GROUPE DUVAL »…)
+function _denoncNormPromo(t) {
+  return ' ' + _pnorm(t).replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(groupe|immobilier|immobiler|promotion|residential|sotck|stock|rp|sas|sa)\b/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+}
+// La dénonciation qui vaut pour un programme : la sienne, sinon celle du client chez ce promoteur quand le
+// promoteur dénonce le client pour tous ses programmes (Nexity, Cogedim, Pichet, Linkapp… : portee 'client').
+function denoncPour(contactId, programme, promoteur) {
+  const d = denoncParProgramme(contactId)[_denoncNorm(programme)];
+  const bons = ['envoyee', 'acceptee', 'deja_connu', 'refusee'];
+  if (d && bons.includes(d.statut)) return d;
+  const p = _denoncNormPromo(promoteur);
+  if (p.trim()) {
+    const c = (_denonc[contactId] || []).filter(x => x.portee === 'client' && bons.includes(x.statut))
+      .sort((a, b) => (DENONC_RANG[b.statut] || 0) - (DENONC_RANG[a.statut] || 0))
+      .find(x => { const q = _denoncNormPromo(x.promoteur); return q.trim() && (p.includes(q) || q.includes(p)); });
+    if (c) return c;
+  }
+  return d || null;
+}
+// Raison d'un échec du robot, en clair
+function _denoncRaison(detail) {
+  const t = String(detail || '');
+  if (/absent de la liste|absent des suggestions|choix possible/i.test(t)) return 'le programme n\'est pas dans la liste de dénonciation du promoteur';
+  if (/civilit/i.test(t)) return 'il manque la civilité';
+  if (/session expir|connexion/i.test(t)) return 'le robot n\'a pas pu se connecter au site du promoteur';
+  if (/absent de la liste de la plateforme|client absent/i.test(t)) return 'envoyé, mais le client n\'apparaît pas chez le promoteur';
+  return 'le site du promoteur n\'a pas accepté l\'envoi';
+}
+// Les 4 états (demande d'Alex du 17/11/2026) : [libellé, couleur, explication, famille]
+//   vert = dénoncé et retrouvé chez le promoteur · bleu = envoyé, à vérifier (seul le message du site le dit)
+//   rouge = refusé ou déjà connu du promoteur · orange = à dénoncer à la main
+const DENONC_COUL = { vert: 'var(--success)', bleu: '#2F6FB0', rouge: 'var(--danger)', orange: 'var(--warning)' };
+function denoncEtat(d) {
+  const jj = x => x ? new Date(x).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
+  if (d && (d.statut === 'envoyee' || d.statut === 'acceptee')) {
+    if (d.paternite_fin && new Date(d.paternite_fin + 'T23:59:59') < new Date())
+      return ['Paternité finie le ' + jj(d.paternite_fin) + ' · à redénoncer', DENONC_COUL.orange,
+        'Le promoteur accordait la paternité jusqu\'au ' + jj(d.paternite_fin) + '. Dénonce à nouveau à la main.', 'orange'];
+    if (d.preuve_niveau === 'message')
+      return ['Envoyé le ' + jj(d.fait_le) + ' · à vérifier', DENONC_COUL.bleu,
+        'Le site du promoteur a confirmé l\'envoi, mais le robot n\'a pas revu le client dans sa liste. Vérifie sur l\'intranet du promoteur.', 'bleu'];
+    return ['Dénoncé le ' + jj(d.fait_le) + (d.statut === 'acceptee' ? ', pris en charge' : '') + (d.paternite_fin ? ' · jusqu\'au ' + jj(d.paternite_fin) : ''),
+      DENONC_COUL.vert, 'Envoyé et retrouvé chez le promoteur' + (d.paternite_fin ? ', paternité jusqu\'au ' + jj(d.paternite_fin) : '') + '.', 'vert'];
+  }
+  if (d && (d.statut === 'deja_connu' || d.statut === 'refusee'))
+    return [d.statut === 'refusee' ? 'Refusé par le promoteur' : 'Déjà connu du promoteur', DENONC_COUL.rouge,
+      'Le promoteur connaissait déjà ce client : commission non garantie.', 'rouge'];
+  if (d && d.statut === 'echec' && (d._echecs || 1) < 2)
+    return ['Pas encore dénoncé · le robot réessaie', DENONC_COUL.orange,
+      'Premier essai du robot raté (' + _denoncRaison(d.detail) + '). Il réessaie ; si c\'est urgent, dénonce à la main.', 'orange'];
+  if (d && d.statut === 'echec')
+    return ['À dénoncer à la main', DENONC_COUL.orange, 'Le robot a échoué deux fois : ' + _denoncRaison(d.detail) + '.', 'orange'];
+  if (d && d.statut === 'a_faire_main')
+    return ['À dénoncer à la main', DENONC_COUL.orange, d.detail || 'Le robot ne peut pas le faire seul.', 'orange'];
+  return ['À dénoncer à la main', DENONC_COUL.orange,
+    'Aucune dénonciation automatique pour ce programme (promoteur pas branché au robot, ou programme hors des villes du client).', 'orange'];
 }
 function denoncPastille(d) {
-  const [txt, c] = denoncEtat(d);
-  const titre = d ? (d.statut === 'envoyee' ? 'Envoyée au promoteur, en attente de sa prise en charge' : (d.detail || '')) : 'Aucune dénonciation enregistrée pour ce programme';
-  return `<span title="${_vEsc(titre)}" style="display:inline-block;font-size:10.5px;line-height:1.5;padding:0 8px;border-radius:20px;border:1px solid ${c};color:${c};white-space:nowrap;vertical-align:middle">${_vEsc(txt)}</span>`;
+  const [txt, c, aide] = denoncEtat(d);
+  return `<span class="denonc-pastille" title="${_vEsc(aide)}" style="display:inline-block;font-size:10.5px;line-height:1.5;padding:0 8px;border-radius:20px;border:1px solid ${c};color:${c};vertical-align:middle;max-width:100%">${_vEsc(txt)}</span>`;
 }
 // Civilité (décision d'Alex du 10/11/2026) : le vendeur la confirme d'un clic (M. / Mme) ; à défaut,
 // le robot de dénonciation la déduit du prénom (prénoms quasi certains de l'Insee) pour iSelection,
@@ -11361,17 +11413,18 @@ async function eqCiviliteCorrigee(id) {
 }
 function eqFicheDenonciationsHtml(l) {
   if (!(l.id in _denonc)) {
-    denoncCharger(l.id, () => { if (_eqFicheId === l.id && (_denonc[l.id] || []).length) _eqFicheRender(); });
+    denoncCharger(l.id, () => { if (_eqFicheId === l.id) _eqFicheRender(); });
     return '';
   }
   const liste = Object.values(denoncParProgramme(l.id))
     .sort((a, b) => (a.ville || '').localeCompare(b.ville || '', 'fr') || (a.programme || '').localeCompare(b.programme || '', 'fr'));
   if (!liste.length) return '';
-  const n = (st) => liste.filter(d => st.includes(d.statut)).length;
+  const n = (f) => liste.filter(d => denoncEtat(d)[3] === f).length;
   const resume = [
-    n(['envoyee', 'acceptee']) ? n(['envoyee', 'acceptee']) + ' dénoncé' + (n(['envoyee', 'acceptee']) > 1 ? 's' : '') : '',
-    n(['deja_connu', 'refusee']) ? n(['deja_connu', 'refusee']) + ' déjà connu' + (n(['deja_connu', 'refusee']) > 1 ? 's' : '') : '',
-    n(['a_faire_main']) ? n(['a_faire_main']) + ' à faire à la main' : ''
+    n('vert') ? n('vert') + ' vérifié' + (n('vert') > 1 ? 's' : '') : '',
+    n('bleu') ? n('bleu') + ' à vérifier' : '',
+    n('rouge') ? n('rouge') + ' déjà connu' + (n('rouge') > 1 ? 's' : '') + ' ou refusé' + (n('rouge') > 1 ? 's' : '') : '',
+    n('orange') ? n('orange') + ' à faire à la main' : ''
   ].filter(Boolean).join(' · ');
   return `<div style="margin-top:14px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 14px">
     <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">
@@ -11379,7 +11432,7 @@ function eqFicheDenonciationsHtml(l) {
       <span style="font-size:11.5px;color:var(--muted)">${_vEsc(resume)}</span>
     </div>
     ${liste.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:12.5px;padding:6px 0;border-top:1px solid var(--border)">
-      <span><strong>${_vEsc(d.programme || '')}</strong> <span style="color:var(--muted)">· ${_vEsc(d.promoteur || d.compte || '')}${d.ville ? ' · ' + _vEsc(d.ville) : ''}</span>${denoncNomVerifHtml(d)}</span>
+      <span><strong>${_vEsc(d.programme || '')}</strong> <span style="color:var(--muted)">· ${_vEsc(d.promoteur || d.compte || '')}${d.ville ? ' · ' + _vEsc(d.ville) : ''}</span>${denoncNomVerifHtml(d)}${denoncEtat(d)[3] !== 'vert' ? '<br><span style="font-size:11.5px;color:var(--muted)">' + _vEsc(denoncEtat(d)[2]) + '</span>' : ''}</span>
       ${denoncPastille(d)}
     </div>`).join('')}
   </div>`;
@@ -11403,29 +11456,30 @@ function denoncNomVerifHtml(d) {
 function _selDenoncPastille(b) {
   const id = _selCtx && _selCtx.lead && _selCtx.lead.id;
   if (!id || !(id in _denonc)) return '';
-  return ' ' + denoncPastille(denoncParProgramme(id)[_denoncNorm(_selNomProgramme(b))]);
+  return ' ' + denoncPastille(denoncPour(id, _selNomProgramme(b), b.promoteur));
 }
 function _selDenoncResume() {
   const el = document.getElementById('sel-denonc-resume');
   const id = _selCtx && _selCtx.lead && _selCtx.lead.id;
   if (!el) return;
   if (!id || !(id in _denonc) || !_selCtx.libres.length) { el.innerHTML = ''; return; }
-  const m = denoncParProgramme(id);
-  const vus = {}, manquants = [], connus = [];
+  const vus = {}, manquants = [], aVerifier = [], connus = [];
   _selCtx.libres.forEach(b => {
     const nom = _selNomProgramme(b), k = _denoncNorm(nom);
     if (!k || vus[k]) return;
     vus[k] = true;
-    const d = m[k];
-    if (d && (d.statut === 'deja_connu' || d.statut === 'refusee')) connus.push(nom);
-    else if (!d || !['envoyee', 'acceptee'].includes(d.statut)) manquants.push(nom);
+    const f = denoncEtat(denoncPour(id, nom, b.promoteur))[3];
+    if (f === 'rouge') connus.push(nom);
+    else if (f === 'bleu') aVerifier.push(nom);
+    else if (f === 'orange') manquants.push(nom);
   });
-  if (!manquants.length && !connus.length) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--success);margin:0 0 12px">Tous les programmes de cette sélection sont dénoncés.</div>';
+  if (!manquants.length && !connus.length && !aVerifier.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--success);margin:0 0 12px">Tous les programmes de cette sélection sont dénoncés et vérifiés chez le promoteur.</div>';
     return;
   }
   const lignes = [];
-  if (manquants.length) lignes.push((manquants.length > 1 ? manquants.length + ' programmes pas encore dénoncés : ' : 'Programme pas encore dénoncé : ') + manquants.map(_vEsc).join(', ') + '.');
+  if (manquants.length) lignes.push('<strong>À dénoncer à la main</strong> : ' + manquants.map(_vEsc).join(', ') + '.');
+  if (aVerifier.length) lignes.push('Envoyé, à vérifier sur l\'intranet du promoteur : ' + aVerifier.map(_vEsc).join(', ') + '.');
   if (connus.length) lignes.push('Déjà connu du promoteur, commission non garantie : ' + connus.map(_vEsc).join(', ') + '.');
   el.innerHTML = `<div style="font-size:12px;color:var(--warning);border:1px solid var(--warning);border-radius:9px;padding:9px 12px;margin:0 0 12px;line-height:1.5">
     ${lignes.join('<br>')}<br><span style="color:var(--muted)">L'envoi reste possible.</span></div>`;
@@ -11478,6 +11532,8 @@ function eqFicheSelectionsHtml(l) {
       g.idx.push(i);
     });
     const groupe = groupes.length > 1 || (groupes[0] && groupes[0].idx.length > 1);
+    // Dénonciation de chaque programme envoyé (4 états, demande d'Alex du 17/11/2026)
+    const denoncDe = (b, prog) => (l.id in _denonc) ? ' ' + denoncPastille(denoncPour(l.id, prog || _selNomProgramme(b), b.promoteur)) : '';
     const lotHtml = (b, i) => {
       const a = avis[String(i)] || {};
       const sec = tpsDe(i);
@@ -11491,7 +11547,7 @@ function eqFicheSelectionsHtml(l) {
       const titreLot = groupe && progDe(b).prog ? progDe(b).lot : (b.titre || 'Lot ' + (i + 1));
       return `<div style="padding:6px 0${groupe ? ' 6px 14px' : ''};border-top:1px dashed var(--border)">
         <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
-          <span style="flex:1;min-width:140px;font-size:12.5px"><strong>${_vEsc(titreLot)}</strong>${!groupe && (b.ville || b.promoteur) ? ' <span style="color:var(--muted)">— ' + [_vEsc(b.ville || ''), _vEsc(b.promoteur || '')].filter(Boolean).join(' · ') + '</span>' : ''}</span>
+          <span style="flex:1;min-width:140px;font-size:12.5px"><strong>${_vEsc(titreLot)}</strong>${!groupe && (b.ville || b.promoteur) ? ' <span style="color:var(--muted)">— ' + [_vEsc(b.ville || ''), _vEsc(b.promoteur || '')].filter(Boolean).join(' · ') + '</span>' : ''}${!groupe ? denoncDe(b, progDe(b).prog) : ''}</span>
           ${lienIntranet && !groupe ? `<a href="${_esc(lienIntranet)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px">${libelleLien}</a>` : ''}
           <span style="font-size:12px">${jugement}</span>
           <span style="font-size:11.5px;color:var(--muted);min-width:62px;text-align:right">${sec ? fmtDuree(sec) : '—'}</span>
@@ -11511,7 +11567,7 @@ function eqFicheSelectionsHtml(l) {
       const sousTitre = [b0.ville || '', b0.promoteur || ''].filter(Boolean).join(' · ');
       return `<div style="margin-top:8px">
         <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;padding:4px 0 2px">
-          <span style="flex:1;min-width:140px;font-size:12.5px;font-weight:700;color:var(--accent)">${_vEsc(g.prog || 'Autres lots')}${sousTitre ? ' <span style="font-weight:400;color:var(--muted)">— ' + _vEsc(sousTitre) + '</span>' : ''}</span>
+          <span style="flex:1;min-width:140px;font-size:12.5px;font-weight:700;color:var(--accent)">${_vEsc(g.prog || 'Autres lots')}${sousTitre ? ' <span style="font-weight:400;color:var(--muted)">— ' + _vEsc(sousTitre) + '</span>' : ''}${g.prog ? '<span style="font-weight:400">' + denoncDe(b0, g.prog) + '</span>' : ''}</span>
           <span style="font-size:11px;color:var(--muted)">${g.idx.length} lot${g.idx.length > 1 ? 's' : ''}</span>
           ${lien0 ? `<a href="${_esc(lien0)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--muted);text-decoration:underline;text-underline-offset:2px">${lienFiche0 ? 'Fiche programme' : 'Intranet promoteur'}</a>` : ''}
         </div>
