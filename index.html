@@ -7898,8 +7898,70 @@ function eqLeadVisiblePour(l, prenom) {
   if (l.vendeur === prenom) return true;      // c'est le sien
   // Compétition ouverte : il s'affiche chez chacun de ceux qui l'ont reçu
   if (eqCompetitionOuverte(l) && (Array.isArray(l.recu_par) ? l.recu_par : []).some(r => r && r.vendeur === prenom)) return true;
-  return estEnVeille(l) && (Array.isArray(l.recu_par) ? l.recu_par : [])
-    .some(r => r && r.vendeur === prenom);
+  // En veille chez un collègue : seulement si ce vendeur l'a reçu APRÈS la mise
+  // en veille (règle d'Alex du 17/11/2026). Celui qui l'a reçu avant puis l'a
+  // transféré ne le revoit plus.
+  return !!eqRecuApresVeille(l, prenom);
+}
+
+// Début de la veille : veille_depuis, à défaut statut_maj (0 si aucune date)
+function eqVeilleDebut(l) {
+  const d = l && (l.veille_depuis || l.statut_maj);
+  const t = d ? new Date(d).getTime() : NaN;
+  return isNaN(t) ? 0 : t;
+}
+// Client en veille chez un autre vendeur, reçu par « prenom » après la mise en
+// veille : renvoie l'entrée recu_par la plus récente, sinon null.
+function eqRecuApresVeille(l, prenom) {
+  if (!l || !prenom || l.vendeur === prenom || !estEnVeille(l)) return null;
+  const debut = eqVeilleDebut(l);
+  if (!debut) return null;
+  const t = (d) => { const x = d ? new Date(d).getTime() : NaN; return isNaN(x) ? 0 : x; };
+  return (Array.isArray(l.recu_par) ? l.recu_par : [])
+    .filter(r => r && r.vendeur === prenom && t(r.le) > debut)
+    .sort((a, b) => t(b.le) - t(a.le))[0] || null;
+}
+
+// ============================================================
+//  ARRIVÉE CHEZ UN NOUVEAU VENDEUR (17/11/2026)
+//  Un client qui arrive chez un vendeur alors qu'il était suivi par un autre
+//  passe dans ses « Premiers appels » :
+//   * fiche passée à ce vendeur (réattribution, paternité échue…) : arrivée =
+//     vendeur_depuis, avec qui le suivait avant ;
+//   * client en veille chez un collègue qui refait une demande sur la boîte de
+//     ce vendeur : arrivée = date de sa réception (recu_par), avec « En veille
+//     chez X depuis le …, revenu vers toi ».
+//  La ligne disparaît dès que ce vendeur agit après l'arrivée : appel noté,
+//  changement de statut, rappel posé, ligne retirée. Un « Nouveau » a déjà sa
+//  ligne Premier appel ; au-delà de EQ_ARRIVEE_FENETRE_J jours, plus rien.
+// ============================================================
+const EQ_ARRIVEE_FENETRE_J = 14;
+function eqArriveeChezMoi(l, prenom) {
+  if (!l || !prenom) return null;
+  const s = eqLeadStatut(l);
+  if (s === 'Nouveau' || STATUTS_FINAUX.includes(s)) return null;
+  const t = (d) => { const x = d ? new Date(d).getTime() : NaN; return isNaN(x) ? 0 : x; };
+  const fmt = (ms) => new Date(ms).toLocaleDateString('fr-FR');
+  let le = 0, texte = '';
+  const r = eqRecuApresVeille(l, prenom);
+  if (r) {
+    le = t(r.le);
+    texte = 'En veille chez ' + l.vendeur + ' depuis le ' + fmt(eqVeilleDebut(l)) + ', revenu vers toi';
+  } else if (l.vendeur === prenom && !eqCompetitionOuverte(l)) {
+    const histo = Array.isArray(l.vendeur_historique) ? l.vendeur_historique : [];
+    const h = histo[histo.length - 1];
+    if (!h || !h.vendeur || h.vendeur === prenom) return null;
+    le = t(l.vendeur_depuis);
+    texte = 'Suivi avant par ' + h.vendeur + (h.motif ? ' (' + h.motif + ')' : '') + ', arrivé chez toi';
+    // Sur sa propre fiche, un rappel posé ou un statut changé depuis l'arrivée = il a agi
+    if (l.rappel_le) return null;
+    if (t(l.statut_maj) > le + 60000) return null;
+  } else return null;
+  if (!le || Date.now() - le > EQ_ARRIVEE_FENETRE_J * 86400000) return null;
+  const apres = (d) => t(d) > le;
+  if ((Array.isArray(l.appels) ? l.appels : []).some(a => a && a.vendeur === prenom && apres(a.le))) return null;
+  if (apres(l.activite_masquee_le)) return null;
+  return { le, texte };
 }
 
 // ============================================================
@@ -12978,6 +13040,7 @@ function eqActToutDeselectionner(){ _eqActSel.clear(); renderEqNotifs(); }
 function _eqActLeadsActifs(){
   return _eqMiens().filter(l => {
     if (STATUTS_FINAUX.includes(eqLeadStatut(l))) return false;
+    if (eqArriveeChezMoi(l, _eqPrenomVue())) return true;
     if (l.rappel_le) return true;
     if (eqEssaiAFaire(l) || eqDecisionAFaire(l)) return true;
     return eqLeadStatut(l) === 'Nouveau' && !l.activite_masquee_le;
@@ -12989,6 +13052,8 @@ function _eqActRetardIds(){
   const jour = new Date().toISOString().slice(0, 10);
   return _eqActLeadsActifs()
     .filter(l => {
+      const arr = eqArriveeChezMoi(l, _eqPrenomVue());
+      if (arr) return Date.now() - arr.le > 48 * 3600000;
       if (l.rappel_le) return l.rappel_le < jour;
       const essai = eqEssaiAFaire(l) || eqDecisionAFaire(l);
       return essai ? essai.le < jour : (typeof _eqLeadFlags === 'function' && _eqLeadFlags(l).alerte48);
@@ -13023,7 +13088,8 @@ function _eqActCorps(action, l){
   if (action === 'sansreponse') return { statut: 'Sans réponse', statut_maj: nowIso, rappel_le: null, rappel_titre: null, rappel_heure: null };
   if (action === 'nonqualifie') return { statut: 'Non qualifié', statut_maj: nowIso, rappel_le: null, rappel_titre: null, rappel_heure: null };
   // « Retirer » : un rappel s'efface, un premier appel jamais fait se masque
-  if (action === 'retirer') return l.rappel_le
+  // (une arrivée chez un nouveau vendeur se masque, sans toucher au rappel de la fiche)
+  if (action === 'retirer') return (l.rappel_le && !eqArriveeChezMoi(l, _eqPrenomVue()))
     ? { rappel_le: null, rappel_titre: null, rappel_heure: null }
     : { activite_masquee_le: nowIso };
   return null;
@@ -13033,6 +13099,8 @@ function _eqActCorps(action, l){
 function _eqActLigne(l){
   const h = l.rappel_heure ? String(l.rappel_heure).slice(0, 5).replace(':', 'h') + ' · ' : '';
   const nom = (typeof nomComplet === 'function' && nomComplet(l)) || '—';
+  const arr = eqArriveeChezMoi(l, _eqPrenomVue());
+  if (arr) return { id: l.id, texte: 'Premier appel — ' + nom, detail: arr.texte };
   const essai = eqEssaiAFaire(l);
   const dec = !l.rappel_le && !essai && eqDecisionAFaire(l);
   const quoi = l.rappel_le ? (l.rappel_titre || ('Rappeler ' + nom)) : (dec ? 'Décider pour ' + nom : essai ? 'Rappeler ' + nom : 'Premier appel — ' + nom);
@@ -13569,7 +13637,21 @@ function renderEqNotifs() {
     const boutons = btnFiche(l.id) +
       `<button class="btn btn-sm btn-secondary" onclick="eqActReporter('${l.id}')" style="font-size:11px" title="Changer l'intitulé, le jour ou l'heure">Modifier</button>` +
       btnActions(l.id);
-    if (l.rappel_le && joursRdvConfirmes.has(l.id) && joursRdvConfirmes.get(l.id).has(l.rappel_le)) {
+    const arrivee = eqArriveeChezMoi(l, prenomVue);
+    if (arrivee) {
+      // Client arrivé chez ce vendeur (17/11/2026) : premier appel à faire, avec d'où il vient
+      const jArr = new Date(arrivee.le).toISOString().slice(0, 10);
+      const titreArr = 'Premier appel — ' + esc(nomComplet(l) || '—') + eqReperesLead(l);
+      const detArr = esc(arrivee.texte) + ' · arrivé le ' + fmtJ(new Date(arrivee.le).toISOString()) + ' · étape : ' + esc(s);
+      const boutonsArr = btnFiche(l.id) + btnActions(l.id);
+      if (Date.now() - arrivee.le > 48 * 3600000) {
+        retard.push({ t: arrivee.le, g: 'premier', d: jArr, html: item('alerte', titreArr,
+          detArr + ' — toujours sans appel (+ de 48 h)', boutonsArr, 'var(--danger)', l.id) });
+      } else {
+        aujourdhui.push({ t: arrivee.le, g: 'premier', d: jour, html: item('rappel', titreArr,
+          detArr + ' — à appeler dans les 48 h', boutonsArr, 'var(--accent)', l.id) });
+      }
+    } else if (l.rappel_le && joursRdvConfirmes.has(l.id) && joursRdvConfirmes.get(l.id).has(l.rappel_le)) {
       // Rendez-vous confirmé ce jour-là : il apparaît dans « Rendez-vous confirmés » seulement
     } else if (l.rappel_le) {
       // Intitulé libre s'il y en a un, sinon « Rappeler <client> ». L'heure, quand
