@@ -18302,11 +18302,14 @@ async function loadAnnonces(force) {
       _anStock = {};
       stock.forEach(s => { const k = _anCleVille(s.cle); ((_anStock[k] = _anStock[k] || {})[s.type === 'Maison' ? 'Maison' : s.typo] = s); });
       // Relevés SeLoger (table seloger_concurrence, importée depuis le fichier du script de pige).
-      // Rotation : chaque pige relève un tiers des villes ; on garde, ville par ville, son relevé
-      // le plus récent des 10 derniers jours.
+      // Relevé mensuel complet (décision d'Alex du 19/11/2026) : on garde, ville par ville, son relevé
+      // le plus récent des 35 derniers jours, pour que la page ne se vide pas avant le relevé suivant.
+      // On ne lit que les lignes qui servent (total de la ville, 10 premières annonces, les nôtres) :
+      // deux relevés mensuels qui se chevauchent tiennent ainsi sous le plafond de _sbTout (30 000 lignes).
+      // Le tri finit par « id » pour que la lecture par pages de 1 000 ne saute ni ne double aucune ligne.
       _anSL = {}; _anSLDate = null;
-      const depuisSL = new Date(Date.now() - 10 * 864e5).toISOString().slice(0, 10);
-      const lignesSL = await _sbTout(SUPABASE_URL + '/rest/v1/seloger_concurrence?select=releve,cle,typo,total,rang,prix,surface,annonceur,promoteur,glr,cree,sid&releve=gte.' + depuisSL + '&order=rang.asc.nullsfirst', h);
+      const depuisSL = new Date(Date.now() - 35 * 864e5).toISOString().slice(0, 10);
+      const lignesSL = await _sbTout(SUPABASE_URL + '/rest/v1/seloger_concurrence?select=releve,cle,typo,total,rang,prix,surface,annonceur,promoteur,glr,cree,sid&releve=gte.' + depuisSL + '&or=(rang.is.null,rang.lte.10,glr.is.true)&order=rang.asc.nullsfirst,id.asc', h);
       const derVille = {};
       lignesSL.forEach(l => { const k = _anCleVille(l.cle); if (!derVille[k] || l.releve > derVille[k]) derVille[k] = l.releve; });
       if (lignesSL.length) {

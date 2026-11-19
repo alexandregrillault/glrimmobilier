@@ -60,14 +60,16 @@ SELOGER = [sl('Clamart', 'T2', 59, r, 170000 + r * 2000, 'CABINET %d' % r) for r
     sl('Clamart', 'T2', 59, 6, 237000, 'GLR IMMOBILIER', True),
     sl('Colombes', 'T2', 40, 1, 150000, 'ELIXIUM'),
     sl('Antony', 'T2', 97, 15, 237000, 'GLR IMMOBILIER', True),
-    sl('Massy', 'T4', 0, None, None, None, releve=j(3)),
+    sl('Massy', 'T4', 0, None, None, None, releve=j(20)),  # relevé mensuel : gardé 35 jours (19/11/2026)
     *[sl('Clamart', 'T3', 20, r, 280000 + r * 10000, 'CABINET T3 %d' % r) for r in (1, 2, 3)],
-    sl('Clamart', 'T2', 80, 1, 99000, 'ANCIEN RELEVE', releve=j(3)),
+    sl('Clamart', 'T2', 80, 1, 99000, 'ANCIEN RELEVE', releve=j(20)),
+    sl('Vanves', 'T2', 30, 1, 88000, 'RELEVE TROP VIEUX', releve=j(40)),
 ]
 GEO = {'VELIZY': {'nom': 'Vélizy-Villacoublay', 'centre': {'coordinates': [2.19, 48.78]}, 'codeDepartement': '78'},
        'ANNECY': {'nom': 'Annecy', 'centre': {'coordinates': [6.13, 45.90]}, 'codeDepartement': '74'}}
 
 APPELS = []
+LECTURES_SL = []
 def route(r):
     u = r.request.url
     if 'seloger_concurrence' in u and r.request.method in ('POST', 'DELETE'):
@@ -76,7 +78,11 @@ def route(r):
         if '/rest/v1/contacts' in u: body = LEADS
         elif '/rest/v1/pige_programmes' in u: body = PIGE
         elif '/rest/v1/rpc/annonces_stock' in u: body = STOCK
-        elif '/rest/v1/seloger_concurrence' in u: body = SELOGER
+        elif '/rest/v1/seloger_concurrence' in u:
+            # comme la base : seules les lignes à partir de la date demandée reviennent
+            LECTURES_SL.append(u)
+            depuis = (re.search(r'releve=gte\.(\d{4}-\d\d-\d\d)', u) or [None, '0000'])[1]
+            body = [l for l in SELOGER if l['releve'] >= depuis]
         else: body = []
         return r.fulfill(status=200, content_type='application/json', body=json.dumps(body))
     if 'geo.api.gouv.fr' in u:
@@ -111,10 +117,13 @@ with sync_playwright() as p:
                         'Nanterre · T3', '5 leads avant · 8 lots', 'Nous avons reçu 5 leads T3 ici', '8 T3 disponibles dès 290 000 €',
                         'Concurrence SeLoger pas encore relevée pour cette ville', 'Clamart · T3', '20 concurrents · 12 lots',
                         'pour être dans les 3 premières il faut moins de 310 000 €', "Comment c'est calculé", 'Leads non rangés (1)', 'FLP7',
-                        '4 villes relevées du ' + datetime.date.fromisoformat(j(3)).strftime('%d/%m/%Y') + ' au ' + datetime.date.fromisoformat(j(1)).strftime('%d/%m/%Y')):
+                        '4 villes relevées du ' + datetime.date.fromisoformat(j(20)).strftime('%d/%m/%Y') + ' au ' + datetime.date.fromisoformat(j(1)).strftime('%d/%m/%Y')):
             if attendu not in texte: erreurs.append(f'{nom} : « {attendu} » absent')
-        for absent in ('Meudon', 'ANCIEN RELEVE', 'Haÿ', 'Clamart · T2'):
+        for absent in ('Meudon', 'ANCIEN RELEVE', 'RELEVE TROP VIEUX', 'Vanves', 'Haÿ', 'Clamart · T2'):
             if absent in texte: erreurs.append(f'{nom} : « {absent} » ne devrait pas apparaître')
+        lu = LECTURES_SL[-1] if LECTURES_SL else ''
+        if 'releve=gte.' + j(35) not in lu and 'releve=gte.' + j(36) not in lu: erreurs.append(f'{nom} : le relevé SeLoger n\'est pas lu sur 35 jours ({lu[-160:]})')
+        if 'rang.lte.10' not in lu or 'id.asc' not in lu: erreurs.append(f'{nom} : lecture du relevé sans le filtre des lignes utiles ou sans tri stable')
         if not page.is_visible('#an-faire') or page.is_visible('#an-carte'): erreurs.append(f'{nom} : onglet « À faire » pas affiché par défaut')
         page.screenshot(path=str(SORTIE / f'annonces_{nom}_faire.png'), full_page=False)
         page.evaluate("anOnglet('annonces')"); page.wait_for_timeout(800)
