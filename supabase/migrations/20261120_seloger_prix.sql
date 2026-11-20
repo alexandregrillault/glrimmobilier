@@ -4,6 +4,8 @@
 -- et a besoin de retenir le vrai prix de chaque annonce : sans cette table, il se perd dès qu'une annonce
 -- est au prix bas ou recréée sous un nouveau numéro.
 -- Remplie et lue par SQL (outil Supabase de Claude) ; la page My SeLoger Pro ne parle jamais à la base.
+-- La liste de nos annonces en ligne y est aussi recopiée (ville, typologie, surface, vendeur, date de création),
+-- dans cette même table plutôt qu'une deuxième.
 -- Aucun écran dans le CRM pour l'instant ; lecture réservée aux gérants, comme seloger_recreation_passages.
 
 create table if not exists public.seloger_prix (
@@ -19,6 +21,18 @@ create table if not exists public.seloger_prix (
   reference   text,
   -- numéro de l'ancienne annonce quand celle-ci vient d'une recréation (le prix haut suit l'appartement)
   remplace    bigint,
+  -- Ce que dit l'annonce, recopié de la liste de nos annonces en ligne (lu par l'analyse SeLoger) :
+  -- ville telle qu'elle est écrite sur l'annonce
+  ville       text,
+  -- en texte, pour garder le zéro de tête éventuel
+  code_postal text,
+  typologie   text check (typologie in ('T1', 'T2', 'T3', 'T4', 'T5+', 'Maison')),
+  -- en m²
+  surface     numeric check (surface > 0),
+  -- prénom du conseiller de l'annonce
+  vendeur     text,
+  -- date de création de l'annonce sur SeLoger
+  cree_le     date,
   -- vide tant que l'annonce est en ligne
   retiree_le  timestamptz,
   -- dernière écriture sur la ligne, tenue par la base
