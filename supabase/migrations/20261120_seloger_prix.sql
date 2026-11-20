@@ -11,6 +11,9 @@
 create table if not exists public.seloger_prix (
   -- numéro de l'annonce dans My SeLoger Pro
   id_annonce  bigint primary key,
+  -- code de la même annonce sur seloger.com (« 26P2YHL7C6RL »), celui de seloger_concurrence.sid :
+  -- ce n'est pas le même numéro que My SeLoger Pro, d'où les deux colonnes
+  sid         text,
   -- le vrai prix (promoteur), en euros
   prix_haut   integer not null check (prix_haut > 3000),
   -- toujours prix haut − 3 000 € : calculé par la base, on ne peut pas l'écrire à la main
@@ -26,18 +29,26 @@ create table if not exists public.seloger_prix (
   ville       text,
   -- en texte, pour garder le zéro de tête éventuel
   code_postal text,
-  typologie   text check (typologie in ('T1', 'T2', 'T3', 'T4', 'T5+', 'Maison')),
+  -- écrite comme dans le relevé de la concurrence (seloger_concurrence.typo) : T5 = 5 pièces et plus
+  typologie   text check (typologie in ('T1', 'T2', 'T3', 'T4', 'T5', 'Maison')),
   -- en m²
   surface     numeric check (surface > 0),
   -- prénom du conseiller de l'annonce
   vendeur     text,
   -- date de création de l'annonce sur SeLoger
   cree_le     date,
+  -- programme de la pige dont vient l'appartement, quand on le connaît ; si la pige retire le programme,
+  -- la case se vide toute seule et la ligne reste
+  programme_id text references public.pige_programmes (id) on delete set null,
   -- vide tant que l'annonce est en ligne
   retiree_le  timestamptz,
   -- dernière écriture sur la ligne, tenue par la base
   maj_le      timestamptz not null default now()
 );
+
+-- pour rapprocher nos annonces du relevé de la concurrence, et retrouver les annonces d'un programme
+create index if not exists seloger_prix_sid on public.seloger_prix (sid);
+create index if not exists seloger_prix_programme on public.seloger_prix (programme_id);
 
 -- maj_le suit chaque modification, même si l'écriture l'oublie
 create or replace function public.seloger_prix_maj()
