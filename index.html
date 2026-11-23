@@ -6,30 +6,11 @@
 <title>Dashboard — Commercialisation Immobilier Neuf</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0d0f14;
-    --surface: #13161e;
-    --surface2: #1a1e2a;
-    --border: #252a38;
-    --accent: #c8a96e;
-    --accent2: #4f7fe8;
-    --success: #3ecf8e;
-    --warning: #f5a623;
-    --danger: #e8504f;
-    --text: #e8eaf0;
-    --muted: #6b7280;
-    /* texte posé sur la couleur principale, et les mêmes couleurs en « r,v,b » pour les teintes transparentes */
-    --on-accent: #0d0f14;
-    --accent-rgb: 200,169,110;
-    --accent2-rgb: 79,127,232;
-    --font-head: 'Inter', sans-serif;
-    --font-body: 'Inter', sans-serif;
-  }
-
-  /* ---- THÈME CLAIR ---- */
   /* Charte GLR figée par Alex le 23/11/2026 (« A, bleu du logo ») : principale = bleu du logo,
-     seconde couleur = laiton foncé (lisible en texte), fonds crème. Les signaux (vert, orange, rouge) ne bougent pas. */
-  body.light {
+     seconde couleur = laiton foncé (lisible en texte), fonds crème. Les signaux (vert, orange, rouge) ne bougent pas.
+     Un seul thème : le thème sombre a été retiré le 23/11/2026 (décision d'Alex). La classe « light » reste
+     posée sur <body> pour les quelques règles qui la nomment encore. */
+  :root {
     --bg: #f4f0e8;
     --surface: #fbf8f1;
     --surface2: #efeae0;
@@ -41,9 +22,12 @@
     --danger: #cf3f36;
     --text: #161a1e;
     --muted: #616b75;
+    /* texte posé sur la couleur principale, et les mêmes couleurs en « r,v,b » pour les teintes transparentes */
     --on-accent: #ffffff;
     --accent-rgb: 0,88,117;
     --accent2-rgb: 138,106,47;
+    --font-head: 'Inter', sans-serif;
+    --font-body: 'Inter', sans-serif;
   }
   body.light .card, body.light .kpi { box-shadow: 0 1px 3px rgba(80,60,25,.07); }
 
@@ -818,7 +802,7 @@
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </head>
-<body>
+<body class="light">
 <div id="login-overlay" style="display:flex;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:#f4f0e8;font-family:Inter,system-ui,-apple-system,sans-serif;padding:24px">
   <div style="max-width:380px;width:100%;background:#fbf8f1;border:1px solid #d8d2c5;border-radius:18px;padding:38px 32px">
     <div style="font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#8a6a2f;text-align:center">GLR Immobilier</div>
@@ -1058,7 +1042,6 @@
         <div id="period-nav-cumul" style="display: flex;">
           <div class="month-badge">Depuis le début</div>
         </div>
-        <button onclick="toggleTheme()" id="theme-toggle" title="Basculer clair / sombre" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:6px 11px;color:var(--text);cursor:pointer;font-size:15px;line-height:1">☾</button>
       </div>
     </div>
 
@@ -3966,8 +3949,7 @@ function switchSpace(space) {
 function loadMailsGuide() {
   const f = document.getElementById('mails-cadre');
   if (!f) return;
-  const theme = document.body.classList.contains('light') ? 'light' : 'dark';
-  f.src = 'mails.html?embed=1&theme=' + theme + '&v=' + Date.now();
+  f.src = 'mails.html?embed=1&theme=light&v=' + Date.now();
 }
 
 // ============================================================
@@ -4949,19 +4931,8 @@ function loadSimulateur() {
   f.src = 'simulateur.html?embed=1';
 }
 
-// ---- Thème clair / sombre ----
-function applyTheme(name) {
-  const light = name === 'light';
-  document.body.classList.toggle('light', light);
-  const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = light ? '☼' : '☾';
-}
-function toggleTheme() {
-  const light = !document.body.classList.contains('light');
-  applyTheme(light ? 'light' : 'dark');
-  try { localStorage.setItem('glr-theme', light ? 'light' : 'dark'); } catch (e) {}
-}
-(function () { try { applyTheme(localStorage.getItem('glr-theme') || 'light'); } catch (e) {} })();
+// ---- Un seul thème, clair (thème sombre retiré le 23/11/2026) : on oublie l'ancien choix gardé sur l'appareil ----
+(function () { try { document.body.classList.add('light'); localStorage.removeItem('glr-theme'); } catch (e) {} })();
 
 function goTo(id, el) {
   if (typeof eqFicheFermer === 'function') eqFicheFermer(); // ferme la fiche client si ouverte
