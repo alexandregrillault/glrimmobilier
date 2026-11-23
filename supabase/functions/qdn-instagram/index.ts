@@ -1,29 +1,28 @@
 // Robot Instagram de Quoi de neuf (demande d'Alex du 03/11/2026)
 //
 // Webhook de l'API Instagram (connexion Instagram, accès standard : le compte
-// @quoideneuf.immo seulement). Le questionnaire se fait dans les messages privés,
-// question par question (questionnaire.ts) :
-//  - un commentaire qui contient « plans » : première question en réponse privée au commentaire,
-//    sans réponse publique (retirée le 06/11/2026, demande d'Alex : Instagram masquait tout le fil
-//    des « Plan » suivis de nos réponses identiques) ;
-//  - un message privé : la réponse à la question en cours, ou, sans conversation,
-//    une invitation à recevoir les plans.
-// Parcours court depuis le 06/11/2026 : ville, typologie, puis la carte du planning de Théophile ;
-// la fiche est créée par la page de rendez-vous quand la personne valide son créneau avec ses
-// coordonnées. La création de fiche par lead-inbound ci-dessous ne sert plus qu'aux conversations
-// de l'ancien parcours encore en cours.
+// @quoideneuf.immo seulement).
+// v19 (23/11/2026, décision d'Alex : « je veux simplement que le robot envoie le message ») :
+// plus de questionnaire. Le robot envoie un seul message, le même pour tout le monde (parcours.ts) :
+//  - un commentaire qui contient « plan » ou « plans » : le message en réponse privée au commentaire,
+//    jamais de réponse publique (retirée le 06/11/2026 : Instagram masquait tout le fil) ;
+//  - un message privé qui parle de plans : le même message ;
+//  - un autre message privé : rien, c'est un humain qui répond ;
+//  - « STOP » : le robot s'arrête.
+// Le message porte un bouton « Voir le planning » vers le planning de Théophile. Si Instagram
+// refuse le bouton, le même texte part avec l'adresse du planning écrite. La fiche est créée par
+// la page de rendez-vous quand la personne valide son créneau : le robot ne crée aucune fiche.
 //
 // Clés lues dans app_secrets (jamais dans ce dépôt public) :
 //   ig_app_secret      secret de l'application Meta (signature des appels)
 //   ig_verify_token    mot de passe choisi pour l'abonnement au webhook
 //   ig_access_token    jeton longue durée du compte Instagram (60 jours, renouvelé ici)
-//   lead_inbound_token jeton de lead-inbound
 // Tables : qdn_instagram_evenements (ne jamais traiter deux fois le même événement),
-// qdn_instagram_conversations (étape et réponses de chaque personne).
+// qdn_instagram_conversations (où en est chaque personne : message envoyé, arrêt demandé).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { demarrerDepuisCommentaire, repondre, parleDePlans, Q, lienPlanningPersonnel } from "./questionnaire.ts";
-import type { Conversation, Message } from "./questionnaire.ts";
+import { demarrerDepuisCommentaire, repondre, parleDePlans, enTexte } from "./parcours.ts";
+import type { Conversation, Message } from "./parcours.ts";
 
 // Connexion unifiée (seule voie ouverte aux nouvelles applications depuis 2026) : jeton
 // d'utilisateur système « EAA… » sans expiration, sur graph.facebook.com. Un jeton Instagram
@@ -32,10 +31,7 @@ const VERSION = "v24.0";
 const graph = (jt: string) => `https://graph.${jt.startsWith("IG") ? "instagram" : "facebook"}.com/${VERSION}`;
 const RENOUVELER_APRES_J = 30;
 const CONSERVATION_J = 365;
-const FENETRE_H = 24;
 const ABANDON_J = 7;
-const VENDEUR = "theophile"; // leads Quoi de neuf chez Théophile (décision d'Alex du 03/11/2026)
-const SOURCE = "Quoi de neuf Instagram";
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -45,7 +41,7 @@ type Secrets = Record<string, { value: string; updated_at: string }>;
 let CLES: { s: Secrets; t: number } | null = null;
 async function secrets(): Promise<Secrets> {
   if (CLES && Date.now() - CLES.t < 300000) return CLES.s;
-  const { data } = await supabase.from("app_secrets").select("name, value, updated_at").in("name", ["ig_app_secret", "ig_verify_token", "ig_access_token", "lead_inbound_token"]);
+  const { data } = await supabase.from("app_secrets").select("name, value, updated_at").in("name", ["ig_app_secret", "ig_verify_token", "ig_access_token"]);
   const s: Secrets = {};
   (data || []).forEach((r: any) => (s[r.name] = { value: r.value, updated_at: r.updated_at }));
   if (s.ig_app_secret && s.ig_access_token) CLES = { s, t: Date.now() };
@@ -94,16 +90,27 @@ async function appel(chemin: string, jt: string, corps: unknown) {
   return { ok: r.ok, statut: r.status, reponse: j };
 }
 
+// Un message à boutons part comme « modèle à boutons » d'Instagram : le texte (640 caractères au
+// plus), puis jusqu'à trois boutons qui ouvrent une page.
 function formatMessage(m: Message) {
-  if (m.carte) {
-    return { attachment: { type: "template", payload: { template_type: "generic", elements: [{
-      title: m.carte.titre, subtitle: m.carte.sousTitre,
-      buttons: m.carte.boutons.map((b) => ({ type: "web_url", url: b.url, title: b.title })),
-    }] } } };
+  if (m.boutons && m.boutons.length) {
+    return { attachment: { type: "template", payload: { template_type: "button", text: m.text,
+      buttons: m.boutons.map((b) => ({ type: "web_url", url: b.url, title: b.title })) } } };
   }
-  return m.quick_replies
-    ? { text: m.text, quick_replies: m.quick_replies.map((b) => ({ content_type: "text", title: b.title, payload: b.payload })) }
-    : { text: m.text };
+  return { text: m.text };
+}
+
+// Envoie un message à `destinataire` (une personne, ou un commentaire pour la réponse privée).
+// Boutons refusés par Instagram : le même message repart en texte, avec les adresses écrites.
+async function envoyer(compte: string, jt: string, destinataire: Record<string, string>, m: Message) {
+  let e = await appel(`${compte}/messages`, jt, { recipient: destinataire, message: formatMessage(m) });
+  let forme = m.boutons && m.boutons.length ? "boutons" : "texte";
+  if (!e.ok && forme === "boutons") {
+    const refus = { statut: e.statut, erreur: (e.reponse as any)?.error?.message || null };
+    e = await appel(`${compte}/messages`, jt, { recipient: destinataire, message: { text: enTexte(m) } });
+    return { ok: e.ok, statut: e.statut, forme: "texte avec adresses", boutons_refuses: refus, erreur: e.ok ? null : (e.reponse as any)?.error?.message || null };
+  }
+  return { ok: e.ok, statut: e.statut, forme, erreur: e.ok ? null : (e.reponse as any)?.error?.message || null };
 }
 
 // Enregistre l'événement ; renvoie false s'il a déjà été traité (Meta renvoie parfois deux fois).
@@ -127,66 +134,6 @@ async function ecrireConversation(igUser: string, conv: Conversation, extra: Rec
   });
 }
 
-// Fin du questionnaire avec accord : la fiche part au CRM par lead-inbound (dédoublonnage, paternité).
-async function creerFiche(s: Secrets, r: Record<string, string>): Promise<string | null> {
-  if (!s.lead_inbound_token?.value) return null;
-  const aujourdhui = new Date().toISOString().slice(0, 10);
-  const corps = [
-    `Demande reçue en message privé Instagram (questionnaire Quoi de neuf${r.pseudo ? ", @" + r.pseudo : ""})`,
-    ``,
-    `Prénom : ${r.prenom}`,
-    `Téléphone : ${r.telephone}`,
-    `Email : ${r.email}`,
-    `Secteur recherché : ${r.zone}`,
-    r.typologie ? `Typologie : ${r.typologie}` : null,
-    r.budget ? `Budget : ${r.budget}` : null,
-    ``,
-    `Accord de recontact par GLR Immobilier donné le ${aujourdhui}.`,
-  ].filter((l) => l !== null).join("\n");
-  const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/lead-inbound?token=${s.lead_inbound_token.value}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      vendeur: VENDEUR, from: r.email, from_name: r.prenom, subject: `Instagram Quoi de neuf — ${r.prenom}`, plain: corps,
-      nom: r.prenom, email: r.email, telephone: r.telephone, budget: r.budget || null, lieu: r.zone, typologie: r.typologie || null,
-    }),
-  });
-  const resultat: any = await res.json().catch(() => null);
-  if (!resultat?.id) return null;
-  try {
-    const { data: actuel } = await supabase.from("contacts").select("notes").eq("id", resultat.id).single();
-    const maj: Record<string, unknown> = {};
-    if (resultat.status === "created") maj.source = SOURCE;
-    const trace = `[${aujourdhui}] Questionnaire Instagram Quoi de neuf${r.pseudo ? " (@" + r.pseudo + ")" : ""} : ${r.zone}${r.typologie ? ", " + r.typologie : ""}${r.budget ? ", " + r.budget : ""}. Accord de recontact donné.`;
-    maj.notes = actuel?.notes ? actuel.notes + "\n" + trace : trace;
-    await supabase.from("contacts").update(maj).eq("id", resultat.id);
-  } catch (_) { /* la fiche existe : on n'échoue pas pour un affinage */ }
-  return resultat.id;
-}
-
-// Lien de rendez-vous personnel de la fiche (créé avec le lead, table rdv_liens) : la page montre
-// le planning du conseiller et la personne n'a pas à retaper ses coordonnées. Sans lien valable,
-// le message garde le lien public du planning de Théophile.
-// Un lien qui porte déjà un rendez-vous passé (fiche existante, test du 03/11/2026 : la page proposait
-// de valider un ancien rendez-vous de septembre) n'est pas renvoyé : on crée un lien neuf pour la fiche.
-async function lienRdv(contactId: string): Promise<string | null> {
-  try {
-    const { data } = await supabase.from("rdv_liens").select("token, contexte, vendeur, rdv").eq("contact_id", contactId)
-      .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(1);
-    const l: any = data?.[0];
-    if (!l?.token) return null;
-    const contexte = { ...(l.contexte || {}), source: SOURCE };
-    const debut = l.rdv?.debut ? new Date(l.rdv.debut).getTime() : null;
-    if (debut === null || debut > Date.now()) {
-      await supabase.from("rdv_liens").update({ contexte }).eq("token", l.token);
-      return l.token;
-    }
-    const token = Array.from(crypto.getRandomValues(new Uint8Array(12))).map((b) => b.toString(16).padStart(2, "0")).join("");
-    const { error } = await supabase.from("rdv_liens").insert({ token, contact_id: contactId, vendeur: l.vendeur, origine: "auto_lead", contexte });
-    return error ? null : token;
-  } catch (_) { return null; }
-}
-
 async function traiterCommentaire(compte: string, v: any, jt: string) {
   const texte = String(v?.text || "");
   const auteur = v?.from?.id ? String(v.from.id) : null;
@@ -195,15 +142,15 @@ async function traiterCommentaire(compte: string, v: any, jt: string) {
   const ok = await nouveau({ id: String(v.id), type: "commentaire", ig_user: auteur, ig_pseudo: pseudo, texte: texte.slice(0, 500), media_id: v.media?.id || null });
   if (!ok) return;
   const r = demarrerDepuisCommentaire(pseudo);
-  // Réponse privée seulement : plus de réponse publique sous le commentaire (06/11/2026).
-  const prive = await appel(`${compte}/messages`, jt, { recipient: { comment_id: String(v.id) }, message: formatMessage(r.messages[0]) });
-  if (prive.ok) {
+  // Réponse privée seulement, un seul message : jamais de réponse publique sous le commentaire.
+  const prive = await envoyer(compte, jt, { comment_id: String(v.id) }, r.messages[0]);
+  if (prive.ok && r.conv) {
     await ecrireConversation(auteur, r.conv, { origine: "commentaire", media_id: v.media?.id || null, debut_le: new Date().toISOString(), contact_id: null });
   }
   await noter(String(v.id), prive.ok, { prive });
 }
 
-async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
+async function traiterMessage(compte: string, m: any, jt: string) {
   const exp = m?.sender?.id ? String(m.sender.id) : null;
   const msg = m?.message;
   if (!exp || exp === compte || !msg?.mid || msg.is_echo) return;
@@ -213,34 +160,14 @@ async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
   if (!ok) return;
 
   const conv: Conversation | null = ligne ? { etape: ligne.etape, reponses: ligne.reponses || {}, essais: ligne.essais || 0 } : null;
-  const expire = ligne ? Date.now() - new Date(ligne.maj_le).getTime() > FENETRE_H * 3600000 : false;
-  const r = repondre(conv, String(msg.text || ""), msg.quick_reply?.payload || null, expire);
+  const r = repondre(conv, String(msg.text || ""), msg.quick_reply?.payload || null);
 
-  const envois: { ok: boolean; statut: number }[] = [];
-  const envoyer = async (mm: Message) => {
-    let e = await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: formatMessage(mm) });
-    // Carte refusée par Instagram : on retombe sur le texte avec le lien du premier bouton.
-    if (!e.ok && mm.carte) e = await appel(`${compte}/messages`, jt, { recipient: { id: exp }, message: { text: `${mm.text} ${mm.carte.boutons[0].url}` } });
-    envois.push(e);
-  };
-
-  let extra: Record<string, unknown> = ligne ? {} : { origine: "message", debut_le: new Date().toISOString() };
-  let conv2 = r.conv;
-  if (r.creerFiche) {
-    // Le merci part tout de suite ; la fiche entre dans le CRM pendant ce temps (l'accusé par e-mail prend
-    // plusieurs secondes), puis la carte du planning arrive avec le lien personnel de la fiche.
-    await envoyer(r.messages[0]);
-    const contact = await creerFiche(s, r.conv.reponses);
-    const jetonRdv = contact ? await lienRdv(contact) : null;
-    await envoyer(jetonRdv ? Q.planning(lienPlanningPersonnel(jetonRdv)) : r.messages[1]);
-    // Une fois la fiche créée, on ne garde ici que le prénom et le pseudo.
-    conv2 = { ...r.conv, reponses: { prenom: r.conv.reponses.prenom || "", pseudo: r.conv.reponses.pseudo || "" } };
-    extra = { ...extra, contact_id: contact };
-  } else {
-    for (const mm of r.messages) await envoyer(mm);
+  const envois: unknown[] = [];
+  for (const mm of r.messages) envois.push(await envoyer(compte, jt, { id: exp }, mm));
+  if (r.conv && r.conv !== conv) {
+    await ecrireConversation(exp, r.conv, ligne ? {} : { origine: "message", debut_le: new Date().toISOString() });
   }
-  if (r.messages.length || r.conv !== conv) await ecrireConversation(exp, conv2, extra);
-  await noter(String(msg.mid), envois.every((e) => e.ok), { envois: envois.map((e) => ({ ok: e.ok, statut: e.statut })), etape: conv2.etape, fiche: !!r.creerFiche });
+  await noter(String(msg.mid), envois.every((e: any) => e.ok), { envois, etape: r.conv ? r.conv.etape : null });
 }
 
 Deno.serve(async (req: Request) => {
@@ -275,7 +202,7 @@ Deno.serve(async (req: Request) => {
       }
     }
     for (const m of entry.messaging || []) {
-      try { await traiterMessage(compte, m, jt, s); } catch (_) { /* idem */ }
+      try { await traiterMessage(compte, m, jt); } catch (_) { /* idem */ }
     }
   }
   // Conservation annoncée dans les mentions légales : 12 mois au plus. Faite un appel sur vingt
@@ -285,7 +212,7 @@ Deno.serve(async (req: Request) => {
     await Promise.all([
       supabase.from("qdn_instagram_evenements").delete().lt("recu_le", limite),
       supabase.from("qdn_instagram_conversations").delete().lt("maj_le", limite),
-      // Questionnaire abandonné en cours de route : rien n'est gardé au-delà de 7 jours.
+      // Ancien questionnaire abandonné en cours de route : rien n'est gardé au-delà de 7 jours.
       supabase.from("qdn_instagram_conversations").delete()
         .not("etape", "in", "(planning,fini,refus,ferme)").lt("maj_le", new Date(Date.now() - ABANDON_J * 86400000).toISOString()),
     ]);
