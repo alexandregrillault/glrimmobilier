@@ -5,8 +5,10 @@
 <meta name="robots" content="noindex,nofollow">
 <style>
   :root {
-    --gold:#c8a96e; --gold-fonce:#b3945a; --dark:#1a1d23; --muted:#6b7280;
-    --bg:#f7f5f1; --carte:#ffffff; --bordure:#e8e3d9; --encre:#3f4550;
+    /* Charte GLR unique (23/11/2026) : bleu du logo, accent laiton (jamais pour du texte) */
+    --bleu:#005875; --laiton:#b0894c; --laiton-texte:#8a6a2f; --teinte:#dce7ec;
+    --dark:#161a1e; --muted:#616b75;
+    --bg:#f4f0e8; --carte:#fbf8f1; --bordure:#d8d2c5; --encre:#161a1e;
   }
   * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
   body { background:var(--bg); color:var(--dark); font-family:'Helvetica Neue',Arial,sans-serif; line-height:1.55; }
@@ -15,31 +17,31 @@
   header { text-align:center; padding:22px 0 18px; }
   .marque { font-family:Georgia,'Times New Roman',serif; letter-spacing:5px; font-size:18px; font-weight:700; }
   .logo { display:block; height:72px; width:auto; max-width:80%; margin:0 auto; }
-  .filet { width:54px; height:2px; background:var(--gold); margin:14px auto 0; }
+  .filet { width:54px; height:2px; background:var(--laiton); margin:14px auto 0; }
 
-  .bloc { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; padding:24px 26px; margin:16px 0; box-shadow:0 2px 12px rgba(26,29,35,.05); }
+  .bloc { background:var(--carte); border:1px solid var(--bordure); border-radius:16px; padding:24px 26px; margin:16px 0; box-shadow:0 2px 12px rgba(22,26,30,.05); }
   .bloc h1 { font-family:Georgia,serif; font-size:22px; font-weight:600; margin-bottom:8px; }
   .bloc h2 { font-family:Georgia,serif; font-size:19px; font-weight:600; margin-bottom:6px; }
   .bloc p { color:var(--encre); font-size:15px; }
   .sig { margin-top:14px; color:var(--muted); font-size:13px; font-style:italic; }
 
   /* Le bien sur lequel le client a écrit */
-  .bien-tag { display:inline-block; font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--gold); border-radius:5px; padding:3px 9px; margin-bottom:10px; }
+  .bien-tag { display:inline-block; font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--laiton); border-radius:5px; padding:3px 9px; margin-bottom:10px; }
   .bien-titre { font-family:Georgia,serif; font-size:19px; font-weight:600; margin-bottom:2px; }
   .bien-ville { font-size:14px; color:var(--encre); }
   .bien-prix { font-family:Georgia,serif; font-size:24px; font-weight:700; color:var(--encre); margin-top:8px; }
   .bien-meta { font-size:12.5px; color:var(--muted); margin-top:8px; }
 
   /* Choix du créneau */
-  .rdv { border:1px solid var(--gold); background:linear-gradient(180deg,#fffdf8,#fdfaf3); }
+  .rdv { border:1px solid var(--laiton); background:linear-gradient(180deg,#ffffff,#fbf8f1); }
   /* Deux formats : la visio de 30 min, ou l'appel de 10 min */
   .fmt-choix { display:flex; gap:10px; margin:14px 0 4px; }
   .fmt { flex:1; text-align:left; border:1px solid var(--bordure); background:#fff; color:var(--encre); border-radius:14px; padding:13px 14px; cursor:pointer; transition:all .15s; font-family:inherit; position:relative; }
-  .fmt:hover { border-color:var(--gold); }
-  .fmt.on { border-color:var(--gold); box-shadow:0 0 0 2px var(--gold) inset; background:#fffdf8; }
+  .fmt:hover { border-color:var(--bleu); }
+  .fmt.on { border-color:var(--bleu); box-shadow:0 0 0 2px var(--bleu) inset; background:var(--teinte); }
   .fmt-titre { font-family:Georgia,serif; font-size:16px; font-weight:600; color:var(--dark); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .fmt-duree { font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:.8px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--gold); border-radius:5px; padding:2px 7px; }
-  .fmt.on .fmt-duree { background:var(--gold-fonce); }
+  .fmt-duree { font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px; letter-spacing:.8px; text-transform:uppercase; font-weight:700; color:#fff; background:var(--laiton); border-radius:5px; padding:2px 7px; }
+  .fmt.on .fmt-duree { background:var(--bleu); }
   .fmt-sous { font-size:13px; color:var(--encre); margin-top:6px; line-height:1.45; }
   .fmt-mode { font-size:11.5px; color:var(--muted); margin-top:6px; }
   .fmt-vide { font-size:13px; color:var(--muted); margin-top:10px; }
@@ -47,80 +49,80 @@
   .cren-etape { font-size:11.5px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin:16px 0 8px; }
   .cren-jrow { display:flex; gap:7px; overflow-x:auto; padding-bottom:6px; -webkit-overflow-scrolling:touch; }
   .cren-jpill { flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:2px; border:1px solid var(--bordure); background:#fff; color:var(--dark); border-radius:12px; padding:8px 14px; cursor:pointer; transition:all .15s; font-family:inherit; }
-  .cren-jpill:hover { border-color:var(--gold); }
+  .cren-jpill:hover { border-color:var(--bleu); }
   .cren-jpill-wd { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); }
   .cren-jpill-dm { font-size:14px; font-weight:700; }
-  .cren-jpill.on { background:var(--gold); border-color:var(--gold); color:#fff; }
+  .cren-jpill.on { background:var(--bleu); border-color:var(--bleu); color:#fff; }
   .cren-jpill.on .cren-jpill-wd { color:rgba(255,255,255,.85); }
   .cren-liste { display:flex; gap:7px; flex-wrap:wrap; }
   .cren { border:1px solid var(--bordure); background:#fff; color:var(--dark); border-radius:10px; padding:10px 16px; font-size:14px; font-weight:600; cursor:pointer; transition:all .15s; font-family:inherit; }
-  .cren:hover { border-color:var(--gold); background:var(--gold); color:#fff; }
+  .cren:hover { border-color:var(--bleu); background:var(--bleu); color:#fff; }
   .cren.off { opacity:.35; cursor:not-allowed; }
-  .cren.choisi { background:var(--gold); border-color:var(--gold); color:#fff; }
+  .cren.choisi { background:var(--bleu); border-color:var(--bleu); color:#fff; }
   .cren-autre { margin-top:16px; text-align:center; }
   .cren-autre button { background:none; border:none; color:var(--muted); font-size:13px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; font-family:inherit; }
-  .cren-autre button:hover { color:var(--gold-fonce); }
+  .cren-autre button:hover { color:var(--bleu); }
 
   .rdv-form { display:flex; gap:8px; margin-top:12px; }
   .rdv-form input { flex:1; min-width:0; border:1px solid var(--bordure); background:#fff; border-radius:10px; padding:11px 13px; font-size:14px; color:var(--dark); outline:none; font-family:inherit; }
-  .rdv-form input:focus { border-color:var(--gold); }
-  .rdv-btn { border:none; background:var(--gold); color:#fff; border-radius:10px; padding:11px 18px; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit; }
-  .rdv-btn:hover { background:var(--gold-fonce); }
+  .rdv-form input:focus { border-color:var(--bleu); }
+  .rdv-btn { border:none; background:var(--bleu); color:#fff; border-radius:10px; padding:11px 18px; font-size:13.5px; font-weight:700; cursor:pointer; white-space:nowrap; font-family:inherit; }
+  .rdv-btn:hover { opacity:.9; }
 
   /* Le visiteur du lien public se présente au moment de confirmer */
-  .form-quand { background:#fff; border:1px solid var(--gold); border-radius:11px; padding:11px 14px; font-size:14px; color:var(--encre); margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .form-quand { background:#fff; border:1px solid var(--laiton); border-radius:11px; padding:11px 14px; font-size:14px; color:var(--encre); margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .form-quand b { color:var(--dark); }
-  .form-quand button { margin-left:auto; background:none; border:none; color:var(--gold-fonce); font-size:13px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; font-family:inherit; }
+  .form-quand button { margin-left:auto; background:none; border:none; color:var(--bleu); font-size:13px; text-decoration:underline; text-underline-offset:3px; cursor:pointer; font-family:inherit; }
   .champs { display:flex; flex-direction:column; gap:11px; }
   .champ label { display:block; font-size:11px; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
   .champ input, .champ textarea { width:100%; border:1px solid var(--bordure); background:#fff; border-radius:10px; padding:11px 13px; font-size:14.5px; color:var(--dark); outline:none; font-family:inherit; }
   .champ textarea { resize:vertical; min-height:66px; }
-  .champ input:focus, .champ textarea:focus { border-color:var(--gold); }
+  .champ input:focus, .champ textarea:focus { border-color:var(--bleu); }
   .champ .err { font-size:12.5px; color:#b23c3c; margin-top:4px; display:none; }
   .champ.faux input, .champ.faux textarea { border-color:#b23c3c; }
   .champ.faux .err { display:block; }
   .piege { position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden; }
-  .btn-large { width:100%; border:none; background:var(--gold); color:#fff; border-radius:12px; padding:14px; font-size:15.5px; font-weight:700; cursor:pointer; font-family:inherit; margin-top:16px; }
-  .btn-large:hover { background:var(--gold-fonce); }
+  .btn-large { width:100%; border:none; background:var(--bleu); color:#fff; border-radius:12px; padding:14px; font-size:15.5px; font-weight:700; cursor:pointer; font-family:inherit; margin-top:16px; }
+  .btn-large:hover { opacity:.9; }
   .btn-large[disabled] { opacity:.6; cursor:default; }
   .mention { font-size:12px; color:var(--muted); margin-top:10px; text-align:center; }
 
   .confirme { text-align:center; }
-  .budget-invite { text-align:left; border:1px solid var(--gold); background:#fffdf8; }
-  .budget-invite .budget-tag { display:inline-block; font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:var(--gold-fonce); margin-bottom:6px; }
+  .budget-invite { text-align:left; border:1px solid var(--laiton); background:#fff; }
+  .budget-invite .budget-tag { display:inline-block; font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:var(--laiton-texte); margin-bottom:6px; }
   .budget-invite h2 { font-size:19px; margin:0 0 6px; }
   .budget-invite p { font-size:14.5px; margin:0; }
-  .budget-btn { display:block; text-align:center; margin-top:14px; background:var(--gold); color:#fff; text-decoration:none; font-weight:700; font-size:15px; border-radius:12px; padding:13px 16px; }
-  .budget-btn:hover { background:var(--gold-fonce); }
+  .budget-btn { display:block; text-align:center; margin-top:14px; background:var(--bleu); color:#fff; text-decoration:none; font-weight:700; font-size:15px; border-radius:12px; padding:13px 16px; }
+  .budget-btn:hover { opacity:.9; }
   .budget-note { margin-top:8px; font-size:12.5px; color:var(--muted); text-align:center; }
-  .confirme .quand { font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--gold-fonce); margin:10px 0 4px; }
+  .confirme .quand { font-family:Georgia,serif; font-size:22px; font-weight:700; color:var(--bleu); margin:10px 0 4px; }
   .confirme .etat { font-size:13px; color:var(--muted); }
-  .coche { width:46px; height:46px; border-radius:50%; background:var(--gold); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 12px; }
+  .coche { width:46px; height:46px; border-radius:50%; background:var(--bleu); color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 12px; }
 
   /* Entrer dans la visio : la salle Google Meet du conseiller n'existe que
      quand il y est. Un client qui arrive avant lui voit un refus sec de Google
      (« Vous ne pouvez pas participer à cet appel vidéo ») et croit le lien
      cassé. Ce bloc le lui explique avant qu'il clique, et lui dit quoi faire. */
   .visio { margin-top:18px; padding-top:18px; border-top:1px solid var(--bordure); text-align:left; }
-  .visio-etape { font-size:11px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:var(--gold-fonce); margin-bottom:8px; text-align:center; }
-  .visio-btn { display:block; width:100%; background:var(--gold); color:#fff; text-decoration:none; text-align:center; border-radius:12px; padding:15px; font-size:16px; font-weight:700; }
-  .visio-btn:hover { background:var(--gold-fonce); }
-  .visio-btn.attente { background:#fff; color:var(--gold-fonce); border:2px solid var(--gold); padding:13px; }
+  .visio-etape { font-size:11px; letter-spacing:1.2px; text-transform:uppercase; font-weight:700; color:var(--laiton-texte); margin-bottom:8px; text-align:center; }
+  .visio-btn { display:block; width:100%; background:var(--bleu); color:#fff; text-decoration:none; text-align:center; border-radius:12px; padding:15px; font-size:16px; font-weight:700; }
+  .visio-btn:hover { opacity:.9; }
+  .visio-btn.attente { background:#fff; color:var(--bleu); border:2px solid var(--bleu); padding:13px; }
   .visio-note { font-size:13.5px; color:var(--encre); margin-top:12px; line-height:1.5; }
   .visio-note b { color:var(--dark); }
-  .visio-note .google { display:block; margin-top:8px; padding:9px 12px; background:#f7f5f1; border-radius:9px; font-size:13px; }
+  .visio-note .google { display:block; margin-top:8px; padding:9px 12px; background:var(--bg); border-radius:9px; font-size:13px; }
   .visio-lien { font-size:12px; color:var(--muted); margin-top:10px; word-break:break-all; text-align:center; }
-  .visio-lien a { color:var(--gold-fonce); }
+  .visio-lien a { color:var(--bleu); }
 
   footer { text-align:center; color:var(--muted); font-size:12.5px; margin-top:22px; }
-  footer a { color:var(--gold-fonce); text-decoration:none; }
+  footer a { color:var(--bleu); text-decoration:none; }
   .etat-vide { text-align:center; color:var(--muted); padding:60px 0; }
   .etat-vide h2 { font-family:Georgia,serif; color:var(--dark); font-size:20px; margin-bottom:10px; }
 
   /* Double confirmation : un doigt qui glisse sur un téléphone ne doit pas
      réserver un rendez-vous. Rien n'est envoyé tant que le client n'a pas
      relu le jour, l'heure et le mode et appuyé une seconde fois. */
-  #confirm { position:fixed; inset:0; background:rgba(26,29,35,.55); display:none; align-items:center; justify-content:center; padding:22px; z-index:120; }
+  #confirm { position:fixed; inset:0; background:rgba(22,26,30,.55); display:none; align-items:center; justify-content:center; padding:22px; z-index:120; }
   #confirm.show { display:flex; }
   #confirm .boite { background:#fff; border:1px solid var(--bordure); border-radius:16px; max-width:390px; width:100%; padding:26px 24px 22px; text-align:center; box-shadow:0 18px 50px rgba(0,0,0,.22); }
   #confirm h3 { font-family:Georgia,serif; font-size:19px; font-weight:600; color:var(--dark); margin:0 0 14px; }
@@ -129,9 +131,9 @@
   #confirm .cf-actions { display:flex; gap:10px; margin-top:22px; }
   #confirm .cf-actions button { flex:1; border-radius:10px; padding:12px 14px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
   #confirm .cf-non { background:#fff; border:1px solid var(--bordure); color:var(--encre); }
-  #confirm .cf-oui { background:var(--gold); border:none; color:#fff; }
-  #confirm .cf-oui:hover { background:var(--gold-fonce); }
-  #toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(140px); background:var(--dark); color:#fff; border-radius:24px; padding:10px 22px; font-size:13.5px; transition:transform .25s; z-index:80; max-width:88vw; text-align:center; }
+  #confirm .cf-oui { background:var(--bleu); border:none; color:#fff; }
+  #confirm .cf-oui:hover { opacity:.9; }
+  #toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(140px); background:var(--bleu); color:#fff; border-radius:24px; padding:10px 22px; font-size:13.5px; transition:transform .25s; z-index:80; max-width:88vw; text-align:center; }
   #toast.show { transform:translateX(-50%) translateY(0); }
 
   @media (max-width:520px){
@@ -454,7 +456,7 @@
       h += "<div class='cren-autre'><button id='rdv-basculer'>Aucun de ces créneaux ne me convient</button></div>";
       h += "<div id='rdv-libre' style='display:none'><div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Envoyer ma demande</button></div></div>";
     } else if (etat.demande){
-      h += "<p style='color:var(--gold-fonce);font-weight:600;margin-top:10px'>✓ Votre demande a bien été transmise — " + qui + " revient vers vous très vite.</p>";
+      h += "<p style='color:var(--bleu);font-weight:600;margin-top:10px'>✓ Votre demande a bien été transmise — " + qui + " revient vers vous très vite.</p>";
     } else {
       h += "<div class='rdv-form'><input id='rdv-creneau' type='text' maxlength='300' placeholder='Ex : mardi après 18h, ou samedi matin'><button class='rdv-btn' id='rdv-envoyer'>Demander à être rappelé</button></div>";
     }
