@@ -60,6 +60,11 @@
 // puis dans tous les mails envoyés à un client qui a déjà reçu une sélection
 // (décision d'Alex, 08/10/2026). Lien et phrase dans reglages_mail
 // (avis_google_url, avis_google_texte), modifiables sans redéployer.
+// v21 (23/11/2026) : charte GLR unique figée par Alex (« A, bleu du logo ») — couleurs
+// seulement, aucun texte ni aucune logique ne change. Boutons, liens et heure du
+// rendez-vous en bleu du logo (#005875) ; filet, bordures d'encart et étoiles en laiton
+// (#b0894c) ; petits titres en capitales en laiton foncé (#8a6a2f) ; fond #f4f0e8,
+// texte #161a1e, texte discret #616b75, traits #d8d2c5.
 //
 // `apercu: true` dans le corps : la fonction renvoie le mail fabriqué (sujet + html)
 // sans l'envoyer — c'est l'aperçu « tel que le client le recevra » du dashboard.
@@ -141,7 +146,7 @@ async function aDejaUneSelection(contactId: string | null): Promise<boolean> {
 // lien de rendez-vous voyage, dans le texte, là où le vendeur l'a mis.
 function paragraphes(texte: string): string {
   const lier = (p: string) => esc(p).replace(/https?:\/\/[^\s<]+/g, (u) =>
-    `<a href="${u}" style="color:#b3945a;font-weight:700;text-decoration:underline;word-break:break-all">${u}</a>`);
+    `<a href="${u}" style="color:#005875;font-weight:700;text-decoration:underline;word-break:break-all">${u}</a>`);
   return String(texte || "").replace(/\r\n?/g, "\n").trim().split(/\n{2,}/)
     .map((p) => `<p style="margin:0 0 12px">${lier(p).replace(/\n/g, "<br>")}</p>`)
     .join("");
@@ -260,38 +265,38 @@ function liensAgenda(o: { debut: string; fin: string; vendeur: string; mode: str
 // `avis` (v20) : petite phrase cliquable vers la fiche Google, sous la signature.
 function gabarit(o: { prenom: string; vendeur: string; titre: string; texte: string; encart?: string; bouton: string; lien: string; bouton2?: string; lien2?: string; formule?: string; avis?: { url: string; texte: string } | null }): string {
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><style>:root{color-scheme:light only;supported-color-schemes:light}</style></head>
-<body bgcolor="#f7f5f1" style="margin:0;padding:0;background:#f7f5f1;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1d23">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f7f5f1" style="background:#f7f5f1;padding:26px 12px">
+<body bgcolor="#f4f0e8" style="margin:0;padding:0;background:#f4f0e8;font-family:'Helvetica Neue',Arial,sans-serif;color:#161a1e">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f0e8" style="background:#f4f0e8;padding:26px 12px">
 <tr><td align="center">
-<table role="presentation" width="560" cellpadding="0" cellspacing="0" bgcolor="#fbf8f1" style="width:100%;max-width:560px;background:#fbf8f1;border:1px solid #e8e3d9;border-radius:18px;overflow:hidden">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" bgcolor="#fbf8f1" style="width:100%;max-width:560px;background:#fbf8f1;border:1px solid #d8d2c5;border-radius:18px;overflow:hidden">
 
   <tr><td align="center" style="padding:26px 30px 6px">
     <img src="${LOGO}" alt="GLR Immobilier" width="110" style="display:block;height:auto;border:0">
-    <div style="width:54px;height:2px;background:#c8a96e;margin:14px auto 0"></div>
+    <div style="width:54px;height:2px;background:#b0894c;margin:14px auto 0"></div>
   </td></tr>
 
   <tr><td style="padding:20px 30px 6px">
     ${o.prenom ? `<div style="font-family:Georgia,serif;font-size:21px;font-weight:600;margin-bottom:10px">Bonjour ${esc(o.prenom)},</div>` : ""}
-    ${o.titre ? `<div style="font-family:Georgia,serif;font-size:19px;font-weight:600;color:#1a1d23;margin-bottom:8px">${esc(o.titre)}</div>` : ""}
-    <div style="font-size:15px;line-height:1.6;color:#3f4550">${o.texte}</div>
+    ${o.titre ? `<div style="font-family:Georgia,serif;font-size:19px;font-weight:600;color:#161a1e;margin-bottom:8px">${esc(o.titre)}</div>` : ""}
+    <div style="font-size:15px;line-height:1.6;color:#161a1e">${o.texte}</div>
   </td></tr>
 
   ${o.encart ? `<tr><td style="padding:18px 30px 0">${o.encart}</td></tr>` : ""}
 
   ${o.lien ? `<tr><td align="center" style="padding:22px 30px 0">
-    <a href="${o.lien}" style="display:inline-block;background:#c8a96e;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:15px 34px;border-radius:12px">${esc(o.bouton)}</a>
+    <a href="${o.lien}" style="display:inline-block;background:#005875;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:15px 34px;border-radius:12px">${esc(o.bouton)}</a>
   </td></tr>` : ""}
 
   ${o.lien2 ? `<tr><td align="center" style="padding:12px 30px 0;font-size:13px">
-    <a href="${o.lien2}" style="color:#b3945a;text-decoration:underline">${esc(o.bouton2 || o.lien2)}</a>
+    <a href="${o.lien2}" style="color:#005875;text-decoration:underline">${esc(o.bouton2 || o.lien2)}</a>
   </td></tr>` : ""}
 
   <tr><td style="padding:26px 30px 30px">
-    <div style="border-top:1px solid #e8e3d9;padding-top:16px;font-size:13.5px;color:#3f4550">
+    <div style="border-top:1px solid #d8d2c5;padding-top:16px;font-size:13.5px;color:#161a1e">
       ${o.formule ? esc(o.formule) + "<br>" : (o.prenom || o.titre ? "À très vite,<br>" : "")}<strong>${esc(o.vendeur)}</strong><br>
-      <span style="color:#6b7280">GLR Immobilier — <a href="${SITE}" style="color:#b3945a;text-decoration:none">glrimmobilier.com</a></span>
+      <span style="color:#616b75">GLR Immobilier — <a href="${SITE}" style="color:#005875;text-decoration:none">glrimmobilier.com</a></span>
     </div>
-    ${o.avis && o.avis.url ? `<div style="margin-top:14px;font-size:12.5px;color:#6b7280"><span style="color:#c8a96e;letter-spacing:1px">${ETOILES}</span>&nbsp; <a href="${o.avis.url}" style="color:#b3945a;text-decoration:underline">${esc(o.avis.texte)}</a></div>` : ""}
+    ${o.avis && o.avis.url ? `<div style="margin-top:14px;font-size:12.5px;color:#616b75"><span style="color:#b0894c;letter-spacing:1px">${ETOILES}</span>&nbsp; <a href="${o.avis.url}" style="color:#005875;text-decoration:underline">${esc(o.avis.texte)}</a></div>` : ""}
   </td></tr>
 
 </table>
@@ -304,16 +309,16 @@ function gabarit(o: { prenom: string; vendeur: string; titre: string; texte: str
 // comment entrer ; on le dit en une ligne.
 function encartQuand(debut: string, fin: string, mode: string, visio?: string, etiquette?: string, agenda?: { google: string; outlook: string }): string {
   const d = dureeMin(debut, fin);
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #c8a96e;border-radius:14px">
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #b0894c;border-radius:14px">
     <tr><td align="center" style="padding:18px 22px">
-      <div style="font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#b3945a;margin-bottom:6px">${esc(etiquette || "Votre rendez-vous")}</div>
-      <div style="font-family:Georgia,serif;font-size:21px;font-weight:700;color:#1a1d23">${esc(jourLong(debut))}</div>
-      <div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#b3945a;margin-top:2px">${esc(heure(debut))}</div>
-      <div style="font-size:13px;color:#6b7280;margin-top:6px">Échange ${esc(MODES[mode] || "")}${d ? " · " + d + " min" : ""}</div>
-      ${visio ? `<div style="font-size:12.5px;color:#6b7280;margin-top:10px">À l'heure du rendez-vous, le bouton ci-dessous vous conduit à la salle de visio, depuis un ordinateur ou un téléphone.</div>` : ""}
-      ${agenda ? `<div style="font-size:12.5px;color:#6b7280;margin-top:12px;padding-top:10px;border-top:1px solid #f0ece3">Ajouter à mon agenda :
-        <a href="${agenda.google}" style="color:#b3945a;font-weight:700;text-decoration:underline">Google Agenda</a>
-        &nbsp;·&nbsp; <a href="${agenda.outlook}" style="color:#b3945a;font-weight:700;text-decoration:underline">Outlook</a>
+      <div style="font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#8a6a2f;margin-bottom:6px">${esc(etiquette || "Votre rendez-vous")}</div>
+      <div style="font-family:Georgia,serif;font-size:21px;font-weight:700;color:#161a1e">${esc(jourLong(debut))}</div>
+      <div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#005875;margin-top:2px">${esc(heure(debut))}</div>
+      <div style="font-size:13px;color:#616b75;margin-top:6px">Échange ${esc(MODES[mode] || "")}${d ? " · " + d + " min" : ""}</div>
+      ${visio ? `<div style="font-size:12.5px;color:#616b75;margin-top:10px">À l'heure du rendez-vous, le bouton ci-dessous vous conduit à la salle de visio, depuis un ordinateur ou un téléphone.</div>` : ""}
+      ${agenda ? `<div style="font-size:12.5px;color:#616b75;margin-top:12px;padding-top:10px;border-top:1px solid #d8d2c5">Ajouter à mon agenda :
+        <a href="${agenda.google}" style="color:#005875;font-weight:700;text-decoration:underline">Google Agenda</a>
+        &nbsp;·&nbsp; <a href="${agenda.outlook}" style="color:#005875;font-weight:700;text-decoration:underline">Outlook</a>
         &nbsp;·&nbsp; Apple / autre : l'invitation jointe à ce mail</div>` : ""}
     </td></tr></table>`;
 }
@@ -325,15 +330,15 @@ function encartBiens(liste: any[]): string {
   const lignes = liste.slice(0, MAX).map((b: any) => {
     const typo = Array.isArray(b.typologies) ? b.typologies.join(" / ") : b.typologies;
     const details = [typo, b.ville, b.surface].map((x: unknown) => String(x || "").trim()).filter(Boolean).join(" · ");
-    return `<tr><td style="padding:10px 16px;border-bottom:1px solid #f0ece3">
-       <div style="font-size:14.5px;font-weight:700;color:#1a1d23">${esc(b.titre || "Bien")}</div>
-       <div style="font-size:12.5px;color:#6b7280;margin-top:2px">${esc(details)}${b.prix ? (details ? " · " : "") + `<strong style="color:#b3945a">${esc(b.prix)}</strong>` : ""}</div>
+    return `<tr><td style="padding:10px 16px;border-bottom:1px solid #d8d2c5">
+       <div style="font-size:14.5px;font-weight:700;color:#161a1e">${esc(b.titre || "Bien")}</div>
+       <div style="font-size:12.5px;color:#616b75;margin-top:2px">${esc(details)}${b.prix ? (details ? " · " : "") + `<strong style="color:#005875">${esc(b.prix)}</strong>` : ""}</div>
      </td></tr>`; }).join("");
   const reste = liste.length - MAX;
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e8e3d9;border-radius:14px">
-    <tr><td style="padding:14px 16px 6px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#b3945a">${liste.length > 1 ? liste.length + " biens sélectionnés pour vous" : "Le bien sélectionné pour vous"}</td></tr>
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #d8d2c5;border-radius:14px">
+    <tr><td style="padding:14px 16px 6px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#8a6a2f">${liste.length > 1 ? liste.length + " biens sélectionnés pour vous" : "Le bien sélectionné pour vous"}</td></tr>
     ${lignes}
-    ${reste > 0 ? `<tr><td style="padding:11px 16px;font-size:12.5px;color:#6b7280">… et ${reste} autre${reste > 1 ? "s" : ""} sur la page.</td></tr>` : ""}
+    ${reste > 0 ? `<tr><td style="padding:11px 16px;font-size:12.5px;color:#616b75">… et ${reste} autre${reste > 1 ? "s" : ""} sur la page.</td></tr>` : ""}
   </table>`;
 }
 
@@ -342,26 +347,26 @@ function encartBiens(liste: any[]): string {
 function encartFormats(lien: string): string {
   const carte = (f: string, titre: string, sous: string) =>
     `<td width="50%" style="padding:0 6px">
-       <a href="${lien}&f=${f}" style="display:block;background:#ffffff;border:2px solid #c8a96e;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none">
-         <div style="font-size:15px;font-weight:700;color:#1a1d23">${titre}</div>
-         <div style="font-size:12px;color:#6b7280;margin-top:4px">${sous}</div>
+       <a href="${lien}&f=${f}" style="display:block;background:#ffffff;border:2px solid #b0894c;border-radius:14px;padding:16px 10px;text-align:center;text-decoration:none">
+         <div style="font-size:15px;font-weight:700;color:#161a1e">${titre}</div>
+         <div style="font-size:12px;color:#616b75;margin-top:4px">${sous}</div>
        </a>
      </td>`;
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr><td colspan="2" align="center" style="padding:0 6px 10px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#b3945a">Choisissez votre créneau</td></tr>
+    <tr><td colspan="2" align="center" style="padding:0 6px 10px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#8a6a2f">Choisissez votre créneau</td></tr>
     <tr>${carte("visio", "Prendre une visio", "30 min · on prend le temps de tout voir")}${carte("appel", "Prendre un appel", "10 min · un premier échange")}</tr>
   </table>`;
 }
 
 function encartCreneaux(liste: any[]): string {
   const lignes = liste.map((c: any) =>
-    `<tr><td style="padding:9px 16px;border-bottom:1px solid #f0ece3;font-size:14.5px;color:#3f4550">
-       <strong style="color:#1a1d23">${esc(jourLong(c.debut))}</strong> à ${esc(heure(c.debut))}
+    `<tr><td style="padding:9px 16px;border-bottom:1px solid #d8d2c5;font-size:14.5px;color:#161a1e">
+       <strong style="color:#161a1e">${esc(jourLong(c.debut))}</strong> à ${esc(heure(c.debut))}
      </td></tr>`).join("");
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e8e3d9;border-radius:14px">
-    <tr><td style="padding:14px 16px 6px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#b3945a">Les créneaux proposés</td></tr>
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #d8d2c5;border-radius:14px">
+    <tr><td style="padding:14px 16px 6px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#8a6a2f">Les créneaux proposés</td></tr>
     ${lignes}
-    <tr><td style="padding:11px 16px;font-size:12.5px;color:#6b7280">Celui que vous retenez est confirmé immédiatement.</td></tr>
+    <tr><td style="padding:11px 16px;font-size:12.5px;color:#616b75">Celui que vous retenez est confirmé immédiatement.</td></tr>
   </table>`;
 }
 
@@ -635,7 +640,7 @@ Deno.serve(async (req: Request) => {
     const titreLot = String(bien.titre || ("Lot " + (idx + 1))).trim();
     const dernierClient = [...fil].reverse().find((m) => m && m.de === "client");
     const citation = dernierClient && String(dernierClient.texte || "").trim()
-      ? `<div style="margin:0 0 14px;padding:10px 14px;border-left:3px solid #c8a96e;background:#f7f3ea;border-radius:0 10px 10px 0;font-size:13.5px;color:#5c6270;font-style:italic">« ${esc(String(dernierClient.texte).trim().slice(0, 600))} »</div>`
+      ? `<div style="margin:0 0 14px;padding:10px 14px;border-left:3px solid #b0894c;background:#f4f0e8;border-radius:0 10px 10px 0;font-size:13.5px;color:#616b75;font-style:italic">« ${esc(String(dernierClient.texte).trim().slice(0, 600))} »</div>`
       : "";
     sujet = "Réponse de votre conseiller — " + titreLot;
     contenu = gabarit({

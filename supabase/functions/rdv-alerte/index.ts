@@ -30,6 +30,11 @@
 //
 // Sans BREVO_API_KEY, la fonction répond « sans_cle » et rien ne casse : le
 // rendez-vous est pris, il manque seulement le mail.
+//
+// v3 (23/11/2026) : charte GLR unique figée par Alex (« A, bleu du logo ») — couleurs
+// seulement. Et plus aucune séquence d'échappement unicode dans le source : les trois
+// caractères concernés sont écrits par leur code, comme dans rdv-notif (le déploiement
+// décodait ces séquences).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -51,12 +56,17 @@ const CORS = {
 const json = (o: unknown, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { ...CORS, "Content-Type": "application/json" } });
 
+// Caractères écrits par leur code pour ne jamais dépendre d'une séquence d'échappement
+const ESPACE_FINE = String.fromCharCode(0x202f);
+const ESPACE_INSECABLE = String.fromCharCode(0xa0);
+const DIACRITIQUES = new RegExp("[" + String.fromCharCode(0x300) + "-" + String.fromCharCode(0x36f) + "]", "g");
+
 const sansAccent = (s: unknown) =>
-  String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  String(s || "").normalize("NFD").replace(DIACRITIQUES, "").toLowerCase().trim();
 
 function esc(s: unknown): string {
   return String(s == null ? "" : s)
-    .replace(/\u202f/g, "\u00a0")
+    .split(ESPACE_FINE).join(ESPACE_INSECABLE)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -148,18 +158,18 @@ function ics(o: { debut: string; fin: string; client: string; mode: string; uid:
 // Mail interne : court, lisible sur un téléphone, aux couleurs de la maison.
 function gabarit(o: { titre: string; sousTitre: string; encart: string; client: string; lien: string; bouton: string; lien2?: string; bouton2?: string }): string {
   return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><style>:root{color-scheme:light only;supported-color-schemes:light}</style></head>
-<body bgcolor="#f7f5f1" style="margin:0;padding:0;background:#f7f5f1;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1d23">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f7f5f1" style="background:#f7f5f1;padding:24px 12px">
+<body bgcolor="#f4f0e8" style="margin:0;padding:0;background:#f4f0e8;font-family:'Helvetica Neue',Arial,sans-serif;color:#161a1e">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f4f0e8" style="background:#f4f0e8;padding:24px 12px">
 <tr><td align="center">
-<table role="presentation" width="520" cellpadding="0" cellspacing="0" bgcolor="#fbf8f1" style="width:100%;max-width:520px;background:#fbf8f1;border:1px solid #e8e3d9;border-radius:18px;overflow:hidden">
+<table role="presentation" width="520" cellpadding="0" cellspacing="0" bgcolor="#fbf8f1" style="width:100%;max-width:520px;background:#fbf8f1;border:1px solid #d8d2c5;border-radius:18px;overflow:hidden">
 
   <tr><td align="center" style="padding:22px 28px 4px">
     <img src="${LOGO}" alt="GLR Immobilier" width="92" style="display:block;height:auto;border:0">
-    <div style="width:44px;height:2px;background:#c8a96e;margin:12px auto 0"></div>
+    <div style="width:44px;height:2px;background:#b0894c;margin:12px auto 0"></div>
   </td></tr>
 
   <tr><td align="center" style="padding:16px 28px 0">
-    <div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;font-weight:700;color:#b3945a">${esc(o.titre)}</div>
+    <div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;font-weight:700;color:#8a6a2f">${esc(o.titre)}</div>
     <div style="font-family:Georgia,serif;font-size:20px;font-weight:600;margin-top:6px">${esc(o.sousTitre)}</div>
   </td></tr>
 
@@ -168,15 +178,15 @@ function gabarit(o: { titre: string; sousTitre: string; encart: string; client: 
   <tr><td style="padding:14px 28px 0">${o.client}</td></tr>
 
   <tr><td align="center" style="padding:20px 28px 0">
-    <a href="${o.lien}" style="display:inline-block;background:#c8a96e;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 30px;border-radius:12px">${esc(o.bouton)}</a>
+    <a href="${o.lien}" style="display:inline-block;background:#005875;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 30px;border-radius:12px">${esc(o.bouton)}</a>
   </td></tr>
 
   ${o.lien2 ? `<tr><td align="center" style="padding:12px 28px 0;font-size:13px">
-    <a href="${o.lien2}" style="color:#b3945a;text-decoration:underline">${esc(o.bouton2 || "Ouvrir la fiche")}</a>
+    <a href="${o.lien2}" style="color:#005875;text-decoration:underline">${esc(o.bouton2 || "Ouvrir la fiche")}</a>
   </td></tr>` : ""}
 
   <tr><td style="padding:22px 28px 26px">
-    <div style="border-top:1px solid #e8e3d9;padding-top:14px;font-size:12px;color:#6b7280">
+    <div style="border-top:1px solid #d8d2c5;padding-top:14px;font-size:12px;color:#616b75">
       Message automatique du CRM GLR Immobilier — pour répondre au client, réponds simplement à ce mail.
     </div>
   </td></tr>
@@ -187,21 +197,21 @@ function gabarit(o: { titre: string; sousTitre: string; encart: string; client: 
 
 function encartQuand(debut: string, fin: string, mode: string, visio: string): string {
   const d = dureeMin(debut, fin);
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #c8a96e;border-radius:14px">
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #b0894c;border-radius:14px">
     <tr><td align="center" style="padding:16px 20px">
-      <div style="font-family:Georgia,serif;font-size:19px;font-weight:700;color:#1a1d23">${esc(jourLong(debut))}</div>
-      <div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#b3945a;margin-top:2px">${esc(heure(debut))}</div>
-      <div style="font-size:13px;color:#6b7280;margin-top:6px">${esc(MODES[mode] || "Rendez-vous")}${d ? " · " + d + " min" : ""}</div>
-      ${visio ? `<div style="font-size:12.5px;margin-top:10px;word-break:break-all"><a href="${visio}" style="color:#b3945a;text-decoration:underline">Rejoindre la visio</a></div>` : ""}
+      <div style="font-family:Georgia,serif;font-size:19px;font-weight:700;color:#161a1e">${esc(jourLong(debut))}</div>
+      <div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#005875;margin-top:2px">${esc(heure(debut))}</div>
+      <div style="font-size:13px;color:#616b75;margin-top:6px">${esc(MODES[mode] || "Rendez-vous")}${d ? " · " + d + " min" : ""}</div>
+      ${visio ? `<div style="font-size:12.5px;margin-top:10px;word-break:break-all"><a href="${visio}" style="color:#005875;text-decoration:underline">Rejoindre la visio</a></div>` : ""}
     </td></tr></table>`;
 }
 
 function ligne(libelle: string, valeur: string, lien?: string): string {
   if (!valeur) return "";
-  const v = lien ? `<a href="${lien}" style="color:#b3945a;text-decoration:none">${esc(valeur)}</a>` : esc(valeur);
-  return `<tr><td style="padding:7px 16px;border-bottom:1px solid #f0ece3;font-size:14px;color:#3f4550">
-      <span style="display:inline-block;min-width:74px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#9aa1ac">${esc(libelle)}</span>
-      <strong style="color:#1a1d23;font-weight:600">${v}</strong>
+  const v = lien ? `<a href="${lien}" style="color:#005875;text-decoration:none">${esc(valeur)}</a>` : esc(valeur);
+  return `<tr><td style="padding:7px 16px;border-bottom:1px solid #d8d2c5;font-size:14px;color:#161a1e">
+      <span style="display:inline-block;min-width:74px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#616b75">${esc(libelle)}</span>
+      <strong style="color:#161a1e;font-weight:600">${v}</strong>
     </td></tr>`;
 }
 
@@ -211,14 +221,14 @@ function encartClient(c: any, message: string): string {
   const mail = String(c.email || "").trim();
   const projet = String(message || c.message || "").replace(/\s+/g, " ").trim().slice(0, 220);
   const bien = [c.typologie, c.lieu].map((x: unknown) => String(x || "").trim()).filter(Boolean).join(" · ");
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #e8e3d9;border-radius:14px">
-    <tr><td style="padding:12px 16px 4px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#b3945a">Le client</td></tr>
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #d8d2c5;border-radius:14px">
+    <tr><td style="padding:12px 16px 4px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700;color:#8a6a2f">Le client</td></tr>
     ${ligne("Nom", nom || "Nom à confirmer")}
     ${ligne("Téléphone", tel, tel ? "tel:" + tel.replace(/\s/g, "") : undefined)}
     ${ligne("Email", mail, mail ? "mailto:" + mail : undefined)}
     ${ligne("Recherche", bien)}
     ${ligne("Source", String(c.source || "").trim())}
-    ${projet ? `<tr><td style="padding:9px 16px;font-size:13.5px;color:#3f4550;font-style:italic">« ${esc(projet)} »</td></tr>` : ""}
+    ${projet ? `<tr><td style="padding:9px 16px;font-size:13.5px;color:#161a1e;font-style:italic">« ${esc(projet)} »</td></tr>` : ""}
   </table>`;
 }
 
