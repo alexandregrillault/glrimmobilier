@@ -3,9 +3,12 @@
 // l'état d'une conversation et la réponse de la personne, et rend le nouvel état, les messages
 // à envoyer et, à la fin, s'il faut créer la fiche dans le CRM. Testé par tests/qdn_questionnaire.mjs.
 //
-// Parcours allégé (décision d'Alex du 03/11/2026) : le premier message explique la démarche
-// (5 questions, un conseiller de GLR Immobilier envoie les plans) et recueille l'accord d'un
-// bouton ; puis 5 questions numérotées : villes, typologie, budget, prénom et téléphone, e-mail.
+// Parcours court (décision d'Alex du 06/11/2026, la moitié des gens s'arrêtaient au premier
+// message du parcours en 5 questions) : la ville, la typologie, puis directement la carte du
+// planning de Théophile. Les coordonnées (nom, téléphone, e-mail) sont demandées par la page de
+// rendez-vous au moment de valider le créneau ; c'est elle qui crée la fiche dans le CRM.
+// Le robot ne crée plus de fiche lui-même. Les fonctions de l'ancien parcours (coordonnées,
+// e-mail) restent exportées mais ne sont plus appelées.
 
 export type Bouton = { title: string; payload: string };
 // `carte` : une carte Instagram avec des boutons qui ouvrent une page (pas de lien brut dans le texte).
@@ -16,6 +19,12 @@ export type Resultat = { conv: Conversation; messages: Message[]; creerFiche?: b
 
 export const DONNEES = "https://www.glrimmobilier.com/mentions-legales/";
 export const LIEN_PLANNING = "https://www.glrimmobilier.com/rdv/?v=theophile&f=appel";
+// Planning public de Théophile, avec le projet prérempli (ville et typologie) dans le champ
+// « Votre projet » de la page : il arrive dans la fiche et dans le créneau réservé.
+export const lienPlanningProjet = (r: Record<string, string>) => {
+  const projet = `Plans des programmes neufs : ${[r.zone, r.typologie].filter(Boolean).join(", ")} (Instagram Quoi de neuf)`;
+  return `${LIEN_PLANNING}&p=${encodeURIComponent(projet.slice(0, 480))}`;
+};
 export const lienPlanningPersonnel = (jeton: string) => `https://www.glrimmobilier.com/rdv/?t=${encodeURIComponent(jeton)}&f=appel`;
 
 export const TYPOLOGIES: Bouton[] = [
@@ -43,23 +52,23 @@ const TYPO_TEXTE: Record<string, string> = {
 
 // Quoi de neuf se présente comme le média de GLR Immobilier (décision d'Alex du 03/11/2026).
 const QUI = "c'est Alto de Quoi de neuf, le média de GLR Immobilier.";
-const DEMARCHE = "Pour recevoir les plans : 5 petites questions (30 secondes), puis un conseiller GLR t'appelle " +
-  "au moment que tu choisis avec les plans des programmes neufs de ton secteur. Ça te va ?";
+const DEMARCHE = "Deux petites questions, puis tu choisis ton créneau d'appel avec un conseiller GLR qui t'envoie les plans. Ça te va ?";
 // Seul bouton avec un émoji (décision d'Alex du 03/11/2026) : il signale qu'il faut toucher les bulles.
 const OK_NON: Bouton[] = [{ title: "✅ C'est parti", payload: "PLANS_OUI" }, { title: "Non merci", payload: "PLANS_NON" }];
 
 export const Q = {
-  // Après un commentaire « PLANS ».
-  debut: (): Message => ({ text: `Salut, ${QUI} ${DEMARCHE}`, quick_replies: OK_NON }),
+  // Après un commentaire « PLANS » ou un message privé qui parle de plans : la première question
+  // tout de suite, sans bouton d'accord (06/11/2026).
+  debut: (): Message => ({ text: `Salut, ${QUI} Pour t'envoyer les plans : dans quelle ville tu cherches ? Tu peux en mettre plusieurs.` }),
   // Message privé qui ne parle pas de plans.
   invitation: (): Message => ({
     text: `Salut, merci pour ton message, ${QUI} Tu veux recevoir les plans des programmes neufs de ton secteur ? ${DEMARCHE}`,
     quick_replies: OK_NON,
   }),
   relance: (): Message => ({ text: "Pour commencer, touche « C'est parti ». Sinon, « Non merci ».", quick_replies: OK_NON }),
-  zone: (): Message => ({ text: "1/5 · Dans quelle ville tu cherches ? Tu peux en mettre plusieurs." }),
+  zone: (): Message => ({ text: "Dans quelle ville tu cherches ? Tu peux en mettre plusieurs." }),
   // Un bouton ne permet qu'un choix : pour plusieurs, la personne les écrit (« T2 ou T3 »).
-  typologie: (): Message => ({ text: "2/5 · Quel type de logement ? Si tu hésites, écris-en plusieurs (ex. T2 ou T3).", quick_replies: TYPOLOGIES }),
+  typologie: (): Message => ({ text: "Quel type de logement ? Si tu hésites, écris-en plusieurs (ex. T2 ou T3).", quick_replies: TYPOLOGIES }),
   budget: (): Message => ({ text: "3/5 · Ton budget ?", quick_replies: BUDGETS }),
   coordonnees: (): Message => ({ text: "4/5 · Ton prénom et ton numéro ?" }),
   prenom: (): Message => ({ text: "Et ton prénom ?" }),
@@ -79,6 +88,15 @@ export const Q = {
       titre: "Réserve ton appel avec le conseiller",
       sousTitre: "Choisis le créneau qui t'arrange, directement dans son planning.",
       boutons: [{ title: "Voir le planning", url: lien }, { title: "Tes données", url: DONNEES }],
+    },
+  }),
+  // Fin du parcours court : la carte du planning, avec la ville et la typologie dans le lien.
+  rdv: (r: Record<string, string>): Message => ({
+    text: `Merci ! Choisis ton créneau d'appel avec un conseiller GLR Immobilier : il te présente les programmes neufs${r.zone ? " de " + r.zone : ""} et t'envoie les plans.`,
+    carte: {
+      titre: "Choisis ton créneau d'appel",
+      sousTitre: "10 minutes au téléphone, au moment qui t'arrange.",
+      boutons: [{ title: "Voir le planning", url: lienPlanningProjet(r) }, { title: "Tes données", url: DONNEES }],
     },
   }),
   pasPlans: (): Message => ({ text: "Pas de souci. Si tu as une question, écris-la ici, on te répond très vite." }),
@@ -144,7 +162,7 @@ const suite = (etape: string, r: Record<string, string>, m: Message): Resultat =
 
 // Démarrage depuis un commentaire « PLANS » (le message part en réponse privée au commentaire).
 export function demarrerDepuisCommentaire(pseudo: string | null): Resultat {
-  return { conv: nouvelle("intro", pseudo ? { pseudo } : {}), messages: [Q.debut()] };
+  return { conv: nouvelle("zone", pseudo ? { pseudo } : {}), messages: [Q.debut()] };
 }
 
 // Une réponse de la personne, à l'étape en cours. `payload` vient d'un bouton de réponse rapide.
@@ -152,14 +170,16 @@ export function repondre(conv: Conversation | null, texteBrut: string, payload: 
   const texte = (texteBrut || "").trim();
 
   // Première fois : la démarche et le bouton « C'est parti ».
-  if (!conv) return parleDePlans(texte) ? { conv: nouvelle("intro"), messages: [Q.debut()] } : { conv: nouvelle("intro"), messages: [Q.invitation()] };
+  if (!conv) return parleDePlans(texte) ? { conv: nouvelle("zone"), messages: [Q.debut()] } : { conv: nouvelle("intro"), messages: [Q.invitation()] };
 
   // Conversation terminée : le robot ne revient que si la personne reparle de plans ;
   // sinon c'est un humain qui répond.
-  if (["fini", "refus", "ferme"].includes(conv.etape)) {
+  if (["planning", "fini", "refus", "ferme"].includes(conv.etape)) {
     if (!parleDePlans(texte)) return { conv, messages: [] };
+    // Planning déjà envoyé il y a moins de 24 h : on renvoie la même carte.
+    if (conv.etape === "planning" && !expire) return { conv, messages: [Q.rdv(conv.reponses || {})] };
     if (conv.etape === "fini" && !expire) return { conv, messages: [Q.dejaNote()] };
-    return { conv: nouvelle("intro", conv.reponses?.pseudo ? { pseudo: conv.reponses.pseudo } : {}), messages: [Q.debut()] };
+    return { conv: nouvelle("zone", conv.reponses?.pseudo ? { pseudo: conv.reponses.pseudo } : {}), messages: [Q.debut()] };
   }
 
   if (veutArreter(texte)) return { conv: nouvelle("refus"), messages: [Q.stop()] };
@@ -175,13 +195,14 @@ export function repondre(conv: Conversation | null, texteBrut: string, payload: 
       if (payload === "PLANS_NON" || ditNon(texte) || conv.essais >= 1) return { conv: nouvelle("ferme", r.pseudo ? { pseudo: r.pseudo } : {}), messages: [Q.pasPlans()] };
       return { conv: { ...conv, essais: 1 }, messages: [Q.relance()] };
     case "zone":
-      if (texte.length < 2) return { conv, messages: [Q.zone()] };
+      // « Plan » renvoyé en message privé n'est pas une ville : on repose la question.
+      if (texte.length < 2 || /^\s*plans?\s*[.!]*\s*$/i.test(texte)) return { conv, messages: [Q.zone()] };
       r.zone = villes(texte).join(", ");
       return suite("typologie", r, Q.typologie());
     case "typologie":
       if (!payload && !texte) return { conv, messages: [Q.typologie()] };
       r.typologie = (payload && TYPO_TEXTE[payload]) || typologieDepuis(texte);
-      return suite("budget", r, Q.budget());
+      return { conv: { etape: "planning", reponses: r, essais: 0 }, messages: [Q.rdv(r)] };
     case "budget":
       if (!payload && !texte) return { conv, messages: [Q.budget()] };
       if (payload !== "BUDGET_NSP" && !/^\s*(je )?(ne )?sais pas|^\s*(aucune id[ée]e|nsp)\b/i.test(texte)) {
@@ -227,7 +248,7 @@ export function repondre(conv: Conversation | null, texteBrut: string, payload: 
 
 function question(conv: Conversation): Message {
   switch (conv.etape) {
-    case "intro": return Q.debut();
+    case "intro": return Q.invitation();
     case "zone": return Q.zone();
     case "typologie": return Q.typologie();
     case "budget": return Q.budget();

@@ -3,12 +3,15 @@
 // Webhook de l'API Instagram (connexion Instagram, accès standard : le compte
 // @quoideneuf.immo seulement). Le questionnaire se fait dans les messages privés,
 // question par question (questionnaire.ts) :
-//  - un commentaire qui contient « plans » : réponse publique courte + première question
-//    en réponse privée au commentaire ;
+//  - un commentaire qui contient « plans » : première question en réponse privée au commentaire,
+//    sans réponse publique (retirée le 06/11/2026, demande d'Alex : Instagram masquait tout le fil
+//    des « Plan » suivis de nos réponses identiques) ;
 //  - un message privé : la réponse à la question en cours, ou, sans conversation,
 //    une invitation à recevoir les plans.
-// À la fin, avec l'accord de la personne, la fiche est créée dans le CRM par lead-inbound
-// (vendeur theophile, source « Quoi de neuf Instagram »), comme le formulaire du site.
+// Parcours court depuis le 06/11/2026 : ville, typologie, puis la carte du planning de Théophile ;
+// la fiche est créée par la page de rendez-vous quand la personne valide son créneau avec ses
+// coordonnées. La création de fiche par lead-inbound ci-dessous ne sert plus qu'aux conversations
+// de l'ancien parcours encore en cours.
 //
 // Clés lues dans app_secrets (jamais dans ce dépôt public) :
 //   ig_app_secret      secret de l'application Meta (signature des appels)
@@ -33,12 +36,6 @@ const FENETRE_H = 24;
 const ABANDON_J = 7;
 const VENDEUR = "theophile"; // leads Quoi de neuf chez Théophile (décision d'Alex du 03/11/2026)
 const SOURCE = "Quoi de neuf Instagram";
-
-const REPONSES_PUBLIQUES = [
-  "C'est envoyé en message privé.",
-  "Je t'ai écrit en message privé.",
-  "Regarde tes messages privés, c'est parti.",
-];
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -131,8 +128,7 @@ async function ecrireConversation(igUser: string, conv: Conversation, extra: Rec
 }
 
 // Fin du questionnaire avec accord : la fiche part au CRM par lead-inbound (dédoublonnage, paternité).
-// `nouvelle` : la fiche vient d'être créée. Sinon l'e-mail ou le téléphone donnés étaient déjà en base.
-async function creerFiche(s: Secrets, r: Record<string, string>): Promise<{ id: string; nouvelle: boolean } | null> {
+async function creerFiche(s: Secrets, r: Record<string, string>): Promise<string | null> {
   if (!s.lead_inbound_token?.value) return null;
   const aujourdhui = new Date().toISOString().slice(0, 10);
   const corps = [
@@ -165,7 +161,7 @@ async function creerFiche(s: Secrets, r: Record<string, string>): Promise<{ id: 
     maj.notes = actuel?.notes ? actuel.notes + "\n" + trace : trace;
     await supabase.from("contacts").update(maj).eq("id", resultat.id);
   } catch (_) { /* la fiche existe : on n'échoue pas pour un affinage */ }
-  return { id: resultat.id, nouvelle: resultat.status === "created" };
+  return resultat.id;
 }
 
 // Lien de rendez-vous personnel de la fiche (créé avec le lead, table rdv_liens) : la page montre
@@ -199,14 +195,12 @@ async function traiterCommentaire(compte: string, v: any, jt: string) {
   const ok = await nouveau({ id: String(v.id), type: "commentaire", ig_user: auteur, ig_pseudo: pseudo, texte: texte.slice(0, 500), media_id: v.media?.id || null });
   if (!ok) return;
   const r = demarrerDepuisCommentaire(pseudo);
-  const [prive, pub] = await Promise.all([
-    appel(`${compte}/messages`, jt, { recipient: { comment_id: String(v.id) }, message: formatMessage(r.messages[0]) }),
-    appel(`${v.id}/replies`, jt, { message: REPONSES_PUBLIQUES[Math.floor(Math.random() * REPONSES_PUBLIQUES.length)] }),
-  ]);
+  // Réponse privée seulement : plus de réponse publique sous le commentaire (06/11/2026).
+  const prive = await appel(`${compte}/messages`, jt, { recipient: { comment_id: String(v.id) }, message: formatMessage(r.messages[0]) });
   if (prive.ok) {
     await ecrireConversation(auteur, r.conv, { origine: "commentaire", media_id: v.media?.id || null, debut_le: new Date().toISOString(), contact_id: null });
   }
-  await noter(String(v.id), prive.ok, { prive, public: pub });
+  await noter(String(v.id), prive.ok, { prive });
 }
 
 async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
@@ -236,16 +230,12 @@ async function traiterMessage(compte: string, m: any, jt: string, s: Secrets) {
     // Le merci part tout de suite ; la fiche entre dans le CRM pendant ce temps (l'accusé par e-mail prend
     // plusieurs secondes), puis la carte du planning arrive avec le lien personnel de la fiche.
     await envoyer(r.messages[0]);
-    const fiche = await creerFiche(s, r.conv.reponses);
-    // Lien personnel seulement pour une fiche neuve (03/11/2026) : rien ne prouve que la personne sur
-    // Instagram est la propriétaire de l'e-mail ou du téléphone donnés. Le lien d'une fiche existante
-    // montrerait le prénom, le projet, le rendez-vous et la visio d'un client à n'importe qui.
-    // Fiche existante : planning public de Théophile, qui ne montre rien sur personne.
-    const jetonRdv = fiche?.nouvelle ? await lienRdv(fiche.id) : null;
+    const contact = await creerFiche(s, r.conv.reponses);
+    const jetonRdv = contact ? await lienRdv(contact) : null;
     await envoyer(jetonRdv ? Q.planning(lienPlanningPersonnel(jetonRdv)) : r.messages[1]);
     // Une fois la fiche créée, on ne garde ici que le prénom et le pseudo.
     conv2 = { ...r.conv, reponses: { prenom: r.conv.reponses.prenom || "", pseudo: r.conv.reponses.pseudo || "" } };
-    extra = { ...extra, contact_id: fiche?.id || null };
+    extra = { ...extra, contact_id: contact };
   } else {
     for (const mm of r.messages) await envoyer(mm);
   }
@@ -297,7 +287,7 @@ Deno.serve(async (req: Request) => {
       supabase.from("qdn_instagram_conversations").delete().lt("maj_le", limite),
       // Questionnaire abandonné en cours de route : rien n'est gardé au-delà de 7 jours.
       supabase.from("qdn_instagram_conversations").delete()
-        .not("etape", "in", "(fini,refus,ferme)").lt("maj_le", new Date(Date.now() - ABANDON_J * 86400000).toISOString()),
+        .not("etape", "in", "(planning,fini,refus,ferme)").lt("maj_le", new Date(Date.now() - ABANDON_J * 86400000).toISOString()),
     ]);
   } catch (_) { /* on réessaiera à un prochain appel */ }
   // Toujours 200 : sinon Meta renvoie l'événement et finit par couper l'abonnement.
