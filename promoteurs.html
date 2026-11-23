@@ -11,10 +11,10 @@
 /* Rapport promoteurs (23/10/2026) — page à part, ne partage rien avec carte.html.
    Données : table pige_kpi_cache (id 'courant'), calculée par select public.pige_kpi_maj(); (après chaque pige + chaque nuit à 4 h 47 UTC par pg_cron « pige_kpi_nuit », ~16 s) — lecture gérants seulement (RLS). */
 :root{
-  --vert:#1E3A32; --vert2:#2C5246; --creme:#FBF8F1; --laiton:#B0894C; --laiton2:#D9C39A;
-  --bg:#F6F3EC; --carte:#FFFFFF; --txt:#1F2A26; --txt2:#5E6B66; --ligne:#E4DED2;
+  --vert:#005875; --vert2:#1F6F8B; --creme:#FBF8F1; --laiton:#B0894C; --laiton2:#D9C39A;
+  --bg:#F4F0E8; --carte:#FBF8F1; --txt:#161A1E; --txt2:#616B75; --ligne:#D8D2C5;
   --ok:#2E7D5B; --moyen:#C98A2B; --ko:#B5483B; --gris:#9AA5A0; --bleu:#3D6FA8;
-  --rayon:12px; --ombre:0 1px 3px rgba(30,58,50,.08),0 4px 14px rgba(30,58,50,.05);
+  --rayon:12px; --ombre:0 1px 3px rgba(0,88,117,.08),0 4px 14px rgba(0,88,117,.05);
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
@@ -170,7 +170,7 @@ function interet(p){
 // ---------- type de programme (23/10/2026, demande d'Alex) ----------
 // calculé côté base par pige_type_programme() : lmnp = résidence gérée (étudiante, seniors, services) ;
 // autre = nue-propriété, BRS / accession maîtrisée, ancien rénové ; sinon accession classique (y compris LMNP « non géré » et LLI).
-const TYPES={accession:{l:'Accession classique',c:'p-acc',coul:'#2C5246',o:0},lmnp:{l:'LMNP',c:'p-lmnp',coul:'#B0894C',o:1},autre:{l:'Autre',c:'p-autre',coul:'#3D6FA8',o:2}};
+const TYPES={accession:{l:'Accession classique',c:'p-acc',coul:'#1F6F8B',o:0},lmnp:{l:'LMNP',c:'p-lmnp',coul:'#B0894C',o:1},autre:{l:'Autre',c:'p-autre',coul:'#3D6FA8',o:2}};
 const typeDe=p=>TYPES[p.type]?p.type:'accession';
 function badgeType(p){const t=TYPES[typeDe(p)];return `<span class="pastille ${t.c}">${t.l}${p.type_detail?' · '+esc(p.type_detail):''}</span>`}
 function mixTypes(progs){
@@ -328,7 +328,7 @@ function couleur(p){
 const LEG={rythme:[['#2E7D5B','≥ 4 % / sem.'],['#7FA86A','1,5 à 4 %'],['#C98A2B','< 1,5 %'],['#B5483B','aucune vente'],['var(--gris)','trop récent']],
   prix:[['#2E7D5B','≥ 8 % sous la commune'],['#7FA86A','2 à 8 % sous'],['#C9B27A','dans le marché'],['#C98A2B','2 à 8 % au-dessus'],['#B5483B','≥ 8 % au-dessus'],['var(--gris)','seul dans sa commune']],
   baisse:[['#B5483B','baisse à la dernière pige'],['#C98A2B','baisse sur la période'],['#3D6FA8','hausse'],['var(--gris)','prix stables']],
-  type:[['#2C5246','Accession classique'],['#B0894C','LMNP (résidence gérée)'],['#3D6FA8','Autre (nue-propriété, BRS, ancien rénové)']],
+  type:[['#1F6F8B','Accession classique'],['#B0894C','LMNP (résidence gérée)'],['#3D6FA8','Autre (nue-propriété, BRS, ancien rénové)']],
   livraison:[['#6B5630','livré'],['#B5483B','sous 1 an'],['#C98A2B','1 à 2 ans'],['#2E7D5B','plus de 2 ans'],['var(--gris)','inconnue']]};
 function vraieCouleur(c){return c.startsWith('var(')?getComputedStyle(document.documentElement).getPropertyValue(c.slice(4,-1)).trim():c}
 function popup(p){
@@ -389,23 +389,23 @@ function tableProgs(progs){
 }
 function graphiques(s,progs){
   if(!window.Chart) return;
-  Chart.defaults.font.family='-apple-system,"Segoe UI",Roboto,sans-serif'; Chart.defaults.color='#5E6B66'; Chart.defaults.animation=false; Chart.defaults.locale='fr-FR';
+  Chart.defaults.font.family='-apple-system,"Segoe UI",Roboto,sans-serif'; Chart.defaults.color='#616B75'; Chart.defaults.animation=false; Chart.defaults.locale='fr-FR';
   const lab=s.map(x=>dfr(x.d));
   graphs.push(new Chart($('#g-stock'),{data:{labels:lab,datasets:[
-    {type:'line',label:'Stock disponible',data:s.map(x=>x.stock),borderColor:'#1E3A32',backgroundColor:'#1E3A32',yAxisID:'y',tension:.25,pointRadius:3},
+    {type:'line',label:'Stock disponible',data:s.map(x=>x.stock),borderColor:'#005875',backgroundColor:'#005875',yAxisID:'y',tension:.25,pointRadius:3},
     {type:'bar',label:'Ventes probables',data:s.map((x,i)=>i?x.ventes:null),backgroundColor:'#B0894C',yAxisID:'y2'},
     {type:'bar',label:'Lots entrés',data:s.map((x,i)=>i?x.entrees:null),backgroundColor:'#9FC1B1',yAxisID:'y2'}]},
     options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{boxWidth:10}}},
       scales:{y:{position:'left',grid:{color:'#EEE9DF'}},y2:{position:'right',grid:{display:false},beginAtZero:true}}}}));
   graphs.push(new Chart($('#g-prix'),{data:{labels:lab,datasets:[
-    {type:'line',label:'€/m² médian',data:s.map(x=>x.pm2),borderColor:'#1E3A32',backgroundColor:'#1E3A32',yAxisID:'y',tension:.25,pointRadius:3},
+    {type:'line',label:'€/m² médian',data:s.map(x=>x.pm2),borderColor:'#005875',backgroundColor:'#005875',yAxisID:'y',tension:.25,pointRadius:3},
     {type:'bar',label:'Baisses',data:s.map((x,i)=>i?x.baisses:null),backgroundColor:'#C9725F',yAxisID:'y2'},
     {type:'bar',label:'Hausses',data:s.map((x,i)=>i?x.hausses:null),backgroundColor:'#7E9CC3',yAxisID:'y2'}]},
     options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{boxWidth:10}}},
       scales:{y:{position:'left',grid:{color:'#EEE9DF'}},y2:{position:'right',grid:{display:false},beginAtZero:true}}}}));
   const ty={};progs.forEach(p=>Object.entries(p.typos||{}).forEach(([t,n])=>ty[t]=(ty[t]||0)+n));
   const keys=Object.keys(ty).filter(t=>t!=='?').sort();
-  graphs.push(new Chart($('#g-typo'),{type:'bar',data:{labels:keys,datasets:[{label:'Lots disponibles',data:keys.map(k=>ty[k]),backgroundColor:'#2C5246'}]},
+  graphs.push(new Chart($('#g-typo'),{type:'bar',data:{labels:keys,datasets:[{label:'Lots disponibles',data:keys.map(k=>ty[k]),backgroundColor:'#1F6F8B'}]},
     options:{maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:'#EEE9DF'}},x:{grid:{display:false}}}}}));
 }
 
