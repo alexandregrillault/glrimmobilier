@@ -45,8 +45,11 @@ drop policy if exists neuf_villes_lecture on public.neuf_villes;
 create policy neuf_villes_lecture on public.neuf_villes
   for select to authenticated using (true);
 
-insert into public.neuf_villes (ville) values
-  ('Aubervilliers'), ('Colombes'), ('Drancy'), ('L''Haÿ-les-Roses'), ('Villiers-sur-Marne')
+-- Décision d'Alex du 24/11/2026 : l'essai commence par une seule ville, Colombes.
+-- Les suivantes s'ajoutent par une ligne chacune, écrite comme dans pige_programmes.ville :
+--   insert into public.neuf_villes (ville) values ('Aubervilliers');
+--   (puis 'Drancy', 'L''Haÿ-les-Roses', 'Villiers-sur-Marne')
+insert into public.neuf_villes (ville) values ('Colombes')
 on conflict (ville) do nothing;
 
 -- 3. Compteur des demandes ------------------------------------------------------------------
