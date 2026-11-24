@@ -20,12 +20,13 @@ export type Resultat = { conv: Conversation | null; messages: Message[] };
 // ouvert sur l'appel de 10 minutes (la page lit f=appel ; la personne peut encore choisir la visio).
 export const LIEN_PLANNING = "https://www.glrimmobilier.com/rdv/?v=theophile&f=appel";
 
-// Texte et bouton validés par Alex le 23/11/2026 (« c'est bien le bon texte », « mets le bouton »,
-// comme avant : un bouton qui ouvre le planning). Un bouton Instagram porte 20 caractères au plus.
-export const TEXTE_RDV = "Salut, c'est GLR Immobilier, le média Quoi de neuf. " + String.fromCodePoint(0x1f44b) +
-  " Les vrais prix et les plans des programmes neufs, tu ne les verras pas sur les sites d'annonces." +
-  " Si ton projet est sérieux, prends 10 minutes avec un conseiller : on cadre ton projet, puis on te montre" +
-  " les programmes qui collent, avec les plans et les prix réels.";
+// Texte validé par Alex le 24/11/2026 (« Ok » ; la personne parle à Quoi de neuf, pas à GLR Immobilier :
+// « tu veux les plans, si ton projet est sérieux, réserve un créneau »). Bouton du 23/11/2026
+// (« mets le bouton » : il ouvre le planning). Un bouton Instagram porte 20 caractères au plus.
+export const TEXTE_RDV = "Hello, c'est l'équipe Quoi de neuf " + String.fromCodePoint(0x1f44b) +
+  " Tu veux les plans ? Si ton projet est sérieux, réserve un créneau de 10 minutes avec un conseiller." +
+  " Tu le sais, les plans ne sont pas disponibles sur les sites d'annonces." +
+  " Nous, on a accès à l'intégralité des stocks et aux prix réels des promoteurs.";
 
 export const M = {
   rdv: (): Message => ({
