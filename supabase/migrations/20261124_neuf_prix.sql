@@ -243,6 +243,7 @@ grant execute on function public.neuf_prix_public(text, text) to service_role;
 -- Promoteur : vide quand la base n'a qu'un nom technique (« immolead_care ») ou une remarque
 -- interne entre parenthèses (« WEMO (agrégateur…) », « catella (réseau) »).
 -- Dispositifs : seulement PTZ, TVA 5,5 % et BRS (jamais LLI ni LMNP).
+-- Étage inconnu : « etage » vide (la page écrit « étage non précisé »). Position approchée : « approx » vrai.
 create or replace function public.neuf_ville_public(p_ville text)
 returns jsonb
 language sql
@@ -327,7 +328,9 @@ as $$
              'picking', r.picking,
              'image', null,
              'position', case when r.lat is null or r.lng is null then null
-                 else jsonb_build_object('latitude', round(r.lat::numeric, 3), 'longitude', round(r.lng::numeric, 3)) end,
+                 else jsonb_build_object('latitude', round(r.lat::numeric, 3), 'longitude', round(r.lng::numeric, 3),
+                                         -- placé au centre de la ville ou de la rue : la page le dit « Emplacement approximatif »
+                                         'approx', coalesce(r.data->>'geo_approx', '') = 'true') end,
              'logements', coalesce((
                  select jsonb_agg(jsonb_build_object('id', l.id, 'typo', l.typo, 'pieces', l.pieces, 'surface', l.surf,
                                                      'etage', l.etage, 'exterieur', l.exterieur)
