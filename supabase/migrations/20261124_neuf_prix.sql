@@ -67,13 +67,15 @@ revoke all on public.neuf_prix_appels from public, anon, authenticated;
 grant all on public.neuf_prix_appels to service_role;
 
 -- 4. Lecture des prix d'un programme --------------------------------------------------------
--- Rend { statut: 'ok', maj, prix: { <clé du lot>: prix }, tva_reduite: [ <clés> ] }
+-- Rend { statut: 'ok', maj, prix: { <clé du lot>: prix TVA 20 % }, prix_tva_reduite: { <clé du lot>: prix TVA 5,5 % } }
 --   ou { statut: 'inconnu' }  (clé fausse, programme picking ou sans mandat, ville non publiée :
 --                              même réponse, pour ne rien apprendre à celui qui tâtonne)
 --   ou { statut: 'limite' }   (trop de demandes).
 --
--- Prix servi : le prix TVA 20 % quand la grille le donne ; sinon le prix TVA 5,5 %, et la clé du
--- lot est alors dans « tva_reduite » pour que la page le dise (prix sous conditions de ressources).
+-- Décision d'Alex du 24/11/2026 (« Les deux prix ») : la page montre le prix TVA 20 % et le prix
+-- TVA 5,5 % quand la grille donne les deux. Un lot peut n'être que dans l'une des deux listes, ou
+-- dans aucune (pas de prix : « sur demande »). La colonne pige_lots.prix mélange les deux taux :
+-- elle ne sert que de repli, rangée d'après data.tva.
 -- Seulement les lots libres de type Appartement ou Maison, prix entre 50 000 et 3 000 000 €.
 create or replace function public.neuf_prix_public(p_cle text, p_ip text)
 returns jsonb
@@ -140,21 +142,22 @@ begin
        and l.type in ('Appartement', 'Maison')
   ), choisi as (
     select neuf_cle(id) as cle,
-           round(coalesce(p20, p55, p)) as prix,
-           (p20 is null and (p55 is not null or tva in ('5.5', '5,5'))) as reduite
+           round(case when p20 is not null then p20
+                      when p55 is null and coalesce(tva, '') not in ('5.5', '5,5') then p end) as prix_20,
+           round(case when p55 is not null then p55
+                      when p20 is null and tva in ('5.5', '5,5') then p end) as prix_55
       from brut
   )
-  select coalesce(jsonb_object_agg(cle, prix), '{}'::jsonb),
-         coalesce(jsonb_agg(cle) filter (where reduite), '[]'::jsonb)
+  select coalesce(jsonb_object_agg(cle, prix_20) filter (where prix_20 between 50000 and 3000000), '{}'::jsonb),
+         coalesce(jsonb_object_agg(cle, prix_55) filter (where prix_55 between 50000 and 3000000), '{}'::jsonb)
     into v_prix, v_reduite
-    from choisi
-   where prix between 50000 and 3000000;
+    from choisi;
 
   return jsonb_build_object(
     'statut', 'ok',
     'maj', (select max(pige_date) from pige_maj),
     'prix', v_prix,
-    'tva_reduite', v_reduite
+    'prix_tva_reduite', v_reduite
   );
 end;
 $$;

@@ -9,10 +9,11 @@
 // l'ouverture, avec la clé publique du programme (jamais l'identifiant de la pige).
 //
 // Appel  : GET /functions/v1/neuf-prix?p=<clé du programme, 12 caractères>
-// Réponse: { "maj": "2026-11-24", "prix": { "<clé du lot>": 245000 }, "tva_reduite": ["<clé du lot>"] }
+// Réponse: { "maj": "2026-11-24", "prix": { "<clé du lot>": 245000 }, "prix_tva_reduite": { "<clé du lot>": 215000 } }
 //   - seulement les lots libres de type Appartement ou Maison ;
-//   - prix TVA 20 % quand la grille le donne, sinon prix TVA 5,5 % et le lot est cité dans
-//     « tva_reduite » (la page doit alors dire « TVA 5,5 %, sous conditions de ressources ») ;
+//   - « prix » = prix TVA 20 %, « prix_tva_reduite » = prix TVA 5,5 % (sous conditions de ressources) ;
+//     décision d'Alex du 24/11/2026 : la page montre les deux quand les deux existent. Un lot peut
+//     n'être que dans l'une des deux listes, ou dans aucune (« sur demande ») ;
 //   - jamais de plan, d'image, de numéro de lot, de commission ni de nom d'intranet ;
 //   - programme « picking », « sans mandat », hors des villes publiées ou inconnu : 404, même réponse.
 //
@@ -81,7 +82,7 @@ Deno.serve(async (req: Request) => {
   if (resultat?.statut !== "ok") return repondre({ error: "inconnu" }, 404, cors, "no-store");
 
   return repondre(
-    { maj: resultat.maj, prix: resultat.prix || {}, tva_reduite: resultat.tva_reduite || [] },
+    { maj: resultat.maj, prix: resultat.prix || {}, prix_tva_reduite: resultat.prix_tva_reduite || {} },
     200,
     cors,
     "public, max-age=3600",
