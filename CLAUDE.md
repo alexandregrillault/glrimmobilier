@@ -22,7 +22,8 @@ Un CRM maison en un seul fichier `index.html` (vanilla JS, ~1,5 Mo, aucun build)
 ## Deux rôles dans le CRM
 
 - **Gérant** (Alex, Théophile) : accès complet. Pages : Rendez-vous, Todo, Tâches hebdomadaires, Chiffres, Reporting, Contacts, Pilotage, Journal, Documents, Carte, Simulateur, Marché, Annonces.
-- **Commercial** (Anaïs, Louis, Nour, Jules, Fabien, Madina) : ses leads, son planning, le pool, ses ventes, les outils. Pas de page Contacts, pas de charges ni de trésorerie, pas de détail des ventes des autres.
+- **Commercial** (Anaïs, Louis, Fabien, Madina ; Nour et Jules ont quitté l'équipe le 24/11/2026) : ses leads, son planning, le pool, ses ventes, les outils. Pas de page Contacts, pas de charges ni de trésorerie, pas de détail des ventes des autres.
+- **Anciens vendeurs** (demande d'Alex du 24/11/2026 : « enlever Nour et Jules de la liste des vendeurs mais en gardant leur vente ») : un vendeur parti n'est jamais supprimé de `data.vendeurs` (ses ventes, factures et commissions cherchent son nom par son identifiant), il reçoit `ancien: true`. `vendeursActifs(garderId)` sert pour la page Vendeurs et tous les menus où l'on choisit un vendeur (vente, planning, attribution, pilotage) ; les listes qui lisent l'historique (commissions, filtre de l'onglet Contacts, journal, relevé bancaire) gardent tout le monde. Sous la grille de la page Vendeurs, une ligne « Anciens vendeurs » permet de le remettre (`vendeurRemettre`). Test : `tests/anciens_vendeurs.py`.
 
 Tout nouveau champ de la fiche vendeur utilisé côté commercial doit être ajouté dans la RPC `donnees_espace`.
 

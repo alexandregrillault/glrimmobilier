@@ -3892,6 +3892,20 @@ function fmtEurFac(n) {
 function initials(prenom, nom) {
   return ((prenom||'')[0]||'') + ((nom||'')[0]||'');
 }
+// Anciens vendeurs (demande d'Alex du 24/11/2026) : un vendeur parti garde sa ligne dans data.vendeurs
+// avec « ancien: true ». Ses ventes, factures et commissions gardent son nom ; il n'est plus proposé
+// sur la page Vendeurs ni dans les menus où l'on choisit un vendeur. `garderId` : le laisser dans un
+// menu quand c'est déjà lui qui est choisi (modifier une de ses ventes).
+function vendeursActifs(garderId) {
+  return ((typeof data !== 'undefined' && data && data.vendeurs) || []).filter(v => v && (!v.ancien || v.id === garderId));
+}
+function vendeurRemettre(id) {
+  const v = data.vendeurs.find(x => x.id === id);
+  if (!v) return;
+  delete v.ancien;
+  saveData(); refresh(); toast('✓ ' + v.prenom + ' est de nouveau dans l\'équipe');
+}
+
 function vendeurColor(id) {
   const idx = data.vendeurs.findIndex(v => v.id === id);
   return COLORS[idx % COLORS.length] || COLORS[0];
@@ -4981,7 +4995,7 @@ function openModal(type) {
     // Remplir le select vendeurs
     const sel = document.getElementById('v-vendeur');
     sel.innerHTML = '<option value="">— Sélectionner —</option>';
-    data.vendeurs.forEach(v => {
+    vendeursActifs().forEach(v => {
       const o = document.createElement('option');
       o.value = v.id;
       o.textContent = v.prenom + ' ' + v.nom;
@@ -5294,7 +5308,7 @@ function openEditVente(id) {
   // Remplir le select vendeurs
   const sel = document.getElementById('v-vendeur');
   sel.innerHTML = '<option value="">— Sélectionner —</option>';
-  data.vendeurs.forEach(vd => {
+  vendeursActifs(v.vendeurId).forEach(vd => {
     const o = document.createElement('option');
     o.value = vd.id;
     o.textContent = vd.prenom + ' ' + vd.nom;
@@ -6431,7 +6445,7 @@ function renderImportApercu() {
         : l.v.dest === 'commission'
         ? '<select class="imp-vendeur" onchange="setImportVendeur(' + i + ', this.value)" style="' + _selStyle + '">'
             + '<option value="">Commercial à choisir</option>'
-            + (data.vendeurs || []).map(v => '<option value="' + escHtml(v.id) + '"' + (l.v.vendeurId === v.id ? ' selected' : '') + '>'
+            + vendeursActifs(l.v.vendeurId).map(v => '<option value="' + escHtml(v.id) + '"' + (l.v.vendeurId === v.id ? ' selected' : '') + '>'
                 + escHtml(((v.prenom || '') + ' ' + (v.nom || '')).trim()) + '</option>').join('')
             + '</select>'
         : l.v.dest === 'fixe' ? l.v.libelle
@@ -7026,11 +7040,11 @@ function renderRemuneration() {
 
 function renderVendeurs() {
   const grid = document.getElementById('vendeur-grid');
-  document.getElementById('vendeurs-count').textContent = data.vendeurs.length + ' membre(s)';
+  document.getElementById('vendeurs-count').textContent = vendeursActifs().length + ' membre(s)';
 
   if (data.vendeurs.length === 0) { grid.innerHTML = '<div style="grid-column:1/-1"><div class="empty"><div class="empty-icon">—</div><p>Commencez par ajouter vos vendeurs</p></div></div>'; return; }
 
-  grid.innerHTML = data.vendeurs.map(v => {
+  grid.innerHTML = vendeursActifs().map(v => {
     const ventes = data.ventes.filter(x => x.vendeurId === v.id); // toujours tout l'historique
     const actes = ventes.filter(x => x.statut === 'acte' || x.statut === 'facture-payee');
     const ca = ventes.reduce((s,x)=>s+honoNet(x),0); // honoraires sur toutes les ventes
@@ -7065,7 +7079,17 @@ function renderVendeurs() {
         </div>
       </div>
     </div>`;
-  }).join('');
+  }).join('') + vendeursAnciensHtml();
+}
+
+// Rappel discret sous la grille : qui a quitté l'équipe, avec le moyen de le remettre.
+function vendeursAnciensHtml() {
+  const anciens = (data.vendeurs || []).filter(v => v && v.ancien);
+  if (!anciens.length) return '';
+  return '<div style="grid-column:1/-1;font-size:12.5px;color:var(--muted);padding:6px 2px">Anciens vendeurs (leurs ventes sont gardées) : '
+    + anciens.map(v => escHtml(((v.prenom || '') + ' ' + (v.nom || '')).trim())
+        + ' <button type="button" onclick="vendeurRemettre(\'' + escHtml(v.id) + '\')" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline;padding:0">Remettre dans l\'équipe</button>').join(' · ')
+    + '</div>';
 }
 
 let pendingDeleteVendeurId = null;
@@ -7112,7 +7136,7 @@ let selectedVendeurId = null;
 function renderEquipeSelector() {
   const container = document.getElementById('equipe-selector');
   if (!container) return;
-  container.innerHTML = data.vendeurs.map(v => {
+  container.innerHTML = vendeursActifs().map(v => {
     const color = vendeurColor(v.id);
     const active = selectedVendeurId === v.id;
     return `<button onclick="selectVendeurEquipe('${v.id}')" style="
@@ -7130,7 +7154,7 @@ function renderEquipeSelector() {
   const sel = document.getElementById('eq-vendeur-select');
   if (sel) {
     sel.innerHTML = '<option value="">— Choisir un vendeur —</option>' +
-      data.vendeurs.map(v => `<option value="${v.id}" ${selectedVendeurId===v.id?'selected':''}>${v.prenom} ${v.nom}</option>`).join('');
+      vendeursActifs().map(v => `<option value="${v.id}" ${selectedVendeurId===v.id?'selected':''}>${v.prenom} ${v.nom}</option>`).join('');
   }
 }
 
@@ -7204,7 +7228,7 @@ function _eqLeadsPopulateSelect() {
   if (!sel) return;
   const current = sel.value || selectedVendeurId || '';
   sel.innerHTML = '<option value="">— Choisir un vendeur —</option>' +
-    data.vendeurs.map(v => `<option value="${v.id}" ${current===v.id?'selected':''}>${v.prenom} ${v.nom}</option>`).join('');
+    vendeursActifs().map(v => `<option value="${v.id}" ${current===v.id?'selected':''}>${v.prenom} ${v.nom}</option>`).join('');
 }
 
 // Pipeline simplifié : 5 étapes + case "Sans réponse" à part + 3 statuts finaux
@@ -7269,7 +7293,7 @@ function _eqSelBarreMaj(){
   if (!n) { el.innerHTML = ''; return; }
   const e = _vEsc;
   const gerant = typeof estGerant !== 'function' || estGerant();
-  const prenoms = ((typeof data !== 'undefined' && data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean);
+  const prenoms = vendeursActifs().map(v => v.prenom).filter(Boolean);
   const selVendeur = gerant && prenoms.length
     ? `<select onchange="eqSelVendeur(this)" title="Transférer la paternité des leads cochés" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-family:var(--font-body);font-size:12px;cursor:pointer">
         <option value="">Réattribuer à…</option>
@@ -17640,7 +17664,7 @@ function _eqPlanPopulateSelect() {
   if (!sel) return;
   const courant = sel.value || document.getElementById('eq-leads-vendeur')?.value || selectedVendeurId || '';
   sel.innerHTML = '<option value="">— Choisir un vendeur —</option>' +
-    data.vendeurs.map(v => `<option value="${v.id}" ${courant === v.id ? 'selected' : ''}>${v.prenom} ${v.nom}</option>`).join('');
+    vendeursActifs().map(v => `<option value="${v.id}" ${courant === v.id ? 'selected' : ''}>${v.prenom} ${v.nom}</option>`).join('');
 }
 
 async function renderEquipePlanning() {
@@ -18077,7 +18101,7 @@ async function renderEquipeVilles() {
   if (sel) {
     const current = sel.value || selectedVendeurId || '';
     sel.innerHTML = '<option value="">— Choisir un vendeur —</option>' +
-      data.vendeurs.map(v => `<option value="${v.id}" ${current===v.id?'selected':''}>${v.prenom} ${v.nom}</option>`).join('');
+      vendeursActifs().map(v => `<option value="${v.id}" ${current===v.id?'selected':''}>${v.prenom} ${v.nom}</option>`).join('');
   }
   const selId = sel?.value || selectedVendeurId;
   const deptsEl = document.getElementById('eqv-depts');
@@ -19311,7 +19335,7 @@ async function openEditContact(id, conjoint) {
   // Réattribution du vendeur : réservée au gérant (la paternité est recalée proprement)
   let vendeurHtml = '';
   if (typeof estGerant === 'function' && estGerant()) {
-    const prenoms = ((data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean);
+    const prenoms = vendeursActifs().map(v => v.prenom).filter(Boolean);
     if (c.vendeur && !prenoms.includes(c.vendeur)) prenoms.push(c.vendeur);
     vendeurHtml = `<div>
       <div style="font-size:11px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px">Vendeur (paternité)</div>
@@ -19399,7 +19423,7 @@ function openNewContact(contexte) {
       <input id="${id2}" type="${type || 'text'}" placeholder="${placeholder || ''}" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;box-sizing:border-box">
     </div>`;
 
-  const prenoms = ((data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean);
+  const prenoms = vendeursActifs().map(v => v.prenom).filter(Boolean);
   if (vendeurLeads && !prenoms.includes(vendeurLeads)) prenoms.push(vendeurLeads);
 
   // Un commercial ne choisit pas : le lead qu'il saisit est le sien.
@@ -20368,7 +20392,7 @@ function refreshSelectionBar() {
   const slot = document.getElementById('contacts-sel-vendeur');
   if (slot) {
     const gerant = typeof estGerant !== 'function' || estGerant();
-    const prenoms = ((typeof data !== 'undefined' && data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean);
+    const prenoms = vendeursActifs().map(v => v.prenom).filter(Boolean);
     slot.innerHTML = gerant && prenoms.length
       ? `<select onchange="ctSelVendeur(this)" title="Attribuer les contacts cochés à un vendeur (la paternité change et le transfert est tracé)" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-family:var(--font-body);font-size:12px;cursor:pointer">
           <option value="">Attribuer à…</option>
@@ -23938,7 +23962,7 @@ async function _pilAppel(fn, b) {
 function pilInit() {
   const remplir = (id, vide) => {
     const sel = document.getElementById(id); if (!sel || sel.options.length > 1) return;
-    ((data && data.vendeurs) || []).slice().sort((a, b) => String(a.prenom).localeCompare(String(b.prenom), 'fr'))
+    vendeursActifs().sort((a, b) => String(a.prenom).localeCompare(String(b.prenom), 'fr'))
       .forEach(v => { const o = document.createElement('option'); o.value = v.prenom; o.textContent = v.prenom; sel.appendChild(o); });
   };
   remplir('pil-vendeur'); remplir('pil-cmp-a');
@@ -24110,7 +24134,7 @@ function _pilARetenir(l, equipe, n) {
 let _pilCmpChoix = null;
 function _pilChipsRemplir() {
   const bloc = document.getElementById('pil-cmp-b-bloc'); if (!bloc || bloc.children.length) return;
-  const noms = ((data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean).sort((a, b) => a.localeCompare(b, 'fr'));
+  const noms = vendeursActifs().map(v => v.prenom).filter(Boolean).sort((a, b) => a.localeCompare(b, 'fr'));
   if (!_pilCmpChoix) _pilCmpChoix = new Set(noms.slice(0, 2));
   bloc.innerHTML = noms.concat(['Équipe']).map(n => `<button type="button" data-n="${_esc(n)}" onclick="pilCmpToggle(this.dataset.n)" style="border-radius:20px;padding:7px 13px;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text)">${_esc(n)}</button>`).join('')
     + `<button type="button" onclick="pilCmpTous()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline">tous</button>`;
@@ -24130,7 +24154,7 @@ function pilCmpToggle(n) {
   _pilChipsPeindre(); pilRender();
 }
 function pilCmpTous() {
-  _pilCmpChoix = new Set(((data && data.vendeurs) || []).map(v => v.prenom).filter(Boolean).concat(['Équipe']));
+  _pilCmpChoix = new Set(vendeursActifs().map(v => v.prenom).filter(Boolean).concat(['Équipe']));
   _pilChipsPeindre(); pilRender();
 }
 function pilCmpMode() {
