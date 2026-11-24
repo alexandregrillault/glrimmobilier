@@ -18,7 +18,7 @@ ok(!["planning", "explanation", "bonjour"].some(parleDePlans), "« planning » n
 ok(["stop", "STOP", "Stop !", " arrête "].every(veutArreter) && !veutArreter("ne t'arrête pas"), "« STOP » reconnu");
 
 const m = M.rdv();
-ok(m.text === TEXTE_RDV && /^Hello, c'est l'équipe Quoi de neuf 👋 Tu veux les plans \? /.test(m.text), "le message commence comme validé par Alex");
+ok(m.text === TEXTE_RDV && /^Hello, c'est l'équipe Quoi de neuf, le média de GLR Immobilier 👋 Tu veux les plans \? /.test(m.text), "le message commence comme validé par Alex");
 ok(/réserve un créneau de 10 minutes avec un conseiller\. Tu le sais, les plans ne sont pas disponibles sur les sites d'annonces\./.test(m.text) && /aux prix réels des promoteurs\.$/.test(m.text) && m.text.length <= 640, "le texte est celui validé");
 ok(!/https?:/.test(m.text), "aucune adresse écrite dans le texte");
 ok(m.text.length <= 640, "640 caractères au plus (limite d'Instagram pour un message à bouton) : " + m.text.length);
