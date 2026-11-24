@@ -11265,11 +11265,16 @@ function _denoncRaison(detail) {
 }
 // Les 4 états (demande d'Alex du 17/11/2026) : [libellé, couleur, explication, famille]
 //   vert = dénoncé et retrouvé chez le promoteur · bleu = envoyé, à vérifier (seul le message du site le dit)
-//   rouge = refusé ou déjà connu du promoteur · orange = à dénoncer à la main
+//   rouge = refusé ou déjà connu du promoteur · orange = à dénoncer à la main, ou contact créé sans dénonciation
 const DENONC_COUL = { vert: 'var(--success)', bleu: '#2F6FB0', rouge: 'var(--danger)', orange: 'var(--warning)' };
 function denoncEtat(d) {
   const jj = x => x ? new Date(x).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
   if (d && (d.statut === 'envoyee' || d.statut === 'acceptee')) {
+    // Promoteurs en deux étapes (Link-app…, constat d'Alex du 24/11/2026) : le robot a créé la fiche du contact,
+    // la dénonciation sur le programme reste à faire. Un mail d'acceptation du promoteur repasse la ligne en vert.
+    if (d.statut === 'envoyee' && d.preuve_niveau === 'contact')
+      return ['Contact créé le ' + jj(d.fait_le) + ' · à dénoncer', DENONC_COUL.orange,
+        'Le robot a créé la fiche du client chez le promoteur, mais ne l\'a pas encore dénoncé sur le programme. Dénonce-le à la main sur l\'intranet du promoteur.', 'orange'];
     if (d.paternite_fin && new Date(d.paternite_fin + 'T23:59:59') < new Date())
       return ['Paternité finie le ' + jj(d.paternite_fin) + ' · à redénoncer', DENONC_COUL.orange,
         'Le promoteur accordait la paternité jusqu\'au ' + jj(d.paternite_fin) + '. Dénonce à nouveau à la main.', 'orange'];

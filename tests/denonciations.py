@@ -39,6 +39,9 @@ DENONC_C6 = [
      'fait_le': '2026-11-13T10:00:00+00:00', 'preuve_niveau': 'message', 'portee': 'client', 'detail': 'Nexity : prospect créé'},
     {'compte': 'cogedim', 'promoteur': 'COGEDIM', 'programme': 'Panorama', 'ville': 'Clamart', 'statut': 'envoyee',
      'fait_le': '2026-09-01T10:00:00+00:00', 'preuve_niveau': 'liste', 'portee': 'client', 'paternite_fin': '2026-10-01'},
+    # Link-app : contact créé seulement, pas encore dénoncé sur le programme (24/11/2026)
+    {'compte': 'linkapp_primavefa', 'promoteur': 'PRIMAVEFA', 'programme': 'Linea Rosa', 'ville': 'Clamart', 'statut': 'envoyee',
+     'fait_le': '2026-11-14T10:00:00+00:00', 'preuve_niveau': 'contact', 'portee': 'client', 'detail': 'Envoyé et retrouvé dans la liste de la plateforme'},
     {'compte': 'bouygues', 'promoteur': 'BOUYGUES', 'programme': 'Retrospective', 'ville': 'Clamart', 'statut': 'echec',
      'fait_le': '2026-11-13T11:00:00+00:00', 'portee': 'programme', 'detail': 'programme « Retrospective » absent des suggestions Bouygues'},
     {'compte': 'bouygues', 'promoteur': 'BOUYGUES', 'programme': 'Retrospective', 'ville': 'Clamart', 'statut': 'echec',
@@ -52,6 +55,7 @@ SEL_C6 = [{'contact_id': 'c6', 'token': 'tokc6', 'created_at': '2026-11-14T10:00
     {'titre': 'Jardin Secret — lot 2', 'programme': 'Jardin Secret', 'ville': 'Clamart', 'promoteur': 'Vinci Immobilier'},
     {'titre': 'Panorama — lot 4', 'programme': 'Panorama', 'ville': 'Clamart', 'promoteur': 'Cogedim'},
     {'titre': 'Retrospective — lot 5', 'programme': 'Retrospective', 'ville': 'Clamart', 'promoteur': 'Bouygues Immobilier'},
+    {'titre': 'Iris — lot 7', 'programme': 'Iris', 'ville': 'Clamart', 'promoteur': 'Primavefa'},
 ]}]
 DENONC_C2 = [{'plateforme': 'iselection', 'compte': 'iselection', 'promoteur': 'ISELECTION', 'programme': 'Opus', 'ville': 'Colombes',
               'statut': 'envoyee', 'fait_le': '2026-11-10T10:00:00+00:00', 'civilite': 'Mme'}]
@@ -203,13 +207,13 @@ with sync_playwright() as p:
         txt = page.inner_text('#eq-fiche-corps')
         sel = txt[txt.lower().index('sélections envoyées'):] if 'sélections envoyées' in txt.lower() else ''
         for attendu in ('Dénoncé le 12/11 · jusqu\'au 12/12', 'Envoyé le 13/11 · à vérifier', 'Déjà connu du promoteur',
-                        'À dénoncer à la main', 'Paternité finie le 01/10 · à redénoncer'):
+                        'À dénoncer à la main', 'Paternité finie le 01/10 · à redénoncer', 'Contact créé le 14/11 · à dénoncer'):
             if attendu not in sel: erreurs.append(f'{nom} : sélections envoyées sans « {attendu} »')
-        etats = page.evaluate("""() => { const r = {}; ['Les Terrasses Mansart','Le Square','Villa Flora','Les Hauts de Clamart','Jardin Secret','Panorama','Retrospective'].forEach(p => {
+        etats = page.evaluate("""() => { const r = {}; ['Les Terrasses Mansart','Le Square','Villa Flora','Les Hauts de Clamart','Jardin Secret','Panorama','Retrospective','Iris'].forEach(p => {
             const b = { programme: p, promoteur: (_eqSelectionsAll[0].biens.find(x => x.programme === p) || {}).promoteur };
             r[p] = denoncEtat(denoncPour('c6', p, b.promoteur))[3]; }); return r; }""")
         voulu = {'Les Terrasses Mansart': 'vert', 'Le Square': 'bleu', 'Villa Flora': 'rouge', 'Les Hauts de Clamart': 'bleu',
-                 'Jardin Secret': 'orange', 'Panorama': 'orange', 'Retrospective': 'orange'}
+                 'Jardin Secret': 'orange', 'Panorama': 'orange', 'Retrospective': 'orange', 'Iris': 'orange'}
         if etats != voulu: erreurs.append(f'{nom} : états {etats}')
         if 'pas dans la liste de dénonciation du promoteur' not in txt: erreurs.append(f'{nom} : raison de l\'échec Bouygues absente')
         if page.evaluate("document.documentElement.scrollWidth > window.innerWidth + 1"): erreurs.append(f'{nom} : fiche 4 états déborde en largeur')
