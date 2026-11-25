@@ -17,6 +17,8 @@
 --   4. neuf_prix_public()    : la lecture des prix, réservée à service_role.
 --   5. neuf_ville_public()   : le JSON d'une ville pour le fabricant du site (aucun prix),
 --                              réservée à service_role.
+--   6. neuf_villes_publiees() et neuf_ville_publiee() : la même lecture pour le générateur du
+--                              site, avec la clé publique, villes « publiee » seulement.
 --
 -- Rien n'est ouvert à anon. Aucune donnée existante n'est modifiée.
 
@@ -381,3 +383,49 @@ $$;
 
 revoke all on function public.neuf_ville_public(text) from public, anon, authenticated;
 grant execute on function public.neuf_ville_public(text) to service_role;
+
+-- ---------------------------------------------------------------------------------------------
+-- 6. Lecture par le générateur du site (ajout du 25/11/2026, préparé, non appliqué)
+-- ---------------------------------------------------------------------------------------------
+-- Décision d'Alex du 25/11/2026 : mise en ligne automatique des pages ville, avec garde-fous.
+-- Le générateur tourne dans glr-site, dépôt public : il n'a pas la clé de service. Il lit donc
+-- avec la clé publique du site, mais SEULEMENT les villes à l'état « publiee », c'est-à-dire ce
+-- qui est de toute façon écrit ensuite dans les pages et dans le dépôt public du site.
+-- Une ville « prete » reste invisible ici (même réponse vide qu'une ville inconnue) ;
+-- neuf_ville_public(), qui rend aussi les villes « prete », reste réservée à service_role.
+-- Aucun prix dans ces deux lectures : la limite d'appels de neuf_prix_public() ne change pas.
+
+-- La liste des villes à fabriquer.
+create or replace function public.neuf_villes_publiees()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object('ville', ville, 'slug', slug, 'insee', insee, 'dept', dept)
+                            order by dept, slug), '[]'::jsonb)
+    from neuf_villes
+   where etat = 'publiee';
+$$;
+
+revoke all on function public.neuf_villes_publiees() from public;
+grant execute on function public.neuf_villes_publiees() to anon, authenticated, service_role;
+
+-- Le JSON d'une ville publiée (nom ou slug) ; null pour une ville « prete » ou inconnue.
+create or replace function public.neuf_ville_publiee(p_ville text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select neuf_ville_public(v.ville)
+    from neuf_villes v
+   where (v.ville = p_ville or v.slug = p_ville)
+     and v.etat = 'publiee'
+   limit 1;
+$$;
+
+revoke all on function public.neuf_ville_publiee(text) from public;
+grant execute on function public.neuf_ville_publiee(text) to anon, authenticated, service_role;
