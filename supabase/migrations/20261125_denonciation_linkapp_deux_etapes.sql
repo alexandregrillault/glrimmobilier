@@ -4,9 +4,10 @@
 --   1. Les comptes Link-app passent « un envoi par programme » et ne sont plus « contact seul » : une ligne
 --      'envoyee' retrouvée dans « Dénonciations » redevient verte.
 --   2. La file ne compte plus une ligne « contact créé » comme faite.
---   3. Rattrapage : un client hors de la fenêtre de 3 jours revient dans la file, mais seulement pour les
---      programmes où il a une ligne « contact créé » (pas pour les autres promoteurs).
--- NON APPLIQUÉ au 25/11/2026 : attend le oui d'Alex (lance de vraies dénonciations : 160 lignes, 63 clients)
+--   3. Rattrapage : un client reçu depuis le 20/11/2026 et sorti de la fenêtre de 3 jours revient dans la file,
+--      mais seulement pour les programmes où il a une ligne « contact créé » (pas pour les autres promoteurs).
+--      Les demandes du 9 au 19/11 ne sont pas rattrapées (décision d'Alex du 25/11/2026).
+-- NON APPLIQUÉ au 25/11/2026 : attend le « pousse » d'Alex pour glr-pige (lance de vraies dénonciations)
 -- et le « pousse » de glr-pige (sans le nouveau robot, la file se remplirait pour rien).
 
 create table if not exists public.fonctions_backup_20261125 as
@@ -41,8 +42,12 @@ begin
     from public.contacts c, unnest(string_to_array(coalesce(c.lieu, ''), ',')) v
     where c.recu_le >= timestamptz '2026-11-09 00:00:00+01'
       and (c.recu_le >= now() - interval '3 days' or c.denonciation_relance_le >= now() - interval '3 days'
-           or exists (select 1 from public.denonciations d0 where d0.contact_id = c.id
-                      and d0.statut = 'envoyee' and d0.preuve_niveau = 'contact'))
+           -- rattrapage limité aux demandes reçues depuis le 20/11/2026 (décision d'Alex du 25/11/2026 :
+           -- « fais que celle du 20 au 25 et vide la file d'attente pour le reste ») ; les plus anciennes
+           -- restent en orange « Contact créé · à dénoncer », à faire à la main
+           or (c.recu_le >= timestamptz '2026-11-20 00:00:00+01'
+               and exists (select 1 from public.denonciations d0 where d0.contact_id = c.id
+                           and d0.statut = 'envoyee' and d0.preuve_niveau = 'contact')))
       and exists (select 1 from public.denonciation_identite(c.prenom, c.nom_famille, c.nom, c.email))
       and coalesce(c.statut, '') <> 'Stop'
       and coalesce(c.source, '') <> 'Ancien lead RAM'
