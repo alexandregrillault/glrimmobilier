@@ -1,6 +1,6 @@
 -- Pages ville : les logements optionnés sont montrés aussi, en plus des libres.
 --
--- PAS ENCORE APPLIQUÉE (préparée le 25/11/2026).
+-- APPLIQUÉE le 25/11/2026, collée par Alex dans l'éditeur SQL de Supabase (« C'est fait »).
 --
 -- Demande d'Alex du 25/11/2026 (dite à la session Site, relayée par la mère) : « quand tu exportes
 -- les lots des programmes, je veux les libres + Optionnés ». Réservé, vendu et bloqué restent exclus.
