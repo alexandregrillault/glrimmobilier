@@ -162,9 +162,9 @@ security definer
 set search_path = public
 as $$
 declare
-  -- À TRANCHER : 'publiee' = une nouvelle commune part en ligne seule ; 'prete' = elle attend le oui d'Alex.
+  -- Tranché par Alex le 25/11/2026 (« Oui, toute seule ») : une nouvelle commune part en ligne seule.
   c_etat_nouvelle constant text := 'publiee';
-  -- À TRANCHER : chute tolérée d'une pige à l'autre (0.20 = 20 %).
+  -- Tranché par Alex le 25/11/2026 (« Oui, 20 % ») : chute tolérée d'une pige à l'autre (0.20 = 20 %).
   c_chute constant numeric := 0.20;
   m      record;
   prec   record;
