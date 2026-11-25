@@ -1,8 +1,8 @@
 // Prix des logements d'un programme, pour les pages ville du site
 // (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// PAS ENCORE DÉPLOYÉE (préparée le 24/11/2026). À déployer avec verify_jwt = false (page publique,
-// sans connexion), et seulement après la migration 20261124_neuf_prix.sql.
+// En ligne depuis le 25/11/2026 (« déploie » d'Alex), avec verify_jwt = false (page publique,
+// sans connexion). Dépend de la migration 20261124_neuf_prix.sql (appliquée le 25/11/2026).
 //
 // Décision d'Alex du 24/11/2026 : les prix sont visibles sans compte, les plans non. Les prix ne
 // sont écrits ni dans les pages ni dans le dépôt public du site : la page les demande ici à
