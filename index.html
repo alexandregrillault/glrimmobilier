@@ -11229,7 +11229,9 @@ function denoncParProgramme(contactId) {
     if (!k) return;
     const prev = m[k];
     const echecs = (prev ? prev._echecs : 0) + (d.statut === 'echec' ? 1 : 0);
-    if (!prev || (DENONC_RANG[d.statut] || 0) > (DENONC_RANG[prev.statut] || 0)) m[k] = Object.assign({}, d);
+    // Une ligne « contact créé » (Link-app) s'efface devant toute vraie réponse sur le même programme (25/11/2026)
+    const rang = x => (x.statut === 'envoyee' && x.preuve_niveau === 'contact') ? 2 : (DENONC_RANG[x.statut] || 0);
+    if (!prev || rang(d) > rang(prev)) m[k] = Object.assign({}, d);
     m[k]._echecs = echecs;
   });
   return m;
