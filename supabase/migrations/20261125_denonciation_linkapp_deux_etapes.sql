@@ -7,8 +7,7 @@
 --   3. Rattrapage : un client reçu depuis le 20/11/2026 et sorti de la fenêtre de 3 jours revient dans la file,
 --      mais seulement pour les programmes où il a une ligne « contact créé » (pas pour les autres promoteurs).
 --      Les demandes du 9 au 19/11 ne sont pas rattrapées (décision d'Alex du 25/11/2026).
--- NON APPLIQUÉ au 25/11/2026 : attend le « pousse » d'Alex pour glr-pige (lance de vraies dénonciations)
--- et le « pousse » de glr-pige (sans le nouveau robot, la file se remplirait pour rien).
+-- Appliqué le 25/11/2026, sur le « Pousse et lance » d'Alex, juste après le push du robot (glr-pige 8e8aa32).
 
 create table if not exists public.fonctions_backup_20261125 as
   select p.proname::text as nom, pg_get_functiondef(p.oid) as definition, now() as sauvegarde_le
