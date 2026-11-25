@@ -8,6 +8,8 @@
 --      mais seulement pour les programmes où il a une ligne « contact créé » (pas pour les autres promoteurs).
 --      Les demandes du 9 au 19/11 ne sont pas rattrapées (décision d'Alex du 25/11/2026).
 -- Appliqué le 25/11/2026, sur le « Pousse et lance » d'Alex, juste après le push du robot (glr-pige 8e8aa32).
+-- Réécrite le même jour avec deux tables intermédiaires (crees, faits) : la première version répondait en 4,4 s et
+-- l'API coupait le robot (erreur 500 au premier passage) ; celle-ci répond en 1,1 s.
 
 create table if not exists public.fonctions_backup_20261125 as
   select p.proname::text as nom, pg_get_functiondef(p.oid) as definition, now() as sauvegarde_le
@@ -33,7 +35,19 @@ begin
     raise exception 'acces_refuse' using errcode = '42501';
   end if;
   return query
-  with leads as (
+  with crees as materialized (
+    -- lignes « contact créé » : la fiche existe chez le promoteur, la dénonciation reste à faire (Link-app)
+    select distinct d.contact_id as cid, d.compte, d.programme
+    from public.denonciations d where d.statut = 'envoyee' and d.preuve_niveau = 'contact'
+  ),
+  faits as materialized (
+    -- ce qui compte comme fait ; « contact créé » n'est pas une dénonciation (Link-app, 25/11/2026)
+    select d.contact_id as cid, lower(c2.email) as em, d.compte, d.programme
+    from public.denonciations d join public.contacts c2 on c2.id = d.contact_id
+    where d.statut in ('envoyee', 'acceptee', 'refusee', 'deja_connu', 'a_faire_main')
+      and coalesce(d.preuve_niveau, '') <> 'contact'
+  ),
+  leads as (
     -- frais = dans la fenêtre de 3 jours (ou relancé) ; sinon le lead n'est là que pour le rattrapage de ses
     -- lignes « contact créé » (Link-app, 25/11/2026)
     select distinct c.id, public.ville_norm(v) as vn, c.recu_le,
@@ -45,8 +59,7 @@ begin
            -- « fais que celle du 20 au 25 et vide la file d'attente pour le reste ») ; les plus anciennes
            -- restent en orange « Contact créé · à dénoncer », à faire à la main
            or (c.recu_le >= timestamptz '2026-11-20 00:00:00+01'
-               and exists (select 1 from public.denonciations d0 where d0.contact_id = c.id
-                           and d0.statut = 'envoyee' and d0.preuve_niveau = 'contact')))
+               and c.id in (select k.cid from crees k)))
       and exists (select 1 from public.denonciation_identite(c.prenom, c.nom_famille, c.nom, c.email))
       and coalesce(c.statut, '') <> 'Stop'
       and coalesce(c.source, '') <> 'Ancien lead RAM'
@@ -67,22 +80,17 @@ begin
     join public.denonciation_comptes dc on dc.plateforme = g.plateforme and dc.compte = g.compte and dc.actif
       and l.recu_le >= coalesce(dc.valide_le, '-infinity'::timestamptz)
     where l.frais
-       or exists (select 1 from public.denonciations d1 where d1.contact_id = l.id and d1.compte = g.compte
-                  and d1.programme = g.nom and d1.statut = 'envoyee' and d1.preuve_niveau = 'contact')
+       or exists (select 1 from crees k where k.cid = l.id and k.compte = g.compte and k.programme = g.nom)
     group by l.id, g.plateforme, g.compte, dc.par_programme, dc.cp_obligatoire, case when dc.par_programme then g.nom else '' end
   )
   select x.id, i.prenom, i.nom, i.prenom || ' ' || i.nom, c.email, c.telephone,
          x.plateforme, x.compte, x.programmes, x.ville, x.cp, x.cp_obligatoire
   from cible x join public.contacts c on c.id = x.id
   cross join lateral public.denonciation_identite(c.prenom, c.nom_famille, c.nom, c.email) i
-  where not exists (select 1 from public.denonciations d
-                    join public.contacts c2 on c2.id = d.contact_id
-                    where (d.contact_id = x.id or lower(c2.email) = lower(c.email))
-                      and d.compte = x.compte
-                      and (not x.par_programme or d.programme = x.cle)
-                      and d.statut in ('envoyee', 'acceptee', 'refusee', 'deja_connu', 'a_faire_main')
-                      -- « contact créé » n'est pas une dénonciation (Link-app, 25/11/2026)
-                      and coalesce(d.preuve_niveau, '') <> 'contact')
+  where not exists (select 1 from faits f where f.cid = x.id and f.compte = x.compte
+                      and (not x.par_programme or f.programme = x.cle))
+    and not exists (select 1 from faits f where f.em = lower(c.email) and f.compte = x.compte
+                      and (not x.par_programme or f.programme = x.cle))
     and (select count(*) from public.denonciations d
          where d.contact_id = x.id and d.compte = x.compte
            and (not x.par_programme or d.programme = x.cle) and d.statut = 'echec'
