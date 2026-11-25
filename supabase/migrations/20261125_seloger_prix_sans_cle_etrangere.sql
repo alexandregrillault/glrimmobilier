@@ -1,6 +1,7 @@
 -- seloger_prix : retirer la clé étrangère vers pige_programmes, qui bloque l'import de la pige.
 --
--- PAS ENCORE APPLIQUÉE (préparée le 25/11/2026, en attente de l'accord d'Alex).
+-- APPLIQUÉE le 25/11/2026 (accord d'Alex : « d'accord pour la migration seloger_prix, je la colle »),
+-- collée par Alex dans l'éditeur SQL de Supabase.
 --
 -- Pourquoi : à chaque pige, pige_import_from_brut() vide pige_lots et pige_programmes par un
 -- « truncate » avant de les remplir. Postgres refuse de vider ainsi une table vers laquelle pointe
