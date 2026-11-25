@@ -48,3 +48,11 @@ select x.ville, x.insee, x.dept, x.etat, public.neuf_slug(x.ville)
   ('Villetaneuse', '93079', '93', 'prete')
   ) as x (ville, insee, dept, etat)
 on conflict (ville) do nothing;
+
+-- Pierrefitte-sur-Seine a fusionné avec Saint-Denis le 01/01/2025 (elle n'est plus dans la liste
+-- officielle des communes) : son programme est rangé sur la page de Saint-Denis (« fais comme tu le
+-- sens », Alex, 25/11/2026). Demande la colonne pige_villes, créée par
+-- 20261125_neuf_arrondissements_et_compteurs.sql, à appliquer avant ce fichier.
+update public.neuf_villes
+   set pige_villes = array['Saint-Denis', 'Pierrefitte-sur-Seine']
+ where ville = 'Saint-Denis' and dept = '93';
