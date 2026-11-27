@@ -1,7 +1,9 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 6, en ligne depuis le 27/11/2026 (« déploie la v6 » d'Alex) : une fiche existante qui a un vendeur le garde
-// (Alex, 27/11/2026 : « Reste chez le vendeur »). Version 5 en ligne : anciennes/index_v5.ts.
+// Version 7, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (Alex : « Oui, la v7 ») : lien de l'immeuble gardé
+// 4 minutes, nouvel essai si le stockage refuse un lien (429), 503 « reessayer » au lieu de 404.
+// Version 6 en ligne : anciennes/index_v6.ts (une fiche existante qui a un vendeur le garde, « Reste chez le
+// vendeur »). Version 5 : anciennes/index_v5.ts.
 // Version 5 (27/11/2026, « deploi et pousse » d'Alex) ; dépend de 20261127_plans_2d.sql :
 //   - fiche existante au statut « Perdu » : repasse en « Nouveau » (« repasse en statut actif ») ;
 //   - plan du promoteur après le formulaire (Alex, 27/11/2026 : « mets le plan du promoteur après le
@@ -38,7 +40,7 @@
 //    → 200 { url, expire: 300 }  lien temporaire (5 minutes) vers la page HTML, à télécharger tout de suite
 //      (le stockage sert le HTML en texte brut : la page l'affiche par un lien blob:, pas par iframe src=).
 //    → 401 jeton absent, faux ou expiré pour un logement (la page montre le formulaire), 404 inconnu,
-//      429 trop de demandes.
+//      429 trop de demandes, 503 « reessayer » (stockage momentanément saturé : la page réessaie).
 //    Limite contre l'aspiration (en base, neuf_3d_acces) : 40 fichiers par jeton et 60 par adresse, par jour ;
 //    l'immeuble public n'est pas compté (migration 20261127_plans_3d_immeuble_hors_limite.sql).
 //    À la première ouverture d'un logement, la base ajoute aux notes de la fiche du client une ligne
@@ -89,6 +91,22 @@ const RE_CLE = /^[0-9a-f]{12}$/;
 async function sha256(s: string): Promise<string> {
   const hache = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
   return Array.from(hache).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// v7 : le stockage de Supabase refuse parfois de créer un lien temporaire quand les demandes arrivent
+// en rafale (429). On réessaie une fois après 300 ms ; si le refus persiste, la page reçoit 503 « réessayer »
+// (et non plus 404 « inconnu »). Le lien de l'immeuble, public et identique pour tous, est gardé en mémoire
+// 4 minutes (il en vaut 5) : en temps normal, un seul lien par immeuble toutes les 4 minutes.
+const CACHE_IMMEUBLE_MS = 4 * 60 * 1000;
+const cacheImmeuble = new Map<string, { url: string; jusqua: number }>();
+
+async function lienSigne(supabase: any, espace: string, chemin: string): Promise<string | null> {
+  for (let essai = 0; essai < 2; essai++) {
+    const { data, error } = await supabase.storage.from(espace).createSignedUrl(chemin, DUREE_LIEN);
+    if (!error && data?.signedUrl) return data.signedUrl;
+    if (essai === 0) await new Promise((r) => setTimeout(r, 300));
+  }
+  return null;
 }
 
 // Même normalisation que lead-inbound : chiffres seuls, +33 → 0 (et « +33 (0)6… » → 06…).
@@ -299,9 +317,9 @@ async function fichier(req: Request, cors: Record<string, string>) {
     if (pl?.statut === "limite") return repondre({ error: "trop_de_demandes" }, 429, cors);
     if (pl?.statut !== "ok" || !pl.chemin) return repondre({ error: "inconnu" }, 404, cors);
 
-    const { data: lienPlan, error: errPlan } = await supabase.storage.from(ESPACE_PLANS).createSignedUrl(pl.chemin, DUREE_LIEN);
-    if (errPlan || !lienPlan?.signedUrl) return repondre({ error: "inconnu" }, 404, cors);
-    return repondre({ url: lienPlan.signedUrl, expire: DUREE_LIEN, pages: pl.pages }, 200, cors);
+    const urlPlan = await lienSigne(supabase, ESPACE_PLANS, pl.chemin);
+    if (!urlPlan) return repondre({ error: "reessayer" }, 503, cors);
+    return repondre({ url: urlPlan, expire: DUREE_LIEN, pages: pl.pages }, 200, cors);
   }
 
   let res: any = null;
@@ -323,9 +341,21 @@ async function fichier(req: Request, cors: Record<string, string>) {
   if (res?.statut === "limite") return repondre({ error: "trop_de_demandes" }, 429, cors);
   if (res?.statut !== "ok" || !res.fichier) return repondre({ error: "inconnu" }, 404, cors);
 
-  const { data: lien, error: errLien } = await supabase.storage.from(ESPACE).createSignedUrl(res.fichier, DUREE_LIEN);
-  if (errLien || !lien?.signedUrl) return repondre({ error: "inconnu" }, 404, cors);
-  return repondre({ url: lien.signedUrl, expire: DUREE_LIEN }, 200, cors);
+  // Immeuble (sans lot) : lien gardé en mémoire 4 minutes, le même pour tous les visiteurs.
+  const maintenantMs = Date.now();
+  if (!lot) {
+    const c = cacheImmeuble.get(res.fichier);
+    if (c && c.jusqua > maintenantMs) {
+      return repondre({ url: c.url, expire: Math.floor((c.jusqua - maintenantMs) / 1000) + 60 }, 200, cors);
+    }
+  }
+  const url = await lienSigne(supabase, ESPACE, res.fichier);
+  if (!url) return repondre({ error: "reessayer" }, 503, cors);
+  if (!lot) {
+    if (cacheImmeuble.size > 200) cacheImmeuble.clear();
+    cacheImmeuble.set(res.fichier, { url, jusqua: maintenantMs + CACHE_IMMEUBLE_MS });
+  }
+  return repondre({ url, expire: DUREE_LIEN }, 200, cors);
 }
 
 Deno.serve(async (req: Request) => {
