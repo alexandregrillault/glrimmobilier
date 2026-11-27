@@ -1,6 +1,7 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 2, en ligne depuis le 27/11/2026 (« Déploie » d'Alex) ; version 1 : anciennes/index_v1.ts.
+// Version 3, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : piège à robots renommé « hp_glr » (voir
+// inscrire). Version 2 en ligne : anciennes/index_v2.ts ; version 1 : anciennes/index_v1.ts.
 // verify_jwt = false (page publique, sans connexion). Dépend des migrations 20261127_plans_3d.sql,
 // 20261127_plans_3d_note.sql et 20261127_plans_3d_immeuble_public.sql.
 // Version 2 (Alex, 27/11/2026 : « source du lead mets juste site web », « je veux ue le client voit le
@@ -12,7 +13,7 @@
 //
 // 1. Le formulaire de la fiche programme
 //    POST { action: "inscrire", prenom, telephone, email, accord: true, p: <clé programme>,
-//           programme?: <nom affiché>, ville?: <ville affichée>, societe: "" (piège à robots) }
+//           programme?: <nom affiché>, ville?: <ville affichée>, hp_glr: "" (piège à robots) }
 //    → 200 { jeton }   (la page le garde dans le navigateur : 30 jours, pour toutes les visites du site)
 //    → 422 champs manquants, 429 trop d'envois, 502 enregistrement impossible.
 //    Le lead est créé chez Alexandre (ou rattaché à la fiche existante, mêmes règles de paternité que
@@ -116,7 +117,10 @@ async function inscrire(req: Request, cors: Record<string, string>) {
   if (body.action !== "inscrire") return repondre({ error: "action_inconnue" }, 400, cors);
 
   // Piège à robots : champ invisible pour un humain. On répond comme si tout allait bien, sans jeton utile.
-  if (texte(body.societe, 200)) return repondre({ jeton: crypto.randomUUID().replace(/-/g, "") }, 200, cors);
+  // v3 (27/11/2026) : le piège s'appelle « hp_glr ». L'ancien nom « societe » est rempli tout seul par
+  // le remplissage automatique de Chrome (nom de société du profil) : le premier essai d'Alex a été
+  // pris pour un robot. Le champ « societe » est désormais ignoré.
+  if (texte(body.hp_glr, 200)) return repondre({ jeton: crypto.randomUUID().replace(/-/g, "") }, 200, cors);
 
   const ip = adresseIp(req);
   if (tropDeEnvois(ip)) return repondre({ error: "trop_de_demandes" }, 429, cors);
