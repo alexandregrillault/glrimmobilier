@@ -1,6 +1,6 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 9, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (dépend de 20261127_plans_masse.sql et
+// Version 9, en ligne depuis le 27/11/2026 (« deploie » d'Alex) ; dépend de 20261127_plans_masse.sql et
 // 20261127_plans_12_pages.sql ; pages jusqu'à 12) : plan de masse du
 // promoteur après le formulaire, GET ?p=<clé programme>&t=<jeton>&doc=masse[&page=n] → { url, expire, pages }.
 // Version 8 en ligne : anciennes/index_v8.ts (activité « Revenu par le site » pour le vendeur, « Une activité »).

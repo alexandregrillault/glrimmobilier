@@ -1,6 +1,6 @@
 // Dépôt des plans du promoteur convertis en images par le robot de pige (session Pige et robots).
 //
-// Version 2, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : accepte aussi les plans de masse ("type": "masse",
+// Version 2, en ligne depuis le 27/11/2026 (« deploie » d'Alex) : accepte aussi les plans de masse ("type": "masse",
 // programme_id et clé publique du programme), déposés sous masse/<cle>/<n>.webp, ligne dans neuf_masses_2d.
 // Sans « type », rien ne change pour les lots. Version 1 en ligne : anciennes/index_v1.ts.
 // verify_jwt = false : le robot n'a que la clé publique et la clé du robot (app_secrets « robot_pige »),
