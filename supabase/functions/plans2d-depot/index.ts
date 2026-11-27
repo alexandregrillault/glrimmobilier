@@ -1,11 +1,14 @@
 // Dépôt des plans du promoteur convertis en images par le robot de pige (session Pige et robots).
 //
-// En ligne depuis le 27/11/2026 (« deploi et pousse » d'Alex), version 1.
+// Version 2, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : accepte aussi les plans de masse ("type": "masse",
+// programme_id et clé publique du programme), déposés sous masse/<cle>/<n>.webp, ligne dans neuf_masses_2d.
+// Sans « type », rien ne change pour les lots. Version 1 en ligne : anciennes/index_v1.ts.
 // verify_jwt = false : le robot n'a que la clé publique et la clé du robot (app_secrets « robot_pige »),
 // que la fonction vérifie elle-même avant tout dépôt. Dépend de 20261127_plans_2d.sql et
 // 20261127_plans_2d_robot.sql.
 //
 // Appel : POST { cle_robot, lot_id, cle, plan_url, plan_maj, pages: [WebP en base64, dans l'ordre] }
+//         plan de masse : { type: "masse", cle_robot, programme_id, cle: <clé programme>, plan_url, plan_maj, pages }
 //         ou, pour un plan illisible : { cle_robot, lot_id, cle, plan_url, plan_maj, pages: [], erreur: "…" }
 // Réponse : 200 { ok: true } ; sinon { ok: false, erreur } avec 400 (demande invalide), 403 (clé du robot),
 //           404 (lot ou plan inconnu), 413 (image trop lourde), 500/503 (dépôt impossible) : à retenter.
@@ -52,7 +55,8 @@ Deno.serve(async (req: Request) => {
   }
 
   const cleRobot = String(b.cle_robot ?? "");
-  const lotId = String(b.lot_id ?? "");
+  const masse = b.type === "masse";             // v2 : plan de masse d'un programme
+  const lotId = String((masse ? b.programme_id : b.lot_id) ?? "");
   const cle = String(b.cle ?? "").toLowerCase();
   const planUrl = String(b.plan_url ?? "");
   const planMaj = b.plan_maj ? String(b.plan_maj) : null;
@@ -68,9 +72,13 @@ Deno.serve(async (req: Request) => {
 
   // 1. Clé du robot, et lot qui a bien ce plan et cette clé publique, avant tout dépôt.
   try {
-    const { data: v, error } = await supabase.rpc("robot_plans_2d_verifier", {
-      p_cle: cleRobot, p_lot_id: lotId, p_cle_lot: cle, p_source_url: planUrl,
-    });
+    const { data: v, error } = masse
+      ? await supabase.rpc("robot_masses_2d_verifier", {
+        p_cle: cleRobot, p_programme_id: lotId, p_cle_prog: cle, p_source_url: planUrl,
+      })
+      : await supabase.rpc("robot_plans_2d_verifier", {
+        p_cle: cleRobot, p_lot_id: lotId, p_cle_lot: cle, p_source_url: planUrl,
+      });
     if (error) throw error;
     if (v === "acces_refuse") return repondre({ ok: false, erreur: "acces_refuse" }, 403);
     if (v !== "ok") return repondre({ ok: false, erreur: "inconnu" }, 404);
@@ -94,7 +102,7 @@ Deno.serve(async (req: Request) => {
 
   // 3. Dépôt, page par page (remplace l'existant), puis seulement la ligne en base.
   for (let i = 0; i < images.length; i++) {
-    const { error } = await supabase.storage.from(ESPACE).upload(`${cle}/${i + 1}.webp`, images[i], {
+    const { error } = await supabase.storage.from(ESPACE).upload(`${masse ? "masse/" : ""}${cle}/${i + 1}.webp`, images[i], {
       contentType: "image/webp",
       upsert: true,
     });
@@ -102,15 +110,16 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { data: res, error } = await supabase.rpc("robot_plans_2d_enregistrer", {
+    const commun = {
       p_cle: cleRobot,
-      p_lot_id: lotId,
-      p_cle_lot: cle,
       p_pages: images.length,
       p_source_url: planUrl,
       p_source_maj: planMaj,
       p_erreur: images.length === 0 ? erreur : null,
-    });
+    };
+    const { data: res, error } = masse
+      ? await supabase.rpc("robot_masses_2d_enregistrer", { ...commun, p_programme_id: lotId, p_cle_prog: cle })
+      : await supabase.rpc("robot_plans_2d_enregistrer", { ...commun, p_lot_id: lotId, p_cle_lot: cle });
     if (error) throw error;
     if (res !== "ok") return repondre({ ok: false, erreur: "inconnu" }, 404);
   } catch (_) {

@@ -1,7 +1,8 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 8, en ligne depuis le 27/11/2026 (« Déploie et pousse » d'Alex) : un client d'un vendeur qui revient par le
-// formulaire pose une activité « Revenu par le site » dans la liste de ce vendeur (Alex : « Une activité »).
+// Version 9, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (dépend de 20261127_plans_masse.sql) : plan de masse du
+// promoteur après le formulaire, GET ?p=<clé programme>&t=<jeton>&doc=masse[&page=n] → { url, expire, pages }.
+// Version 8 en ligne : anciennes/index_v8.ts (activité « Revenu par le site » pour le vendeur, « Une activité »).
 // Version 7 en ligne : anciennes/index_v7.ts (lien de l'immeuble gardé 4 minutes, nouvel essai si le
 // stockage refuse un lien, 503 « reessayer » au lieu de 404).
 // Version 6 en ligne : anciennes/index_v6.ts (une fiche existante qui a un vendeur le garde, « Reste chez le
@@ -308,6 +309,34 @@ async function fichier(req: Request, cors: Record<string, string>) {
 
   const cleService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, cleService);
+
+  // Plan de masse du promoteur (v9) : jeton obligatoire, sans lot. Image convertie par le robot, rangée dans
+  // l'espace privé plans2d sous masse/<clé programme>/<page>.webp.
+  if (q.get("doc") === "masse") {
+    if (lot) return repondre({ error: "inconnu" }, 404, cors);
+    if (!jetonValide) return repondre({ error: "jeton" }, 401, cors);
+    const page = Number(q.get("page") || "1");
+    if (!Number.isInteger(page) || page < 1 || page > 8) return repondre({ error: "inconnu" }, 404, cors);
+    let pm: any = null;
+    try {
+      const { data, error } = await supabase.rpc("neuf_2d_masse", {
+        p_programme: cle,
+        p_page: page,
+        p_empreinte: await sha256(jeton),
+        p_ip: (await sha256(cleService + "|" + adresseIp(req))).slice(0, 32),
+      });
+      if (error) throw error;
+      pm = data;
+    } catch (_) {
+      return repondre({ error: "indisponible" }, 503, cors);
+    }
+    if (pm?.statut === "jeton") return repondre({ error: "jeton" }, 401, cors);
+    if (pm?.statut === "limite") return repondre({ error: "trop_de_demandes" }, 429, cors);
+    if (pm?.statut !== "ok" || !pm.chemin) return repondre({ error: "inconnu" }, 404, cors);
+    const urlMasse = await lienSigne(supabase, ESPACE_PLANS, pm.chemin);
+    if (!urlMasse) return repondre({ error: "reessayer" }, 503, cors);
+    return repondre({ url: urlMasse, expire: DUREE_LIEN, pages: pm.pages }, 200, cors);
+  }
 
   // Plan du promoteur (v5) : jeton obligatoire. Image convertie par le robot de pige, rangée dans
   // l'espace privé plans2d ; la page reçoit un lien temporaire de 5 minutes vers la page demandée.
