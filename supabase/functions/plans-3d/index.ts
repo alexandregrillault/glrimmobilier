@@ -21,6 +21,8 @@
 //      (le stockage sert le HTML en texte brut : la page l'affiche par un lien blob:, pas par iframe src=).
 //    → 401 jeton absent, faux ou expiré (la page montre le formulaire), 404 inconnu, 429 trop de demandes.
 //    Limite contre l'aspiration (en base, neuf_3d_acces) : 40 fichiers par jeton et 60 par adresse, par jour.
+//    À la première ouverture d'un logement, la base ajoute aux notes de la fiche du client une ligne
+//    « [JJ/MM/AAAA] Visite 3D : lot A001 (T3, 61 m²), Esprit Valmy à Colombes » (une fois par logement).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -129,7 +131,14 @@ async function inscrire(req: Request, cors: Record<string, string>) {
   const maintenant = new Date();
   const nowIso = maintenant.toISOString();
   const aujourdhui = nowIso.slice(0, 10);
-  const quoi = programme ? `programme ${programme}${ville ? " à " + ville : ""}` : `programme ${cle}`;
+  // Nom et ville lus en base d'après la clé (migration 20261127_plans_3d_note.sql) ; le texte envoyé
+  // par la page ne sert que de secours.
+  let nomProg = programme, villeProg = ville;
+  try {
+    const { data: pr } = await supabase.rpc("neuf_3d_programme", { p_cle: cle });
+    if (pr?.nom) { nomProg = String(pr.nom); villeProg = pr.ville ? String(pr.ville) : villeProg; }
+  } catch (_) { /* secours : le texte de la page */ }
+  const quoi = nomProg ? `programme ${nomProg}${villeProg ? " à " + villeProg : ""}` : `programme ${cle}`;
   const trace = `[${aujourdhui}] Formulaire visite 3D du site : ${quoi}. Accord de recontact donné.`;
 
   let contactId: string | null = null;
@@ -146,7 +155,7 @@ async function inscrire(req: Request, cors: Record<string, string>) {
     if (!existant) {
       const ligne = {
         nom: prenom, prenom, email, telephone: formatTel(telephone),
-        lieu: ville || null,
+        lieu: villeProg || null,
         message: `Demande de visite 3D sur le site : ${quoi}.`,
         date_lead: aujourdhui,
         statut: "Nouveau",
