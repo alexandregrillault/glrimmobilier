@@ -1,7 +1,11 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// En ligne depuis le 27/11/2026 (« Déploie » d'Alex), avec verify_jwt = false (page publique, sans
-// connexion). Dépend des migrations 20261127_plans_3d.sql et 20261127_plans_3d_note.sql (appliquées).
+// Version 2, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (version 1 en ligne : anciennes/index_v1.ts).
+// verify_jwt = false (page publique, sans connexion). Dépend des migrations 20261127_plans_3d.sql,
+// 20261127_plans_3d_note.sql et 20261127_plans_3d_immeuble_public.sql.
+// Version 2 (Alex, 27/11/2026 : « source du lead mets juste site web », « je veux ue le client voit le
+// nouvelle immeuble qu'on a mis en place et il pourra voir les plans uniquement si il a un compte ») :
+// source « Site web » ; l'immeuble sans jeton, les logements toujours avec.
 //
 // Décisions d'Alex (27/11/2026) : la 3D se voit « Après le formulaire » ; « oui c'est mieux que appelez
 // nous. mets les leads chez moi, et garde les numéros de lots. »
@@ -16,10 +20,12 @@
 //    pas par lead-inbound, qui envoie de lui-même un accusé avec un lien de rendez-vous.
 //
 // 2. Un fichier de la visite
-//    GET ?p=<clé programme>&l=<clé lot, vide pour l'immeuble>&t=<jeton>
+//    GET ?p=<clé programme>                      → l'immeuble, sans jeton
+//    GET ?p=<clé programme>&l=<clé lot>&t=<jeton> → les plans d'un logement, jeton obligatoire
 //    → 200 { url, expire: 300 }  lien temporaire (5 minutes) vers la page HTML, à télécharger tout de suite
 //      (le stockage sert le HTML en texte brut : la page l'affiche par un lien blob:, pas par iframe src=).
-//    → 401 jeton absent, faux ou expiré (la page montre le formulaire), 404 inconnu, 429 trop de demandes.
+//    → 401 jeton absent, faux ou expiré pour un logement (la page montre le formulaire), 404 inconnu,
+//      429 trop de demandes.
 //    Limite contre l'aspiration (en base, neuf_3d_acces) : 40 fichiers par jeton et 60 par adresse, par jour.
 //    À la première ouverture d'un logement, la base ajoute aux notes de la fiche du client une ligne
 //    « [JJ/MM/AAAA] Visite 3D : lot A001 (T3, 61 m²), Esprit Valmy à Colombes » (une fois par logement).
@@ -27,7 +33,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const VENDEUR = "Alexandre";             // « mets les leads chez moi » (Alex, 27/11/2026)
-const SOURCE = "Site web - visite 3D";   // À CONFIRMER par Alex (libellé proposé)
+const SOURCE = "Site web";               // « source du lead mets juste site web » (Alex, 27/11/2026)
 const DUREE_LIEN = 300;                  // secondes
 const ESPACE = "plans3d";
 
@@ -214,7 +220,9 @@ async function fichier(req: Request, cors: Record<string, string>) {
   const lot = (q.get("l") || "").trim().toLowerCase();
   const jeton = (q.get("t") || "").trim().toLowerCase();
   if (!RE_CLE.test(cle) || (lot && !RE_CLE.test(lot))) return repondre({ error: "inconnu" }, 404, cors);
-  if (!/^[0-9a-f]{48}$/.test(jeton)) return repondre({ error: "jeton" }, 401, cors);
+  // Les plans d'un logement exigent le jeton du formulaire ; l'immeuble est ouvert à tous (Alex, 27/11/2026).
+  const jetonValide = /^[0-9a-f]{48}$/.test(jeton);
+  if (lot && !jetonValide) return repondre({ error: "jeton" }, 401, cors);
 
   const cleService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, cleService);
@@ -224,7 +232,7 @@ async function fichier(req: Request, cors: Record<string, string>) {
     const { data, error } = await supabase.rpc("neuf_3d_acces", {
       p_programme: cle,
       p_lot: lot || null,
-      p_empreinte: await sha256(jeton),
+      p_empreinte: jetonValide ? await sha256(jeton) : null,
       // Empreinte de l'adresse IP : la base ne garde jamais l'adresse elle-même.
       p_ip: (await sha256(cleService + "|" + adresseIp(req))).slice(0, 32),
     });
