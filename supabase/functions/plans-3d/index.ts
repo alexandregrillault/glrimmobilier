@@ -1,7 +1,8 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 3, en ligne depuis le 27/11/2026 (« deploie et pousse » d'Alex) : piège à robots renommé « hp_glr » (voir
-// inscrire). Version 2 en ligne : anciennes/index_v2.ts ; version 1 : anciennes/index_v1.ts.
+// Version 4, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : plus de champ piège, anti-robots par le délai
+// d'envoi (« delai », 3 s minimum) ; téléphone « +33 (0)6… » normalisé. Version 3 en ligne :
+// anciennes/index_v3.ts ; v2 : anciennes/index_v2.ts ; v1 : anciennes/index_v1.ts.
 // verify_jwt = false (page publique, sans connexion). Dépend des migrations 20261127_plans_3d.sql,
 // 20261127_plans_3d_note.sql et 20261127_plans_3d_immeuble_public.sql.
 // Version 2 (Alex, 27/11/2026 : « source du lead mets juste site web », « je veux ue le client voit le
@@ -13,7 +14,7 @@
 //
 // 1. Le formulaire de la fiche programme
 //    POST { action: "inscrire", prenom, telephone, email, accord: true, p: <clé programme>,
-//           programme?: <nom affiché>, ville?: <ville affichée>, hp_glr: "" (piège à robots) }
+//           programme?: <nom affiché>, ville?: <ville affichée>, delai: <ms depuis l'affichage du formulaire> }
 //    → 200 { jeton }   (la page le garde dans le navigateur : 30 jours, pour toutes les visites du site)
 //    → 422 champs manquants, 429 trop d'envois, 502 enregistrement impossible.
 //    Le lead est créé chez Alexandre (ou rattaché à la fiche existante, mêmes règles de paternité que
@@ -36,6 +37,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const VENDEUR = "Alexandre";             // « mets les leads chez moi » (Alex, 27/11/2026)
 const SOURCE = "Site web";               // « source du lead mets juste site web » (Alex, 27/11/2026)
 const DUREE_LIEN = 300;                  // secondes
+const DELAI_MIN_MS = 3000;               // anti-robots : temps minimal entre affichage et envoi du formulaire
 const ESPACE = "plans3d";
 
 const ORIGINES_AUTORISEES = [
@@ -87,10 +89,12 @@ async function sha256(s: string): Promise<string> {
   return Array.from(hache).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Même normalisation que lead-inbound : chiffres seuls, +33 → 0.
+// Même normalisation que lead-inbound : chiffres seuls, +33 → 0 (et « +33 (0)6… » → 06…).
 function normTel(p: string): string | null {
   let d = p.replace(/\D/g, "");
-  if (d.startsWith("33")) d = "0" + d.slice(2);
+  if (d.startsWith("0033")) d = d.slice(2);
+  if (d.startsWith("330")) d = "0" + d.slice(3);
+  else if (d.startsWith("33")) d = "0" + d.slice(2);
   return d.length >= 9 ? d : null;
 }
 
@@ -116,11 +120,16 @@ async function inscrire(req: Request, cors: Record<string, string>) {
   }
   if (body.action !== "inscrire") return repondre({ error: "action_inconnue" }, 400, cors);
 
-  // Piège à robots : champ invisible pour un humain. On répond comme si tout allait bien, sans jeton utile.
-  // v3 (27/11/2026) : le piège s'appelle « hp_glr ». L'ancien nom « societe » est rempli tout seul par
-  // le remplissage automatique de Chrome (nom de société du profil) : le premier essai d'Alex a été
-  // pris pour un robot. Le champ « societe » est désormais ignoré.
-  if (texte(body.hp_glr, 200)) return repondre({ jeton: crypto.randomUUID().replace(/-/g, "") }, 200, cors);
+  // Anti-robots v4 (27/11/2026) : plus aucun champ caché. Les deux essais d'Alex ont été pris pour des
+  // robots parce que le remplissage automatique de Chrome remplissait le champ piège (« societe » en v2,
+  // « hp_glr » en v3) ; ces champs sont désormais ignorés. La page envoie « delai » : le temps en
+  // millisecondes entre l'affichage du formulaire et l'envoi. Un humain met plus de 3 secondes ; en
+  // dessous (ou sans « delai »), on répond comme si tout allait bien, sans rien enregistrer.
+  // S'ajoute la limite de 3 envois par 10 minutes et par adresse, plus bas.
+  const delai = Number(body.delai);
+  if (!Number.isFinite(delai) || delai < DELAI_MIN_MS) {
+    return repondre({ jeton: crypto.randomUUID().replace(/-/g, "") }, 200, cors);
+  }
 
   const ip = adresseIp(req);
   if (tropDeEnvois(ip)) return repondre({ error: "trop_de_demandes" }, 429, cors);
