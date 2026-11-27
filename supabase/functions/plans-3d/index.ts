@@ -1,6 +1,6 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 7, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (Alex : « Oui, la v7 ») : lien de l'immeuble gardé
+// Version 7, en ligne depuis le 27/11/2026 (« Oui, la v7 », puis « déploie et pousse ») : lien de l'immeuble gardé
 // 4 minutes, nouvel essai si le stockage refuse un lien (429), 503 « reessayer » au lieu de 404.
 // Version 6 en ligne : anciennes/index_v6.ts (une fiche existante qui a un vendeur le garde, « Reste chez le
 // vendeur »). Version 5 : anciennes/index_v5.ts.
