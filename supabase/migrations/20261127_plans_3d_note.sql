@@ -14,6 +14,10 @@
 --      Écriture faite par la base (clé de service) : ne touche ni au vendeur ni aux délais de paternité.
 -- Rien n'est retiré ni effacé.
 
+insert into public.fonctions_backup_20261127 (nom, definition)
+select 'neuf_3d_acces(text,text,text,text)', pg_get_functiondef('public.neuf_3d_acces(text,text,text,text)'::regprocedure)
+on conflict (nom) do nothing;
+
 create or replace function public.neuf_3d_programme(p_cle text)
 returns jsonb
 language sql
