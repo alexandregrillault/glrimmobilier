@@ -1,8 +1,9 @@
 -- Plans 2D et plans de masse : jusqu'à 12 pages au lieu de 8.
 --
--- PRÉPARÉE le 27/11/2026, NON APPLIQUÉE : elle remplace une contrainte de contrôle (« drop constraint »
--- puis « add constraint », aucune donnée touchée). Règle du dépôt : pas de « drop » sans l'accord explicite
--- d'Alex. Ne s'applique qu'avec son oui.
+-- Appliquée le 27/11/2026 (migration « plans_12_pages ») : elle remplace une contrainte de contrôle
+-- (« drop constraint » puis « add constraint », aucune donnée touchée). Accord explicite d'Alex, relayé par la
+-- session mère en citant sa réponse à « Tu es d'accord pour passer la limite de 8 à 12 pages ? » : « ok ».
+-- Vérifié : neuf_plans_2d 4 662 lignes avant, 4 711 après (rattrapage en cours, aucune perdue), 7 erreurs.
 -- Constat de Pige et robots (27/11/2026) : les plans des maisons du Domaine Céladon (Maisons-Laffitte,
 -- immolead_emocom:568180, 568183, 568192, 568195, 568198) font 10 ou 11 pages (niveaux, garage, coupes) ;
 -- avec la limite de 8 ils étaient écartés comme « pas un plan de lot ».
