@@ -14,13 +14,13 @@
 //           404 (lot ou plan inconnu), 413 (image trop lourde), 500/503 (dépôt impossible) : à retenter.
 //
 // Contrat garanti ici : les images sont déposées d'abord (<cle>/1.webp, 2.webp… dans l'espace privé
-// plans2d, en remplaçant l'existant), la ligne de neuf_plans_2d n'est écrite qu'ensuite ; 8 pages au plus,
+// plans2d, en remplaçant l'existant), la ligne de neuf_plans_2d n'est écrite qu'ensuite ; 12 pages au plus (v2),
 // 5 Mo par image, WebP seulement ; jamais de suppression.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const ESPACE = "plans2d";
-const PAGES_MAX = 8;
+const PAGES_MAX = 12;               // 12 depuis la v2 (maisons du Domaine Céladon : 10-11 pages)
 const OCTETS_MAX = 5 * 1024 * 1024;
 
 function repondre(corps: unknown, status: number) {

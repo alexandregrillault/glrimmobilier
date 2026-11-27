@@ -1,6 +1,7 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 9, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (dépend de 20261127_plans_masse.sql) : plan de masse du
+// Version 9, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (dépend de 20261127_plans_masse.sql et
+// 20261127_plans_12_pages.sql ; pages jusqu'à 12) : plan de masse du
 // promoteur après le formulaire, GET ?p=<clé programme>&t=<jeton>&doc=masse[&page=n] → { url, expire, pages }.
 // Version 8 en ligne : anciennes/index_v8.ts (activité « Revenu par le site » pour le vendeur, « Une activité »).
 // Version 7 en ligne : anciennes/index_v7.ts (lien de l'immeuble gardé 4 minutes, nouvel essai si le
@@ -316,7 +317,7 @@ async function fichier(req: Request, cors: Record<string, string>) {
     if (lot) return repondre({ error: "inconnu" }, 404, cors);
     if (!jetonValide) return repondre({ error: "jeton" }, 401, cors);
     const page = Number(q.get("page") || "1");
-    if (!Number.isInteger(page) || page < 1 || page > 8) return repondre({ error: "inconnu" }, 404, cors);
+    if (!Number.isInteger(page) || page < 1 || page > 12) return repondre({ error: "inconnu" }, 404, cors);
     let pm: any = null;
     try {
       const { data, error } = await supabase.rpc("neuf_2d_masse", {
@@ -343,7 +344,7 @@ async function fichier(req: Request, cors: Record<string, string>) {
   if (q.get("doc") === "plan") {
     if (!lot) return repondre({ error: "inconnu" }, 404, cors);
     const page = Number(q.get("page") || "1");
-    if (!Number.isInteger(page) || page < 1 || page > 8) return repondre({ error: "inconnu" }, 404, cors);
+    if (!Number.isInteger(page) || page < 1 || page > 12) return repondre({ error: "inconnu" }, 404, cors);
     let pl: any = null;
     try {
       const { data, error } = await supabase.rpc("neuf_2d_plan", {
