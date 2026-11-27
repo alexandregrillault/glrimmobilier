@@ -1,7 +1,9 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 7, en ligne depuis le 27/11/2026 (« Oui, la v7 », puis « déploie et pousse ») : lien de l'immeuble gardé
-// 4 minutes, nouvel essai si le stockage refuse un lien (429), 503 « reessayer » au lieu de 404.
+// Version 8, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : un client d'un vendeur qui revient par le
+// formulaire pose une activité « Revenu par le site » dans la liste de ce vendeur (Alex : « Une activité »).
+// Version 7 en ligne : anciennes/index_v7.ts (lien de l'immeuble gardé 4 minutes, nouvel essai si le
+// stockage refuse un lien, 503 « reessayer » au lieu de 404).
 // Version 6 en ligne : anciennes/index_v6.ts (une fiche existante qui a un vendeur le garde, « Reste chez le
 // vendeur »). Version 5 : anciennes/index_v5.ts.
 // Version 5 (27/11/2026, « deploi et pousse » d'Alex) ; dépend de 20261127_plans_2d.sql :
@@ -129,7 +131,7 @@ function adresseIp(req: Request): string {
     req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "inconnue";
 }
 
-const CHAMPS_CONTACT = "id, notes, prenom, nom_confirme, statut, vendeur";
+const CHAMPS_CONTACT = "id, notes, prenom, nom_confirme, statut, vendeur, activites";
 
 async function inscrire(req: Request, cors: Record<string, string>) {
   let body: Record<string, unknown>;
@@ -246,6 +248,20 @@ async function inscrire(req: Request, cors: Record<string, string>) {
       if (vendeurActuel) {
         mention = ` — suivi par ${vendeurActuel}, vendeur inchangé`;
         maj.recu_le = nowIso;
+        // v8 (Alex, 27/11/2026 : « Une activité ») : une activité dans la liste du vendeur, sur le modèle du
+        // « retour client » des sélections. Une seule par fiche (« retour_site »), remise à aujourd'hui à
+        // chaque passage du formulaire ; aucun envoi. Le vendeur la retire par « Fait ».
+        const jourParis = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
+        const actuelles = Array.isArray(existant.activites) ? existant.activites : [];
+        maj.activites = actuelles.filter((x: any) => x?.id !== "retour_site").concat([{
+          id: "retour_site",
+          le: jourParis,
+          titre: `Revenu par le site (visite 3D et plans) — ${nomProg}${villeProg ? " à " + villeProg : ""}`,
+          heure: null,
+          cree_le: nowIso,
+          par: null,
+          systeme: true,
+        }]);
       } else {
         try {
           const { data: pat } = await supabase.rpc("paternite_recevoir", {
