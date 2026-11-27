@@ -1,7 +1,7 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (attend le « déploie » d'Alex). verify_jwt = false
-// (page publique, sans connexion). Dépend de la migration 20261127_plans_3d.sql.
+// En ligne depuis le 27/11/2026 (« Déploie » d'Alex), avec verify_jwt = false (page publique, sans
+// connexion). Dépend des migrations 20261127_plans_3d.sql et 20261127_plans_3d_note.sql (appliquées).
 //
 // Décisions d'Alex (27/11/2026) : la 3D se voit « Après le formulaire » ; « oui c'est mieux que appelez
 // nous. mets les leads chez moi, et garde les numéros de lots. »
