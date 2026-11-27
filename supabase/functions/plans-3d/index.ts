@@ -1,6 +1,8 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 5, en ligne depuis le 27/11/2026 (« deploi et pousse » d'Alex) ; dépend de 20261127_plans_2d.sql :
+// Version 6, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : une fiche existante qui a un vendeur le garde
+// (Alex, 27/11/2026 : « Reste chez le vendeur »). Version 5 en ligne : anciennes/index_v5.ts.
+// Version 5 (27/11/2026, « deploi et pousse » d'Alex) ; dépend de 20261127_plans_2d.sql :
 //   - fiche existante au statut « Perdu » : repasse en « Nouveau » (« repasse en statut actif ») ;
 //   - plan du promoteur après le formulaire (Alex, 27/11/2026 : « mets le plan du promoteur après le
 //     formulaire », puis « ok pour le B » : images converties par le robot, espace privé), sur tous les
@@ -22,8 +24,8 @@
 //           programme?: <nom affiché>, ville?: <ville affichée>, delai_ms?: <ms entre affichage et clic> }
 //    → 200 { jeton }   (la page le garde dans le navigateur : 30 jours, pour toutes les visites du site)
 //    → 404 programme non montré, 422 champs manquants, 429 trop d'envois, 502 enregistrement impossible.
-//    Le lead est créé chez Alexandre (ou rattaché à la fiche existante, mêmes règles de paternité que
-//    les autres leads), directement en base : AUCUN mail ni SMS n'est envoyé au client. On ne passe
+//    Le lead est créé chez Alexandre ; une fiche existante est rattachée sans changer de vendeur (v6), une
+//    fiche existante sans vendeur va chez Alexandre ; directement en base : AUCUN mail ni SMS n'est envoyé au client. On ne passe
 //    pas par lead-inbound, qui envoie de lui-même un accusé avec un lien de rendez-vous.
 //
 // 2. Un fichier de la visite
@@ -108,7 +110,7 @@ function adresseIp(req: Request): string {
     req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "inconnue";
 }
 
-const CHAMPS_CONTACT = "id, notes, prenom, nom_confirme, statut";
+const CHAMPS_CONTACT = "id, notes, prenom, nom_confirme, statut, vendeur";
 
 async function inscrire(req: Request, cors: Record<string, string>) {
   let body: Record<string, unknown>;
@@ -215,15 +217,25 @@ async function inscrire(req: Request, cors: Record<string, string>) {
 
     if (existant) {
       contactId = existant.id;
-      // Porte unique de paternité de la base (mêmes règles que les autres leads). Elle n'envoie rien.
+      // Règle d'Alex du 27/11/2026 (« Reste chez le vendeur ») : une fiche qui a déjà un vendeur le garde,
+      // le formulaire du site ne touche pas à la paternité ; on note seulement le retour et la fiche
+      // remonte en tête de liste (recu_le), comme tout client qui revient. Une fiche sans vendeur passe
+      // par la porte de paternité de la base et va chez Alexandre, comme une fiche nouvelle.
       let mention = "";
-      try {
-        const { data: pat } = await supabase.rpc("paternite_recevoir", {
-          p_contact: existant.id, p_vendeur: VENDEUR, p_source: SOURCE,
-        });
-        mention = pat?.mention || "";
-      } catch (_) { mention = " — paternité non mise à jour (erreur base)"; }
-      const maj: Record<string, unknown> = { notes: (existant.notes ? existant.notes + "\n" : "") + trace + mention };
+      const maj: Record<string, unknown> = {};
+      const vendeurActuel = String(existant.vendeur ?? "").trim();
+      if (vendeurActuel) {
+        mention = ` — suivi par ${vendeurActuel}, vendeur inchangé`;
+        maj.recu_le = nowIso;
+      } else {
+        try {
+          const { data: pat } = await supabase.rpc("paternite_recevoir", {
+            p_contact: existant.id, p_vendeur: VENDEUR, p_source: SOURCE,
+          });
+          mention = pat?.mention || "";
+        } catch (_) { mention = " — paternité non mise à jour (erreur base)"; }
+      }
+      maj.notes = (existant.notes ? existant.notes + "\n" : "") + trace + mention;
       if (!existant.nom_confirme && !existant.prenom) maj.prenom = prenom;
       // Une fiche « Perdu » qui revient par le site repasse en « Nouveau » (Alex, 27/11/2026 : « repasse en
       // statut actif »). Aucun autre statut n'est touché.
