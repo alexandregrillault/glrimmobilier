@@ -1,6 +1,7 @@
 -- Plans 3D sur le site : visite 3D d'un programme, ouverte après le formulaire de la fiche programme.
 --
--- PRÉPARÉE le 27/11/2026, NON APPLIQUÉE.
+-- Appliquée le 27/11/2026 (migration « plans_3d »), sur signal de la session mère, SANS la partie 7
+-- (aucune visite enregistrée, aucun fichier déposé). Vérifié après coup : Colombes identique (89ba6291…).
 -- Décisions d'Alex (session mère, 27/11/2026) : « Après le formulaire » ; « oui c'est mieux que appelez nous.
 -- mets les leads chez moi, et garde les numéros de lots. »
 --
