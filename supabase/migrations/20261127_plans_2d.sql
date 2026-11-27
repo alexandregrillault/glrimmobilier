@@ -1,20 +1,21 @@
 -- Plans 3D, suite : le plan du promoteur de chaque logement, après le formulaire, sur tous les programmes montrés.
 --
 -- PRÉPARÉE le 27/11/2026, NON APPLIQUÉE.
--- Décision d'Alex du 27/11/2026 (session mère) : « mets le plan du promoteur après le formulaire ».
+-- Décisions d'Alex du 27/11/2026 (session mère) : « mets le plan du promoteur après le formulaire », puis
+-- « ok pour le B » : les plans sont convertis en images par le robot de pige et rangés dans un espace privé.
 -- Exception voulue à la règle des noms de promoteurs (le cartouche du plan porte le nom), limitée à
 -- l'après-formulaire.
 --
 --   0. Sauvegarde de neuf_ville_public et neuf_3d_programme (versions en place) dans fonctions_backup_20261127.
---   1. neuf_ville_public : « p2d »: true sur chaque lot qui a un plan dans documents_lot (vrai seulement).
---      ATTENTION : apparaît d'un coup sur ~15 700 lots de toutes les villes ; la liste blanche de Site
---      doit être en ligne avant d'appliquer.
---   2. neuf_3d_programme : ne répond plus que pour un programme montré (ville publiée, ni picking ni sans
+--   1. Espace PRIVÉ « plans2d » : <clé lot>/<page>.webp (1.webp, 2.webp…), 5 Mo par fichier, images seulement.
+--   2. neuf_plans_2d : une ligne par lot converti, remplie par le robot de pige (contrat plus bas).
+--      neuf_plans_2d_a_faire : la liste de travail du robot (lots montrés dont le plan manque ou a changé).
+--   3. neuf_ville_public : « p2d »: true sur chaque lot converti (vrai seulement).
+--   4. neuf_3d_programme : ne répond plus que pour un programme montré (ville publiée, ni picking ni sans
 --      mandat). La fonction plans-3d refuse alors l'inscription (404) pour une autre clé.
---   3. neuf_2d_vues : premier passage de chaque jeton sur le plan de chaque logement.
---   4. neuf_2d_plan(...) : chemin du plan d'un lot montré pour un jeton valide, mêmes compteurs que la 3D
---      (40 par jeton, 60 par adresse, par jour), note « Plan 2D : lot … » à la première ouverture.
---   5. neuf_3d_formulaire(p_ip) : limite du formulaire en base, 3 envois par tranche de 10 minutes.
+--   5. neuf_2d_vues + neuf_2d_plan(...) : chemin de l'image d'une page pour un jeton valide, mêmes compteurs
+--      que la 3D (40 par jeton, 60 par adresse, par jour), note « Plan 2D : lot … » à la première ouverture.
+--   6. neuf_3d_formulaire(p_ip) : limite du formulaire en base, 3 envois par tranche de 10 minutes.
 -- Rien n'est retiré ni effacé.
 
 insert into public.fonctions_backup_20261127 (nom, definition)
@@ -24,7 +25,57 @@ insert into public.fonctions_backup_20261127 (nom, definition)
 select 'neuf_3d_programme(text)', pg_get_functiondef('public.neuf_3d_programme(text)'::regprocedure)
 on conflict (nom) do nothing;
 
--- 1. neuf_ville_public : version en place (avec v3d) + p2d ----------------------------------------
+-- 1. Espace privé des plans en image -----------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('plans2d', 'plans2d', false, 5242880, array['image/webp', 'image/jpeg', 'image/png'])
+on conflict (id) do nothing;
+
+-- 2. Plans convertis (rempli par le robot de pige) ---------------------------------------------
+-- CONTRAT DU ROBOT (session Pige et robots) :
+--   - Liste de travail : select * from public.neuf_plans_2d_a_faire  (lot_id, cle, plan_url, plan_maj).
+--     Ce sont les lots montrés sur le site qui ont un plan dans documents_lot et dont l'image manque, ou
+--     dont le plan a changé (plan_url différent, ou documents_lot.maj_le plus récent que la conversion).
+--   - Pour chaque lot : télécharger plan_url ; PDF → chaque page (8 au plus) rendue en image ; JPG/PNG →
+--     la seule page. Image WebP, 1 600 px sur le grand côté, qualité 80 (viser moins de 600 Ko, 5 Mo maximum).
+--   - Dépôt (clé de service) dans l'espace plans2d, en remplaçant l'existant : <cle>/1.webp, <cle>/2.webp…
+--   - Puis : insert into public.neuf_plans_2d (lot_id, pages, source_url, source_maj, converti_le)
+--            values (…, now()) on conflict (lot_id) do update set pages = excluded.pages, source_url = …,
+--            source_maj = excluded.source_maj, converti_le = now();
+--     source_url = documents_lot.plan_url lu, source_maj = documents_lot.maj_le lu (la colonne plan_maj de la vue).
+--   - Un plan illisible : ne rien écrire pour ce lot (il reste dans la liste, le robot le retentera).
+--   - Jamais de suppression dans l'espace ni dans la table.
+create table if not exists public.neuf_plans_2d (
+  lot_id      text primary key,            -- pige_lots.id (jamais montré : le site ne voit que neuf_cle)
+  pages       integer not null check (pages between 1 and 8),
+  source_url  text not null,               -- documents_lot.plan_url converti
+  source_maj  timestamptz,                 -- documents_lot.maj_le au moment de la conversion
+  converti_le timestamptz not null default now()
+);
+alter table public.neuf_plans_2d enable row level security;
+revoke all on public.neuf_plans_2d from public, anon;
+grant select on public.neuf_plans_2d to authenticated;
+grant all on public.neuf_plans_2d to service_role;
+
+create or replace view public.neuf_plans_2d_a_faire
+with (security_invoker = true) as
+  select l.id as lot_id, neuf_cle(l.id) as cle, d.plan_url, d.maj_le as plan_maj
+    from pige_lots l
+    join pige_programmes p on p.id = l.programme_id
+    join neuf_villes v on v.etat = 'publiee' and v.dept = p.dept
+     and p.ville = any(coalesce(v.pige_villes, array[v.ville]))
+     and (v.cps is null or p.cp = any(v.cps))
+    join documents_lot d on d.lot_id = l.id and d.plan_url is not null
+    left join neuf_plans_2d z on z.lot_id = l.id
+   where coalesce(p.source, '') not in ('picking', 'nomandat')
+     and l.st in ('libre', 'option')
+     and l.type in ('Appartement', 'Maison')
+     and l.typo in ('T1', 'T2', 'T3', 'T4', 'T5+')
+     and (z.lot_id is null or z.source_url is distinct from d.plan_url
+          or (d.maj_le is not null and (z.source_maj is null or d.maj_le > z.source_maj)));
+revoke all on public.neuf_plans_2d_a_faire from public, anon, authenticated;
+grant select on public.neuf_plans_2d_a_faire to service_role;
+
+-- 3. neuf_ville_public : version en place (avec v3d) + p2d ----------------------------------------
 create or replace function public.neuf_ville_public(p_ville text)
 returns jsonb
 language sql
@@ -48,8 +99,8 @@ as $$
                 when l.ext then 'Extérieur' end as exterieur,
            -- Plans 3D (27/11/2026) : lot visitable en 3D après le formulaire
            exists (select 1 from neuf_visites_3d x where x.lot_id = l.id and x.actif) as v3d,
-           -- Plan du promoteur (27/11/2026) : visible après le formulaire, par la fonction plans-3d
-           exists (select 1 from documents_lot d where d.lot_id = l.id and d.plan_url is not null) as p2d
+           -- Plan du promoteur (27/11/2026) : converti en image par le robot, visible après le formulaire
+           exists (select 1 from neuf_plans_2d z where z.lot_id = l.id and z.pages > 0) as p2d
       from pige_lots l
       join pige_programmes p on p.id = l.programme_id
       join v on v.dept = p.dept
@@ -177,7 +228,7 @@ $$;
 revoke all on function public.neuf_ville_public(text) from public, anon, authenticated;
 grant execute on function public.neuf_ville_public(text) to service_role;
 
--- 2. neuf_3d_programme : programmes montrés seulement ---------------------------------------------
+-- 4. neuf_3d_programme : programmes montrés seulement ---------------------------------------------
 create or replace function public.neuf_3d_programme(p_cle text)
 returns jsonb
 language sql
@@ -197,7 +248,7 @@ $$;
 revoke all on function public.neuf_3d_programme(text) from public, anon, authenticated;
 grant execute on function public.neuf_3d_programme(text) to service_role;
 
--- 3. Premier passage sur un plan ---------------------------------------------------------------
+-- 5a. Premier passage sur un plan ---------------------------------------------------------------
 create table if not exists public.neuf_2d_vues (
   empreinte text not null,
   lot_id    text not null,
@@ -208,10 +259,10 @@ alter table public.neuf_2d_vues enable row level security;
 revoke all on public.neuf_2d_vues from public, anon, authenticated;
 grant all on public.neuf_2d_vues to service_role;
 
--- 4. Le plan d'un lot, pour un jeton valide ----------------------------------------------------
--- Réponse : { statut: 'ok', chemin, format: 'pdf'|'image' } (chemin dans l'espace « docs »)
+-- 5b. L'image d'une page du plan d'un lot, pour un jeton valide ---------------------------------
+-- Réponse : { statut: 'ok', chemin: '<cle>/<page>.webp', pages } (chemin dans l'espace plans2d)
 --         | { statut: 'jeton' } | { statut: 'inconnu' } | { statut: 'limite' }.
-create or replace function public.neuf_2d_plan(p_programme text, p_lot text, p_empreinte text, p_ip text)
+create or replace function public.neuf_2d_plan(p_programme text, p_lot text, p_page integer, p_empreinte text, p_ip text)
 returns jsonb
 language plpgsql
 security definer
@@ -225,8 +276,8 @@ declare
   v_nj      integer;
   v_ni      integer;
   v_lot     text;
-  v_url     text;
-  v_chemin  text;
+  v_pages   integer;
+  v_page    integer := coalesce(p_page, 1);
   v_n       integer;
   v_ligne   text;
 begin
@@ -244,14 +295,14 @@ begin
     return jsonb_build_object('statut', 'limite');
   end if;
 
-  -- Un lot montré sur le site (mêmes filtres que neuf_ville_public), du bon programme, avec un plan.
-  select l.id, d.plan_url into v_lot, v_url
+  -- Un lot montré sur le site (mêmes filtres que neuf_ville_public), du bon programme, converti.
+  select l.id, z.pages into v_lot, v_pages
     from pige_lots l
     join pige_programmes p on p.id = l.programme_id
     join neuf_villes v on v.etat = 'publiee' and v.dept = p.dept
      and p.ville = any(coalesce(v.pige_villes, array[v.ville]))
      and (v.cps is null or p.cp = any(v.cps))
-    join documents_lot d on d.lot_id = l.id and d.plan_url is not null
+    join neuf_plans_2d z on z.lot_id = l.id and z.pages > 0
    where neuf_cle(p.id) = p_programme
      and neuf_cle(l.id) = p_lot
      and coalesce(p.source, '') not in ('picking', 'nomandat')
@@ -259,8 +310,7 @@ begin
      and l.type in ('Appartement', 'Maison')
      and l.typo in ('T1', 'T2', 'T3', 'T4', 'T5+')
    limit 1;
-  v_chemin := substring(v_url from 'object/public/docs/([^?]+)');
-  if v_lot is null or v_chemin is null then
+  if v_lot is null or v_page < 1 or v_page > v_pages then
     return jsonb_build_object('statut', 'inconnu');
   end if;
 
@@ -282,14 +332,13 @@ begin
     end if;
   end if;
 
-  return jsonb_build_object('statut', 'ok', 'chemin', v_chemin,
-                            'format', case when v_chemin ~* '\.pdf$' then 'pdf' else 'image' end);
+  return jsonb_build_object('statut', 'ok', 'chemin', p_lot || '/' || v_page || '.webp', 'pages', v_pages);
 end;
 $$;
-revoke all on function public.neuf_2d_plan(text, text, text, text) from public, anon, authenticated;
-grant execute on function public.neuf_2d_plan(text, text, text, text) to service_role;
+revoke all on function public.neuf_2d_plan(text, text, integer, text, text) from public, anon, authenticated;
+grant execute on function public.neuf_2d_plan(text, text, integer, text, text) to service_role;
 
--- 5. Limite du formulaire en base : 3 envois par tranche de 10 minutes et par adresse -------------
+-- 6. Limite du formulaire en base : 3 envois par tranche de 10 minutes et par adresse -------------
 create or replace function public.neuf_3d_formulaire(p_ip text)
 returns boolean
 language plpgsql
