@@ -1,6 +1,7 @@
 -- Plan de masse du promoteur, après le formulaire, sur la fiche programme (comme les plans des logements).
 --
--- PRÉPARÉE le 27/11/2026, NON APPLIQUÉE.
+-- Appliquée le 27/11/2026 (migration « plans_masse »), sur signal de la session mère ; « après le formulaire »
+-- confirmé par Alex (« après le formulaire, fais tout puis on pousse »). Aucun « pm » tant que rien n'est converti.
 -- Demande d'Alex du 27/11/2026 (session mère) : « pour le plan de masse mets aussi la possibilité d'avoir
 -- celui du promoteur, l'image qu'il donne, comme pour les plans soit on a la vision 3D soit la photo du
 -- promoteur ». Visible après le formulaire (le plan porte le nom du promoteur) : à confirmer par Alex.
