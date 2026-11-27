@@ -1,6 +1,7 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 5, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (dépend de 20261127_plans_2d.sql) :
+// Version 5, en ligne depuis le 27/11/2026 (« deploi et pousse » d'Alex) ; dépend de 20261127_plans_2d.sql :
+//   - fiche existante au statut « Perdu » : repasse en « Nouveau » (« repasse en statut actif ») ;
 //   - plan du promoteur après le formulaire (Alex, 27/11/2026 : « mets le plan du promoteur après le
 //     formulaire », puis « ok pour le B » : images converties par le robot, espace privé), sur tous les
 //     programmes montrés : GET ?p=&l=&t=&doc=plan&page= ;
@@ -107,7 +108,7 @@ function adresseIp(req: Request): string {
     req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "inconnue";
 }
 
-const CHAMPS_CONTACT = "id, notes, prenom, nom_confirme";
+const CHAMPS_CONTACT = "id, notes, prenom, nom_confirme, statut";
 
 async function inscrire(req: Request, cors: Record<string, string>) {
   let body: Record<string, unknown>;
@@ -224,6 +225,12 @@ async function inscrire(req: Request, cors: Record<string, string>) {
       } catch (_) { mention = " — paternité non mise à jour (erreur base)"; }
       const maj: Record<string, unknown> = { notes: (existant.notes ? existant.notes + "\n" : "") + trace + mention };
       if (!existant.nom_confirme && !existant.prenom) maj.prenom = prenom;
+      // Une fiche « Perdu » qui revient par le site repasse en « Nouveau » (Alex, 27/11/2026 : « repasse en
+      // statut actif »). Aucun autre statut n'est touché.
+      if (existant.statut === "Perdu") {
+        maj.statut = "Nouveau";
+        maj.notes = String(maj.notes) + `\n[${aujourdhui}] Statut repassé de Perdu à Nouveau par le formulaire du site.`;
+      }
       await supabase.from("contacts").update(maj).eq("id", existant.id);
     }
   } catch (_) {

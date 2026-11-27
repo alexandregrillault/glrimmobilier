@@ -1,6 +1,6 @@
 // Dépôt des plans du promoteur convertis en images par le robot de pige (session Pige et robots).
 //
-// PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (part avec plans-3d v5 au « déploie » d'Alex).
+// En ligne depuis le 27/11/2026 (« deploi et pousse » d'Alex), version 1.
 // verify_jwt = false : le robot n'a que la clé publique et la clé du robot (app_secrets « robot_pige »),
 // que la fonction vérifie elle-même avant tout dépôt. Dépend de 20261127_plans_2d.sql et
 // 20261127_plans_2d_robot.sql.
