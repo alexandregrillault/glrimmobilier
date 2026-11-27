@@ -1,6 +1,7 @@
 -- Plans 3D, suite : le plan du promoteur de chaque logement, après le formulaire, sur tous les programmes montrés.
 --
--- PRÉPARÉE le 27/11/2026, NON APPLIQUÉE.
+-- Appliquée le 27/11/2026 (migration « plans_2d »), sur signal de la session mère. Pages ville vérifiées
+-- inchangées (aucun plan converti à l'application).
 -- Décisions d'Alex du 27/11/2026 (session mère) : « mets le plan du promoteur après le formulaire », puis
 -- « ok pour le B » : les plans sont convertis en images par le robot de pige et rangés dans un espace privé.
 -- Exception voulue à la règle des noms de promoteurs (le cartouche du plan porte le nom), limitée à
