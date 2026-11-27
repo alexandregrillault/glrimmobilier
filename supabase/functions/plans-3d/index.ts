@@ -1,6 +1,6 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 4, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : plus de champ piège, anti-robots par le délai
+// Version 4, en ligne depuis le 27/11/2026 (« déploie et pousse glrimmobilier » d'Alex) : plus de champ piège, anti-robots par le délai
 // d'envoi (« delai_ms », 1,5 s minimum, absent accepté) ; téléphone « +33 (0)6… » normalisé. Version 3 en ligne :
 // anciennes/index_v3.ts ; v2 : anciennes/index_v2.ts ; v1 : anciennes/index_v1.ts.
 // verify_jwt = false (page publique, sans connexion). Dépend des migrations 20261127_plans_3d.sql,
