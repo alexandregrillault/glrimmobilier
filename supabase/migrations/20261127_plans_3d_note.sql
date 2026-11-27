@@ -1,6 +1,7 @@
 -- Plans 3D : la fiche du lead dit quel programme et quels logements le client a regardés en 3D.
 --
--- PRÉPARÉE le 27/11/2026, NON APPLIQUÉE. À appliquer après 20261127_plans_3d.sql (appliquée le 27/11).
+-- Appliquée le 27/11/2026 (migration « plans_3d_note »), sur signal de la session mère, avec en plus la
+-- sauvegarde de l'ancienne neuf_3d_acces dans fonctions_backup_20261127. Colombes vérifiée inchangée.
 -- Demande de la session Site, relayée par la mère : le site n'envoie que des clés de 12 caractères ;
 -- Alex doit savoir, sur la fiche, quel logement intéressait le client.
 --
