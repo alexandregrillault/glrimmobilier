@@ -1,7 +1,7 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
 // Version 4, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : plus de champ piège, anti-robots par le délai
-// d'envoi (« delai », 3 s minimum) ; téléphone « +33 (0)6… » normalisé. Version 3 en ligne :
+// d'envoi (« delai_ms », 1,5 s minimum, absent accepté) ; téléphone « +33 (0)6… » normalisé. Version 3 en ligne :
 // anciennes/index_v3.ts ; v2 : anciennes/index_v2.ts ; v1 : anciennes/index_v1.ts.
 // verify_jwt = false (page publique, sans connexion). Dépend des migrations 20261127_plans_3d.sql,
 // 20261127_plans_3d_note.sql et 20261127_plans_3d_immeuble_public.sql.
@@ -14,7 +14,7 @@
 //
 // 1. Le formulaire de la fiche programme
 //    POST { action: "inscrire", prenom, telephone, email, accord: true, p: <clé programme>,
-//           programme?: <nom affiché>, ville?: <ville affichée>, delai: <ms depuis l'affichage du formulaire> }
+//           programme?: <nom affiché>, ville?: <ville affichée>, delai_ms?: <ms entre affichage et clic> }
 //    → 200 { jeton }   (la page le garde dans le navigateur : 30 jours, pour toutes les visites du site)
 //    → 422 champs manquants, 429 trop d'envois, 502 enregistrement impossible.
 //    Le lead est créé chez Alexandre (ou rattaché à la fiche existante, mêmes règles de paternité que
@@ -37,7 +37,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const VENDEUR = "Alexandre";             // « mets les leads chez moi » (Alex, 27/11/2026)
 const SOURCE = "Site web";               // « source du lead mets juste site web » (Alex, 27/11/2026)
 const DUREE_LIEN = 300;                  // secondes
-const DELAI_MIN_MS = 3000;               // anti-robots : temps minimal entre affichage et envoi du formulaire
+const DELAI_MIN_MS = 1500;               // anti-robots : temps minimal entre affichage et envoi (accord avec Site)
 const ESPACE = "plans3d";
 
 const ORIGINES_AUTORISEES = [
@@ -122,13 +122,16 @@ async function inscrire(req: Request, cors: Record<string, string>) {
 
   // Anti-robots v4 (27/11/2026) : plus aucun champ caché. Les deux essais d'Alex ont été pris pour des
   // robots parce que le remplissage automatique de Chrome remplissait le champ piège (« societe » en v2,
-  // « hp_glr » en v3) ; ces champs sont désormais ignorés. La page envoie « delai » : le temps en
-  // millisecondes entre l'affichage du formulaire et l'envoi. Un humain met plus de 3 secondes ; en
-  // dessous (ou sans « delai »), on répond comme si tout allait bien, sans rien enregistrer.
+  // « hp_glr » en v3) ; ces champs sont désormais ignorés. La page envoie « delai_ms » : le temps en
+  // millisecondes entre l'affichage de la page et le clic sur « Créer mon accès ». Un humain met plus
+  // de 5 secondes, un remplissage automatique rapide environ 1,6 s : en dessous de 1,5 s, on répond comme
+  // si tout allait bien, sans rien enregistrer. Sans « delai_ms » (page encore en cache), on accepte.
   // S'ajoute la limite de 3 envois par 10 minutes et par adresse, plus bas.
-  const delai = Number(body.delai);
-  if (!Number.isFinite(delai) || delai < DELAI_MIN_MS) {
-    return repondre({ jeton: crypto.randomUUID().replace(/-/g, "") }, 200, cors);
+  if (body.delai_ms !== undefined && body.delai_ms !== null && body.delai_ms !== "") {
+    const delai = Number(body.delai_ms);
+    if (!Number.isFinite(delai) || delai < DELAI_MIN_MS) {
+      return repondre({ jeton: crypto.randomUUID().replace(/-/g, "") }, 200, cors);
+    }
   }
 
   const ip = adresseIp(req);
