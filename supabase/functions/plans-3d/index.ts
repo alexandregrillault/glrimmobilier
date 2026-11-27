@@ -1,8 +1,11 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 4, en ligne depuis le 27/11/2026 (« déploie et pousse glrimmobilier » d'Alex) : plus de champ piège, anti-robots par le délai
-// d'envoi (« delai_ms », 1,5 s minimum, absent accepté) ; téléphone « +33 (0)6… » normalisé. Version 3 en ligne :
-// anciennes/index_v3.ts ; v2 : anciennes/index_v2.ts ; v1 : anciennes/index_v1.ts.
+// Version 5, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE (dépend de 20261127_plans_2d.sql) :
+//   - plan du promoteur après le formulaire (Alex, 27/11/2026 : « mets le plan du promoteur après le
+//     formulaire »), sur tous les programmes montrés : GET ?p=&l=&t=&doc=plan ;
+//   - inscription refusée (404) pour un programme non montré ; limite du formulaire comptée en base.
+// Version 4 en ligne : anciennes/index_v4.ts (plus de champ piège, « delai_ms », 1,5 s minimum).
+// v3 : anciennes/index_v3.ts ; v2 : anciennes/index_v2.ts ; v1 : anciennes/index_v1.ts.
 // verify_jwt = false (page publique, sans connexion). Dépend des migrations 20261127_plans_3d.sql,
 // 20261127_plans_3d_note.sql et 20261127_plans_3d_immeuble_public.sql.
 // Version 2 (Alex, 27/11/2026 : « source du lead mets juste site web », « je veux ue le client voit le
@@ -16,7 +19,7 @@
 //    POST { action: "inscrire", prenom, telephone, email, accord: true, p: <clé programme>,
 //           programme?: <nom affiché>, ville?: <ville affichée>, delai_ms?: <ms entre affichage et clic> }
 //    → 200 { jeton }   (la page le garde dans le navigateur : 30 jours, pour toutes les visites du site)
-//    → 422 champs manquants, 429 trop d'envois, 502 enregistrement impossible.
+//    → 404 programme non montré, 422 champs manquants, 429 trop d'envois, 502 enregistrement impossible.
 //    Le lead est créé chez Alexandre (ou rattaché à la fiche existante, mêmes règles de paternité que
 //    les autres leads), directement en base : AUCUN mail ni SMS n'est envoyé au client. On ne passe
 //    pas par lead-inbound, qui envoie de lui-même un accusé avec un lien de rendez-vous.
@@ -24,6 +27,9 @@
 // 2. Un fichier de la visite
 //    GET ?p=<clé programme>                      → l'immeuble, sans jeton
 //    GET ?p=<clé programme>&l=<clé lot>&t=<jeton> → les plans d'un logement, jeton obligatoire
+//    GET ?p=<clé programme>&l=<clé lot>&t=<jeton>&doc=plan → le plan du promoteur (PDF ou image), renvoyé
+//      tel quel par la fonction, en flux, sans adresse de stockage ; 401 / 404 / 429 comme ci-dessous.
+//      Note « Plan 2D : lot … » sur la fiche à la première ouverture. Compteurs communs avec la 3D.
 //    → 200 { url, expire: 300 }  lien temporaire (5 minutes) vers la page HTML, à télécharger tout de suite
 //      (le stockage sert le HTML en texte brut : la page l'affiche par un lien blob:, pas par iframe src=).
 //    → 401 jeton absent, faux ou expiré pour un logement (la page montre le formulaire), 404 inconnu,
@@ -45,19 +51,8 @@ const ORIGINES_AUTORISEES = [
   "https://glrimmobilier.com",
 ];
 
-// Formulaire : 3 envois par tranche de 10 minutes et par adresse (comme qdn-plans).
-const FENETRE_MS = 10 * 60 * 1000;
-const MAX_PAR_FENETRE = 3;
-const historique = new Map<string, number[]>();
-
-function tropDeEnvois(ip: string): boolean {
-  const now = Date.now();
-  const passages = (historique.get(ip) || []).filter((t) => now - t < FENETRE_MS);
-  passages.push(now);
-  historique.set(ip, passages);
-  if (historique.size > 5000) historique.clear();
-  return passages.length > MAX_PAR_FENETRE;
-}
+// Formulaire : 3 envois par tranche de 10 minutes et par adresse, compté en base (neuf_3d_formulaire,
+// v5) : le formulaire est sur toutes les fiches, et un compteur en mémoire se perdait à chaque redémarrage.
 
 function entetesCors(origin: string | null) {
   const autorise = origin && ORIGINES_AUTORISEES.includes(origin) ? origin : ORIGINES_AUTORISEES[0];
@@ -134,9 +129,6 @@ async function inscrire(req: Request, cors: Record<string, string>) {
     }
   }
 
-  const ip = adresseIp(req);
-  if (tropDeEnvois(ip)) return repondre({ error: "trop_de_demandes" }, 429, cors);
-
   const prenom = texte(body.prenom, 60);
   const telephone = texte(body.telephone, 40);
   const email = texte(body.email, 160).toLowerCase();
@@ -149,17 +141,34 @@ async function inscrire(req: Request, cors: Record<string, string>) {
     return repondre({ error: "champs_manquants" }, 422, cors);
   }
 
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const cleService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, cleService);
   const maintenant = new Date();
   const nowIso = maintenant.toISOString();
   const aujourdhui = nowIso.slice(0, 10);
-  // Nom et ville lus en base d'après la clé (migration 20261127_plans_3d_note.sql) ; le texte envoyé
-  // par la page ne sert que de secours.
+
+  // Limite du formulaire, en base (empreinte de l'adresse seulement).
+  try {
+    const { data: ok, error } = await supabase.rpc("neuf_3d_formulaire", {
+      p_ip: (await sha256(cleService + "|" + adresseIp(req))).slice(0, 32),
+    });
+    if (error) throw error;
+    if (ok === false) return repondre({ error: "trop_de_demandes" }, 429, cors);
+  } catch (_) {
+    return repondre({ error: "indisponible" }, 503, cors);
+  }
+
+  // Programme montré sur le site seulement (v5) : nom et ville lus en base d'après la clé.
   let nomProg = programme, villeProg = ville;
   try {
-    const { data: pr } = await supabase.rpc("neuf_3d_programme", { p_cle: cle });
-    if (pr?.nom) { nomProg = String(pr.nom); villeProg = pr.ville ? String(pr.ville) : villeProg; }
-  } catch (_) { /* secours : le texte de la page */ }
+    const { data: pr, error } = await supabase.rpc("neuf_3d_programme", { p_cle: cle });
+    if (error) throw error;
+    if (!pr?.nom) return repondre({ error: "inconnu" }, 404, cors);
+    nomProg = String(pr.nom);
+    villeProg = pr.ville ? String(pr.ville) : villeProg;
+  } catch (_) {
+    return repondre({ error: "indisponible" }, 503, cors);
+  }
   const quoi = nomProg ? `programme ${nomProg}${villeProg ? " à " + villeProg : ""}` : `programme ${cle}`;
   const trace = `[${aujourdhui}] Formulaire visite 3D du site : ${quoi}. Accord de recontact donné.`;
 
@@ -242,6 +251,48 @@ async function fichier(req: Request, cors: Record<string, string>) {
 
   const cleService = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, cleService);
+
+  // Plan du promoteur (v5) : jeton obligatoire, fichier renvoyé par la fonction elle-même, en flux.
+  if (q.get("doc") === "plan") {
+    if (!lot) return repondre({ error: "inconnu" }, 404, cors);
+    let pl: any = null;
+    try {
+      const { data, error } = await supabase.rpc("neuf_2d_plan", {
+        p_programme: cle,
+        p_lot: lot,
+        p_empreinte: await sha256(jeton),
+        p_ip: (await sha256(cleService + "|" + adresseIp(req))).slice(0, 32),
+      });
+      if (error) throw error;
+      pl = data;
+    } catch (_) {
+      return repondre({ error: "indisponible" }, 503, cors);
+    }
+    if (pl?.statut === "jeton") return repondre({ error: "jeton" }, 401, cors);
+    if (pl?.statut === "limite") return repondre({ error: "trop_de_demandes" }, 429, cors);
+    if (pl?.statut !== "ok" || !pl.chemin) return repondre({ error: "inconnu" }, 404, cors);
+
+    const chemin = String(pl.chemin).split("/").map(encodeURIComponent).join("/");
+    let r: Response;
+    try {
+      r = await fetch(`${Deno.env.get("SUPABASE_URL")}/storage/v1/object/authenticated/docs/${chemin}`, {
+        headers: { Authorization: "Bearer " + cleService, apikey: cleService },
+      });
+    } catch (_) {
+      return repondre({ error: "indisponible" }, 503, cors);
+    }
+    if (!r.ok || !r.body) return repondre({ error: "inconnu" }, 404, cors);
+    const type = pl.format === "pdf" ? "application/pdf" : (r.headers.get("content-type") || "image/jpeg");
+    const entetes: Record<string, string> = {
+      ...cors,
+      "Content-Type": type,
+      "Content-Disposition": pl.format === "pdf" ? 'inline; filename="plan.pdf"' : "inline",
+      "Cache-Control": "private, no-store",
+    };
+    const taille = r.headers.get("content-length");
+    if (taille) entetes["Content-Length"] = taille;
+    return new Response(r.body, { status: 200, headers: entetes });
+  }
 
   let res: any = null;
   try {
