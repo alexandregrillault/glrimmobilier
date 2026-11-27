@@ -1,6 +1,6 @@
 -- Plans 3D : l'immeuble se voit sans formulaire, les plans des logements restent derrière le formulaire.
 --
--- PRÉPARÉE le 27/11/2026, NON APPLIQUÉE.
+-- Appliquée le 27/11/2026 (migration « plans_3d_immeuble_public »), sur signal de la session mère.
 -- Décision d'Alex du 27/11/2026 (session mère) : « je veux ue le client voit le nouvelle immeuble qu'on
 -- a mis en place et il pourra voir les plans uniquement si il a un compte. »
 --
