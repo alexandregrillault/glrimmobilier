@@ -1,6 +1,6 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 3, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : piège à robots renommé « hp_glr » (voir
+// Version 3, en ligne depuis le 27/11/2026 (« deploie et pousse » d'Alex) : piège à robots renommé « hp_glr » (voir
 // inscrire). Version 2 en ligne : anciennes/index_v2.ts ; version 1 : anciennes/index_v1.ts.
 // verify_jwt = false (page publique, sans connexion). Dépend des migrations 20261127_plans_3d.sql,
 // 20261127_plans_3d_note.sql et 20261127_plans_3d_immeuble_public.sql.
