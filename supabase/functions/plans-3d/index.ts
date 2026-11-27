@@ -1,6 +1,6 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 6, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : une fiche existante qui a un vendeur le garde
+// Version 6, en ligne depuis le 27/11/2026 (« déploie la v6 » d'Alex) : une fiche existante qui a un vendeur le garde
 // (Alex, 27/11/2026 : « Reste chez le vendeur »). Version 5 en ligne : anciennes/index_v5.ts.
 // Version 5 (27/11/2026, « deploi et pousse » d'Alex) ; dépend de 20261127_plans_2d.sql :
 //   - fiche existante au statut « Perdu » : repasse en « Nouveau » (« repasse en statut actif ») ;
@@ -39,7 +39,8 @@
 //      (le stockage sert le HTML en texte brut : la page l'affiche par un lien blob:, pas par iframe src=).
 //    → 401 jeton absent, faux ou expiré pour un logement (la page montre le formulaire), 404 inconnu,
 //      429 trop de demandes.
-//    Limite contre l'aspiration (en base, neuf_3d_acces) : 40 fichiers par jeton et 60 par adresse, par jour.
+//    Limite contre l'aspiration (en base, neuf_3d_acces) : 40 fichiers par jeton et 60 par adresse, par jour ;
+//    l'immeuble public n'est pas compté (migration 20261127_plans_3d_immeuble_hors_limite.sql).
 //    À la première ouverture d'un logement, la base ajoute aux notes de la fiche du client une ligne
 //    « [JJ/MM/AAAA] Visite 3D : lot A001 (T3, 61 m²), Esprit Valmy à Colombes » (une fois par logement).
 
