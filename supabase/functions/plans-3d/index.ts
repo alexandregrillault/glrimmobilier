@@ -1,6 +1,6 @@
 // Visites 3D des programmes sur les pages ville du site (www.glrimmobilier.com/neuf/<ville>/<programme>/).
 //
-// Version 8, PRÉPARÉE le 27/11/2026, PAS ENCORE DÉPLOYÉE : un client d'un vendeur qui revient par le
+// Version 8, en ligne depuis le 27/11/2026 (« Déploie et pousse » d'Alex) : un client d'un vendeur qui revient par le
 // formulaire pose une activité « Revenu par le site » dans la liste de ce vendeur (Alex : « Une activité »).
 // Version 7 en ligne : anciennes/index_v7.ts (lien de l'immeuble gardé 4 minutes, nouvel essai si le
 // stockage refuse un lien, 503 « reessayer » au lieu de 404).
