@@ -1,6 +1,6 @@
 -- Plans 2D : les deux portes du robot de conversion (session Pige et robots), avec la clé du robot.
 --
--- PRÉPARÉE le 27/11/2026, NON APPLIQUÉE. À appliquer après 20261127_plans_2d.sql (appliquée le 27/11).
+-- Appliquée le 27/11/2026 (migration « plans_2d_robot »), sur signal de la session mère.
 -- Choix de la session mère : comme tous les robots, celui-ci n'a pas de clé de service ; il passe par la
 -- clé du robot (app_secrets « robot_pige ») et la clé publique.
 --
